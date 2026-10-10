@@ -118,7 +118,7 @@ async function txn(t: {
   on: string;
   amount: string;
   desc: string;
-  account: string;
+  account: string | null;
   source: string;
   weekly?: boolean;
   categoryId?: string | null;
@@ -361,9 +361,90 @@ describe("(WP8) case 4 — a split part of a card charge stays on the card", () 
     await db
       .insert(plaidAccountsTable)
       .values({ userId: OTHER_USER, householdId: otherHh, itemId: item!.id, accountId: theirs, name: "Their Amex", mask: "2002", type: "credit", subtype: "credit card" });
+    // (WP8b) …and so is one only their rows carry: the rows read are this household's.
+    await db.insert(transactionsTable).values({
+      userId: OTHER_USER,
+      householdId: otherHh,
+      occurredOn: "2026-10-05",
+      description: "THEIR CHARGE",
+      amount: "-5.00",
+      source: "plaid:amex",
+      plaidAccountId: theirs,
+      plaidTransactionId: `ptx-theirs-${RUN}`,
+    });
     const r = await request("POST", "/transactions", { occurredOn: "2026-10-05", description: "PART", amount: "-1.00", source: "plaid:amex", plaidAccountId: theirs });
     expect(r.status).toBe(400);
     expect(r.json).toMatchObject({ code: "invalid_plaid_account" });
+  });
+});
+
+describe("(WP8b) a split part names its charge, and the server puts it where the charge is", () => {
+  const bank = async () => (await get<{ bank: { balance: string } }>("/spine")).bank.balance;
+  const partOf = (parent: string, extra: Record<string, unknown> = {}) =>
+    request("POST", "/transactions", {
+      occurredOn: "2026-10-05",
+      description: "TRADER JOE S #712",
+      amount: "-35.00",
+      categoryId: groceriesId,
+      weeklyAllowance: true,
+      weeklyBucket: "alcohol",
+      notes: "Split from TRADER JOE S #712",
+      splitOf: parent,
+      ...extra,
+    });
+
+  it("a charge whose card connection was removed (its account id is only on its rows) still splits, and the part stays on that card", async () => {
+    // DELETE /plaid/items deletes the plaid_accounts row and keeps the rows with their account id: ORPHAN is that id.
+    const parent = await txn({ on: "2026-10-05", amount: "-70.00", desc: "TRADER JOE S #712", account: ORPHAN, source: "plaid:amex", weekly: true, categoryId: groceriesId });
+    const before = await bank();
+    // What the body says about the part's place is ignored: the charge decides.
+    const created = await partOf(parent, { source: "manual", plaidAccountId: null });
+    expect(created.status, JSON.stringify(created.json)).toBe(201);
+    expect(created.json).toMatchObject({ source: "plaid:amex", plaidAccountId: ORPHAN, plaidTransactionId: null });
+    // Not a checking row: cash does not move.
+    expect(await bank()).toBe(before);
+    // A client that still names the account (the WP8 body) is accepted too: the household's rows carry the id.
+    const legacy = await request("POST", "/transactions", {
+      occurredOn: "2026-10-05",
+      description: "TRADER JOE S #712",
+      amount: "-1.00",
+      source: "plaid:amex",
+      plaidAccountId: ORPHAN,
+    });
+    expect(legacy.status, JSON.stringify(legacy.json)).toBe(201);
+    expect(legacy.json).toMatchObject({ source: "plaid:amex", plaidAccountId: ORPHAN });
+    expect(await bank()).toBe(before);
+  });
+
+  it("a part of a statement-imported card row keeps that row's source (off the checking ledger); a part of a checking row stays a checking row", async () => {
+    const csvCard = await txn({ on: "2026-10-05", amount: "-70.00", desc: "AMEX STATEMENT ROW", account: null, source: "amex", plaidTxnId: null });
+    const manual = await txn({ on: "2026-10-05", amount: "-70.00", desc: "CASH AT MARKET", account: null, source: "manual", plaidTxnId: null });
+    const before = await bank();
+    const a = await partOf(csvCard);
+    expect(a.status, JSON.stringify(a.json)).toBe(201);
+    expect(a.json).toMatchObject({ source: "amex", plaidAccountId: null });
+    expect(await bank()).toBe(before);
+    const b = await partOf(manual, { source: "plaid:amex", plaidAccountId: PLAT });
+    expect(b.status, JSON.stringify(b.json)).toBe(201);
+    expect(b.json).toMatchObject({ source: "manual", plaidAccountId: null });
+    // A checking part is a checking row: −35.00 on the ledger.
+    expect(cents(await bank())).toBe(cents(before) - 3500);
+  });
+
+  it("splitOf that is not one of the household's transactions is a 400 and writes nothing", async () => {
+    const count = async () => (await db.select({ id: transactionsTable.id }).from(transactionsTable).where(eq(transactionsTable.userId, TEST_USER))).length;
+    const otherHh = householdOf.get(OTHER_USER)!;
+    const [theirs] = await db
+      .insert(transactionsTable)
+      .values({ userId: OTHER_USER, householdId: otherHh, occurredOn: "2026-10-05", description: "THEIR ROW", amount: "-5.00", source: "manual" })
+      .returning({ id: transactionsTable.id });
+    const n = await count();
+    for (const splitOf of [randomUUID(), "not-a-uuid", theirs!.id]) {
+      const r = await partOf(splitOf);
+      expect(r.status, splitOf).toBe(400);
+      expect(r.json).toMatchObject({ code: "invalid_split_parent" });
+    }
+    expect(await count()).toBe(n);
   });
 });
 

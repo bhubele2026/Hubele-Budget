@@ -88,7 +88,7 @@ describe("SplitTransactionDialog", () => {
     expect((calls.created[0] as { data: Record<string, unknown> }).data).toMatchObject({
       amount: "-20.00",
       weeklyAllowance: true,
-      source: "manual",
+      splitOf: "t1",
     });
     expect((calls.updated[0] as { data: Record<string, unknown> }).data).toMatchObject({
       amount: "-30.00",
@@ -98,27 +98,29 @@ describe("SplitTransactionDialog", () => {
     });
   });
 
-  it("(WP8) a part of a card charge stays on the card: the charge's source and Plaid account, never a manual row", async () => {
+  it("(WP8b) a part of a card charge names its charge; the server places it, so the dialog sends no source or Plaid account of its own", async () => {
     const card = { ...(tx as object), id: "t2", source: "plaid:amex", plaidAccountId: "ext-plat", pending: false };
     const onOpenChange = mount(vi.fn(), card);
     fireEvent.change(screen.getByTestId("split-amount-0"), { target: { value: "30.00" } });
     fireEvent.change(screen.getByTestId("split-amount-1"), { target: { value: "20.00" } });
     fireEvent.click(screen.getByRole("button", { name: "Split it" }));
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-    expect((calls.created[0] as { data: Record<string, unknown> }).data).toMatchObject({
-      amount: "-20.00",
-      source: "plaid:amex",
-      plaidAccountId: "ext-plat",
-    });
+    const data = (calls.created[0] as { data: Record<string, unknown> }).data;
+    expect(data).toMatchObject({ amount: "-20.00", splitOf: "t2" });
+    // A dead account id here was refused (invalid_plaid_account) once the card's connection was removed.
+    expect(data).not.toHaveProperty("plaidAccountId");
+    expect(data).not.toHaveProperty("source");
   });
 
-  it("(WP8) a charge with no Plaid account still splits into manual rows (no account named)", async () => {
+  it("(WP8b) a charge with no Plaid account names its charge the same way", async () => {
     const onOpenChange = mount();
     fireEvent.change(screen.getByTestId("split-amount-0"), { target: { value: "30.00" } });
     fireEvent.change(screen.getByTestId("split-amount-1"), { target: { value: "20.00" } });
     fireEvent.click(screen.getByRole("button", { name: "Split it" }));
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-    expect((calls.created[0] as { data: Record<string, unknown> }).data).toMatchObject({ source: "manual", plaidAccountId: null });
+    const data = (calls.created[0] as { data: Record<string, unknown> }).data;
+    expect(data).toMatchObject({ splitOf: "t1" });
+    expect(data).not.toHaveProperty("source");
   });
 
   it("(WP8) a pending charge waits: the action is off and the dialog says why; nothing is written", () => {

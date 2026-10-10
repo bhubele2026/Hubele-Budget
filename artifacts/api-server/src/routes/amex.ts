@@ -14,6 +14,22 @@ import { householdTodayISO } from "../lib/householdClock";
 
 const router: IRouter = Router();
 
+/** (WP8b) Is this external Plaid `account_id` a credit card of the household? */
+async function isHouseholdCreditCard(householdId: string, externalId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: plaidAccountsTable.id })
+    .from(plaidAccountsTable)
+    .where(
+      and(
+        eq(plaidAccountsTable.householdId, householdId),
+        eq(plaidAccountsTable.accountId, externalId),
+        eq(plaidAccountsTable.type, "credit"),
+      ),
+    )
+    .limit(1);
+  return !!row;
+}
+
 /**
  * Resolved Amex ending balance for the current user. Used by the Amex page
  * as a server-side fallback so it does not silently show "Unavailable" when
@@ -26,6 +42,10 @@ const router: IRouter = Router();
  *                   `settings.preferences.amexAnchor`.
  *   3) `computed` — net change of all `source='amex'` transactions from $0.
  *   4) `missing`  — no Amex data at all.
+ *
+ * (WP8b) Per card (`?accountId=`): any credit card of the household, Amex or
+ * not, answers its Plaid liability balance (`plaid`) or its debt row (`debt`),
+ * else `missing` — never the saved combined anchor and never `computed`.
  */
 router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
@@ -112,14 +132,26 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   }
   // (#748) Per-card scope filter. If the client passed
   // `?accountId=...` we only proceed for that single card; if the
-  // requested card isn't in our Amex set we short-circuit to
+  // requested account is not a card here we short-circuit to
   // `missing` so the client renders the empty state instead of
   // falling through to the global `settings.amexAnchor` fallback
   // below (which would otherwise yield the combined value for an
   // invalid per-card request).
+  //
+  // ⭐ (WP8b) ANY CREDIT CARD OF THE HOUSEHOLD, at any bank — not only the Amex
+  // set. A card's own page lists that card's rows (WP7), so it anchors on that
+  // card's own figure: Plaid's stored liability balance (the card model's
+  // `creditorCurrent` for a card with no debt row, which the account Summary
+  // prints as "Card's current balance") or its debt row. Outside the Amex set
+  // this answered `missing` and the page ran its running balances and chart up
+  // from $0. (The Delta charge card stays out of the combined set above, but
+  // its own page reads its own figure.)
   let amexPlaidAccountIds: string[];
   if (scopedAccountId) {
-    if (!amexPlaidAccountIdSet.has(scopedAccountId)) {
+    if (
+      !amexPlaidAccountIdSet.has(scopedAccountId) &&
+      !(await isHouseholdCreditCard(householdId, scopedAccountId))
+    ) {
       res.json({
         amexEndingBalance: null,
         asOf: new Date().toISOString(),
@@ -366,10 +398,19 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  // (#748) When a card was specifically requested, restrict the
-  // computed-from-txns net aggregate to that card's transactions so
-  // the per-card "Calculated" tile doesn't roll up every Amex card
-  // back into one number.
+  // (WP8b) One card's balance is that card's own figure (Plaid's, or its debt
+  // row's above), never a running sum of its rows from $0: its rows here start
+  // where the bank's feed starts, not where the card opened. With neither, the
+  // per-card answer is `missing`, and the page shows no running balance and no
+  // chart, and says so. (It used to answer a per-card "Calculated" sum.)
+  if (scopedAccountId) {
+    res.json({
+      amexEndingBalance: null,
+      asOf: new Date().toISOString(),
+      source: "missing" as const,
+    });
+    return;
+  }
   const [agg] = await db
     .select({
       net: sql<string>`coalesce(sum(${transactionsTable.amount})::text, '0')`,
@@ -381,9 +422,6 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       and(
         eq(transactionsTable.householdId, householdId),
         inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
-        ...(scopedAccountId
-          ? [eq(transactionsTable.plaidAccountId, scopedAccountId)]
-          : []),
       ),
     );
 
