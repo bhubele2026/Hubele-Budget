@@ -11,6 +11,7 @@ export interface AmexWeeklyPayoff {
   weekStart: string;
   weekEnd: string;
   cards: AmexWeeklyPayoffCard[];
+  /** The weekly-cadence band cards' `weekCharges` summed. (WP8, owner's decision) Every charge on the cards, filed or not, less refunds — the basis the forecast's Saturday payoff bills (`allCoverages`), so this plus what is left of the week is that payoff. */
   combinedWeekCharges: number;
   /** The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total */
   combinedStatementBalance: number;

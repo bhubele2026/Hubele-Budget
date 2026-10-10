@@ -1,7 +1,8 @@
 // (B6) Refunds net — through the real readers, on one small ledger.
 //
 //   GET /amex/weekly-payoff  the card's charges less its refunds, per window, never below zero;
-//                            a refund dated after a week closed nets the NEXT week
+//                            a refund dated after a week closed nets the NEXT week. (WP8,
+//                            owner's decision) It bills every coverage, as the hooks do.
 //   computeWeeklyPayoff      the hooks' view (every coverage) nets the same refunds
 //   GET /reports/spending-facts
 //                            householdSpend nets per account; a filed refund nets its
@@ -135,11 +136,13 @@ afterAll(async () => {
 type Payoff = { cards: { accountId: string; weekCharges: number; chargeCount: number }[]; combinedWeekCharges: number };
 
 describe("the card's charges net its refunds, per window, never below zero", () => {
-  it("week 1 — the Amex page: filed charges 50.00 less the 15.00 and the reimbursable 5.00 refunds = 30.00", async () => {
+  it("week 1 — the Amex page: (WP8, owner's decision) every charge, the unfiled 30.00 bistro included: 80.00 less the 15.00 and the reimbursable 5.00 refunds = 60.00 (was 30.00, filed only)", async () => {
     const p = await get<Payoff>(`/amex/weekly-payoff?weekStart=${W1.start}`);
     expect(p.cards).toHaveLength(1);
-    expect(p.cards[0]).toMatchObject({ accountId: CARD, weekCharges: 30, chargeCount: 1 });
-    expect(p.combinedWeekCharges).toBe(30);
+    expect(p.cards[0]).toMatchObject({ accountId: CARD, weekCharges: 60, chargeCount: 2 });
+    expect(p.combinedWeekCharges).toBe(60);
+    // The page and the hooks are one figure now.
+    expect(p.combinedWeekCharges).toBe((await computeWeeklyPayoff(HH, W1.start, TEST_USER, { allCoverages: true })).combinedWeekCharges);
   });
 
   it("week 1 — the hooks (every coverage): 80.00 less 20.00 = 60.00; the 10/05 refund stays out of the closed week", async () => {

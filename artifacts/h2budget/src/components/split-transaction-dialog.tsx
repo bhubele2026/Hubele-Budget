@@ -37,9 +37,16 @@ type Part = { amount: string; weeklyBucket: SubBucket };
  * Split one purchase across weekly allowance buckets (e.g. a store run that
  * was part alcohol, part groceries). Implemented WITHOUT a schema change: the
  * original row is reshaped into the first part and the remaining parts become
- * new manual rows. Every total already counts those rows, so no aggregation
- * needs to know about "splits". Children are created FIRST so a failure can
- * never leave money unaccounted for.
+ * new rows. Every total already counts those rows, so no aggregation needs to
+ * know about "splits". Children are created FIRST so a failure can never leave
+ * money unaccounted for.
+ *
+ * ⭐ (WP8) A PART STAYS WHERE THE CHARGE IS. A part of a card charge carries the
+ * charge's `source` and Plaid account, so it stays on the card: as a
+ * `source: "manual"` row with no account it landed on the checking ledger,
+ * and the forecast's bank balance dropped by a purchase the card had made. A
+ * charge that is still pending is not split (its posted row will replace it):
+ * the action waits until it posts.
  */
 export function SplitTransactionDialog({
   tx,
@@ -59,6 +66,11 @@ export function SplitTransactionDialog({
 
   const total = tx ? Math.abs(Number(tx.amount) || 0) : 0;
   const isExpense = tx ? Number(tx.amount) < 0 : true;
+  // (WP8) A pending charge is split once it posts.
+  const pending = !!tx?.pending;
+  // (WP8) Where the parts live: the charge's own account and source, or a manual
+  // row when the charge has no Plaid account.
+  const onAccount = !!tx?.plaidAccountId;
   const startBucket: SubBucket = (
     SUB_BUCKETS as readonly string[]
   ).includes(tx?.weeklyBucket ?? "")
@@ -98,7 +110,7 @@ export function SplitTransactionDialog({
     setParts((prev) => prev.filter((_, idx) => idx !== i));
 
   const apply = async () => {
-    if (!tx || !valid) return;
+    if (!tx || !valid || pending) return;
     setSaving(true);
     try {
       // Children first (parts 2..N) — never lose money on a partial failure.
@@ -112,7 +124,8 @@ export function SplitTransactionDialog({
             weeklyAllowance: true,
             weeklyBucket: p.weeklyBucket,
             account: tx.account ?? null,
-            source: "manual",
+            source: onAccount ? tx.source : "manual",
+            plaidAccountId: onAccount ? tx.plaidAccountId : null,
             notes: `Split from ${tx.displayName || tx.description}`,
           },
         });
@@ -210,11 +223,17 @@ export function SplitTransactionDialog({
             : `${formatCurrency(Math.abs(remaining))} ${remaining > 0 ? "left to allocate" : "over"}`}
         </div>
 
+        {pending ? (
+          <p role="status" className="text-label text-neutral-600" data-testid="split-pending">
+            This charge is still pending. Split it once it posts.
+          </p>
+        ) : null}
+
         <DialogFooter>
           <button type="button" className={btnSecondarySm} onClick={() => onOpenChange(false)}>
             Cancel
           </button>
-          <button type="button" className={btnSm} onClick={apply} disabled={!valid || saving}>
+          <button type="button" className={btnSm} onClick={apply} disabled={!valid || saving || pending}>
             {saving ? "Splitting…" : "Split it"}
           </button>
         </DialogFooter>

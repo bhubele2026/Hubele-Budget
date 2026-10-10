@@ -1743,6 +1743,17 @@ export interface CreateTransactionInput {
     owedBy?: string | null;
     /** @nullable */
     debtId?: string | null;
+    /**
+     * (WP8) The external Plaid `account_id` the new row is on — a split part
+  of a card charge keeps its card (with the charge's `source`), so it
+  never lands on the checking ledger. Must be an account of the caller's
+  household (400 `invalid_plaid_account` otherwise); null, empty or absent
+  leaves the row with no Plaid account.
+  
+     * @maxLength 128
+     * @nullable
+     */
+    plaidAccountId?: string | null;
 }
 /**
  * @nullable
@@ -4403,6 +4414,7 @@ export interface AmexWeeklyPayoffCard {
     periodLabel: string;
     /** @nullable */
     displayName: string | null;
+    /** This card's charges in its billing window (the week, or the month for a monthly card). (WP8, owner's decision) Every charge, filed or not, less refunds dated in the window. */
     weekCharges: number;
     chargeCount: number;
     /** ⚠️ NOT the statement balance, despite the name: the card's CURRENT
@@ -4419,6 +4431,7 @@ export interface AmexWeeklyPayoff {
     weekStart: string;
     weekEnd: string;
     cards: AmexWeeklyPayoffCard[];
+    /** The weekly-cadence band cards' `weekCharges` summed. (WP8, owner's decision) Every charge on the cards, filed or not, less refunds — the basis the forecast's Saturday payoff bills (`allCoverages`), so this plus what is left of the week is that payoff. */
     combinedWeekCharges: number;
     /** The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total */
     combinedStatementBalance: number;

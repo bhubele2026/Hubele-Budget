@@ -40,11 +40,11 @@ const tx = {
   account: null,
 } as never;
 
-function mount(onOpenChange = vi.fn()) {
+function mount(onOpenChange = vi.fn(), t: unknown = tx) {
   const qc = new QueryClient();
   render(
     <QueryClientProvider client={qc}>
-      <SplitTransactionDialog tx={tx} open onOpenChange={onOpenChange} />
+      <SplitTransactionDialog tx={t as never} open onOpenChange={onOpenChange} />
     </QueryClientProvider>,
   );
   return onOpenChange;
@@ -96,5 +96,41 @@ describe("SplitTransactionDialog", () => {
       monthlyAllowance: false,
       unplannedAllowance: false,
     });
+  });
+
+  it("(WP8) a part of a card charge stays on the card: the charge's source and Plaid account, never a manual row", async () => {
+    const card = { ...(tx as object), id: "t2", source: "plaid:amex", plaidAccountId: "ext-plat", pending: false };
+    const onOpenChange = mount(vi.fn(), card);
+    fireEvent.change(screen.getByTestId("split-amount-0"), { target: { value: "30.00" } });
+    fireEvent.change(screen.getByTestId("split-amount-1"), { target: { value: "20.00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Split it" }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect((calls.created[0] as { data: Record<string, unknown> }).data).toMatchObject({
+      amount: "-20.00",
+      source: "plaid:amex",
+      plaidAccountId: "ext-plat",
+    });
+  });
+
+  it("(WP8) a charge with no Plaid account still splits into manual rows (no account named)", async () => {
+    const onOpenChange = mount();
+    fireEvent.change(screen.getByTestId("split-amount-0"), { target: { value: "30.00" } });
+    fireEvent.change(screen.getByTestId("split-amount-1"), { target: { value: "20.00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Split it" }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect((calls.created[0] as { data: Record<string, unknown> }).data).toMatchObject({ source: "manual", plaidAccountId: null });
+  });
+
+  it("(WP8) a pending charge waits: the action is off and the dialog says why; nothing is written", () => {
+    const pendingTx = { ...(tx as object), id: "t3", source: "plaid:amex", plaidAccountId: "ext-plat", pending: true };
+    mount(vi.fn(), pendingTx);
+    fireEvent.change(screen.getByTestId("split-amount-0"), { target: { value: "30.00" } });
+    fireEvent.change(screen.getByTestId("split-amount-1"), { target: { value: "20.00" } });
+    const go = screen.getByRole("button", { name: "Split it" }) as HTMLButtonElement;
+    expect(go.disabled).toBe(true);
+    expect(screen.getByTestId("split-pending").textContent).toBe("This charge is still pending. Split it once it posts.");
+    fireEvent.click(go);
+    expect(calls.created).toHaveLength(0);
+    expect(calls.updated).toHaveLength(0);
   });
 });

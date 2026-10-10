@@ -6,6 +6,7 @@ import type { PayoffInfo, PayoffTransition } from "@/lib/forecastDebts";
 import { CashFreedBanner } from "./CashFreedBanner";
 import { PlanDropRow } from "./PlanDropRow";
 import type { SuggestionAnswer } from "./probablyPaidText";
+import type { HookPayoffLine } from "@/lib/forecastHooks";
 
 /**
  * (#618) Flat item descriptor for the virtualized "Planned forecast items"
@@ -49,6 +50,7 @@ export function PlannedItemsList({
   onMarkMissed,
   onAnswerSuggestion,
   answerDisabled,
+  hookPayoffs,
 }: {
   items: PlannedItem[];
   payoffsByItem: Map<string, PayoffInfo>;
@@ -61,6 +63,12 @@ export function PlannedItemsList({
   /** (PR5) Confirm / Not this / Partial on a "Suggested" row. */
   onAnswerSuggestion?: (row: PlanLine, answer: SuggestionAnswer) => void;
   answerDisabled?: boolean;
+  /**
+   * (WP8) An everyday hook's occurrences by plan key (`lib/forecastHooks.ts`):
+   * the card payoff the curve takes in place of the stored plan, or the bank
+   * row that paid it. Display only.
+   */
+  hookPayoffs?: Map<string, HookPayoffLine>;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -200,6 +208,7 @@ export function PlannedItemsList({
           answerDisabled={answerDisabled}
           activeDragId={activeDragId}
           payoff={payoffsByItem.get(row.itemId)}
+          hook={hookPayoffs?.get(planKey)}
           isBestSuggestion={bestSuggestionPlanKey === planKey}
           isHighlighted={highlightedPlanKey === planKey}
         />
@@ -234,6 +243,7 @@ export function PlannedItemsList({
               answerDisabled={answerDisabled}
               activeDragId={activeDragId}
               payoff={payoffsByItem.get(row.itemId)}
+              hook={hookPayoffs?.get(planKey)}
               isBestSuggestion={bestSuggestionPlanKey === planKey}
               isHighlighted={highlightedPlanKey === planKey}
             />

@@ -202,6 +202,10 @@ export async function dedupeTransactionsForAccount(
   const run = async (
     tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   ): Promise<DedupeTxnReport> => {
+    // (WP8) Plaid postings only (`plaid_transaction_id is not null`). A row the
+    // app wrote on the account — a split part of a card charge, which keeps
+    // its card and the charge's description and date — is never a re-link
+    // duplicate: collapsing equal parts deleted real money.
     const rows = await tx
       .select()
       .from(transactionsTable)
@@ -209,6 +213,7 @@ export async function dedupeTransactionsForAccount(
         and(
           eq(transactionsTable.userId, userId),
           eq(transactionsTable.plaidAccountId, plaidAccountId),
+          sql`${transactionsTable.plaidTransactionId} is not null` as SQL<unknown>,
         ),
       );
     if (rows.length < 2) return report;
@@ -448,6 +453,8 @@ export async function dedupeTransactionsAcrossAccountsForUser(
   return await db.transaction(async (tx) => {
     // Only inspect Plaid-origin rows. Manual rows are user-authored and
     // must not be auto-collapsed even if their fields happen to match.
+    // (WP8) Plaid POSTINGS: a split part keeps its card's `plaid:*` source but
+    // carries no Plaid transaction id, and is never relink residue.
     const rows = await tx
       .select()
       .from(transactionsTable)
@@ -455,6 +462,7 @@ export async function dedupeTransactionsAcrossAccountsForUser(
         and(
           eq(transactionsTable.userId, userId),
           sql`${transactionsTable.source} like 'plaid:%'` as SQL<unknown>,
+          sql`${transactionsTable.plaidTransactionId} is not null` as SQL<unknown>,
         ),
       );
     report.rowsScanned = rows.length;
@@ -659,6 +667,7 @@ export async function countDuplicateTransactionsForUser(
       from ${transactionsTable}
       where ${transactionsTable.userId} = ${userId}
         and ${transactionsTable.plaidAccountId} is not null
+        and ${transactionsTable.plaidTransactionId} is not null
       group by
         ${transactionsTable.plaidAccountId},
         ${transactionsTable.occurredOn},
@@ -702,6 +711,7 @@ export async function dedupeTransactionsForUser(
       from ${transactionsTable}
       where ${transactionsTable.userId} = ${userId}
         and ${transactionsTable.plaidAccountId} is not null
+        and ${transactionsTable.plaidTransactionId} is not null
       group by
         ${transactionsTable.plaidAccountId},
         ${transactionsTable.occurredOn},

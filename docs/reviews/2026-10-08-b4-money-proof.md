@@ -1,5 +1,7 @@
 # B4 — the complete Amex + checking scenario, proven on identical fixtures
 
+> **(WP8, 2026-10-10) Superseded on one point, by the owner's decision:** the Amex page (`GET /amex/weekly-payoff`) now bills every charge on the card, filed or not, as the forecast's hook does. In this scenario the page shows the unfiled pending KROGER $86.33 from S1 (it showed $0.00 until S3a filed it); no other figure changes. See `2026-10-13-wp8-forecast.md`.
+
 Branch `restore/b4-money-proof` · base `origin/main` `070ebb1c` · test DB `h2budget_test_b4` · no migration.
 
 **No source file changed.** Two files are added: the scenario test

@@ -1801,6 +1801,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
 }>, "many">;
+export declare const createTransactionBodyPlaidAccountIdMax = 128;
 export declare const CreateTransactionBody: zod.ZodObject<{
     occurredOn: zod.ZodString;
     occurredAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -1823,6 +1824,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     occurredOn: string;
     description: string;
@@ -1844,6 +1846,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     notes?: string | null | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
+    plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
 }, {
     occurredOn: string;
@@ -1866,6 +1869,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     notes?: string | null | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
+    plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
 }>;
 export declare const UpdateTransactionParams: zod.ZodObject<{
