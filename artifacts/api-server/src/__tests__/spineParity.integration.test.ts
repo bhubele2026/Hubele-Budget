@@ -371,6 +371,20 @@ beforeAll(async () => {
       minPayment: "0.00",
       status: "paid_off",
     },
+    // (WP4) An ARCHIVED debt — what the server really writes when a debt is
+    // paid off or taken off the plan (nothing writes `paid_off`). Before WP4
+    // `payoffPct` kept it (`status !== "paid_off"`): its 4,000 anchor and $0
+    // balance lifted "% paid" from 41.47% to 52.62%.
+    {
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      name: "Archived loan",
+      balance: "0.00",
+      originalBalance: "4000.00",
+      apr: "0.0899",
+      minPayment: "0.00",
+      status: "archived",
+    },
   ]).returning();
   VISA_DEBT_ID = seededDebts.find((d) => d.name === "Visa")!.id;
 
@@ -968,6 +982,36 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(rawBasis).toBeCloseTo(39.7035, 3);
     expect(spine.debt.payoffPct!).toBeGreaterThan(rawBasis!);
     expect(spine.debt.payoffPct!).toBeCloseTo(41.4682, 3);
+  });
+
+  it("⭐ (WP4) debt.payoffPct measures ACTIVE debts only — an archived debt is out of both sides", async () => {
+    const spine = await get<Spine>("/spine");
+    const debts = await get<
+      Array<{ id: string; name: string; balance: string; originalBalance?: string | null; status?: string; pendingPaymentTotal?: string | null }>
+    >("/debts");
+
+    // The archived debt is on /debts — it is just not progress on the plan.
+    const archived = debts.find((d) => d.name === "Archived loan");
+    expect(archived?.status).toBe("archived");
+
+    // THE DISCRIMINATING ASSERTION: the pre-WP4 population (`status !==
+    // "paid_off"`), re-derived here by hand, counts the archived debt and lands
+    // on 52.62%. The spine must not.
+    let sumOrig = 0;
+    let sumBal = 0;
+    for (const d of debts) {
+      if (d.status === "paid_off") continue;
+      const orig = Number(d.originalBalance ?? 0) || 0;
+      if (orig <= 0) continue;
+      sumOrig += orig;
+      sumBal += Math.min(Math.max(0, Number(d.balance) - Number(d.pendingPaymentTotal ?? 0)), orig);
+    }
+    const oldPopulation = ((sumOrig - sumBal) / sumOrig) * 100;
+    expect(oldPopulation).toBeCloseTo(52.6171, 3);
+    expect(spine.debt.payoffPct!).toBeCloseTo(41.4682, 3);
+    expect(spine.debt.payoffPct!).not.toBeCloseTo(oldPopulation, 1);
+    // The same population as the active total: the two active debts only.
+    expect(debts.filter((d) => d.status === "active").map((d) => d.name).sort()).toEqual(["Car loan", "Visa"]);
   });
 
   it("dashboard.totalDebt is netted too, and ties to /debts to the cent", async () => {

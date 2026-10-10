@@ -19,6 +19,7 @@ import {
   type SimResult,
   type Strategy,
 } from "./index";
+import { inPayoffPopulation } from "./pendingDebt";
 
 /**
  * A debt as the plan reads it: the simulator's fields plus where each figure
@@ -291,9 +292,9 @@ export function milestonesFor(simulation: SimResult, debts: PlanDebt[]): Milesto
   }
 
   if (first) {
-    const anchored = debts.filter(
-      (d) => d.status !== "paid_off" && Number(d.originalBalance ?? 0) > 0,
-    );
+    // (WP4) The population `payoffPct` measures (`inPayoffPopulation`), so a
+    // milestone named "50% paid" is that same 50%.
+    const anchored = debts.filter(inPayoffPopulation);
     let pctAt: (i: number) => number;
     let startPct: number;
     if (anchored.length > 0) {
