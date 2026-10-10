@@ -289,6 +289,12 @@ export default function NextAccountsPage() {
                 </p>
               </Panel>
             </>
+          ) : selectedId && !itemsKnown ? (
+            // (WP7d) An account's route while the linked accounts load: its own
+            // view's skeleton, never a flash of every account's activity (which
+            // also asked GET /transactions with no account on a card's page). A
+            // failed read is said above; nothing is guessed below it.
+            itemsFailed ? null : <div className="span-12 min-w-0"><AccountPageSkeleton tiles={3} /></div>
           ) : (
             <CombinedActivity entries={entries} entriesKnown={itemsKnown} />
           )}
