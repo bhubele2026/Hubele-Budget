@@ -242,6 +242,17 @@ describe("milestonesFor", () => {
     expect(withArchived.some((x) => x.key === "pct_25")).toBe(true);
   });
 
+  it("(WP4b) an active debt anchored at $0.00 is in the basis at what it owes, exactly as payoffPct reads it", () => {
+    // Large enough that leaving it out would move the % steps.
+    const zero: PlanDebt = { id: "z", name: "Card Z", apr: 0.2, balance: 6000, minPayment: 150, type: "credit_card", status: "active", originalBalance: 0 };
+    const all = [...debts, zero];
+    const s2 = simulate({ debts: all, extraPerMonth: 300, strategy: "avalanche", startDate: START });
+    // max(anchor, owed) = 6,000: the same as anchoring it at its balance — never dropped.
+    expect(milestonesFor(s2, all)).toEqual(milestonesFor(s2, all.map((d) => (d.id === "z" ? { ...d, originalBalance: 6000 } : d))));
+    // And it is in the basis: leaving it out (WP4 dropped a $0.00 anchor) gives other steps.
+    expect(milestonesFor(s2, all)).not.toEqual(milestonesFor(s2, all.map((d) => (d.id === "z" ? { ...d, status: "archived" } : d))));
+  });
+
   it("without anchors the basis is the run's starting total", () => {
     const bare: PlanDebt[] = debts.map(({ originalBalance: _o, ...d }) => d);
     const m = milestonesFor(sim, bare);

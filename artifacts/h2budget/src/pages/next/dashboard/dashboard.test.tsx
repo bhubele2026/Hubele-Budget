@@ -349,10 +349,15 @@ describe("summary row: four figures, status-aware", () => {
     wrap(<SummaryRow />);
     expect(screen.getByTestId("dash-debt-left").textContent).toBe("$18,500.00 left on your payoff plan (HELOC)");
   });
-  it("(WP4) the amount left measures the debts % paid measures: an unanchored active debt is in neither", () => {
+  it("(WP4b) an active debt anchored at $0.00 is money left: in the amount and in the names (it was dropped)", () => {
     h.Q.debts = ok([debt("h1", "HELOC", "18500.00"), debt("z1", "Never anchored", "120.00", { originalBalance: "0.00" })]);
     wrap(<SummaryRow />);
-    expect(screen.getByTestId("dash-debt-left").textContent).toBe("$18,500.00 left on your payoff plan (HELOC)");
+    expect(screen.getByTestId("dash-debt-left").textContent).toBe("$18,620.00 left on your payoff plan (HELOC and Never anchored)");
+  });
+  it("(WP4b) alone, a zero-anchored debt with a balance is never 'No balance left'", () => {
+    h.Q.debts = ok([debt("z1", "Blue Cash", "684.12", { originalBalance: "0.00" })]);
+    wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-debt-left").textContent).toBe("$684.12 left on your payoff plan (Blue Cash)");
   });
   describe("(WP4) the cards the amount left does not cover", () => {
     const amexItem = (o: Record<string, unknown> = {}) => item("b", "American Express", "amex", [

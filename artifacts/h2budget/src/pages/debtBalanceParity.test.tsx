@@ -82,6 +82,8 @@ vi.mock("wouter", () => ({
 }));
 // The dashboard case below hands the summary row a spine; the pages read none.
 const spineHolder = vi.hoisted(() => ({ data: undefined as unknown }));
+// (WP4b) A test may swap the debts the pages read; null = SEEDED_DEBTS.
+const debtsHolder = vi.hoisted(() => ({ list: null as unknown[] | null }));
 vi.mock("@/hooks/useSpine", () => ({
   useSpine: () => ({ data: spineHolder.data, isLoading: false, state: "loaded", refetch: () => {} }),
 }));
@@ -101,7 +103,7 @@ vi.mock("@workspace/api-client-react", () => {
   const mutation = { mutate: noop, mutateAsync: asyncNoop, isPending: false };
   const mutation2 = () => mutation;
   return {
-    useListDebts: () => ({ data: SEEDED_DEBTS, isLoading: false }),
+    useListDebts: () => ({ data: debtsHolder.list ?? SEEDED_DEBTS, isLoading: false }),
     useListDebtBalanceHistory: () => ({ data: [], isLoading: false }),
     useCreateDebt: () => mutation,
     useUpdateDebt: () => mutation,
@@ -189,6 +191,7 @@ function debtsPageRowFor(name: string): HTMLElement {
 
 beforeEach(() => {
   cleanup();
+  debtsHolder.list = null;
 });
 
 describe("Debt balance parity — Debts page vs Avalanche page (owner-authorized, 2026-08-23)", () => {
@@ -306,5 +309,51 @@ describe("⭐ The amount left — dashboard debt tile vs Avalanche vs Reports (o
     expect(scope.total).toBe(total);
     // A cleared or archived debt adds nothing, so it is not named in the scope.
     expect(scope.names).toEqual(["Amex Delta", "Chase Visa"]);
+  });
+
+  // ⭐ (WP4b) A card put on the plan while it read $0.00 keeps the anchor "0.00"
+  // (written only while null) after Plaid raises its balance. WP4 dropped it
+  // from the amount left while the Avalanche rows, Accounts and Reports counted
+  // it; the population is every active debt now.
+  const ZERO_ANCHORED = {
+    ...SEEDED_DEBTS[1]!, id: "zero-anchor", name: "Blue Cash", balance: "684.12", originalBalance: "0.00",
+    minPayment: "40", payment: "40", apr: "0.2799", sortOrder: 3,
+  } as Debt;
+  const ARCHIVED = { ...SEEDED_DEBTS[1]!, id: "archived", name: "Archived card", status: "archived", balance: "999.00" } as Debt;
+
+  it("(WP4b) the Avalanche Totals row is the sum of its rows — an active debt anchored at $0.00 in both, an archived one in neither", () => {
+    debtsHolder.list = [...SEEDED_DEBTS, ZERO_ANCHORED, ARCHIVED];
+    renderPage(<AvalanchePage />);
+    const rows = Array.from(document.querySelectorAll('tr[data-testid^="row-debt-"]'));
+    expect(rows.map((r) => r.getAttribute("data-testid")).sort()).toEqual(["row-debt-amex", "row-debt-chase", "row-debt-zero-anchor"]);
+    const money = (t: string) => Number(t.replace(/[$,]/g, ""));
+    const rowSum = rows.reduce((s, r) => s + money(r.querySelectorAll("td")[2]?.querySelector("div")?.textContent ?? "0"), 0);
+    const totals = screen.getByText("Totals").closest("tr")!;
+    const totalText = (totals.querySelectorAll("td")[1]?.textContent ?? "").trim();
+    expect(totalText).toBe("$9,304.67"); // 8,120.55 + 500.00 + 684.12
+    expect(money(totalText)).toBeCloseTo(rowSum, 2);
+  });
+
+  it("(WP4b) the dashboard's amount left and its names include the debt anchored at $0.00, equal to the Avalanche Totals", () => {
+    const debts = [...SEEDED_DEBTS, ZERO_ANCHORED, ARCHIVED];
+    debtsHolder.list = debts;
+    spineHolder.data = {
+      bank: { balance: "100.00", asOfDate: "2026-10-08T12:00:00Z", source: "plaid", lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null },
+      forecast: { lowPoint: "100.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "not_yet" },
+      position: { safeToSpendNow: null, remainingWeek: null, availableUntilPayday: null, paydayDate: null, horizonKind: "week_end", withinPlan: null, confidence: "firm", degraded: false, weekAdjustment: null },
+      debt: { payoffPct: 40, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 },
+      reviewCount: 0, nextBill: null, spentWeek: 0, spentMonth: 0, billsDueCount: 0, asOf: "2026-10-08T12:00:00Z",
+    };
+    try {
+      renderPage(<SummaryRow />);
+      expect(screen.getByTestId("dash-debt-left").textContent).toBe(
+        "$9,304.67 left on your payoff plan (Amex Delta, Chase Visa and Blue Cash)",
+      );
+    } finally {
+      spineHolder.data = undefined;
+    }
+    expect(remainingDebtTotal(debts)).toBeCloseTo(9304.67, 2);
+    expect(totalsForDebts(debts).totalBalance).toBe(remainingDebtTotal(debts));
+    expect(remainingDebtScope(debts).names).toEqual(["Amex Delta", "Chase Visa", "Blue Cash"]);
   });
 });
