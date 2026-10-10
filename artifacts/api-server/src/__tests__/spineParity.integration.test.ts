@@ -382,8 +382,8 @@ beforeAll(async () => {
   // the spine shipped a "% paid" that disagreed with the Debts page.
   //
   // Neither seeded debt sets `lastBalanceUpdate` or `plaidLastSyncedAt`, so
-  // `pendingCutoffForDebt` returns null and every tagged payment counts as
-  // pending. Shape copied from `debtsPendingPaymentDecrement.integration.test`:
+  // `balanceAsOfForDebt` returns null and every payment-shaped tagged row
+  // counts as pending (a manual row always is: WP2). Shape copied from `debtsPendingPaymentDecrement.integration.test`:
   // debt-tagged, positive (payment-direction), `source: "manual"`, and
   // deliberately NOT on the checking account — this is the creditor side of
   // the payment, so it must not disturb the bank roll-forward or spend facts

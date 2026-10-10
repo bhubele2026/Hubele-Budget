@@ -60,6 +60,7 @@ import {
   fetchLiabilitiesForItem,
   fetchLiabilitiesForUser,
 } from "../lib/plaidLiabilities";
+import { applyCachedLiabilitiesToPlaidDebts } from "../lib/debtLiabilityApply";
 import {
   listRecentSyncAttempts,
   PLAID_SYNC_ATTEMPT_LIST_LIMIT,
@@ -2473,6 +2474,10 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
         if (!hasLiabilityAcct) return;
         try {
           await fetchLiabilitiesForItem(req.userId!, r.plaidItemRowId);
+          // (WP2) Put what was just cached onto the linked debts Plaid owns,
+          // as GET /debts does: otherwise the fetch time moved (and with it
+          // the pending rule's as-of) while `debts.balance` stayed behind.
+          await applyCachedLiabilitiesToPlaidDebts(req.userId!, req.householdId!, r.plaidItemRowId);
         } catch (liabErr) {
           req.log.warn(
             { err: liabErr, plaidItemRowId: r.plaidItemRowId },

@@ -362,6 +362,11 @@ export const transactionsTable = pgTable(
     isExternalCardPayment: boolean("is_external_card_payment")
       .notNull()
       .default(false),
+    // (FIN-2) A row the household typed in that a Plaid sync merge adopted
+    // (it took the Plaid transaction id). The pending-payment rule still reads
+    // it as the household's own row. Set only by the two merges; added by
+    // lib/db/migrations/0180_transactions_adopted_from_household.sql.
+    adoptedFromHousehold: boolean("adopted_from_household").notNull().default(false),
     importBatchId: uuid("import_batch_id"),
     notes: text("notes"),
     source: text("source").notNull().default("manual"),

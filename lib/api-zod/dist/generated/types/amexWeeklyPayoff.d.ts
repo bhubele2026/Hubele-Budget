@@ -11,6 +11,7 @@ export interface AmexWeeklyPayoff {
     weekEnd: string;
     cards: AmexWeeklyPayoffCard[];
     combinedWeekCharges: number;
+    /** The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total */
     combinedStatementBalance: number;
 }
 //# sourceMappingURL=amexWeeklyPayoff.d.ts.map

@@ -5530,25 +5530,52 @@ components:
         pendingPaymentTotal:
           type: ["string", "null"]
           description: |
-            (#421) Sum (as a money string, e.g. "200.00") of payment-direction
-            transactions tagged to this debt that the creditor has not yet
-            reflected in the reported `balance`. A transaction counts as
-            pending when it's tagged to the debt (auto or manual), has a
-            positive (payment-direction) amount, and is dated strictly after
-            the debt's last creditor-reported balance timestamp
-            (`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`
-            for manual). The Avalanche / Debts UI subtracts this from
-            `balance` to render an "effective" balance and show a small
-            "−$X pending" hint. Null when the debt has no pending payments.
+            (#421) Sum (as a money string, e.g. "200.00") of payments tagged
+            to this debt that the creditor has not yet reflected in the
+            reported `balance`. (WP2) A tagged row counts when it pays the
+            debt down (a positive amount — and, for a row from a bank or card
+            feed, one `classifyLiabilityRow` calls a payment, so a refund or a
+            statement credit never counts), it is not the bank row that
+            confirmed a payment claim, and it is dated AFTER the household
+            day of `liabilityAsOf` (a payment dated on or before that day is
+            taken to be in the balance). The Avalanche / Debts UI subtracts
+            this from `balance` to render an "effective" balance and show a
+            small "−$X pending" hint. Null when the debt has no pending
+            payments.
         pendingPaymentCount:
           type: ["integer", "null"]
           description: |
-            (#421) Number of tagged payment-direction transactions counted
-            in `pendingPaymentTotal`. Null / 0 when there are none.
+            (#421) Number of tagged payments counted in
+            `pendingPaymentTotal`. Null / 0 when there are none.
+        liabilityAsOf:
+          type: ["string", "null"]
+          description: |
+            (WP2) When the balance on this row was read (ISO instant): for a
+            Plaid-sourced linked debt, the later of its account's liability
+            fetch and `plaidLastSyncedAt`; otherwise `lastBalanceUpdate`.
+            Payments dated after this instant's household day are pending
+            (`pendingPaymentTotal`). Null when the balance was never read.
+        statement:
+          description: |
+            (WP2) The creditor's latest statement on file (`debt_statements`,
+            the newest statement date), or null when none was ever reported.
+            This is the real statement — not the card's current balance.
+          oneOf:
+            - $ref: "#/components/schemas/DebtStatement"
+            - type: "null"
         plaidAccount:
           oneOf:
             - $ref: "#/components/schemas/DebtPlaidAccount"
             - type: "null"
+    DebtStatement:
+      type: object
+      description: (WP2) One creditor statement, as Plaid's liabilities report (or the household) gave it.
+      required: [date, balance, minPayment, dueDate]
+      properties:
+        date: { type: string, description: The statement date (YYYY-MM-DD) }
+        balance: { type: ["string", "null"], description: "The statement balance, two decimals; null when not reported" }
+        minPayment: { type: ["string", "null"], description: "The minimum payment due, two decimals; null when not reported" }
+        dueDate: { type: ["string", "null"], description: "When the payment is due (YYYY-MM-DD); null when not reported" }
     DebtPlaidAccount:
       type: object
       required: [id]
@@ -7750,8 +7777,14 @@ components:
         displayName: { type: ["string", "null"] }
         weekCharges: { type: number }
         chargeCount: { type: integer }
-        statementBalance: { type: number }
-        pctOfStatementThisWeek: { type: number }
+        statementBalance:
+          type: number
+          description: |
+            ⚠️ NOT the statement balance, despite the name: the card's CURRENT
+            balance as Plaid last reported it (`plaid_accounts.liability_balance`),
+            else the linked debt's balance, else 0. (WP2) The real last statement
+            is `Debt.statement`.
+        pctOfStatementThisWeek: { type: number, description: "weekCharges ÷ statementBalance (the current balance), clamped to 0–1" }
         topMerchant:
           oneOf:
             - type: "null"
@@ -7771,7 +7804,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AmexWeeklyPayoffCard" }
         combinedWeekCharges: { type: number }
-        combinedStatementBalance: { type: number }
+        combinedStatementBalance: { type: number, description: "The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total" }
 
     DashboardBudget:
       type: object

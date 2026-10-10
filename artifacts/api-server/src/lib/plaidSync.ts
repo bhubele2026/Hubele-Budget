@@ -30,6 +30,7 @@ import { markRemovedRowsKept, runCategorizationBatch } from "./categorizer";
 import { reconcileSplitsAfterSync } from "./categorizer/splits";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { afterPlaidSyncDebtPass } from "./debtPaymentConfirm";
+import { debtIdForSyncedRow } from "./debtPending";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "./householdClock";
@@ -1433,9 +1434,16 @@ export async function syncPlaidItem(
       // appear as POSITIVE amounts in our app and purchases as negative.
       // Tagging purchases would make the dashboard double-count debt growth
       // as "paid off" and worsen the original bug.
-      const linkedDebtId = debtIdByPlaidAccount.get(t.account_id) ?? null;
-      const debtId =
-        linkedDebtId && Number(signedAmount) > 0 ? linkedDebtId : null;
+      // (WP2) And only a PAYMENT among the positive rows: a refund or a
+      // statement credit lowers the card too, but tagging it netted the debt as
+      // if it were a payment (`debtIdForSyncedRow`, the pending reader's rule).
+      const debtId = debtIdForSyncedRow(debtIdByPlaidAccount.get(t.account_id) ?? null, {
+        source,
+        amount: signedAmount,
+        description,
+        pfcPrimary: pfc?.primary ?? null,
+        pfcDetailed: pfc?.detailed ?? null,
+      });
 
       // (#361) First-sync cutoff gate. For *added* rows on an account
       // that hasn't yet completed its first sync AND has a cutoff on
@@ -1569,6 +1577,10 @@ export async function syncPlaidItem(
               plaidTransactionId: t.transaction_id,
               plaidAccountId: t.account_id,
               source,
+              // (FIN-2) A row the household typed stays theirs to the pending
+              // rule. SET reads the row BEFORE this update, so `source` here is
+              // the typed row's own, not the `plaid:<slug>` just written.
+              adoptedFromHousehold: sql`${transactionsTable.source} = 'manual'`,
             })
             .where(eq(transactionsTable.id, mergedTo));
           firstSyncMerged++;
@@ -3657,9 +3669,14 @@ export async function runGapBackfillForItem(
           .from(transactionsTable)
           .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
           .limit(1);
-        const linkedDebtId = debtIdByExternal.get(t.account_id) ?? null;
-        const debtId =
-          linkedDebtId && Number(signedAmount) > 0 ? linkedDebtId : null;
+        // (WP2) The cursor path's rule: only a payment is tagged to the debt.
+        const debtId = debtIdForSyncedRow(debtIdByExternal.get(t.account_id) ?? null, {
+          source,
+          amount: signedAmount,
+          description,
+          pfcPrimary: pfc?.primary ?? null,
+          pfcDetailed: pfc?.detailed ?? null,
+        });
 
         // ±7-day merge with an unattached manual row (same
         // userId+amount+date+source-scope, plaidTransactionId NULL).
@@ -3702,6 +3719,8 @@ export async function runGapBackfillForItem(
               .set({
                 plaidTransactionId: t.transaction_id,
                 plaidAccountId: t.account_id,
+                // (FIN-2) A row the household typed stays theirs to the pending rule.
+                adoptedFromHousehold: sql`${transactionsTable.source} = 'manual'`,
               })
               .where(eq(transactionsTable.id, match.id));
             continue;

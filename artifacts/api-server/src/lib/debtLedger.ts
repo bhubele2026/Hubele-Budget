@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   debtLedgerEventsTable,
@@ -212,4 +212,43 @@ export async function recordDebtStatements(
     logger.error({ err, householdId }, "[debt-plan] recording statement facts failed");
     return 0;
   }
+}
+
+/** (WP2) A debt's latest statement, as `Debt.statement` serves it. Amounts are two-decimal strings. */
+export type DebtStatementFact = {
+  date: string;
+  balance: string | null;
+  minPayment: string | null;
+  dueDate: string | null;
+};
+
+/**
+ * (WP2) Each debt's LATEST statement from `debt_statements` (one row per debt:
+ * the newest statement date), keyed by debt id. A debt with no statement on
+ * file is absent. Read-only. Before WP2 these rows were written on every
+ * liabilities fetch and read by nothing, while the account page labelled
+ * Plaid's CURRENT balance "Statement balance".
+ */
+export async function loadLatestStatements(
+  householdId: string,
+  debtIds: readonly string[],
+): Promise<Map<string, DebtStatementFact>> {
+  const out = new Map<string, DebtStatementFact>();
+  if (debtIds.length === 0) return out;
+  const s = debtStatementsTable;
+  const rows = await db
+    .selectDistinctOn([s.debtId], {
+      debtId: s.debtId,
+      date: s.statementDate,
+      balance: s.statementBalance,
+      minPayment: s.minPayment,
+      dueDate: s.dueDate,
+    })
+    .from(s)
+    .where(and(eq(s.householdId, householdId), inArray(s.debtId, [...debtIds])))
+    .orderBy(asc(s.debtId), desc(s.statementDate));
+  for (const r of rows) {
+    out.set(r.debtId, { date: r.date, balance: r.balance ?? null, minPayment: r.minPayment ?? null, dueDate: r.dueDate ?? null });
+  }
+  return out;
 }

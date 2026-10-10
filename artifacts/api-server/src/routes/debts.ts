@@ -18,80 +18,26 @@ import {
   CreateDebtPaymentParams,
 } from "@workspace/api-zod";
 import { fetchLiabilitiesForItem } from "../lib/plaidLiabilities";
-import { householdTodayISO } from "../lib/householdClock";
 import {
+  AprValidationError,
+  applyLiabilityToDebt,
+  recordBalanceSnapshot,
+  validateAprDecimal,
+} from "../lib/debtLiabilityApply";
+import {
+  balanceAsOfForDebt,
   loadPendingPayments,
   type PendingEntry,
 } from "../lib/debtPending";
+import { loadLatestStatements, type DebtStatementFact } from "../lib/debtLedger";
 import { confirmDebtPaymentClaims } from "../lib/debtPaymentConfirm";
 import { syncDebtBudgetAfterWrite } from "../lib/budgetDebtSync";
+
+export { AprValidationError, validateAprDecimal };
 
 const router: IRouter = Router();
 
 const REFRESH_STALE_MS = 60 * 60 * 1000; // 1 hour
-
-/** The household's today (America/Chicago) — the day a balance change is recorded on. */
-function todayISO(): string {
-  return householdTodayISO();
-}
-
-async function recordBalanceSnapshot(
-  userId: string,
-  householdId: string,
-  debtId: string,
-  balance: string | number,
-): Promise<void> {
-  const balStr =
-    typeof balance === "number" ? balance.toFixed(2) : String(balance);
-  // Upsert the day's row so a later same-day balance update wins (including
-  // a correction down to $0). Previously this used onConflictDoNothing,
-  // which silently dropped same-day drops to zero and left paid-off debts
-  // frozen at their last non-zero balance in the history curve.
-  await db
-    .insert(debtBalanceHistoryTable)
-    .values({
-      userId,
-      householdId,
-      debtId,
-      recordedOn: todayISO(),
-      balance: balStr,
-    })
-    .onConflictDoUpdate({
-      target: [
-        debtBalanceHistoryTable.householdId,
-        debtBalanceHistoryTable.debtId,
-        debtBalanceHistoryTable.recordedOn,
-      ],
-      set: { balance: balStr },
-    });
-}
-
-export class AprValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "AprValidationError";
-  }
-}
-
-// APR is stored and consumed as a *decimal* (e.g. 0.2499 for 24.99%). A user
-// sending the percentage form (e.g. 24.99) would be interpreted as 2,499%
-// APR by the simulator, breaking the whole avalanche page. Reject anything
-// outside [0, 1) with a clear message so the bad value never reaches the DB.
-export function validateAprDecimal(apr: unknown): void {
-  if (apr === undefined || apr === null) return;
-  const n = typeof apr === "number" ? apr : Number(apr);
-  if (!Number.isFinite(n)) {
-    throw new AprValidationError("APR must be a number");
-  }
-  if (n < 0) {
-    throw new AprValidationError("APR must be ≥ 0");
-  }
-  if (n >= 1) {
-    throw new AprValidationError(
-      `APR must be a decimal — e.g. 0.2499 for 24.99% (got ${n})`,
-    );
-  }
-}
 
 function normalize<T extends Record<string, unknown>>(input: T): Record<string, unknown> {
   const out: Record<string, unknown> = { ...input };
@@ -153,14 +99,21 @@ function shapeDebt(
   accountById: Map<string, AccountRow>,
   itemById: Map<string, ItemRow>,
   pendingByDebt: Map<string, PendingEntry> = new Map(),
+  statementByDebt: Map<string, DebtStatementFact> = new Map(),
 ) {
   const acct = d.plaidAccountId ? accountById.get(d.plaidAccountId) : null;
   const item = acct ? itemById.get(acct.itemId) : null;
   const pending = pendingByDebt.get(d.id) ?? null;
+  // (WP2) The instant the pending rule cuts at: payments dated after its
+  // household day are "paid, not posted" (`lib/debtPending.ts`).
+  const asOf = balanceAsOfForDebt(d, acct?.liabilityLastFetchedAt ?? null);
   return {
     ...d,
     pendingPaymentTotal: pending && pending.total > 0 ? pending.total.toFixed(2) : null,
     pendingPaymentCount: pending && pending.count > 0 ? pending.count : null,
+    liabilityAsOf: asOf ? asOf.toISOString() : null,
+    // (WP2) The creditor's real last statement (`debt_statements`), or null.
+    statement: statementByDebt.get(d.id) ?? null,
     lastBalanceUpdate: d.lastBalanceUpdate
       ? d.lastBalanceUpdate.toISOString()
       : null,
@@ -220,78 +173,19 @@ function shapeDebt(
 }
 
 /**
- * Apply cached Plaid liability values to a debt.
- * - On `mode='adopt'` (initial link): claim every field Plaid actually
- *   returned, marking that field's source as 'plaid'. Fields Plaid did not
- *   return stay manual.
- * - On `mode='refresh'` (subsequent syncs): only overwrite fields whose
- *   current source is already 'plaid'. Manual overrides are preserved.
+ * (WP2) Every `Debt` this router returns, shaped from ONE set of reads: the
+ * linked accounts and their items, the pending payments, and the latest
+ * statements. Each route used to assemble its own subset, so the same debt
+ * could come back with or without its account context depending on the call.
  */
-async function applyLiabilityToDebt(
-  userId: string,
-  householdId: string,
-  debt: DebtRow,
-  mode: "adopt" | "refresh" = "refresh",
-  stampSync: boolean = true,
-): Promise<DebtRow> {
-  if (!debt.plaidAccountId) return debt;
-  const [acct] = await db
-    .select()
-    .from(plaidAccountsTable)
-    .where(
-      and(
-        eq(plaidAccountsTable.id, debt.plaidAccountId),
-        eq(plaidAccountsTable.householdId, householdId),
-      ),
-    );
-  if (!acct) return debt;
-  const patch: Partial<typeof debtsTable.$inferInsert> = {
-    updatedAt: new Date(),
-  };
-  if (stampSync) patch.plaidLastSyncedAt = new Date();
-  const allowBalance = mode === "adopt" || debt.balanceSource === "plaid";
-  const allowApr = mode === "adopt" || debt.aprSource === "plaid";
-  const allowMin = mode === "adopt" || debt.minPaymentSource === "plaid";
-  if (allowBalance && acct.liabilityBalance != null) {
-    patch.balance = acct.liabilityBalance;
-    patch.balanceSource = "plaid";
-    patch.lastBalanceUpdate = new Date();
-    // Anchor the original balance the first time we ever see one for this
-    // debt so the avalanche progress bar has a stable denominator. We never
-    // overwrite an existing anchor — the original is by definition the
-    // highest known balance at adoption time.
-    if (debt.originalBalance == null) {
-      patch.originalBalance = acct.liabilityBalance;
-    }
-    // (#292) Auto-archive when Plaid reports the balance hit zero so the
-    // Bills "Stops at payoff" celebratory row fires automatically. Without
-    // this the user has to manually flip status='archived' for the row to
-    // appear, and most paid-off debts would silently slip past it.
-    if (
-      debt.status === "active" &&
-      Number(acct.liabilityBalance) <= 0.005
-    ) {
-      patch.status = "archived";
-    }
-  }
-  if (allowApr && acct.liabilityApr != null) {
-    validateAprDecimal(acct.liabilityApr);
-    patch.apr = acct.liabilityApr;
-    patch.aprSource = "plaid";
-  }
-  if (allowMin && acct.liabilityMinPayment != null) {
-    patch.minPayment = acct.liabilityMinPayment;
-    patch.minPaymentSource = "plaid";
-  }
-  const [updated] = await db
-    .update(debtsTable)
-    .set(patch)
-    .where(and(eq(debtsTable.id, debt.id), eq(debtsTable.householdId, householdId)))
-    .returning();
-  if (updated && patch.balance != null) {
-    await recordBalanceSnapshot(userId, householdId, updated.id, updated.balance);
-  }
-  return updated ?? debt;
+async function shapeDebts(householdId: string, rows: DebtRow[]) {
+  const accountIds = rows.map((r) => r.plaidAccountId).filter((v): v is string => !!v);
+  const [{ accountById, itemById }, pendingByDebt, statementByDebt] = await Promise.all([
+    loadAccountContext(householdId, accountIds),
+    loadPendingPayments(householdId, rows),
+    loadLatestStatements(householdId, rows.map((r) => r.id)),
+  ]);
+  return rows.map((r) => shapeDebt(r, accountById, itemById, pendingByDebt, statementByDebt));
 }
 
 async function refreshLinkedDebt(
@@ -449,14 +343,7 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  const accountIds = rows
-    .map((r) => r.plaidAccountId)
-    .filter((v): v is string => !!v);
-  const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
-  const pendingByDebt = await loadPendingPayments(householdId, rows);
-  res.json(
-    rows.map((r) => shapeDebt(r, accountById, itemById, pendingByDebt)),
-  );
+  res.json(await shapeDebts(householdId, rows));
 });
 
 router.post("/debts", requireAuth, async (req, res): Promise<void> => {
@@ -490,9 +377,9 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
     .values(values as typeof debtsTable.$inferInsert)
     .returning();
   await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
-  const pendingByDebt = await loadPendingPayments(req.householdId!, [row]);
+  const [shaped] = await shapeDebts(req.householdId!, [row]);
   await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-  res.status(201).json(shapeDebt(row, new Map(), new Map(), pendingByDebt));
+  res.status(201).json(shaped);
 });
 
 router.post("/debts/sync-minimums", requireAuth, async (req, res): Promise<void> => {
@@ -638,11 +525,9 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     // balance latest point and the recorded history agree going forward).
     await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
   }
-  const accountIds = row.plaidAccountId ? [row.plaidAccountId] : [];
-  const { accountById, itemById } = await loadAccountContext(req.householdId!, accountIds);
-  const pendingByDebt = await loadPendingPayments(req.householdId!, [row]);
+  const [shaped] = await shapeDebts(req.householdId!, [row]);
   await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-  res.json(shapeDebt(row, accountById, itemById, pendingByDebt));
+  res.json(shaped);
 });
 
 router.post(
@@ -745,10 +630,9 @@ router.post(
       }
       throw e;
     }
-    const { accountById, itemById } = await loadAccountContext(householdId, [plaidAccountId]);
-    const pendingByDebt = await loadPendingPayments(householdId, [refreshed]);
+    const [shaped] = await shapeDebts(householdId, [refreshed]);
     await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-    res.json(shapeDebt(refreshed, accountById, itemById, pendingByDebt));
+    res.json(shaped);
   },
 );
 
@@ -774,9 +658,9 @@ router.post(
       res.status(404).json({ error: "Not found" });
       return;
     }
-    const pendingByDebt = await loadPendingPayments(householdId, [row]);
+    const [shaped] = await shapeDebts(householdId, [row]);
     await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-    res.json(shapeDebt(row, new Map(), new Map(), pendingByDebt));
+    res.json(shaped);
   },
 );
 
@@ -816,12 +700,9 @@ router.post(
       });
       return;
     }
-    const { accountById, itemById } = await loadAccountContext(householdId, [
-      result.debt.plaidAccountId!,
-    ]);
-    const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
+    const [shaped] = await shapeDebts(householdId, [result.debt]);
     await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-    res.json(shapeDebt(result.debt, accountById, itemById, pendingByDebt));
+    res.json(shaped);
   },
 );
 
@@ -917,12 +798,10 @@ router.post(
     } catch (err) {
       req.log?.warn?.({ err }, "[debt-plan] claim confirmation after payment failed");
     }
-    const accountIds = result.debt.plaidAccountId ? [result.debt.plaidAccountId] : [];
-    const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
-    const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
+    const [shaped] = await shapeDebts(householdId, [result.debt]);
     await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
     res.status(201).json({
-      debt: shapeDebt(result.debt, accountById, itemById, pendingByDebt),
+      debt: shaped,
       transaction,
       killed: result.killed,
     });
