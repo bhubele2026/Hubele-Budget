@@ -3,9 +3,11 @@
 import { describe, it, expect } from "vitest";
 import {
   decomposeDelta,
+  inPayoffPopulation,
   isTransferPair,
   normalizeCardAmount,
   pairTransfers,
+  payoffPct,
   type DebtEvent,
 } from "@workspace/avalanche-core";
 
@@ -132,5 +134,69 @@ describe("normalizeCardAmount — charge semantics, both conventions", () => {
   });
   it("a charge on each side sums to two charges, not zero", () => {
     expect(normalizeCardAmount("amex", 100) + normalizeCardAmount("plaid:amex", -100)).toBe(200);
+  });
+});
+
+// ⭐ (WP4) "% PAID" MEASURES THE DEBTS ON THE PLAN: active, anchored debts,
+// netted of pending payments — the population "$X left" sums. The server
+// writes `active` or `archived` (never `paid_off`), so the old
+// `status !== "paid_off"` filter kept every archived debt: its anchor in the
+// denominator, its $0 in the numerator. One row per case; `before` is what the
+// old population read, for the review note.
+describe("payoffPct — the population (WP4)", () => {
+  type Row = { status?: string; balance: string; originalBalance?: string | null; pendingPaymentTotal?: string | null };
+  const active = (balance: string, originalBalance: string | null, pendingPaymentTotal: string | null = null): Row => ({
+    status: "active", balance, originalBalance, pendingPaymentTotal,
+  });
+  const table: Array<{ name: string; rows: Row[]; after: number | null; before: number | null }> = [
+    { name: "one active debt, half paid", rows: [active("500.00", "1000.00")], after: 50, before: 50 },
+    {
+      name: "⭐ + an ARCHIVED debt paid to $0 — out of both sides (it lifted % paid)",
+      rows: [active("500.00", "1000.00"), { status: "archived", balance: "0.00", originalBalance: "1000.00" }],
+      after: 50, before: 75,
+    },
+    {
+      name: "+ an archived debt with a balance left (taken off the plan) — out",
+      rows: [active("500.00", "1000.00"), { status: "archived", balance: "400.00", originalBalance: "1000.00" }],
+      after: 50, before: 55,
+    },
+    {
+      name: "+ a paid_off debt — out (both rules)",
+      rows: [active("500.00", "1000.00"), { status: "paid_off", balance: "0.00", originalBalance: "900.00" }],
+      after: 50, before: 50,
+    },
+    {
+      name: "+ an active debt with no anchor — out of both sides, not 0% paid",
+      rows: [active("500.00", "1000.00"), active("300.00", null), active("300.00", "0.00")],
+      after: 50, before: 50,
+    },
+    { name: "a pending payment nets the balance", rows: [active("600.00", "1000.00", "100.00")], after: 50, before: 50 },
+    { name: "a balance above its anchor counts as nothing paid, never negative", rows: [active("1200.00", "1000.00")], after: 0, before: 0 },
+    {
+      name: "only archived debts: nothing to show (null), never 0% or 100%",
+      rows: [{ status: "archived", balance: "0.00", originalBalance: "1000.00" }],
+      after: null, before: 100,
+    },
+  ];
+  // The pre-WP4 population, kept here only to state what changed.
+  const beforeWp4 = (rows: Row[]): number | null =>
+    payoffPct(rows.map((r) => (r.status === "paid_off" ? r : { ...r, status: "active" })));
+
+  it.each(table)("$name", ({ rows, after, before }) => {
+    const got = payoffPct(rows);
+    if (after === null) expect(got).toBeNull();
+    else expect(got).toBeCloseTo(after, 6);
+    const old = beforeWp4(rows);
+    if (before === null) expect(old).toBeNull();
+    else expect(old).toBeCloseTo(before, 6);
+  });
+
+  it("inPayoffPopulation: active and anchored; a missing status reads as active", () => {
+    expect(inPayoffPopulation({ status: "active", originalBalance: "1.00" })).toBe(true);
+    expect(inPayoffPopulation({ originalBalance: 10 })).toBe(true);
+    expect(inPayoffPopulation({ status: "archived", originalBalance: "1000.00" })).toBe(false);
+    expect(inPayoffPopulation({ status: "paid_off", originalBalance: "1000.00" })).toBe(false);
+    expect(inPayoffPopulation({ status: "active", originalBalance: null })).toBe(false);
+    expect(inPayoffPopulation({ status: "active", originalBalance: "0.00" })).toBe(false);
   });
 });

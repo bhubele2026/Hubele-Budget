@@ -789,8 +789,8 @@ export function sortDebts<T extends SimDebt>(debts: T[], strat: Strategy): T[] {
 // `./pendingDebt` (a sub-path export, like `./householdTime`), so the web app's
 // landing can net a debt balance without pulling this whole module — the
 // payoff simulator with it — into its entry chunk. Re-exported here, unchanged.
-import { effectiveDebtBalance, type PendingAwareDebt } from "./pendingDebt";
-export { effectiveDebtBalance, pendingPaymentTotalOf, type PendingAwareDebt } from "./pendingDebt";
+import { effectiveDebtBalance, inPayoffPopulation, type PendingAwareDebt } from "./pendingDebt";
+export { effectiveDebtBalance, inPayoffPopulation, pendingPaymentTotalOf, type PendingAwareDebt } from "./pendingDebt";
 
 // ── Payoff progress ─────────────────────────────────────────────────────────
 
@@ -836,18 +836,17 @@ export function payoffPct(
     }
   >,
 ): number | null {
-  // `status !== "paid_off"` — the landing's own filter. A retired debt must not
-  // keep inflating the numerator forever after it is gone.
-  const active = debts.filter((d) => d.status !== "paid_off");
+  // ⭐ (WP4) ACTIVE, anchored debts only (`inPayoffPopulation`) — the debts on
+  // the plan, the population "$X left" sums. An archived debt (paid off, or
+  // taken off the plan) is out of both sides; before, `status !== "paid_off"`
+  // kept it, because nothing writes `paid_off`.
   let sumOrig = 0;
   let sumBal = 0;
-  for (const d of active) {
-    const bal = effectiveDebtBalance(d);
-    const orig = Number(d.originalBalance ?? 0) || 0;
-    if (orig > 0) {
-      sumOrig += orig;
-      sumBal += Math.min(bal, orig);
-    }
+  for (const d of debts) {
+    if (!inPayoffPopulation(d)) continue;
+    const orig = Number(d.originalBalance);
+    sumOrig += orig;
+    sumBal += Math.min(effectiveDebtBalance(d), orig);
   }
   if (sumOrig <= 0) return null;
   return Math.max(0, Math.min(1, (sumOrig - sumBal) / sumOrig)) * 100;

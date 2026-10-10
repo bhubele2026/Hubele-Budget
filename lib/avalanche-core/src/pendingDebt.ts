@@ -29,3 +29,22 @@ export function effectiveDebtBalance(d: PendingAwareDebt): number {
   const pending = pendingPaymentTotalOf(d);
   return Math.max(0, reported - pending);
 }
+
+/**
+ * ⭐ (WP4) WHICH DEBTS "% PAID" MEASURES: the ACTIVE debts with an anchor
+ * (`originalBalance > 0`) — the debts on the payoff plan, the same population
+ * the "$X left" total sums (`remainingDebtTotal`: active only). An archived
+ * debt — paid off, or taken off the plan — is out of BOTH sides of the ratio.
+ *
+ * The server writes `active` or `archived`, never `paid_off`, so the old
+ * `status !== "paid_off"` filter let every archived debt keep its full anchor
+ * in the denominator and its $0 in the numerator: "% paid" read higher than
+ * the debts on the plan. A missing status reads as active, as the plan's other
+ * filters read it (the server always sends one).
+ */
+export function inPayoffPopulation(d: {
+  status?: string | null;
+  originalBalance?: number | string | null;
+}): boolean {
+  return (d.status ?? "active") === "active" && (Number(d.originalBalance ?? 0) || 0) > 0;
+}

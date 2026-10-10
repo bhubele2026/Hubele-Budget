@@ -233,6 +233,15 @@ describe("milestonesFor", () => {
     expect(m.find((x) => x.key === "first_card_zero")!.debtId).toBe("k");
   });
 
+  it("(WP4) an ARCHIVED debt is out of the % basis, as in payoffPct: the steps are the plan's own", () => {
+    // Paid off and archived: before WP4 its 4,000 anchor and $0 balance moved
+    // the start from 16.2% to 31.1% paid, so "25% paid" vanished from the list.
+    const archived: PlanDebt = { id: "z", name: "Old loan", apr: 0.09, balance: 0, minPayment: 0, status: "archived", originalBalance: 4000 };
+    const withArchived = milestonesFor(sim, [...debts, archived]);
+    expect(withArchived).toEqual(milestonesFor(sim, debts));
+    expect(withArchived.some((x) => x.key === "pct_25")).toBe(true);
+  });
+
   it("without anchors the basis is the run's starting total", () => {
     const bare: PlanDebt[] = debts.map(({ originalBalance: _o, ...d }) => d);
     const m = milestonesFor(sim, bare);
