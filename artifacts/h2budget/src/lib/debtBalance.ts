@@ -94,12 +94,12 @@ const CLEARED_EPSILON = 0.005;
  * debt" Stat and Totals row, the Reports Debt page's hero (`totalsForDebts`)
  * and the dashboard's debt tile all call this, so the three cannot disagree.
  *
- * (WP4) "On the payoff plan" is `inPayoffPopulation` — active, with an anchor
- * (`originalBalance > 0`) — the SAME rule the spine's "% paid" uses, so the
- * landing's percentage and its "$X left" always measure the same debts. GET
- * /debts anchors every debt it returns (max of its history and its balance),
- * so the only active debt this leaves out is one anchored at $0.00, which "%
- * paid" already left out.
+ * (WP4b) "On the payoff plan" is `inPayoffPopulation` — every ACTIVE debt —
+ * the SAME population the spine's "% paid" measures, so the landing's
+ * percentage and its "$X left" always cover the same debts. A debt anchored at
+ * $0.00 (put on the plan while it read $0; the anchor is written only while
+ * null) is money owed and is counted here; "% paid" counts it as 0% paid of
+ * what it owes. WP4 had dropped it while the Avalanche rows counted it.
  */
 export function remainingDebtTotal(debts: readonly Debt[] | null | undefined): number {
   let total = 0;

@@ -374,7 +374,7 @@ beforeAll(async () => {
     // (WP4) An ARCHIVED debt — what the server really writes when a debt is
     // paid off or taken off the plan (nothing writes `paid_off`). Before WP4
     // `payoffPct` kept it (`status !== "paid_off"`): its 4,000 anchor and $0
-    // balance lifted "% paid" from 41.47% to 52.62%.
+    // balance lifted "% paid" (that rule read 52.62%).
     {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
@@ -384,6 +384,19 @@ beforeAll(async () => {
       apr: "0.0899",
       minPayment: "0.00",
       status: "archived",
+    },
+    // (WP4b) An ACTIVE card put on the plan while it read $0.00: its anchor is
+    // "0.00" (written only while null) and Plaid has since raised it to
+    // 684.12. It is money owed — in every figure, at 0% paid of what it owes.
+    {
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      name: "Zero-anchored card",
+      balance: "684.12",
+      originalBalance: "0.00",
+      apr: "0.2799",
+      minPayment: "0.00",
+      status: "active",
     },
   ]).returning();
   VISA_DEBT_ID = seededDebts.find((d) => d.name === "Visa")!.id;
@@ -942,12 +955,13 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
 
     expect(spine.debt.payoffPct).toBe(payoffPct(debts));
 
-    // Not vacuous: 17,000 anchored; 10,250.40 posted less a 300.00 tagged-
-    // unposted payment => 9,950.40 effectively owed => ~41.47% paid.
+    // Not vacuous: bases 5,000 + 12,000 + 684.12 (the zero-anchored card
+    // weighs what it owes, WP4b); 10,934.52 posted less a 300.00 tagged-
+    // unposted payment => 10,634.52 owed => ~39.86% paid.
     expect(spine.debt.payoffPct).not.toBeNull();
     expect(spine.debt.payoffPct!).toBeGreaterThan(0);
     expect(spine.debt.payoffPct!).toBeLessThan(100);
-    expect(spine.debt.payoffPct!).toBeCloseTo(41.4682, 3);
+    expect(spine.debt.payoffPct!).toBeCloseTo(39.864, 3);
   });
 
   it("⭐ debt.payoffPct NETS tagged-unposted payments — the C10 basis", async () => {
@@ -979,9 +993,9 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     const rawBasis = payoffPct(
       debts.map((d) => ({ ...d, pendingPaymentTotal: null })),
     );
-    expect(rawBasis).toBeCloseTo(39.7035, 3);
+    expect(rawBasis).toBeCloseTo(38.1676, 3);
     expect(spine.debt.payoffPct!).toBeGreaterThan(rawBasis!);
-    expect(spine.debt.payoffPct!).toBeCloseTo(41.4682, 3);
+    expect(spine.debt.payoffPct!).toBeCloseTo(39.864, 3);
   });
 
   it("⭐ (WP4) debt.payoffPct measures ACTIVE debts only — an archived debt is out of both sides", async () => {
@@ -1008,10 +1022,35 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     }
     const oldPopulation = ((sumOrig - sumBal) / sumOrig) * 100;
     expect(oldPopulation).toBeCloseTo(52.6171, 3);
-    expect(spine.debt.payoffPct!).toBeCloseTo(41.4682, 3);
+    expect(spine.debt.payoffPct!).toBeCloseTo(39.864, 3);
     expect(spine.debt.payoffPct!).not.toBeCloseTo(oldPopulation, 1);
-    // The same population as the active total: the two active debts only.
-    expect(debts.filter((d) => d.status === "active").map((d) => d.name).sort()).toEqual(["Car loan", "Visa"]);
+    // The same population as the active total: every active debt.
+    expect(debts.filter((d) => d.status === "active").map((d) => d.name).sort()).toEqual(["Car loan", "Visa", "Zero-anchored card"]);
+  });
+
+  it("⭐ (WP4b) an active debt anchored at $0.00 is IN debt.payoffPct, at 0% paid of what it owes", async () => {
+    const spine = await get<Spine>("/spine");
+    const debts = await get<
+      Array<{ name: string; balance: string; originalBalance?: string | null; status?: string; pendingPaymentTotal?: string | null }>
+    >("/debts");
+    const zero = debts.find((d) => d.name === "Zero-anchored card");
+    // GET /debts backfills only a NULL anchor: "0.00" is served as stored.
+    expect(zero).toMatchObject({ status: "active", balance: "684.12", originalBalance: "0.00" });
+
+    // THE DISCRIMINATING ASSERTION: WP4's rule (active AND anchored) dropped it
+    // and read 41.47%; the spine counts it at its balance and reads 39.86%.
+    let o = 0;
+    let b = 0;
+    for (const d of debts) {
+      const orig = Number(d.originalBalance ?? 0) || 0;
+      if (d.status !== "active" || orig <= 0) continue;
+      o += orig;
+      b += Math.min(Math.max(0, Number(d.balance) - Number(d.pendingPaymentTotal ?? 0)), orig);
+    }
+    const wp4Rule = ((o - b) / o) * 100;
+    expect(wp4Rule).toBeCloseTo(41.4682, 3);
+    expect(spine.debt.payoffPct!).toBeCloseTo(39.864, 3);
+    expect(spine.debt.payoffPct!).toBe(payoffPct(debts));
   });
 
   it("dashboard.totalDebt is netted too, and ties to /debts to the cent", async () => {
@@ -1035,10 +1074,10 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
       .reduce((s, d) => s + effectiveDebtBalance(d), 0);
     expect(Number(dashboard.totalDebt)).toBeCloseTo(expected, 2);
 
-    // Not vacuous, and specifically netted: 3000 + 7250.40 posted, less the
-    // 300.00 pending payment.
-    expect(Number(dashboard.totalDebt)).toBeCloseTo(9950.4, 2);
-    expect(dashboard.activeDebtCount).toBe(2);
+    // Not vacuous, and specifically netted: 3000 + 7250.40 + 684.12 posted,
+    // less the 300.00 pending payment (the zero-anchored card is money owed).
+    expect(Number(dashboard.totalDebt)).toBeCloseTo(10634.52, 2);
+    expect(dashboard.activeDebtCount).toBe(3);
   });
 
   it("(PR-D) debt.nextMilestone + debt.paidDownMtd match GET /debt-plan (computeDebtHeadline)", async () => {
