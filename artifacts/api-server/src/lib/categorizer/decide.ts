@@ -1,4 +1,5 @@
 // (PR-A) The deterministic pipeline for one row — pure, no I/O.
+import { guardDirection } from "./direction";
 import { heuristicStage, refundStage } from "./stages/heuristic";
 import { inheritedStage } from "./stages/inherited";
 import { lockedStage } from "./stages/locked";
@@ -22,6 +23,15 @@ import type { EngineContext, EngineRow, StageResult } from "./types";
  * memory, rules and recurring items, which would otherwise file it as the
  * purchase it returns. Only the filing of the pending row it replaced still
  * carries (`inherited`, as the readers' `effectiveFiling` already counts it).
+ *
+ * ⭐ (WP5c) DIRECTION. A memory, rule or recurring pick that would file money
+ * in under an expense category, or money out under an income one
+ * (`categoryDirectionConflict`), is downgraded to the queue band — same
+ * category suggested, same rule / memory / recurring id — with an explanation
+ * that says which way the money went (`guardDirection`). A broad rule such as
+ * "EXACT SCIENCES" can then never file a paycheck under Dining, nor a cafeteria
+ * charge under the paycheck. `inherited` is not guarded: it writes what the
+ * readers already count (`effectiveFiling`), so write ≡ read holds.
  */
 export function decideRow(row: EngineRow, ctx: EngineContext): StageResult | null {
   const locked = lockedStage(row);
@@ -31,6 +41,6 @@ export function decideRow(row: EngineRow, ctx: EngineContext): StageResult | nul
   const earlier = memoryStage(row, ctx) ?? ruleStage(row, ctx) ?? recurringStage(row, ctx);
   const inherited = inheritedStage(row, earlier, ctx);
   if (inherited) return inherited;
-  if (earlier) return earlier;
+  if (earlier) return guardDirection(row, earlier, ctx);
   return heuristicStage(row, ctx);
 }

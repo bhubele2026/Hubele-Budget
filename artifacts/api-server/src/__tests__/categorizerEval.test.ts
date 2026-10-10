@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import { decideRow } from "../lib/categorizer/decide";
 import { bandFor } from "../lib/categorizer/bands";
-import { catName, EVAL_CASES, evalContext } from "./_fixtures/categorizationEval";
+import { catId, catName, EVAL_CASES, evalContext } from "./_fixtures/categorizationEval";
 
 describe("categorizer eval (synthetic)", () => {
   it("decides precisely and queues rather than guessing", () => {
@@ -68,5 +68,27 @@ describe("categorizer eval (synthetic)", () => {
     expect(EVAL_CASES.filter((k) => k.kind === "injection")).toHaveLength(5);
     expect(precision).toBeGreaterThanOrEqual(0.97);
     expect(queueRatherThanWrong).toBeGreaterThanOrEqual(0.95);
+  });
+
+  it("(WP5c) never files money against its direction: BIGCO PAYROLL and BIGCO CAFE are queued, naming the rule and the memory", () => {
+    const ctx = evalContext();
+    const caseOf = (prefix: string) => EVAL_CASES.find((k) => k.row.description.startsWith(prefix))!.row;
+    // The broad employer rule (BIGCO → Dining) would put the payroll deposit in Dining.
+    expect(decideRow(caseOf("BIGCO PAYROLL"), ctx)).toEqual({
+      source: "rule",
+      categoryId: catId("Dining"),
+      confidence: 0.5,
+      explanation: "Money in, but this would file it under an expense category.",
+      ruleId: "r8",
+    });
+    // The wrong memory (bigco cafe → Income) would put the cafeteria charge in Income.
+    expect(decideRow(caseOf("BIGCO CAFE"), ctx)).toEqual({
+      source: "memory",
+      categoryId: catId("Income"),
+      confidence: 0.5,
+      explanation: "Money out, but this would file it under an income category.",
+      memoryId: "m9",
+    });
+    expect(bandFor(0.5)).toBe("queue");
   });
 });
