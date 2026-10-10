@@ -848,6 +848,8 @@ export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
 
 export const createTransactionBodyPlaidAccountIdMax = 128;
 
+export const createTransactionBodySplitOfMax = 64;
+
 export const CreateTransactionBody = zod.object({
   occurredOn: zod.string(),
   occurredAt: zod.string().nullish(),
@@ -884,7 +886,14 @@ export const CreateTransactionBody = zod.object({
     .max(createTransactionBodyPlaidAccountIdMax)
     .nullish()
     .describe(
-      "(WP8) The external Plaid `account_id` the new row is on — a split part\nof a card charge keeps its card (with the charge's `source`), so it\nnever lands on the checking ledger. Must be an account of the caller's\nhousehold (400 `invalid_plaid_account` otherwise); null, empty or absent\nleaves the row with no Plaid account.\n",
+      "(WP8) The external Plaid `account_id` the new row is on. Must be an\naccount of the caller's household, or (WP8b) an account id already on\none of the household's transactions — a removed Plaid connection keeps\nits rows and their account id (400 `invalid_plaid_account` otherwise);\nnull, empty or absent leaves the row with no Plaid account. Ignored\nwhen `splitOf` is given.\n",
+    ),
+  splitOf: zod
+    .string()
+    .max(createTransactionBodySplitOfMax)
+    .nullish()
+    .describe(
+      "(WP8b) The id of the transaction this row is a split part of. A part\nstays where its charge is: the server copies the charge's `source` and\nPlaid account onto the new row (any `source` or `plaidAccountId` in the\nbody is ignored), so a part of a card charge stays on the card — even\nwhen the card's Plaid account row is gone — and never lands on the\nchecking ledger. Must be a transaction of the caller's household (400\n`invalid_split_parent` otherwise); null, empty or absent: not a split\npart.\n",
     ),
 });
 

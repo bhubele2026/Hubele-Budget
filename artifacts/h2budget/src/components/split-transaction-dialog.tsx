@@ -41,12 +41,14 @@ type Part = { amount: string; weeklyBucket: SubBucket };
  * know about "splits". Children are created FIRST so a failure can never leave
  * money unaccounted for.
  *
- * ⭐ (WP8) A PART STAYS WHERE THE CHARGE IS. A part of a card charge carries the
- * charge's `source` and Plaid account, so it stays on the card: as a
- * `source: "manual"` row with no account it landed on the checking ledger,
- * and the forecast's bank balance dropped by a purchase the card had made. A
- * charge that is still pending is not split (its posted row will replace it):
- * the action waits until it posts.
+ * ⭐ (WP8) A PART STAYS WHERE THE CHARGE IS. A part of a card charge stays on
+ * the card: as a `source: "manual"` row with no account it landed on the
+ * checking ledger, and the forecast's bank balance dropped by a purchase the
+ * card had made. (WP8b) Each part names its charge (`splitOf`) and the server
+ * copies the charge's `source` and Plaid account onto it, so the split works
+ * even when the card's Plaid connection was removed (its rows keep the account
+ * id). A charge that is still pending is not split (its posted row will
+ * replace it): the action waits until it posts.
  */
 export function SplitTransactionDialog({
   tx,
@@ -68,9 +70,6 @@ export function SplitTransactionDialog({
   const isExpense = tx ? Number(tx.amount) < 0 : true;
   // (WP8) A pending charge is split once it posts.
   const pending = !!tx?.pending;
-  // (WP8) Where the parts live: the charge's own account and source, or a manual
-  // row when the charge has no Plaid account.
-  const onAccount = !!tx?.plaidAccountId;
   const startBucket: SubBucket = (
     SUB_BUCKETS as readonly string[]
   ).includes(tx?.weeklyBucket ?? "")
@@ -124,8 +123,8 @@ export function SplitTransactionDialog({
             weeklyAllowance: true,
             weeklyBucket: p.weeklyBucket,
             account: tx.account ?? null,
-            source: onAccount ? tx.source : "manual",
-            plaidAccountId: onAccount ? tx.plaidAccountId : null,
+            // (WP8b) The server places the part where this charge is.
+            splitOf: tx.id,
             notes: `Split from ${tx.displayName || tx.description}`,
           },
         });

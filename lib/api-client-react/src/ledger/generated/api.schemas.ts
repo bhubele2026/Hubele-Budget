@@ -2013,16 +2013,31 @@ export interface CreateTransactionInput {
   /** @nullable */
   debtId?: string | null;
   /**
-   * (WP8) The external Plaid `account_id` the new row is on — a split part
-of a card charge keeps its card (with the charge's `source`), so it
-never lands on the checking ledger. Must be an account of the caller's
-household (400 `invalid_plaid_account` otherwise); null, empty or absent
-leaves the row with no Plaid account.
+   * (WP8) The external Plaid `account_id` the new row is on. Must be an
+account of the caller's household, or (WP8b) an account id already on
+one of the household's transactions — a removed Plaid connection keeps
+its rows and their account id (400 `invalid_plaid_account` otherwise);
+null, empty or absent leaves the row with no Plaid account. Ignored
+when `splitOf` is given.
 
    * @maxLength 128
    * @nullable
    */
   plaidAccountId?: string | null;
+  /**
+   * (WP8b) The id of the transaction this row is a split part of. A part
+stays where its charge is: the server copies the charge's `source` and
+Plaid account onto the new row (any `source` or `plaidAccountId` in the
+body is ignored), so a part of a card charge stays on the card — even
+when the card's Plaid account row is gone — and never lands on the
+checking ledger. Must be a transaction of the caller's household (400
+`invalid_split_parent` otherwise); null, empty or absent: not a split
+part.
+
+   * @maxLength 64
+   * @nullable
+   */
+  splitOf?: string | null;
 }
 
 /**

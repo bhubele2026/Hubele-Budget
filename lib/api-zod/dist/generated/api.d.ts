@@ -1802,6 +1802,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     confirmedByTxnId?: string | null | undefined;
 }>, "many">;
 export declare const createTransactionBodyPlaidAccountIdMax = 128;
+export declare const createTransactionBodySplitOfMax = 64;
 export declare const CreateTransactionBody: zod.ZodObject<{
     occurredOn: zod.ZodString;
     occurredAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -1825,6 +1826,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    splitOf: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     occurredOn: string;
     description: string;
@@ -1848,6 +1850,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     owedBy?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    splitOf?: string | null | undefined;
 }, {
     occurredOn: string;
     description: string;
@@ -1871,6 +1874,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     owedBy?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    splitOf?: string | null | undefined;
 }>;
 export declare const UpdateTransactionParams: zod.ZodObject<{
     id: zod.ZodString;
