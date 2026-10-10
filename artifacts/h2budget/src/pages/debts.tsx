@@ -288,8 +288,10 @@ export default function DebtsPage() {
                         </div>
                       </td>
                       <td className={td}>
-                        <span className="chip ok" data-testid="debt-card-paid-off-headline">
-                          Paid off
+                        {/* (WP6 live check) Archived while it still reports a
+                            balance: "Archived", never "Paid off". */}
+                        <span className={offPlan ? "chip gray" : "chip ok"} data-testid="debt-card-paid-off-headline">
+                          {offPlan ? "Archived" : "Paid off"}
                         </span>
                       </td>
                       <td className={`${tdNum} text-neutral-400`}>{fmtPct(Number(debt.apr))}</td>

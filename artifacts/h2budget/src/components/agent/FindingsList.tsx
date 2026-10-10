@@ -4,7 +4,7 @@ import { useDismissAgentFinding, useResolveAgentFinding, type AgentFinding } fro
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { relativeTime } from "@/lib/dates";
-import { FINDING_LINK, FINDING_TITLE, SEVERITY_WORD } from "@/lib/agentTrail";
+import { FINDING_LINK, SEVERITY_WORD, findingTitle } from "@/lib/agentTrail";
 import { btnLink } from "@/ui";
 import { OWN_INVALIDATION } from "@/lib/mutationInvalidation";
 import { PayloadList } from "./PayloadList";
@@ -16,7 +16,13 @@ import { useRefreshAgent } from "./agentHooks";
  * unless it gets more severe); Dismiss takes it off the list (it stays in the
  * ledger). (F3; ported from h2's `AgentTrail.tsx` Findings, plus Resolve.)
  */
-export function FindingsList({ findings }: { findings: readonly AgentFinding[] }) {
+export function FindingsList({
+  findings, categoryNameOf,
+}: {
+  findings: readonly AgentFinding[];
+  /** (WP6) The household's category names, so a category finding is titled by it. */
+  categoryNameOf?: (id: string) => string | null | undefined;
+}) {
   const dismiss = useDismissAgentFinding({ mutation: { meta: OWN_INVALIDATION } });
   const resolve = useResolveAgentFinding({ mutation: { meta: OWN_INVALIDATION } });
   const refresh = useRefreshAgent();
@@ -46,7 +52,7 @@ export function FindingsList({ findings }: { findings: readonly AgentFinding[] }
               data-testid="finding"
             >
               <span className="min-w-0">
-                <span className="text-body text-brand-navy">{FINDING_TITLE[f.kind] ?? "Something to look at"}</span>
+                <span className="text-body text-brand-navy">{findingTitle(f, { categoryNameOf })}</span>
                 <span className={`chip ${tone} ml-2`} data-testid="finding-severity">
                   {SEVERITY_WORD[f.severity]}
                   {f.confidence === "estimate" ? " · estimate" : ""}
@@ -77,7 +83,7 @@ export function FindingsList({ findings }: { findings: readonly AgentFinding[] }
           {why && (
             <>
               <DialogHeader>
-                <DialogTitle>{FINDING_TITLE[why.kind] ?? "Something to look at"}</DialogTitle>
+                <DialogTitle>{findingTitle(why, { categoryNameOf })}</DialogTitle>
                 <DialogDescription>First seen {relativeTime(why.firstSeen)}</DialogDescription>
               </DialogHeader>
               <PayloadList payload={why.payload} />

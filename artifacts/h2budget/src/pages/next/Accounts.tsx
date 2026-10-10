@@ -136,9 +136,13 @@ export default function NextAccountsPage() {
   // liability figures, as the dashboard does (same key; asked only when such an
   // account exists and never with `refresh`).
   const needLiabilities = debts !== undefined && entries.some((e) => owes(e) && needsLiability(debtFor(e.rowId)));
-  const { data: liabs } = useListPlaidLiabilityAccounts(undefined, {
+  const { data: liabs, isError: liabsFailed } = useListPlaidLiabilityAccounts(undefined, {
     query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * 60_000, enabled: needLiabilities },
   });
+  // (WP6 live check) An off-plan card's words wait for Plaid's figures too:
+  // "Paid off" vs "Archived" depends on its current balance.
+  const liabsPending = needLiabilities && liabs === undefined && !liabsFailed;
+  const waitsOnLiability = (e: (typeof entries)[number]) => owes(e) && liabsPending && needsLiability(debtFor(e.rowId));
   const liabilityFor = (rowId: string) =>
     needsLiability(debtFor(rowId)) ? (liabs ?? []).find((l) => l.id === rowId) ?? null : null;
   // The account the bank balance rolls forward on — BY ID (`isSpineAccount`),
@@ -149,11 +153,12 @@ export default function NextAccountsPage() {
   const bankFor = (e: (typeof entries)[number]) => (isSpine(e) ? bank : null);
   const pendingFor = (e: (typeof entries)[number]) =>
     owes(e)
-      ? debtsUnknown ? { failed: debtsFailed, what: "Debts", onRetry: () => void debtsQ.refetch() } : null
+      ? debtsUnknown ? { failed: debtsFailed, what: "Debts", onRetry: () => void debtsQ.refetch() }
+        : waitsOnLiability(e) ? { failed: false, what: "The card's balance" } : null
       : bankUnknown ? { failed: bankFailed, what: "Your bank balance", onRetry: () => void refetchBank() } : null;
   const balances: BalanceByRow = {};
   for (const e of entries) {
-    if (owes(e) ? debtsUnknown : bankUnknown) {
+    if (owes(e) ? debtsUnknown || waitsOnLiability(e) : bankUnknown) {
       // Not known yet: a dash, or the words when the read failed.
       const failed = owes(e) ? debtsFailed : bankFailed;
       balances[e.rowId] = { label: null, figure: null, words: failed ? (owes(e) ? "Debts did not load" : "Balance did not load") : null };

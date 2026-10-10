@@ -76,6 +76,24 @@ export const FINDING_TITLE: Record<AgentFinding["kind"], string> = {
   bank_stale: "Bank data is out of date",
 };
 
+/**
+ * (WP6) A finding's title, naming its category when it is about one: "Groceries
+ * spending is speeding up" rather than "Spending in a category is speeding up".
+ * The name comes from the household's own categories (`categoryNameOf`); an
+ * unknown id keeps the generic title. Display only.
+ */
+export function findingTitle(
+  f: Pick<AgentFinding, "kind" | "payload">,
+  opts: { categoryNameOf?: (id: string) => string | null | undefined } = {},
+): string {
+  if (f.kind === "category_acceleration") {
+    const id = (f.payload as Record<string, unknown> | null | undefined)?.categoryId;
+    const name = typeof id === "string" ? opts.categoryNameOf?.(id)?.trim() : null;
+    if (name) return `${name} spending is speeding up`;
+  }
+  return FINDING_TITLE[f.kind] ?? "Something to look at";
+}
+
 const MONEY_KEY = /amount|total|shortfall|short|balance|cost|price|delta|increase|spent|limit|gap|buffer|payment/i;
 const REF_KEY = /(^|[a-z])(id|ids|ref|refs)$/i;
 

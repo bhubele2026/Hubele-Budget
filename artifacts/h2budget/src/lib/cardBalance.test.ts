@@ -79,12 +79,12 @@ describe("cardOwedView", () => {
     expect(v.pending).toBeNull();
     expect(cardHasFigures(v)).toBe(true);
   });
-  it("archived: 'Paid off · not on the payoff plan' — never Owed", () => {
+  it("archived with a balance: 'Archived · not on the payoff plan' — never Owed, never 'Paid off'", () => {
     const v = cardOwedView({ debt: { ...live, status: "archived" } });
     expect(v.state).toBe("archived");
     expect(v.archived).toBe(true);
     expect(v.owed).toBeNull();
-    expect(v.status).toBe("Paid off · not on the payoff plan");
+    expect(v.status).toBe("Archived · not on the payoff plan");
     // Its own figure is still told, named as the card's.
     expect(v.creditorCurrent?.balance).toBe(3842.98);
     // …and it never reaches the one total.
@@ -98,7 +98,8 @@ describe("cardOwedView", () => {
     expect(none.creditorCurrent).toBeNull(); // not $0.00: that is when it was archived, not now
     const v = cardOwedView({ debt: row, liability: { balance: "1940.00", minPayment: "40.00", lastFetchedAt: "2026-10-09T13:00:00Z", suggestedDebt: null } });
     expect(v.state).toBe("archived");
-    expect(v.status).toBe("Paid off · not on the payoff plan");
+    expect(v.status).toBe("Archived · not on the payoff plan"); // Plaid says it carries $1,940
+    expect(none.status).toBe("Paid off · not on the payoff plan"); // unknown balance
     expect(v.owed).toBeNull();
     expect(v.creditorCurrent).toEqual({ balance: 1940, asOf: "2026-10-09T13:00:00Z", source: "plaid" });
     expect(v.minPayment).toBe(40);
@@ -111,6 +112,14 @@ describe("cardOwedView", () => {
     expect(v.creditorCurrent?.balance).toBe(3842.98);
     expect(v.statement).toEqual({ date: "2026-09-27", balance: 2980.44, minPayment: 85, dueDate: "2026-10-22" });
     expect(cardOwedView({ liability: { balance: "10.00" } }).statement).toBeNull(); // no debt, no statement
+  });
+  it("(WP6) 'Paid off' only at a $0.00 or unknown balance", () => {
+    const at = (balance: string, balanceSource = "plaid") => cardOwedView({ debt: { balance, status: "archived", balanceSource } }).status;
+    expect(at("0.00")).toBe("Paid off · not on the payoff plan");
+    expect(at("0.004")).toBe("Paid off · not on the payoff plan");
+    expect(at("12.00")).toBe("Archived · not on the payoff plan");
+    expect(at("12.00", "manual")).toBe("Paid off · not on the payoff plan"); // a typed archived row is not the card's balance: unknown
+    expect(cardOwedView({ debt: { balance: "0", status: "archived" }, liability: { balance: "0.00" } }).status).toBe("Paid off · not on the payoff plan");
   });
   it("needsLiability: no debt row, or an archived one", () => {
     expect(needsLiability(null)).toBe(true);

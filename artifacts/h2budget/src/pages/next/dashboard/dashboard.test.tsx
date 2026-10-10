@@ -39,7 +39,12 @@ vi.mock("@/components/bank-balance-why", () => ({ BankBalanceWhy: () => <span>wh
 vi.mock("@/components/data-state", () => ({ FreshnessLine: () => <span>fresh</span> }));
 vi.mock("@/components/agent/agentHooks", () => ({ useOpenFindings: () => get("findings") }));
 vi.mock("@/components/agent/FindingsList", () => ({
-  FindingsList: ({ findings }: { findings: unknown[] }) => <div data-testid="findings-stub">{findings.length} findings</div>,
+  FindingsList: ({ findings, categoryNameOf }: { findings: unknown[]; categoryNameOf?: (id: string) => string | null | undefined }) => (
+    <div>
+      <div data-testid="findings-stub">{findings.length} findings</div>
+      {categoryNameOf ? <div data-testid="findings-names">names: {categoryNameOf("dining") ?? "none"}</div> : null}
+    </div>
+  ),
 }));
 vi.mock("@/pages/forecast/ProjectedBalanceChart", () => ({
   ProjectedBalanceChart: (p: { data: unknown[]; cashBuffer: number; lowLabel?: string }) => (
@@ -82,6 +87,8 @@ const spine = (o: Record<string, unknown> = {}) => ({
   position: { safeToSpendNow: "210.00", remainingWeek: "210.00", availableUntilPayday: "400.00", paydayDate: "2026-10-16", horizonKind: "payday", withinPlan: "yes", confidence: "firm", degraded: false, weekAdjustment: null },
   ...o,
 });
+/** (WP6) A day with nothing to say: no review, and a low point well above the buffer (no "runs short" item). */
+const calmSpine = () => spine({ reviewCount: 0, forecast: { lowPoint: "1500.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "ready" } });
 const acct = (id: string, o: Record<string, unknown>) => ({ id, accountId: `p-${id}`, name: null, mask: null, type: "depository", subtype: "checking", ...o });
 const item = (id: string, institutionName: string, slug: string, accounts: unknown[], o: Record<string, unknown> = {}) => ({
   id, itemId: `i-${id}`, institutionName, institutionSlug: slug, lastSyncedAt: "2026-10-08T12:00:00Z", lastSyncError: null, lastSyncErrorCode: null, accounts, ...o,
@@ -115,7 +122,9 @@ describe("header", () => {
     expect(screen.getByTestId("dash-today").textContent).toBe("Today · Thu Oct 8");
     expect(screen.getByTestId("dash-fact-room").textContent).toBe("$210.00 room to spend until payday Fri Oct 16");
     expect(screen.getByTestId("dash-fact-next").textContent).toBe("Next: Rent $1,200.00 · Sat Oct 10");
-    expect(screen.getByTestId("dash-fact-review").textContent).toContain("3 charges to match");
+    // (WP6) "N charges to match" left the facts line: Needs attention's own row says it.
+    expect(screen.queryByTestId("dash-fact-review")).toBeNull();
+    expect(screen.getByTestId("dash-facts").textContent).not.toContain("charges to match");
     const banks = screen.getByTestId("dash-bank-fresh").textContent!;
     expect(banks).toContain("Chase · synced 2 h ago");
     expect(banks).toContain("American Express · needs reconnecting");
@@ -509,13 +518,13 @@ describe("accounts list", () => {
     expect(within(rows[3]!).queryByTestId("dash-account-min")).toBeNull();
     expect(rows[3]!.textContent).not.toContain("$0");
   });
-  it("(WP3) an archived debt is 'Paid off · not on the payoff plan': never Owed, its own balance named", () => {
+  it("(WP3/WP6) an archived debt still carrying a balance is 'Archived · not on the payoff plan' — never Owed, never 'Paid off'", () => {
     h.Q.debts = ok([debt("d1", "Amex Platinum", "3842.98", { plaidAccountId: "x1", status: "archived", balanceSource: "plaid", lastBalanceUpdate: "2026-10-08T11:00:00Z" })]);
     h.Q.liab = ok([]);
     wrap(<AccountsPanel />);
     const row = screen.getAllByTestId("dash-account")[2]!;
     expect(row.getAttribute("data-plan")).toBe("archived");
-    expect(within(row).getByTestId("dash-account-plan").textContent).toBe("Paid off · not on the payoff plan");
+    expect(within(row).getByTestId("dash-account-plan").textContent).toBe("Archived · not on the payoff plan");
     expect(within(row).queryByTestId("dash-account-balance")).toBeNull();
     expect(row.textContent).not.toContain("Owed");
     expect(within(row).getByTestId("dash-account-creditor").textContent).toBe("Card's current balance$3,842.98");
@@ -526,12 +535,14 @@ describe("accounts list", () => {
     const { unmount } = wrap(<AccountsPanel />);
     let row = screen.getAllByTestId("dash-account")[2]!;
     expect(row.textContent).not.toContain("$0.00"); // a skeleton while Plaid's figures load
-    expect(within(row).getByTestId("dash-account-plan").textContent).toBe("Paid off · not on the payoff plan");
+    // (WP6) …and no plan words yet: "Paid off" or "Archived" depends on the balance Plaid reports.
+    expect(within(row).queryByTestId("dash-account-plan")).toBeNull();
     unmount();
     h.Q.liab = ok([{ id: "x1", accountId: "p-x1", balance: "1940.00", minPayment: "40.00", lastFetchedAt: "2026-10-08T15:00:00Z", suggestedDebt: null }]);
     wrap(<AccountsPanel />);
     row = screen.getAllByTestId("dash-account")[2]!;
     expect(within(row).getByTestId("dash-account-creditor").textContent).toBe("Card's current balance$1,940.00");
+    expect(within(row).getByTestId("dash-account-plan").textContent).toBe("Archived · not on the payoff plan");
     expect(within(row).getByTestId("dash-account-due").textContent).toContain("the 22nd");
     expect(row.textContent).not.toContain("$0.00");
   });
@@ -821,7 +832,9 @@ describe("spending pace", () => {
     expect(screen.getByTestId("dash-week-meter").textContent).toContain("$80.00");
     expect(screen.getByTestId("dash-week-meter-scope").textContent).toBe("Sun Oct 4 – Sat Oct 10 · discretionary spending");
     expect(screen.getByTestId("dash-week-meter-status").textContent).toBe("$120.00 left in the plan");
-    expect(screen.getByTestId("dash-month-meter-scope").textContent).toBe("October 1–31 · budgeted expense categories");
+    expect(screen.getByTestId("dash-month-meter-scope").textContent).toBe(
+      "Oct 1–31 · everything filed to a budgeted expense category, every account (card and debt payments count here)",
+    );
     expect(screen.getByTestId("dash-month-meter-status").textContent).toBe("$200.00 over");
     expect(screen.getAllByTestId("meter-pace")).toHaveLength(2);
   });
@@ -835,14 +848,60 @@ describe("spending pace", () => {
     wrap(<SpendingPanel />);
     expect(screen.getByTestId("dash-week-meter-status").textContent).toBe("No weekly plan set");
   });
-  it("quotes all household spending from the spine, and links the detail that moved off the dashboard", () => {
+  it("quotes purchases so far from the spine, named by what they count, and links the detail that moved off the dashboard", () => {
     wrap(<SpendingPanel />);
+    expect(screen.getByTestId("dash-household-spent").textContent).toContain("Purchases so far");
+    expect(screen.getByTestId("dash-purchases-scope").textContent).toBe(
+      "Oct 1–today · card payments, debt payments, transfers and reimbursables left out · refunds netted",
+    );
     expect(screen.getByTestId("dash-spent-week").textContent).toBe("$120.00");
     expect(screen.getByTestId("dash-spent-month").textContent).toBe("$900.00");
     expect(screen.getByTestId("dash-link-allowances").getAttribute("href")).toBe("/allowances");
     expect(screen.getByTestId("dash-link-biggest").getAttribute("href")).toBe("/banking");
     const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/budget");
+  });
+});
+
+describe("(WP6) why the two month totals differ", () => {
+  const rec = (o: Record<string, unknown> = {}) => ({
+    budgetActual: "5511.84", householdSpendToDate: "3485.99", through: "2026-10-08", difference: "2025.85", unexplained: "0.00",
+    terms: {
+      futureDated: "0.00", cardPayments: "1450.00", debtPayments: "620.00", excludedNames: "0.00", reimbursable: "0.00", bankNoise: "0.00",
+      splitsOutsideLines: "-12.40", uncategorized: "74.25", parkedUncategorized: "0.00", refundsNetted: "42.50",
+    },
+    ...o,
+  });
+  beforeEach(() => {
+    h.Q.pos = ok({ spentWeekDiscretionary: "80.00", weekCap: "200.00", remainingWeek: "120.00", paceAllowedToday: "142.86", weekStart: "2026-10-04", weekEnd: "2026-10-10" });
+    h.Q.budget = ok({ summary: { expenses: { budget: "6000.00", actual: "5511.84" } }, spendingReconciliation: rec() });
+  });
+  it("one bridge line from the server's terms, and 'Why these differ' opens every term with its sign", async () => {
+    wrap(<SpendingPanel />);
+    expect(screen.getByTestId("dash-spend-bridge-words").textContent).toBe(
+      "Budget counts $1,450.00 of card payments and $620.00 of debt payments that purchases leave out; refunds net $42.50",
+    );
+    fireEvent.click(screen.getByTestId("dash-spend-why"));
+    const body = await screen.findByTestId("dash-spend-why-body");
+    expect(body.textContent).toContain("Budget, Oct 1–end$5,511.84");
+    expect(body.textContent).toContain("Purchases, Oct 1–today$3,485.99");
+    expect(body.textContent).toContain("Difference$2,025.85");
+    const terms = within(screen.getByTestId("dash-spend-why-terms")).getAllByRole("definition").map((d) => d.textContent);
+    // Only the terms that are not zero, in order; the ones purchases count and the Budget does not take away.
+    expect(terms).toEqual(["+$1,450.00", "+$620.00", "−$12.40", "−$74.25", "+$42.50"]);
+    expect(screen.queryByTestId("dash-spend-why-unexplained")).toBeNull();
+    expect(screen.getByTestId("dash-spend-why-link").getAttribute("href")).toBe("/reports/spending");
+  });
+  it("an unexplained remainder is said, never hidden", async () => {
+    h.Q.budget = ok({ summary: { expenses: { budget: "6000.00", actual: "5511.84" } }, spendingReconciliation: rec({ unexplained: "3.10" }) });
+    wrap(<SpendingPanel />);
+    fireEvent.click(screen.getByTestId("dash-spend-why"));
+    expect((await screen.findByTestId("dash-spend-why-unexplained")).textContent).toBe("$3.10 of the difference is not explained by these lines.");
+  });
+  it("no reconciliation for the month (before tracking): no bridge line", () => {
+    h.Q.budget = ok({ summary: { expenses: { budget: "6000.00", actual: "5511.84" } }, spendingReconciliation: null });
+    wrap(<SpendingPanel />);
+    expect(screen.queryByTestId("dash-spend-bridge")).toBeNull();
   });
 });
 
@@ -885,6 +944,25 @@ describe("needs attention", () => {
     h.Q.cats = ok([]);
     h.Q.items = ok([]);
   });
+  it("(WP6) the header's action and Needs attention read ONE 'runs short' item", () => {
+    // spine(): low point $350 under the $500 buffer (not_yet).
+    h.Q.queue = ok({ total: 0 }); h.Q.dups = ok({ count: 0 });
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
+    wrap(<><DashboardHeader /><AttentionPanel /></>);
+    const row = screen.getByTestId("dash-att-short");
+    expect(row.textContent).toContain("The forecast runs short");
+    expect(row.textContent).toContain("Low $350.00 on Oct 20 · below your $500 buffer");
+    expect(row.getAttribute("href")).toBe("/forecast");
+    expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("short");
+    expect(screen.getByTestId("dash-runs-short").getAttribute("href")).toBe(row.getAttribute("href"));
+  });
+  it("(WP6) the findings are titled with the household's own category names", () => {
+    h.Q.queue = ok({ total: 0 }); h.Q.dups = ok({ count: 0 });
+    h.Q.cats = ok([{ id: "dining", name: "Dining & Coffee", kind: "expense" }]);
+    h.Q.findings = ok({ findings: [{ id: "f1", kind: "category_acceleration", severity: "watch", payload: { categoryId: "dining" } }] });
+    wrap(<AttentionPanel />);
+    expect(screen.getByTestId("findings-names").textContent).toBe("names: Dining & Coffee");
+  });
   it("one list: the bank, the week, and the two review queues worded distinctly", () => {
     h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "refresh_failed" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00" } });
     h.Q.queue = ok({ total: 7 });
@@ -909,7 +987,7 @@ describe("needs attention", () => {
     isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false, pfcDetailed: "INCOME_WAGES", ...o,
   });
   const incomeSetup = () => {
-    h.spine.data = spine({ reviewCount: 0 });
+    h.spine.data = calmSpine();
     h.Q.queue = ok({ total: 0 });
     h.Q.dups = ok({ duplicateCount: 0 });
     h.Q.cats = ok([{ id: "dining", name: "Dining & Coffee", kind: "expense" }]);
@@ -958,7 +1036,7 @@ describe("needs attention", () => {
     expect(screen.getByTestId("dash-review-income-pending").textContent).toContain("did not load");
   });
   it("(WP5c) a credit on a NON-Amex card is never 'income': the account's type says it is a card", () => {
-    h.spine.data = spine({ reviewCount: 0 });
+    h.spine.data = calmSpine();
     h.Q.queue = ok({ total: 0 });
     h.Q.dups = ok({ duplicateCount: 0 });
     h.Q.cats = ok([{ id: "shop", name: "Shopping", kind: "expense" }]);
@@ -988,7 +1066,7 @@ describe("needs attention", () => {
     expect(screen.getByTestId("findings-stub").textContent).toBe("1 findings");
   });
   it("(D20) a queue that is loading or failed is never 'nothing needs you'", () => {
-    h.spine.data = spine({ reviewCount: 0 });
+    h.spine.data = calmSpine();
     h.Q.dups = ok({ duplicateCount: 0 });
     h.Q.queue = loading;
     const { unmount } = wrap(<AttentionPanel />);
@@ -1000,14 +1078,14 @@ describe("needs attention", () => {
     expect(screen.getByTestId("dash-review-cats-pending").textContent).toContain("did not load");
   });
   it("an all-clear only when every source answered", () => {
-    h.spine.data = spine({ reviewCount: 0 });
+    h.spine.data = calmSpine();
     h.Q.queue = ok({ total: 0 });
     h.Q.dups = ok({ duplicateCount: 0 });
     wrap(<AttentionPanel />);
     expect(screen.getByText("Nothing needs you today.")).toBeTruthy();
   });
   it("findings, the recent window and the cash signal hold the all-clear while they load, and say so when they fail", () => {
-    h.spine.data = spine({ reviewCount: 0 });
+    h.spine.data = calmSpine();
     h.Q.queue = ok({ total: 0 });
     h.Q.dups = ok({ duplicateCount: 0 });
     for (const [key, testid] of [["findings", "dash-findings-pending"], ["txns", "dash-review-income-pending"], ["cash", "dash-att-due-pending"]] as const) {
@@ -1038,7 +1116,7 @@ describe("needs attention", () => {
     expect(screen.queryByTestId("panel-error")).toBeNull();
   });
   it("a full recent window says the income check stopped at the newest 100 rows, and is never 'nothing'", () => {
-    h.spine.data = spine({ reviewCount: 0 });
+    h.spine.data = calmSpine();
     h.Q.queue = ok({ total: 0 });
     h.Q.dups = ok({ duplicateCount: 0 });
     h.Q.cats = ok([{ id: "food", name: "Groceries", kind: "expense" }]);

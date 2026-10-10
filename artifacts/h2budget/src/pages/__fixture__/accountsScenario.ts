@@ -11,7 +11,7 @@
  *   live            Amex Platinum ••1005            debt, active, 3,842.98 reported, 2,615.71 pending (2)
  *   duplicate mask  Amex Platinum ••1005 (AU twin)  its OWN debt, active, 250.00 — same last four
  *   zero            Amex Blue Cash ••1001           debt, active, 0.00 (a real zero)
- *   archived        Amex Gold ••1009                debt, ARCHIVED, 412.50 reported
+ *   archived        Amex Gold ••1009                debt, ARCHIVED, 412.50 reported (still owing: "Archived", not "Paid off")
  *   missing mask    Amex Green (no mask)            debt, active, 96.40
  *   off-plan        Citi Costco ••4410              no debt row; Plaid liability 684.12, min 40, due 14th
  *   missing         Citi Double Cash ••4411         no debt row; Plaid reported nothing
@@ -130,7 +130,7 @@ export const EXPECT = {
   live: { ext: "ext-plat", debtId: "d-plat", owed: "$1,227.27", creditor: "$3,842.98", pending: "$2,615.71" },
   twin: { ext: "ext-plat2", debtId: "d-plat2", owed: "$250.00" },
   zero: { ext: "ext-blue", debtId: "d-blue", owed: "$0.00" },
-  archived: { ext: "ext-gold", debtId: "d-gold", words: "Paid off · not on the payoff plan", creditor: "$412.50" },
+  archived: { ext: "ext-gold", debtId: "d-gold", words: "Archived · not on the payoff plan", creditor: "$412.50" },
   noMask: { ext: "ext-green", debtId: "d-green", owed: "$96.40" },
   offPlan: { ext: "ext-citi", words: "Not on the payoff plan", creditor: "$684.12" },
   missing: { ext: "ext-citi2", words: "No balance, minimum or due date reported for this card yet." },

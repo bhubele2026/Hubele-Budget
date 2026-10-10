@@ -23,8 +23,10 @@ import { dayOf } from "./accountFreshness";
  *   - `statement`       a real statement (the API's `statement`, once it sends
  *                       one) — never the current balance under another name
  *
- * An archived debt is "Paid off · not on the payoff plan": never "Owed", never
- * in a total. Its card's own current balance is Plaid's stored liability figure
+ * An archived debt is never "Owed" and never in a total; it reads "Paid off ·
+ * not on the payoff plan" only when its card's current balance is $0.00 or
+ * unknown, and "Archived · not on the payoff plan" while the card still
+ * carries a balance. Its card's own current balance is Plaid's stored liability figure
  * when there is one, else the row's only while Plaid keeps the row current
  * (`balanceSource: "plaid"`): a manual archived row holds the $0.00 it was
  * archived at, not what the card owes now that it is in use again. A card with
@@ -71,6 +73,8 @@ export const CARD_WORDS = {
   due: "Due",
   onPlan: "On the payoff plan",
   archived: "Paid off · not on the payoff plan",
+  /** (WP6 live check) Archived, yet the card still carries a balance: never "Paid off". */
+  archivedOwing: "Archived · not on the payoff plan",
   offPlan: "Not on the payoff plan",
   nothing: "No balance, minimum or due date reported for this card yet.",
 } as const;
@@ -124,6 +128,10 @@ const statementOf = (debt: CardDebtInput | null | undefined): CardOwedView["stat
   return st ? { date: st.date ?? null, balance: num(st.balance), minPayment: num(st.minPayment), dueDate: st.dueDate ?? null } : null;
 };
 
+/** An archived card's words: "Paid off" only at $0.00 or an unknown balance. */
+const archivedWords = (bal: number | null | undefined): string =>
+  bal != null && Math.abs(bal) >= 0.005 ? CARD_WORDS.archivedOwing : CARD_WORDS.archived;
+
 /** The one view of a card or loan. Pure. */
 export function cardOwedView({
   debt, liability,
@@ -160,7 +168,7 @@ export function cardOwedView({
       statement: statementOf(debt),
       minPayment: positive(debt.minPayment),
       dueDay: debt.dueDay ?? null,
-      status: onPlan ? CARD_WORDS.onPlan : CARD_WORDS.archived,
+      status: onPlan ? CARD_WORDS.onPlan : archivedWords(bal),
     };
   }
   const bal = num(liability?.balance);
@@ -175,7 +183,7 @@ export function cardOwedView({
     statement: statementOf(debt),
     minPayment: positive(liability?.minPayment),
     dueDay: liability?.suggestedDebt?.dueDay ?? debt?.dueDay ?? null,
-    status: debt ? CARD_WORDS.archived : CARD_WORDS.offPlan,
+    status: debt ? archivedWords(bal) : CARD_WORDS.offPlan,
   };
 }
 
