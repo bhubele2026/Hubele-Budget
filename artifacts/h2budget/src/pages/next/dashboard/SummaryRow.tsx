@@ -4,7 +4,7 @@ import type { Spine } from "@workspace/api-client-react";
 import { AccountChip } from "@/components/next";
 import { BankBalanceWhy } from "@/components/bank-balance-why";
 import { FreshnessLine } from "@/components/data-state";
-import { isSyntheticPlaidItem } from "@/components/plaid-reconnect-button";
+import { isSyntheticPlaidItem } from "@/lib/plaidReauth";
 import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
 import { bankBalanceView, sinceSnapshotWords } from "@/lib/bankBalance";
 import { debtForAccount, needsLiability } from "@/lib/cardBalance";

@@ -1,5 +1,5 @@
 import type { PlaidItemDetail } from "@workspace/api-client-react";
-import { isPlaidReauthCode, isSyntheticPlaidItem } from "@/components/plaid-reconnect-button";
+import { isPlaidReauthCode, isSyntheticPlaidItem } from "@/lib/plaidReauth";
 import { agoShort } from "@/lib/accountFreshness";
 import { PLAID_FEED_QUIET_MS } from "@workspace/avalanche-core/freshness";
 

@@ -12,6 +12,7 @@ import {
  */
 const live = {
   balance: "3842.98",
+  originalBalance: "3842.98", // GET /debts anchors every debt it returns
   status: "active",
   minPayment: "0",
   dueDay: 22,

@@ -11,7 +11,7 @@ import { bankBalanceView, isSpineAccount } from "@/lib/bankBalance";
 import { useSpine } from "@/hooks/useSpine";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { FreshnessLine } from "@/components/data-state";
-import { isSyntheticPlaidItem, plaidReauthReason } from "@/components/plaid-reconnect-button";
+import { isSyntheticPlaidItem, plaidReauthReason } from "@/lib/plaidReauth";
 import { btnSecondarySm } from "@/ui";
 import { cn } from "@/lib/utils";
 import { useDebtsQ, useLiabilityAccountsQ, usePlaidItemsQ } from "./queries";
