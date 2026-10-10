@@ -113,6 +113,8 @@ export default function AttentionPanel() {
       today,
       reviewCount: 0, // the review queue has its own rows below
       reauthBanks: bankLines(items.data, Date.now()).filter((b) => b.state === "reauth").map((b) => b.institution),
+      // (WP6) The same "runs short" item the header's action reads.
+      forecast: s?.forecast ?? null,
     }).filter((a) => a.kind !== "nothing");
   }, [s, cash.data, today, items.data]);
 
@@ -170,7 +172,7 @@ export default function AttentionPanel() {
             <Group title="Now">
               {now.map((a) => (
                 <Row key={a.kind} href={a.action?.href ?? "/settings"} label={a.title} detail={a.detail}
-                  testid={`dash-att-${a.kind}`} tone={a.kind === "reconnect" || a.kind === "over" ? "bad" : undefined} />
+                  testid={`dash-att-${a.kind}`} tone={a.kind === "reconnect" || a.kind === "over" || a.kind === "short" ? "bad" : undefined} />
               ))}
               {!spineKnown ? (
                 <PendingRow failed={spineFailed} label="Your bank balance and this week's plan" testid="dash-att-spine-pending" onRetry={spine.refetch} />
@@ -243,7 +245,8 @@ export default function AttentionPanel() {
             <div data-testid="dash-findings">
               <h3 className={cn(LABEL, "px-2")}>What H2 noticed</h3>
               <div className="mt-1 px-2">
-                <FindingsList findings={findings} />
+                {/* (WP6) A finding about one category names it ("Groceries spending is speeding up"). */}
+                <FindingsList findings={findings} categoryNameOf={(id) => cats.data?.find((c) => c.id === id)?.name ?? null} />
               </div>
             </div>
           ) : null}

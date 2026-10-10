@@ -58,3 +58,14 @@ describe("titles, links, statuses", () => {
     expect(isStatus(null, 501)).toBe(false);
   });
 });
+
+describe("(WP6) findingTitle names the category", () => {
+  it("a category finding reads the household's own name; unknown keeps the generic title", async () => {
+    const { findingTitle } = await import("./agentTrail");
+    const f = { kind: "category_acceleration" as const, payload: { categoryId: "c1" } };
+    expect(findingTitle(f, { categoryNameOf: (id) => (id === "c1" ? "Groceries" : null) })).toBe("Groceries spending is speeding up");
+    expect(findingTitle(f, { categoryNameOf: () => null })).toBe("Spending in a category is speeding up");
+    expect(findingTitle(f)).toBe("Spending in a category is speeding up");
+    expect(findingTitle({ kind: "bank_stale", payload: {} })).toBe("Bank data is out of date");
+  });
+});

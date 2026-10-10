@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
 import { attentionItems, headerActionOf } from "@/lib/attention";
-import { lowPointView } from "@/lib/lowPoint";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { useSpine } from "@/hooks/useSpine";
 import { btn, btnSecondary } from "@/ui";
@@ -46,13 +45,12 @@ export default function DashboardHeader() {
       today,
       reviewCount: s.reviewCount,
       reauthBanks: bankLines(items.data, Date.now()).filter((b) => b.state === "reauth").map((b) => b.institution),
+      // (WP6) "Runs short" is an attention item, the one Needs attention lists.
+      forecast: s.forecast,
     });
   }, [s, obligations, today, items.data]);
   const noBank = items.data !== undefined && !hasLinkedBank(items.data);
-  // Under the buffer, or below zero, inside the forecast's 90 days.
-  const low = s ? lowPointView(s.forecast, { buffer: s.forecast.cashBuffer }) : null;
-  const runsShort = !!low && (low.kind === "below" || (low.value != null && low.value < 0));
-  const action = headerActionOf(attention ?? [], { noBank, runsShort });
+  const action = headerActionOf(attention ?? [], { noBank });
   const banks = bankLines(items.data, now);
 
   // One line of facts, each said only when it is known.
@@ -66,9 +64,8 @@ export default function DashboardHeader() {
     if (obligations[0]) {
       facts.push({ key: "next", text: `Next: ${obligationLine(obligations[0])}` });
     }
-    if (s.reviewCount > 0) {
-      facts.push({ key: "review", text: s.reviewCount === 1 ? "1 charge to match" : `${s.reviewCount} charges to match` });
-    }
+    // (WP6) "N charges to match" left the facts line: Needs attention's own
+    // row says it ("Charges to match to the forecast"), with its link.
   }
 
   return (

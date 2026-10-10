@@ -146,7 +146,9 @@ export default function AccountsPanel() {
                 }, now);
                 // (WP3b) Plan words only once the debts have answered: a missing
                 // list is not "Not on the payoff plan".
-                const planWords = view && !view.onPlan && debts.data !== undefined ? view.status : null;
+                // Nor while an off-plan card's Plaid figures load: "Paid off" vs
+                // "Archived" depends on its current balance (WP6 live check).
+                const planWords = view && !view.onPlan && debts.data !== undefined && !waiting ? view.status : null;
                 const debtsFailed = debts.data === undefined && !!debts.isError;
                 // The spine decides which depository account rolls forward: until
                 // it answers, no depository row is labelled.

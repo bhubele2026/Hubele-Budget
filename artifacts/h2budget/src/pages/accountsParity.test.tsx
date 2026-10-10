@@ -22,7 +22,7 @@ import * as F from "./__fixture__/accountsScenario";
  *   - the card's own current balance — named, never as "Owed";
  *   - the payments not posted yet;
  *   - a real zero as $0.00; missing data as words, never $0;
- *   - an archived debt as "Paid off · not on the payoff plan", never in a total;
+ *   - an archived debt as "Archived · not on the payoff plan" while it carries a balance ("Paid off" only at $0), never in a total;
  *   - a card with no debt row as "Not on the payoff plan";
  *   - savings as its last reading, "not rolled forward";
  *   - the amount left = the Avalanche total, without the archived or off-plan cards.
@@ -192,7 +192,7 @@ describe("other card cases, one string per surface", () => {
     renderIn(<DebtsPage />);
     expect(debtsCell("Amex Blue Cash", "Balance")).toBe(E.owed);
   });
-  it("archived: 'Paid off · not on the payoff plan' everywhere — never Owed, never in a total", async () => {
+  it("archived, still owing: 'Archived · not on the payoff plan' everywhere — never Owed, never 'Paid off', never in a total", async () => {
     const E = F.EXPECT.archived;
     renderIn(<AccountsPanel />);
     const row = dashRow(E.ext);
@@ -211,7 +211,8 @@ describe("other card cases, one string per surface", () => {
     // Debts: the paid-off layout, no plan balance, and the words.
     renderIn(<DebtsPage />);
     const gold = screen.getAllByTestId("debt-card-paid-off").find((r) => r.getAttribute("data-debt-id") === E.debtId)!;
-    expect(gold.textContent).toContain("Paid off");
+    expect(within(gold).getByTestId("debt-card-paid-off-headline").textContent).toBe("Archived");
+    expect(gold.textContent).not.toContain("Paid off");
     expect(within(gold).getByTestId("debt-card-paid-off-month").textContent).toBe("Not on the payoff plan");
     expect(gold.textContent).not.toContain(E.creditor);
     cleanup();

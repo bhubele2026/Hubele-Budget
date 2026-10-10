@@ -97,14 +97,29 @@ describe("attentionItems — a card's bank needing a new login (dashboard refine
   });
 });
 
-describe("headerActionOf — the forecast running short (lead, 2026-10-09)", () => {
+describe("headerActionOf — the forecast running short (lead, 2026-10-09; WP6: one item)", () => {
   const over = { ...base, withinPlan: "over" as const, overBy: 25 };
+  // $350 under the $500 buffer (the server's not_yet): the forecast runs short.
+  const short = { lowPoint: "350.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "not_yet" as const };
+  const fine = { ...short, lowPoint: "1500.00", status: "ready" as const };
   it("order: Link a bank → Reconnect → runs short → Pick a way back → Afford", () => {
-    expect(headerActionOf(attentionItems(over), { noBank: true, runsShort: true }).kind).toBe("link");
-    expect(headerActionOf(attentionItems({ ...over, reauthBanks: ["Amex"] }), { runsShort: true }).kind).toBe("reconnect");
-    expect(headerActionOf(attentionItems(over), { runsShort: true })).toEqual({ kind: "short", label: "See where it runs short", href: "/forecast" });
-    expect(headerActionOf(attentionItems(over), { runsShort: false })).toEqual({ kind: "wayBack" });
+    expect(headerActionOf(attentionItems({ ...over, forecast: short }), { noBank: true }).kind).toBe("link");
+    expect(headerActionOf(attentionItems({ ...over, forecast: short, reauthBanks: ["Amex"] })).kind).toBe("reconnect");
+    expect(headerActionOf(attentionItems({ ...over, forecast: short }))).toEqual({ kind: "short", label: "See where it runs short", href: "/forecast" });
+    expect(headerActionOf(attentionItems({ ...over, forecast: fine }))).toEqual({ kind: "wayBack" });
     expect(headerActionOf(attentionItems(base), {})).toEqual({ kind: "afford" });
+  });
+  it("(WP6) runs short is an attention item from lowPointView — the one Needs attention lists — in its place in the order", () => {
+    const items = attentionItems({ ...over, forecast: short, bank: bank({ stale: true, staleReason: "old" }) });
+    expect(items.map((a) => a.kind)).toEqual(["stale", "short", "over"]);
+    expect(items[1]).toEqual({
+      kind: "short", title: "The forecast runs short", detail: "Low $350.00 on Oct 20 · below your $500 buffer",
+      action: { label: "See where it runs short", href: "/forecast" },
+    });
+    // Below zero runs short even above the buffer's verdict; tight and ready do not.
+    expect(attentionItems({ ...base, forecast: { ...fine, lowPoint: "-40.00", status: "tight" } }).some((a) => a.kind === "short")).toBe(true);
+    expect(attentionItems({ ...base, forecast: { ...fine, lowPoint: "620.00", status: "tight" } }).some((a) => a.kind === "short")).toBe(false);
+    expect(attentionItems({ ...base, forecast: { ...short, status: "no_data" } }).some((a) => a.kind === "short")).toBe(false);
   });
 });
 

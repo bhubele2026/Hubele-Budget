@@ -1,6 +1,8 @@
 import type { BillsSummary, Spine } from "@workspace/api-client-react";
 import { addDaysISO } from "@/lib/householdDay";
 import { formatCurrency } from "@/lib/utils";
+import { shortDate } from "@/lib/dates";
+import { lowPointView } from "@/lib/lowPoint";
 
 /**
  * The one thing that needs the household, chosen in a fixed order: first match
@@ -8,12 +10,16 @@ import { formatCurrency } from "@/lib/utils";
  * frozen h2 app's `screens/today/attention.ts` (logic copied, not imported).
  *
  *   1. the bank needs reconnecting   2. the bank balance is old
- *   3. over the week's limit         4. a bill is due today or tomorrow
- *   5. charges need a look           6. nothing
+ *   3. the forecast runs short       4. over the week's limit
+ *   5. a bill is due today or tomorrow   6. charges need a look   7. nothing
+ *
+ * (WP6) "Runs short" is an item here, from `lowPointView` — under the buffer,
+ * or below zero, inside the forecast's horizon — so the header's action and
+ * Needs attention read the SAME item instead of each deciding it.
  *
  * "Over" is a fact to know, not a failing to answer for: no scold.
  */
-export type AttentionKind = "reconnect" | "stale" | "over" | "bill" | "review" | "nothing";
+export type AttentionKind = "reconnect" | "stale" | "short" | "over" | "bill" | "review" | "nothing";
 
 export interface Attention {
   kind: AttentionKind;
@@ -84,6 +90,8 @@ export function attentionItems(i: {
    *  feed's own failure is `bank.staleReason`; a CARD's bank needing a new
    *  login is just as much a reconnect — new charges stop coming in. */
   reauthBanks?: readonly string[];
+  /** The spine's forecast block: "runs short" is read from it (`lowPointView`). */
+  forecast?: Spine["forecast"] | null;
 }): Attention[] {
   const out: Array<Attention & { [WHOLE]?: boolean }> = [];
   const reauth = [...new Set(i.reauthBanks ?? [])];
@@ -107,6 +115,15 @@ export function attentionItems(i: {
       kind: "stale",
       title: "The bank balance is out of date",
       action: { label: "Sync", href: "/settings" },
+    });
+  }
+  const low = i.forecast ? lowPointView(i.forecast, { buffer: i.forecast.cashBuffer }) : null;
+  if (low && low.value != null && (low.kind === "below" || low.value < 0)) {
+    out.push({
+      kind: "short",
+      title: "The forecast runs short",
+      detail: `Low ${formatCurrency(low.value)}${low.date ? ` on ${shortDate(low.date)}` : ""} · ${low.words}`,
+      action: { label: "See where it runs short", href: "/forecast" },
     });
   }
   if (i.withinPlan === "over") {
@@ -164,17 +181,18 @@ export type HeaderAction =
  * → Pick a way back → Afford. With no bank linked the action is the app's
  * existing link path (Settings › Banks); the dashboard keeps Afford beside it
  * as the quiet second control, whose sheet says what it needs.
- * `runsShort` is the caller's reading of the low point (`lowPointView`: under
- * the buffer, or below zero, inside the horizon).
+ * (WP6) "Runs short" is the `short` item `attentionItems` made — the one Needs
+ * attention lists — never a second reading of the low point.
  */
 export function headerActionOf(
   items: readonly Attention[],
-  opts: { noBank?: boolean; runsShort?: boolean } = {},
+  opts: { noBank?: boolean } = {},
 ): HeaderAction {
   if (opts.noBank) return { kind: "link", label: "Link a bank", href: "/settings" };
   const reconnect = items.find((a) => a.kind === "reconnect");
   if (reconnect) return { kind: "reconnect", label: reconnect.action?.label ?? "Reconnect", href: reconnect.action?.href ?? "/settings" };
-  if (opts.runsShort) return { kind: "short", label: "See where it runs short", href: "/forecast" };
+  const short = items.find((a) => a.kind === "short");
+  if (short) return { kind: "short", label: short.action?.label ?? "See where it runs short", href: short.action?.href ?? "/forecast" };
   if (items.some((a) => a.kind === "over" && a.wayBack)) return { kind: "wayBack" };
   return { kind: "afford" };
 }
