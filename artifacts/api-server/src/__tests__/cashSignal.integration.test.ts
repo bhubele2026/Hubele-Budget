@@ -1805,7 +1805,7 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
 
     // Anchor-day txn — excluded: it reached the ledger (00:00 on 05-01) before
     // the balance was read (12:00Z), so the balance already nets it (PR4b rule;
-    // the Chase page's computeBalanceAtEndOfDate still excludes the whole day).
+    // the Chase page reads the same rule from the server's ledger, PR13).
     await addLedgerTxn({
       occurredOn: "2026-05-01",
       amount: "-100",
@@ -2297,8 +2297,9 @@ describe("computeCashSignal.account — the account the figures roll forward on"
 
   it("names the pointed-at account from its own row, not the snapshot's remembered label", async () => {
     await setSettings({ balance: "1000.00", at: new Date("2026-05-10T12:00:00Z") });
+    const externalId = `acct-${randomUUID()}`;
     const rowId = await seedAccount({
-      externalId: `acct-${randomUUID()}`,
+      externalId,
       name: "Test Checking",
       mask: "0001",
       subtype: "checking",
@@ -2310,25 +2311,27 @@ describe("computeCashSignal.account — the account the figures roll forward on"
       .where(eq(forecastSettingsTable.userId, TEST_USER));
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
-    expect(sig.account).toEqual({ name: "Test Checking", mask: "0001", subtype: "checking", via: "pointer" });
+    // (WP1) With its ids: the pointed-at row and the account_id its rows carry.
+    expect(sig.account).toEqual({ rowId, externalId, name: "Test Checking", mask: "0001", subtype: "checking", via: "pointer" });
   });
 
   it("a manual snapshot with no pointer or mask names the sole checking account, and that account's row is what moved the balance", async () => {
     await setSettings({ balance: "1000.00", at: new Date("2026-05-10T12:00:00Z") });
     const externalId = `acct-${randomUUID()}`;
-    await seedAccount({ externalId, name: "Test Checking", mask: "0002", subtype: "checking", type: "depository" });
+    const rowId = await seedAccount({ externalId, name: "Test Checking", mask: "0002", subtype: "checking", type: "depository" });
     await addBankRow({ externalId, occurredOn: "2026-05-12", amount: "-25.00", description: "Test row" });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
-    expect(sig.account).toEqual({ name: "Test Checking", mask: "0002", subtype: "checking", via: "sole checking" });
+    expect(sig.account).toEqual({ rowId, externalId, name: "Test Checking", mask: "0002", subtype: "checking", via: "sole checking" });
     // The label and the figure name ONE account: its row rolled the snapshot forward.
     expect(sig.bankToday).toBe("975.00");
   });
 
   it("a savings account resolved as the sole depository account keeps its own subtype", async () => {
     await setSettings({ balance: "1000.00", at: new Date("2026-05-10T12:00:00Z") });
-    await seedAccount({
-      externalId: `acct-${randomUUID()}`,
+    const externalId = `acct-${randomUUID()}`;
+    const rowId = await seedAccount({
+      externalId,
       name: "Test Savings",
       mask: "0003",
       subtype: "savings",
@@ -2336,13 +2339,13 @@ describe("computeCashSignal.account — the account the figures roll forward on"
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
-    expect(sig.account).toEqual({ name: "Test Savings", mask: "0003", subtype: "savings", via: "sole depository" });
+    expect(sig.account).toEqual({ rowId, externalId, name: "Test Savings", mask: "0003", subtype: "savings", via: "sole depository" });
   });
 
   it("nothing resolvable: via 'unresolved', with no name, mask or subtype to show", async () => {
     await setSettings({ balance: "1000.00", at: new Date("2026-05-10T12:00:00Z") });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
-    expect(sig.account).toEqual({ name: null, mask: null, subtype: null, via: "unresolved" });
+    expect(sig.account).toEqual({ rowId: null, externalId: null, name: null, mask: null, subtype: null, via: "unresolved" });
   });
 });

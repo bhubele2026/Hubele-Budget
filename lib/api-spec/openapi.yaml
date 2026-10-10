@@ -4118,7 +4118,7 @@ components:
         asOf: { type: string, description: ISO timestamp the snapshot was read }
         bank:
           type: object
-          required: [balance, asOfDate, source, lastContactAt, lastFailureAt, stale, staleReason]
+          required: [balance, asOfDate, source, lastContactAt, lastFailureAt, stale, staleReason, snapshot, sinceSnapshot, account]
           properties:
             balance: { type: string, description: computeCashSignal().bankToday — snapshot rolled forward through the ledger }
             asOfDate: { type: ["string", "null"], description: computeCashSignal().snapshotAt — when the bank snapshot was taken }
@@ -4127,6 +4127,29 @@ components:
             lastFailureAt: { type: ["string", "null"], description: computeBankFreshness().lastFailureAt }
             stale: { type: boolean, description: computeBankFreshness().stale }
             staleReason: { type: ["string", "null"], enum: [refresh_failed, old, manual_old, null], description: computeBankFreshness().staleReason }
+            snapshot:
+              description: >-
+                (WP1) bankBalanceParts(ledger).snapshot — the bank snapshot `balance` rolls forward
+                from, as read (never rolled forward). Equals /forecast/bank-balance-explain
+                .snapshot's balance, at and source. Null when there is no snapshot.
+              oneOf:
+                - $ref: "#/components/schemas/SpineBankSnapshot"
+                - type: "null"
+            sinceSnapshot:
+              description: >-
+                (WP1) bankBalanceParts(ledger).sinceSnapshot — what the roll-forward adds on top of
+                the snapshot, through `through` (the household's today), by the ledger's own rule
+                (PR4e). Equals /forecast/bank-balance-explain .ledger.sinceAnchor (net, rowCount).
+                snapshot.balance + net = balance to the cent: one ledger computes all three. Null
+                when the snapshot has no read time (no roll-forward).
+              oneOf:
+                - $ref: "#/components/schemas/SpineSinceSnapshot"
+                - type: "null"
+            account:
+              $ref: "#/components/schemas/CashSignalAccount"
+              description: >-
+                (WP1) computeCashSignal().account — the account `balance` rolls forward on, with its
+                ids. A screen finds this account in a list by `rowId` / `externalId`, never by mask.
         spentMonth: { type: number, description: buildSpendingFacts(monthStart..today).householdSpend.total }
         spentWeek: { type: number, description: buildSpendingFacts(weekStart..weekEnd).householdSpend.total }
         nextBill:
@@ -4191,6 +4214,30 @@ components:
                 /debt-plan .newChargesMtd.
         reviewCount: { type: integer, description: computeReviewCount() — unmatched forecast-flagged bank txns this month }
         position: { $ref: "#/components/schemas/SpinePosition" }
+
+    SpineBankSnapshot:
+      type: object
+      description: >-
+        (WP1) The bank snapshot as it was read: the balance the bank (or the household, for a
+        typed-in one) reported at `at`. Not the balance today — the spine's `bank.balance` is
+        this rolled forward. A different figure from `balance` whenever rows landed since.
+      required: [balance, at, source]
+      properties:
+        balance: { type: string, description: "The snapshot balance, two decimals" }
+        at: { type: string, description: When it was read (ISO instant); its household day is the snapshot day }
+        source: { type: string, enum: [plaid, manual], description: "Same as bank.source: anything not from Plaid was typed in" }
+
+    SpineSinceSnapshot:
+      type: object
+      description: >-
+        (WP1) What the roll-forward adds on top of the snapshot. `count` is the rows that count,
+        dated through `through`, including a posted row that adds 0.00 because its pending half was
+        already in the balance; held, other-account and replaced pending rows are not counted.
+      required: [net, count, through]
+      properties:
+        net: { type: string, description: Signed two-decimal dollars (negative = money out since the snapshot) }
+        count: { type: integer }
+        through: { type: string, description: "The household day (YYYY-MM-DD) the roll runs through: today" }
 
     SpinePosition:
       type: object
@@ -5483,25 +5530,52 @@ components:
         pendingPaymentTotal:
           type: ["string", "null"]
           description: |
-            (#421) Sum (as a money string, e.g. "200.00") of payment-direction
-            transactions tagged to this debt that the creditor has not yet
-            reflected in the reported `balance`. A transaction counts as
-            pending when it's tagged to the debt (auto or manual), has a
-            positive (payment-direction) amount, and is dated strictly after
-            the debt's last creditor-reported balance timestamp
-            (`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`
-            for manual). The Avalanche / Debts UI subtracts this from
-            `balance` to render an "effective" balance and show a small
-            "−$X pending" hint. Null when the debt has no pending payments.
+            (#421) Sum (as a money string, e.g. "200.00") of payments tagged
+            to this debt that the creditor has not yet reflected in the
+            reported `balance`. (WP2) A tagged row counts when it pays the
+            debt down (a positive amount — and, for a row from a bank or card
+            feed, one `classifyLiabilityRow` calls a payment, so a refund or a
+            statement credit never counts), it is not the bank row that
+            confirmed a payment claim, and it is dated AFTER the household
+            day of `liabilityAsOf` (a payment dated on or before that day is
+            taken to be in the balance). The Avalanche / Debts UI subtracts
+            this from `balance` to render an "effective" balance and show a
+            small "−$X pending" hint. Null when the debt has no pending
+            payments.
         pendingPaymentCount:
           type: ["integer", "null"]
           description: |
-            (#421) Number of tagged payment-direction transactions counted
-            in `pendingPaymentTotal`. Null / 0 when there are none.
+            (#421) Number of tagged payments counted in
+            `pendingPaymentTotal`. Null / 0 when there are none.
+        liabilityAsOf:
+          type: ["string", "null"]
+          description: |
+            (WP2) When the balance on this row was read (ISO instant): for a
+            Plaid-sourced linked debt, the later of its account's liability
+            fetch and `plaidLastSyncedAt`; otherwise `lastBalanceUpdate`.
+            Payments dated after this instant's household day are pending
+            (`pendingPaymentTotal`). Null when the balance was never read.
+        statement:
+          description: |
+            (WP2) The creditor's latest statement on file (`debt_statements`,
+            the newest statement date), or null when none was ever reported.
+            This is the real statement — not the card's current balance.
+          oneOf:
+            - $ref: "#/components/schemas/DebtStatement"
+            - type: "null"
         plaidAccount:
           oneOf:
             - $ref: "#/components/schemas/DebtPlaidAccount"
             - type: "null"
+    DebtStatement:
+      type: object
+      description: (WP2) One creditor statement, as Plaid's liabilities report (or the household) gave it.
+      required: [date, balance, minPayment, dueDate]
+      properties:
+        date: { type: string, description: The statement date (YYYY-MM-DD) }
+        balance: { type: ["string", "null"], description: "The statement balance, two decimals; null when not reported" }
+        minPayment: { type: ["string", "null"], description: "The minimum payment due, two decimals; null when not reported" }
+        dueDate: { type: ["string", "null"], description: "When the payment is due (YYYY-MM-DD); null when not reported" }
     DebtPlaidAccount:
       type: object
       required: [id]
@@ -6948,8 +7022,13 @@ components:
         this, so its label and its numbers come from one response. `name`,
         `mask` and `subtype` are the resolved Plaid account's own; all null when
         `via` is `unresolved`, where the balance stays at the raw snapshot.
-      required: [name, mask, subtype, via]
+        (WP1) `rowId` and `externalId` say WHICH account: a screen that finds this
+        account in a list matches on them, never on the mask (two accounts can
+        share a mask, and a missing mask matched every other missing one).
+      required: [rowId, externalId, name, mask, subtype, via]
       properties:
+        rowId: { type: ["string", "null"], description: "(WP1) The resolved account's plaid_accounts.id; null when unresolved." }
+        externalId: { type: ["string", "null"], description: "(WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved." }
         name: { type: ["string", "null"] }
         mask: { type: ["string", "null"] }
         subtype: { type: ["string", "null"], description: "Plaid subtype, e.g. checking or savings." }
@@ -7698,8 +7777,14 @@ components:
         displayName: { type: ["string", "null"] }
         weekCharges: { type: number }
         chargeCount: { type: integer }
-        statementBalance: { type: number }
-        pctOfStatementThisWeek: { type: number }
+        statementBalance:
+          type: number
+          description: |
+            ⚠️ NOT the statement balance, despite the name: the card's CURRENT
+            balance as Plaid last reported it (`plaid_accounts.liability_balance`),
+            else the linked debt's balance, else 0. (WP2) The real last statement
+            is `Debt.statement`.
+        pctOfStatementThisWeek: { type: number, description: "weekCharges ÷ statementBalance (the current balance), clamped to 0–1" }
         topMerchant:
           oneOf:
             - type: "null"
@@ -7719,7 +7804,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AmexWeeklyPayoffCard" }
         combinedWeekCharges: { type: number }
-        combinedStatementBalance: { type: number }
+        combinedStatementBalance: { type: number, description: "The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total" }
 
     DashboardBudget:
       type: object
@@ -7835,6 +7920,25 @@ components:
         # once this timestamp is non-null because the override is no
         # longer accepted.
         firstSyncCompletedAt: { type: ["string", "null"] }
+        snapshot:
+          description: |
+            (WP3) The account's last balance READING — a snapshot, never
+            rolled forward through the ledger. The account the household's
+            bank snapshot points at reads the `bank_snapshot_*` columns;
+            any other account its `forecast_settings.account_snapshots`
+            entry. null = no reading yet (a screen says "not tracked yet",
+            never $0). GET /plaid/items always sends it; the single-item
+            mutation responses leave it out.
+          oneOf:
+            - $ref: "#/components/schemas/PlaidAccountSnapshot"
+            - type: "null"
+    PlaidAccountSnapshot:
+      type: object
+      required: [balance, at, source]
+      properties:
+        balance: { type: string, description: "The balance as read, as a money string." }
+        at: { type: string, description: ISO timestamp of the reading. }
+        source: { type: string, enum: [manual, plaid] }
     PlaidItemDetail:
       type: object
       required: [id, itemId, institutionSlug, accounts]
@@ -8602,14 +8706,20 @@ components:
 
     CategorizationBank:
       type: object
-      required: [itemId, name, lastDataOn, autoUpdates]
+      required: [itemId, name, lastDataOn, lastSyncedAt, autoUpdates]
       properties:
         itemId: { type: string, description: The same `itemId` GET /plaid/items lists. }
         name: { type: ["string", "null"] }
         lastDataOn:
           type: ["string", "null"]
           format: date
-          description: The household's date of the last successful sync; null before the first.
+          description: >-
+            (WP3) The date of the newest bank transaction H2 holds for this bank
+            — the same rule as GET /plaid/items `lastBankTxOn`. A data date, not
+            a sync date; null when no transaction has arrived.
+        lastSyncedAt:
+          type: ["string", "null"]
+          description: (WP3) ISO timestamp of the last successful sync; null before the first.
         autoUpdates:
           type: object
           required: ["on", reason]

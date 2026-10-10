@@ -14,13 +14,14 @@ import {
   effectiveBrand,
 } from "@/lib/amexBrand";
 import { cn } from "@/lib/utils";
+import { creditorLabel } from "@/lib/cardBalance";
 import { fieldLabel } from "@/ui";
 
 /**
  * Per-card band for the Amex page (C10): one PANEL per card on the page grid,
  * plus an "All cards" panel. Each card panel carries the Amex identity edge
  * (the teal-green account accent, CLAUDE.md §3), its name and ••mask, the
- * statement balance, this week's charges, and a "% cleared" ring; the card's
+ * card's current balance, this week's charges, and a "% cleared" ring; the card's
  * tier colour stays as the small dot beside its name (AX-26). Selecting a
  * panel filters the register below (drill); "All cards" clears the filter.
  *
@@ -147,8 +148,12 @@ export function AmexCardBand({
                   <div className="mt-2 font-mono text-title font-semibold leading-none tabular-nums text-brand-navy">
                     <MoneyText amount={c.statementBalance} />
                   </div>
+                  {/* (WP3) The payoff card's `statementBalance` is the card's
+                      CURRENT balance (Plaid's liability balance, else the debt
+                      row) — named as such, the words the account Summary and
+                      the account chips use (`creditorLabel`). */}
                   <div className="mt-1 text-micro text-neutral-500">
-                    Statement balance
+                    {creditorLabel()}
                   </div>
                 </div>
                 {/* Progress is progress everywhere in this app — navy, not the

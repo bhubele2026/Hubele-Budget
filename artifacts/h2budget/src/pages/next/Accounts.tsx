@@ -1,17 +1,22 @@
 import { lazy, Suspense, useMemo } from "react";
 import { useRoute } from "wouter";
 import {
-  useGetAmexWeeklyPayoff, useGetForecast, useListCategories, useListDebts,
-  useListPlaidItems, useListTransactions,
+  useGetAmexWeeklyPayoff, useListCategories, useListDebts,
+  useListPlaidItems, useListPlaidLiabilityAccounts, useListTransactions,
+  getListPlaidLiabilityAccountsQueryKey,
   type AmexWeeklyPayoffCard,
 } from "@workspace/api-client-react";
 import { Page, emptyNote } from "@/ui";
 import { PageGrid, Panel, TxnTable, type TxnRow } from "@/components/next";
 import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
 import { displayAmount } from "@/lib/amountDisplay";
-import { resolveTxnAccount } from "@/lib/accountIdentity";
+import { txnRoute } from "@/lib/accountRoute";
 import { householdToday } from "@/lib/householdDay";
-import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
+import { formatCurrency } from "@/lib/utils";
+import { isSpineAccount, snapshotWords } from "@/lib/bankBalance";
+import { useBankBalanceView } from "@/hooks/useBankBalanceView";
+import { CARD_WORDS, cardOwedView, creditorLabel, debtForAccount, needsLiability } from "@/lib/cardBalance";
+import { NOT_TRACKED, snapshotCaption } from "@/lib/snapshotWords";
 import { AccountSelector, type BalanceByRow } from "./accounts/AccountSelector";
 import { AccountSummary } from "./accounts/AccountSummary";
 import { buildEntries } from "./accounts/entries";
@@ -26,18 +31,27 @@ function daysBack(iso: string, n: number): string {
   return new Date(Date.UTC(y, m - 1, d - n)).toISOString().slice(0, 10);
 }
 
-function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries> }) {
+/** The combined view's window: the last 30 days, newest first, at most 100 rows. */
+export const COMBINED_DAYS = 30;
+export const COMBINED_LIMIT = 100;
+
+function CombinedActivity({ entries, entriesKnown }: { entries: ReturnType<typeof buildEntries>; entriesKnown: boolean }) {
   const today = useMemo(() => householdToday(new Date()), []);
-  const { data: txns, isLoading } = useListTransactions({ from: daysBack(today, 30), to: today, limit: 100 });
+  const { data: txns, isLoading } = useListTransactions({ from: daysBack(today, COMBINED_DAYS), to: today, limit: COMBINED_LIMIT });
   const { data: cats } = useListCategories();
   const rows = useMemo<TxnRow[]>(() => {
     const byExt = new Map(entries.map((e) => [e.plaidAccountId, e]));
     const catName = new Map((cats ?? []).map((c) => [c.id, c.name]));
     return (txns ?? []).map((t) => {
-      const e = t.plaidAccountId ? byExt.get(t.plaidAccountId) : undefined;
       // A row with no linked account says where it came from (Amex import,
       // manual entry, an unlinked bank account), never "Manual entry" for all.
-      const identity = resolveTxnAccount(t, byExt);
+      // (WP7) And it opens the ledger that lists it, on its month — the Amex
+      // page for a workbook row, the checking ledger for a manual one — or
+      // says why no ledger does (`txnRoute`).
+      // (WP7 review) Until the linked accounts are known (loading, or failed), a
+      // Plaid row opens nowhere and says nothing: never "no longer linked".
+      const route = txnRoute(t, byExt, { entriesKnown });
+      const identity = route.identity;
       return {
         id: t.id,
         date: t.occurredOn.slice(0, 10),
@@ -46,13 +60,22 @@ function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries
         identity,
         pending: t.pending,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
-        href: e ? `/next/accounts/${encodeURIComponent(e.plaidAccountId)}` : undefined,
+        href: route.href ?? undefined,
+        note: route.note,
       };
     });
-  }, [txns, cats, entries]);
+  }, [txns, cats, entries, entriesKnown]);
+  // (WP7) A capped pull discloses its cap (CLAUDE.md §2): the server answers
+  // newest first and cuts at the limit, so a full window lost its oldest rows.
+  const capped = (txns?.length ?? 0) >= COMBINED_LIMIT;
   if (isLoading) return <AccountPageSkeleton tiles={2} />;
   return (
     <Panel title="Recent activity" sub="Last 30 days, every account. Pick an account to review and edit." span={12} data-testid="combined-activity">
+      {capped ? (
+        <p className="pb-2 text-label text-neutral-600" data-testid="combined-activity-cap">
+          Showing the newest {COMBINED_LIMIT} rows of the last {COMBINED_DAYS} days.
+        </p>
+      ) : null}
       {rows.length ? <TxnTable rows={rows} /> : <p className={emptyNote}>No activity in the last 30 days.</p>}
     </Panel>
   );
@@ -79,25 +102,87 @@ export function payoffCardFor(
 export default function NextAccountsPage() {
   const [, params] = useRoute("/next/accounts/:plaidAccountId");
   const selectedId = params?.plaidAccountId ? decodeURIComponent(params.plaidAccountId) : null;
-  const { data: items, isLoading } = useListPlaidItems();
-  const { data: debts } = useListDebts();
+  const { data: items, isLoading, isError: itemsFailed, refetch: refetchItems } = useListPlaidItems();
+  // (WP7 review) A failed read of the linked accounts is unknown, never "none".
+  const itemsKnown = items !== undefined;
+  const debtsQ = useListDebts();
+  const debts = debtsQ.data;
+  // (WP3b) Until the debts answer, a card's plan state is UNKNOWN: never "Not
+  // on the payoff plan" because the list is missing, and a failed read says so.
+  const debtsUnknown = debts === undefined;
+  const debtsFailed = debtsUnknown && !!debtsQ.isError;
   const { data: payoff } = useGetAmexWeeklyPayoff();
-  const { data: forecast } = useGetForecast({ days: 90 });
+  // (WP3) The checking balance comes from the spine's bank view (WP1) — the
+  // figure the dashboard shows, with the snapshot under it — so this page no
+  // longer asks for the whole forecast to find one number.
+  const { view: bank, state: bankState, refetch: refetchBank } = useBankBalanceView();
+  // (WP3b) The spine decides which depository account rolls forward: until it
+  // answers, no depository balance is labelled (never "not rolled forward" for
+  // the one that is).
+  const bankUnknown = bank === null;
+  const bankFailed = bankUnknown && bankState === "failed";
   const entries = useMemo(() => buildEntries(items), [items]);
   // The id may be the Plaid account_id or the items response's row id.
   const selected = entries.find((e) => e.plaidAccountId === selectedId || e.rowId === selectedId) ?? null;
 
-  const debtFor = (rowId: string) => (debts ?? []).find((d) => d.plaidAccountId === rowId) ?? null;
-  const snapshotFor = (rowId: string) =>
-    deriveEffectiveSnapshot({
-      bankSnapshot: forecast?.bankSnapshot ?? null,
-      accountSnapshots: forecast?.accountSnapshots ?? {},
-      selectedAccountInternalId: rowId,
-      plaidCheckingAccounts: forecast?.plaidCheckingAccounts ?? [],
-    });
+  // (WP3) The debt row by the account's INTERNAL row id only, any status —
+  // the card model says what an archived row is. The dashboard's own rule.
+  const debtFor = (rowId: string) => debtForAccount(debts, { id: rowId });
+  const owes = (e: (typeof entries)[number]) => e.identity.isCard || e.identity.kind === "loan";
+  // A card or loan with no debt row — or an archived one — reads Plaid's STORED
+  // liability figures, as the dashboard does (same key; asked only when such an
+  // account exists and never with `refresh`).
+  const needLiabilities = debts !== undefined && entries.some((e) => owes(e) && needsLiability(debtFor(e.rowId)));
+  const { data: liabs } = useListPlaidLiabilityAccounts(undefined, {
+    query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * 60_000, enabled: needLiabilities },
+  });
+  const liabilityFor = (rowId: string) =>
+    needsLiability(debtFor(rowId)) ? (liabs ?? []).find((l) => l.id === rowId) ?? null : null;
+  // The account the bank balance rolls forward on — BY ID (`isSpineAccount`),
+  // never by mask.
+  const allKeys = entries.map((e) => ({ id: e.rowId, accountId: e.plaidAccountId, mask: e.identity.mask4 || null }));
+  const isSpine = (e: (typeof entries)[number]) =>
+    !owes(e) && isSpineAccount({ id: e.rowId, accountId: e.plaidAccountId, mask: e.identity.mask4 || null }, bank?.account, allKeys);
+  const bankFor = (e: (typeof entries)[number]) => (isSpine(e) ? bank : null);
+  const pendingFor = (e: (typeof entries)[number]) =>
+    owes(e)
+      ? debtsUnknown ? { failed: debtsFailed, what: "Debts", onRetry: () => void debtsQ.refetch() } : null
+      : bankUnknown ? { failed: bankFailed, what: "Your bank balance", onRetry: () => void refetchBank() } : null;
   const balances: BalanceByRow = {};
   for (const e of entries) {
-    balances[e.rowId] = e.identity.isCard ? debtFor(e.rowId)?.balance : e.identity.kind === "checking" ? snapshotFor(e.rowId)?.balance : undefined;
+    if (owes(e) ? debtsUnknown : bankUnknown) {
+      // Not known yet: a dash, or the words when the read failed.
+      const failed = owes(e) ? debtsFailed : bankFailed;
+      balances[e.rowId] = { label: null, figure: null, words: failed ? (owes(e) ? "Debts did not load" : "Balance did not load") : null };
+    } else if (owes(e)) {
+      // ⭐ The ONE card model: the chip prints what the dashboard row prints.
+      const v = cardOwedView({ debt: debtFor(e.rowId), liability: liabilityFor(e.rowId) });
+      balances[e.rowId] = v.owed != null
+        ? { label: CARD_WORDS.owed, figure: formatCurrency(v.owed), balanceAt: v.creditorCurrent?.asOf }
+        : {
+            label: v.creditorCurrent ? creditorLabel(e.identity.kind === "loan") : null,
+            figure: v.creditorCurrent ? formatCurrency(v.creditorCurrent.balance) : null,
+            plan: v.status,
+            balanceAt: v.creditorCurrent?.asOf,
+          };
+    } else if (isSpine(e) && bank) {
+      // ⭐ The checking balance: the dashboard's figure ("Balance" = the
+      // snapshot rolled forward), with the bank's own snapshot under it, dated,
+      // and how many entries rolled on top (WP1's `snapshotWords`).
+      balances[e.rowId] = {
+        label: "Balance",
+        figure: bank.balance != null ? formatCurrency(bank.balance) : null,
+        sub: snapshotWords(bank),
+        balanceAt: bank.snapshot?.at,
+      };
+    } else {
+      // Every other depository account (savings, a second checking account):
+      // its last reading, never rolled forward, or words (`lib/snapshotWords.ts`).
+      const r = e.snapshot;
+      balances[e.rowId] = r
+        ? { label: "Snapshot", figure: formatCurrency(r.balance), words: snapshotCaption(r), balanceAt: r.at }
+        : { label: null, figure: null, words: e.identity.kind === "savings" ? NOT_TRACKED.savings : NOT_TRACKED.other };
+    }
   }
 
   return (
@@ -107,12 +192,31 @@ export default function NextAccountsPage() {
           <div className="span-12 min-w-0">
             {isLoading ? (
               <AccountPageSkeleton tiles={2} />
+            ) : !itemsKnown && itemsFailed ? (
+              <p role="alert" className="text-body text-neutral-600" data-testid="accounts-failed">
+                Your linked accounts did not load.{" "}
+                <button type="button" onClick={() => void refetchItems()} className="text-label font-semibold text-brand-navy underline">
+                  Try again
+                </button>
+              </p>
             ) : entries.length ? (
               <AccountSelector entries={entries} selectedId={selected?.plaidAccountId ?? null} balances={balances} />
             ) : (
               <p className={emptyNote}>No linked accounts yet.</p>
             )}
-            {selectedId && !selected && !isLoading ? (
+            {entries.length && debtsFailed ? (
+              <p role="alert" className="mt-2 text-label text-neutral-600" data-testid="accounts-debts-failed">
+                Debts did not load ·{" "}
+                <button type="button" onClick={() => void debtsQ.refetch()} className="font-semibold text-brand-navy underline">Try again</button>
+              </p>
+            ) : null}
+            {entries.length && bankFailed ? (
+              <p role="alert" className="mt-2 text-label text-neutral-600" data-testid="accounts-bank-failed">
+                Your bank balance did not load ·{" "}
+                <button type="button" onClick={() => void refetchBank()} className="font-semibold text-brand-navy underline">Try again</button>
+              </p>
+            ) : null}
+            {selectedId && !selected && itemsKnown ? (
               <p role="status" className="mt-2 text-label text-neutral-600">That account is not linked here. Showing all accounts.</p>
             ) : null}
           </div>
@@ -132,8 +236,9 @@ export default function NextAccountsPage() {
                     <AccountSummary
                       entry={selected}
                       debt={debtFor(selected.rowId)}
+                      pending={pendingFor(selected)}
                       payoffCard={null}
-                      snapshot={snapshotFor(selected.rowId)}
+                      bank={bankFor(selected)}
                     />
                   }
                 />
@@ -152,8 +257,9 @@ export default function NextAccountsPage() {
                     <AccountSummary
                       entry={selected}
                       debt={debtFor(selected.rowId)}
+                      pending={pendingFor(selected)}
+                      liability={liabilityFor(selected.rowId)}
                       payoffCard={payoffCardFor(payoff?.cards, selected)}
-                      snapshot={null}
                     />
                   }
                 />
@@ -164,15 +270,17 @@ export default function NextAccountsPage() {
               <AccountSummary
                 entry={selected}
                 debt={debtFor(selected.rowId)}
+                pending={pendingFor(selected)}
+                liability={liabilityFor(selected.rowId)}
                 payoffCard={null}
-                snapshot={snapshotFor(selected.rowId)}
+                bank={bankFor(selected)}
               />
               <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" variant="static" data-testid="account-activity">
                 <p className={emptyNote}>This account type has no activity view yet.</p>
               </Panel>
             </>
           ) : (
-            <CombinedActivity entries={entries} />
+            <CombinedActivity entries={entries} entriesKnown={itemsKnown} />
           )}
         </PageGrid>
       </Page>

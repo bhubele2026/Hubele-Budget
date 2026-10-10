@@ -7,6 +7,8 @@ import { useOpenFindings } from "@/components/agent/agentHooks";
 import { attentionItems } from "@/lib/attention";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { accountTypesOf, categoriesByIdOf, isCardTxn, isInflowFiledAsExpense } from "@/lib/categoryDirection";
+import { txnRoute } from "@/lib/accountRoute";
+import { buildEntries } from "@/pages/next/accounts/entries";
 import { useSpine } from "@/hooks/useSpine";
 import { useCashSignalQ, usePlaidItemsQ } from "./queries";
 import { dueSoonOf, upcomingRows } from "./obligations";
@@ -55,6 +57,11 @@ function PendingRow({ failed, label, testid, onRetry }: { failed: boolean; label
       )}
     </li>
   );
+}
+
+/** "<description> · <category> and N more · last 30 days[, newest 100 rows only]". */
+function incomeDetail(first: { description: string; category: string | null }, count: number, capped: boolean): string {
+  return `${first.description}${first.category ? ` · ${first.category}` : ""}${count > 1 ? ` and ${count - 1} more` : ""} · last ${RECENT_WINDOW_DAYS} days${capped ? `, newest ${RECENT_LIMIT} rows only` : ""}`;
 }
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
@@ -111,18 +118,23 @@ export default function AttentionPanel() {
 
   // (dash-accuracy) "Income filed under an expense category", by the shared
   // pure rule, over the recent window Recent activity reads (one request).
-  // (WP5c) The rule needs to know which rows sit on a card (a card's credits
-  // are refunds and payments, whatever the issuer), so it waits for the bank
-  // items too; they are the panel's own query, already loaded for "Now".
+  // (WP7) Each row opens the ledger that lists it, on its month (`txnRoute`),
+  // keeping the category filter; a row no ledger lists says so instead.
+  // Where a row opens needs the linked accounts too: without them every row
+  // would read "no longer linked", so the check waits for them as well.
+  // (WP5c) The rule also needs to know which rows sit on a card (a card's
+  // credits are refunds and payments, whatever the issuer) — from the same items.
   const misfiled = useMemo(() => {
     if (recent.data === undefined || cats.data === undefined || items.data === undefined) return null;
     const byId = categoriesByIdOf(cats.data);
+    const entries = buildEntries(items.data);
     const types = accountTypesOf(items.data);
     return recent.data
       .filter((t) => isInflowFiledAsExpense(t, byId, { isCardAccount: isCardTxn(t, types) }))
-      .map((t) => ({
-        id: t.id, description: t.description, category: byId.get(t.categoryId ?? "")?.name ?? null,
-      }));
+      .map((t) => {
+        const category = byId.get(t.categoryId ?? "")?.name ?? null;
+        return { id: t.id, description: t.description, category, route: txnRoute(t, entries, { extra: { category } }) };
+      });
   }, [recent.data, cats.data, items.data]);
   // The window is the newest RECENT_LIMIT rows: when it is full, older rows of
   // the 30 days were not checked, and the panel says so whatever it found.
@@ -193,13 +205,26 @@ export default function AttentionPanel() {
                   onRetry={() => { void recent.refetch(); void cats.refetch(); void items.refetch(); }}
                 />
               ) : income > 0 ? (
-                <Row
-                  href={`/transactions?tx=${encodeURIComponent(misfiled![0]!.id)}${misfiled![0]!.category ? `&category=${encodeURIComponent(misfiled![0]!.category)}` : ""}`}
-                  count={income}
-                  label="Income filed under an expense category"
-                  detail={`${misfiled![0]!.description}${misfiled![0]!.category ? ` · ${misfiled![0]!.category}` : ""}${income > 1 ? ` and ${income - 1} more` : ""} · last ${RECENT_WINDOW_DAYS} days${misfiledCapped ? `, newest ${RECENT_LIMIT} rows only` : ""}`}
-                  testid="dash-review-income"
-                />
+                misfiled![0]!.route.href ? (
+                  <Row
+                    href={misfiled![0]!.route.href}
+                    count={income}
+                    label="Income filed under an expense category"
+                    detail={incomeDetail(misfiled![0]!, income, misfiledCapped)}
+                    testid="dash-review-income"
+                  />
+                ) : (
+                  // (WP7) The row's account is on no ledger H2 has: say so, never a dead link.
+                  <li data-testid="dash-review-income" className="flex items-baseline justify-between gap-3 px-2 py-2 text-label">
+                    <span className="min-w-0">
+                      <span className="block font-medium text-brand-ink">Income filed under an expense category</span>
+                      <span className="block text-micro text-neutral-600">
+                        {incomeDetail(misfiled![0]!, income, misfiledCapped)} · {misfiled![0]!.route.note}
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-mono font-semibold tabular-nums text-brand-navy">{income}</span>
+                  </li>
+                )
               ) : misfiledCapped ? (
                 <li data-testid="dash-review-income-capped" className="px-2 py-2 text-label text-neutral-600">
                   <span className="block font-medium text-brand-ink">Income filed under an expense category</span>

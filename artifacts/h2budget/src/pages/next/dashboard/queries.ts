@@ -4,7 +4,6 @@ import {
   useListDebts, getListDebtsQueryKey,
   useGetAmexWeeklyPayoff, getGetAmexWeeklyPayoffQueryKey,
   useListPlaidLiabilityAccounts, getListPlaidLiabilityAccountsQueryKey,
-  useGetForecastBankBalanceExplain, getGetForecastBankBalanceExplainQueryKey,
   // (F3b) The first screen's one fold-in read comes from the MAIN module, on
   // purpose. This file is on the entry path, and importing `/features` here
   // pulled the WHOLE sub-module into the entry chunk (Rollup keeps a module
@@ -38,8 +37,13 @@ export const useCashSignalQ = (horizonDays: number) => {
 export const useDebtsQ = () =>
   useListDebts({ query: { queryKey: getListDebtsQueryKey(), staleTime: 5 * MIN, gcTime: GC } });
 
-export const useAmexQ = () =>
-  useGetAmexWeeklyPayoff(undefined, { query: { queryKey: getGetAmexWeeklyPayoffQueryKey(), staleTime: 5 * MIN, gcTime: GC } });
+/**
+ * The weekly payoff, same key as the Amex page. (WP4) The debt tile asks only
+ * when a card off the payoff plan exists, for its billing word ("paid in full
+ * weekly"): `enabled`.
+ */
+export const useAmexQ = (enabled = true) =>
+  useGetAmexWeeklyPayoff(undefined, { query: { queryKey: getGetAmexWeeklyPayoffQueryKey(), staleTime: 5 * MIN, gcTime: GC, enabled } });
 
 export const useMoneyPositionQ = () =>
   useGetMoneyPosition({ query: { queryKey: getGetMoneyPositionQueryKey(), staleTime: MIN, gcTime: GC } });
@@ -55,14 +59,4 @@ export const useMoneyPositionQ = () =>
 export const useLiabilityAccountsQ = (enabled: boolean) =>
   useListPlaidLiabilityAccounts(undefined, {
     query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * MIN, gcTime: GC, enabled },
-  });
-
-/**
- * "Why this number?"'s own read-only diagnostic (no Plaid call), asked by the
- * checking figure only when the snapshot is from an earlier day, so it can say
- * how many ledger rows the balance rolls forward on top of it.
- */
-export const useBankExplainQ = (enabled: boolean) =>
-  useGetForecastBankBalanceExplain({
-    query: { queryKey: getGetForecastBankBalanceExplainQueryKey(), staleTime: 5 * MIN, gcTime: GC, enabled },
   });

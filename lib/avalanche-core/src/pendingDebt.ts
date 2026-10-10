@@ -29,3 +29,34 @@ export function effectiveDebtBalance(d: PendingAwareDebt): number {
   const pending = pendingPaymentTotalOf(d);
   return Math.max(0, reported - pending);
 }
+
+/**
+ * ⭐ (WP4b) THE DEBTS ON THE PAYOFF PLAN: every ACTIVE debt — one population for
+ * every figure ("$X left" and the names it covers, the Avalanche rows and their
+ * Totals, "% paid", the milestones), so no figure drops money another counts.
+ * An archived debt (paid off, or taken off the plan) is out of all of them. A
+ * missing status reads as active, as the plan's other filters read it (the
+ * server always sends one).
+ *
+ * History: WP4 also required an anchor (`originalBalance > 0`). The anchor is
+ * written only while it is null, so a card put on the plan while it read $0.00
+ * kept "0.00" after Plaid raised its balance — and dropped out of "$X left"
+ * while the Accounts row, the Avalanche table and Reports still counted it.
+ * (Before WP4 the filter was `status !== "paid_off"`, which nothing writes, so
+ * every archived debt counted.)
+ */
+export function inPayoffPopulation(d: { status?: string | null }): boolean {
+  return (d.status ?? "active") === "active";
+}
+
+/**
+ * ⭐ (WP4b) WHAT A DEBT'S "% PAID" IS MEASURED AGAINST: the larger of its anchor
+ * (`originalBalance`) and what it owes now, netted ({@link effectiveDebtBalance}).
+ * A debt that owes more than its anchor — put on the plan at $0.00, or charged
+ * back up past it — is 0% paid of what it owes now: in the figure, never dropped
+ * and never negative. 0 for a debt that owes nothing and has no anchor.
+ * Stored anchors are never rewritten; this is only how they are read.
+ */
+export function payoffBasisOf(d: PendingAwareDebt & { originalBalance?: number | string | null }): number {
+  return Math.max(Math.max(0, Number(d.originalBalance ?? 0) || 0), effectiveDebtBalance(d));
+}

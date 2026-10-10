@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
+  plaidAccountsTable,
   transactionsTable,
   settingsTable,
   budgetCategoriesTable,
@@ -64,6 +65,20 @@ export type AmexAnchorRefreshResult = {
  *
  * Otherwise the debt row is left alone — manual UI edits win.
  *
+ * ⭐ (WP2) WHICH DEBT — exactly one, or none (`pickAnchorDebt`). This used to
+ * compare the debts' INTERNAL `plaid_account_id` (a uuid) with the EXTERNAL
+ * Plaid account ids the Amex rows carry, which can never match, so it always
+ * fell through to "the first debt named like amex" — an arbitrary row (a manual
+ * decoy, the other card) whose balance it then overwrote. Now:
+ *   - the rows' external ids resolve to `plaid_accounts.id` first; a debt
+ *     linked to one of those accounts is a candidate, and only a SOLE linked
+ *     candidate is written (two linked cards share one combined anchor, which
+ *     is neither card's balance);
+ *   - a debt whose balance Plaid owns (`balanceSource = 'plaid'`) is never
+ *     overwritten unless `adopt`;
+ *   - the name match runs only when no debt is linked to those accounts, only
+ *     among debts linked to NO account, and only when it names one debt.
+ *
  * Returns `{ changed: false, balance: null }` when there are no
  * `source='amex'` transactions yet.
  */
@@ -120,37 +135,30 @@ export async function refreshAmexAnchor(
     .map((r) => r.plaidAccountId)
     .filter((v): v is string => !!v);
 
-  let debt: { id: string; balance: string } | undefined;
-  if (amexPlaidAccountIds.length > 0) {
-    const [byAcct] = await exec
-      .select({ id: debtsTable.id, balance: debtsTable.balance })
-      .from(debtsTable)
-      .where(
-        and(
-          eq(debtsTable.userId, userId),
-          // (B5) `inArray`, as the file's other queries bind lists. The raw
-          // `= ANY(${ids})` spread the array into `ANY(($2))`, which Postgres
-          // refused ("malformed array literal") on every Plaid Amex row — the
-          // sync swallowed it, so the anchor never moved (B4, D3).
-          inArray(sql`${debtsTable.plaidAccountId}::text`, amexPlaidAccountIds),
-        ),
-      )
-      .limit(1);
-    debt = byAcct;
-  }
-  if (!debt) {
-    const [byName] = await exec
-      .select({ id: debtsTable.id, balance: debtsTable.balance })
-      .from(debtsTable)
-      .where(
-        and(
-          eq(debtsTable.userId, userId),
-          sql`${debtsTable.name} ~* '(amex|american\\s*express)'`,
-        ),
-      )
-      .limit(1);
-    debt = byName;
-  }
+  // (WP2) External → internal: `transactions.plaid_account_id` holds Plaid's
+  // account_id; `debts.plaid_account_id` holds the `plaid_accounts.id` uuid.
+  // (B5) `inArray` binds the list (a raw `= ANY(${ids})` was refused).
+  const internalIds =
+    amexPlaidAccountIds.length > 0
+      ? (
+          await exec
+            .select({ id: plaidAccountsTable.id })
+            .from(plaidAccountsTable)
+            .where(inArray(plaidAccountsTable.accountId, amexPlaidAccountIds))
+        ).map((r) => r.id)
+      : [];
+  const userDebts = await exec
+    .select({
+      id: debtsTable.id,
+      name: debtsTable.name,
+      balance: debtsTable.balance,
+      plaidAccountId: debtsTable.plaidAccountId,
+      balanceSource: debtsTable.balanceSource,
+    })
+    .from(debtsTable)
+    .where(eq(debtsTable.userId, userId));
+  const picked = pickAnchorDebt(userDebts, internalIds, adopt);
+  const debt = picked.debt;
 
   // Read prior anchor so we can detect manual UI overrides since the last
   // auto-update.
@@ -209,6 +217,43 @@ export async function refreshAmexAnchor(
   }
 
   return { changed: true, updatedDebt, balance, asOf, txnCount };
+}
+
+/** (WP2) A debt row, as `pickAnchorDebt` reads it. */
+export type AnchorDebtCandidate = {
+  id: string;
+  name: string;
+  balance: string;
+  plaidAccountId: string | null;
+  balanceSource: string;
+};
+
+const AMEX_NAME = /(amex|american\s*express)/i;
+
+/**
+ * (WP2) The ONE debt the Amex anchor may write, or none — see
+ * `refreshAmexAnchor`. `internalAccountIds` are the `plaid_accounts.id`s of
+ * the accounts the Amex rows came from. Pure.
+ */
+export function pickAnchorDebt(
+  debts: readonly AnchorDebtCandidate[],
+  internalAccountIds: readonly string[],
+  adopt: boolean,
+): { debt: AnchorDebtCandidate | null; reason: "linked" | "name" | "ambiguous_linked" | "plaid_owned" | "ambiguous_name" | "none" } {
+  const accounts = new Set(internalAccountIds);
+  const linked = debts.filter((d) => !!d.plaidAccountId && accounts.has(d.plaidAccountId));
+  if (linked.length > 1) return { debt: null, reason: "ambiguous_linked" };
+  if (linked.length === 1) {
+    const d = linked[0]!;
+    if (d.balanceSource === "plaid" && !adopt) return { debt: null, reason: "plaid_owned" };
+    return { debt: d, reason: "linked" };
+  }
+  const byName = debts.filter((d) => !d.plaidAccountId && AMEX_NAME.test(d.name));
+  if (byName.length > 1) return { debt: null, reason: "ambiguous_name" };
+  if (byName.length === 0) return { debt: null, reason: "none" };
+  const d = byName[0]!;
+  if (d.balanceSource === "plaid" && !adopt) return { debt: null, reason: "plaid_owned" };
+  return { debt: d, reason: "name" };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,9 +1,10 @@
-// (#476) Shared helper that computes the Amex end-of-month balance.
-//
-// Mirrors `chaseEndingBalance.ts` for the Amex page so that if/when a
-// dashboard "Amex ending balance" tile is added, both surfaces compute
-// from the same logic and can never drift across past, current, or
-// future months.
+// (#476) Shared helper that computes the Amex end-of-month balance, so that
+// if/when a dashboard "Amex ending balance" tile is added, both surfaces
+// compute from the same logic and can never drift across past, current, or
+// future months. (It used to mirror a browser `chaseEndingBalance.ts`; the
+// Chase page's balances now come from the server's ledger,
+// `GET /transactions/ledger` and `/transactions/balances`, and that helper
+// was deleted as dead code in WP7.)
 //
 // Encapsulates:
 //  - Anchor month selection (the month containing the asOf timestamp,

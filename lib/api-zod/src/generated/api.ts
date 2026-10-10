@@ -2205,13 +2205,52 @@ export const ListDebtsResponseItem = zod.object({
     .string()
     .nullish()
     .describe(
-      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payments tagged\nto this debt that the creditor has not yet reflected in the\nreported `balance`. (WP2) A tagged row counts when it pays the\ndebt down (a positive amount — and, for a row from a bank or card\nfeed, one `classifyLiabilityRow` calls a payment, so a refund or a\nstatement credit never counts), it is not the bank row that\nconfirmed a payment claim, and it is dated AFTER the household\nday of `liabilityAsOf` (a payment dated on or before that day is\ntaken to be in the balance). The Avalanche \/ Debts UI subtracts\nthis from `balance` to render an \"effective\" balance and show a\nsmall \"−$X pending\" hint. Null when the debt has no pending\npayments.\n',
     ),
   pendingPaymentCount: zod
     .number()
     .nullish()
     .describe(
-      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+      "(#421) Number of tagged payments counted in\n`pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
+  liabilityAsOf: zod
+    .string()
+    .nullish()
+    .describe(
+      "(WP2) When the balance on this row was read (ISO instant): for a\nPlaid-sourced linked debt, the later of its account's liability\nfetch and `plaidLastSyncedAt`; otherwise `lastBalanceUpdate`.\nPayments dated after this instant's household day are pending\n(`pendingPaymentTotal`). Null when the balance was never read.\n",
+    ),
+  statement: zod
+    .union([
+      zod
+        .object({
+          date: zod.string().describe("The statement date (YYYY-MM-DD)"),
+          balance: zod
+            .string()
+            .nullable()
+            .describe(
+              "The statement balance, two decimals; null when not reported",
+            ),
+          minPayment: zod
+            .string()
+            .nullable()
+            .describe(
+              "The minimum payment due, two decimals; null when not reported",
+            ),
+          dueDate: zod
+            .string()
+            .nullable()
+            .describe(
+              "When the payment is due (YYYY-MM-DD); null when not reported",
+            ),
+        })
+        .describe(
+          "(WP2) One creditor statement, as Plaid's liabilities report (or the household) gave it.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "(WP2) The creditor's latest statement on file (`debt_statements`,\nthe newest statement date), or null when none was ever reported.\nThis is the real statement — not the card's current balance.\n",
     ),
   plaidAccount: zod
     .union([
@@ -2308,13 +2347,52 @@ export const LinkDebtToPlaidResponse = zod.object({
     .string()
     .nullish()
     .describe(
-      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payments tagged\nto this debt that the creditor has not yet reflected in the\nreported `balance`. (WP2) A tagged row counts when it pays the\ndebt down (a positive amount — and, for a row from a bank or card\nfeed, one `classifyLiabilityRow` calls a payment, so a refund or a\nstatement credit never counts), it is not the bank row that\nconfirmed a payment claim, and it is dated AFTER the household\nday of `liabilityAsOf` (a payment dated on or before that day is\ntaken to be in the balance). The Avalanche \/ Debts UI subtracts\nthis from `balance` to render an \"effective\" balance and show a\nsmall \"−$X pending\" hint. Null when the debt has no pending\npayments.\n',
     ),
   pendingPaymentCount: zod
     .number()
     .nullish()
     .describe(
-      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+      "(#421) Number of tagged payments counted in\n`pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
+  liabilityAsOf: zod
+    .string()
+    .nullish()
+    .describe(
+      "(WP2) When the balance on this row was read (ISO instant): for a\nPlaid-sourced linked debt, the later of its account's liability\nfetch and `plaidLastSyncedAt`; otherwise `lastBalanceUpdate`.\nPayments dated after this instant's household day are pending\n(`pendingPaymentTotal`). Null when the balance was never read.\n",
+    ),
+  statement: zod
+    .union([
+      zod
+        .object({
+          date: zod.string().describe("The statement date (YYYY-MM-DD)"),
+          balance: zod
+            .string()
+            .nullable()
+            .describe(
+              "The statement balance, two decimals; null when not reported",
+            ),
+          minPayment: zod
+            .string()
+            .nullable()
+            .describe(
+              "The minimum payment due, two decimals; null when not reported",
+            ),
+          dueDate: zod
+            .string()
+            .nullable()
+            .describe(
+              "When the payment is due (YYYY-MM-DD); null when not reported",
+            ),
+        })
+        .describe(
+          "(WP2) One creditor statement, as Plaid's liabilities report (or the household) gave it.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "(WP2) The creditor's latest statement on file (`debt_statements`,\nthe newest statement date), or null when none was ever reported.\nThis is the real statement — not the card's current balance.\n",
     ),
   plaidAccount: zod
     .union([
@@ -2391,13 +2469,52 @@ export const UnlinkDebtFromPlaidResponse = zod.object({
     .string()
     .nullish()
     .describe(
-      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payments tagged\nto this debt that the creditor has not yet reflected in the\nreported `balance`. (WP2) A tagged row counts when it pays the\ndebt down (a positive amount — and, for a row from a bank or card\nfeed, one `classifyLiabilityRow` calls a payment, so a refund or a\nstatement credit never counts), it is not the bank row that\nconfirmed a payment claim, and it is dated AFTER the household\nday of `liabilityAsOf` (a payment dated on or before that day is\ntaken to be in the balance). The Avalanche \/ Debts UI subtracts\nthis from `balance` to render an \"effective\" balance and show a\nsmall \"−$X pending\" hint. Null when the debt has no pending\npayments.\n',
     ),
   pendingPaymentCount: zod
     .number()
     .nullish()
     .describe(
-      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+      "(#421) Number of tagged payments counted in\n`pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
+  liabilityAsOf: zod
+    .string()
+    .nullish()
+    .describe(
+      "(WP2) When the balance on this row was read (ISO instant): for a\nPlaid-sourced linked debt, the later of its account's liability\nfetch and `plaidLastSyncedAt`; otherwise `lastBalanceUpdate`.\nPayments dated after this instant's household day are pending\n(`pendingPaymentTotal`). Null when the balance was never read.\n",
+    ),
+  statement: zod
+    .union([
+      zod
+        .object({
+          date: zod.string().describe("The statement date (YYYY-MM-DD)"),
+          balance: zod
+            .string()
+            .nullable()
+            .describe(
+              "The statement balance, two decimals; null when not reported",
+            ),
+          minPayment: zod
+            .string()
+            .nullable()
+            .describe(
+              "The minimum payment due, two decimals; null when not reported",
+            ),
+          dueDate: zod
+            .string()
+            .nullable()
+            .describe(
+              "When the payment is due (YYYY-MM-DD); null when not reported",
+            ),
+        })
+        .describe(
+          "(WP2) One creditor statement, as Plaid's liabilities report (or the household) gave it.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "(WP2) The creditor's latest statement on file (`debt_statements`,\nthe newest statement date), or null when none was ever reported.\nThis is the real statement — not the card's current balance.\n",
     ),
   plaidAccount: zod
     .union([
@@ -2474,13 +2591,52 @@ export const RefreshDebtFromPlaidResponse = zod.object({
     .string()
     .nullish()
     .describe(
-      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payments tagged\nto this debt that the creditor has not yet reflected in the\nreported `balance`. (WP2) A tagged row counts when it pays the\ndebt down (a positive amount — and, for a row from a bank or card\nfeed, one `classifyLiabilityRow` calls a payment, so a refund or a\nstatement credit never counts), it is not the bank row that\nconfirmed a payment claim, and it is dated AFTER the household\nday of `liabilityAsOf` (a payment dated on or before that day is\ntaken to be in the balance). The Avalanche \/ Debts UI subtracts\nthis from `balance` to render an \"effective\" balance and show a\nsmall \"−$X pending\" hint. Null when the debt has no pending\npayments.\n',
     ),
   pendingPaymentCount: zod
     .number()
     .nullish()
     .describe(
-      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+      "(#421) Number of tagged payments counted in\n`pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
+  liabilityAsOf: zod
+    .string()
+    .nullish()
+    .describe(
+      "(WP2) When the balance on this row was read (ISO instant): for a\nPlaid-sourced linked debt, the later of its account's liability\nfetch and `plaidLastSyncedAt`; otherwise `lastBalanceUpdate`.\nPayments dated after this instant's household day are pending\n(`pendingPaymentTotal`). Null when the balance was never read.\n",
+    ),
+  statement: zod
+    .union([
+      zod
+        .object({
+          date: zod.string().describe("The statement date (YYYY-MM-DD)"),
+          balance: zod
+            .string()
+            .nullable()
+            .describe(
+              "The statement balance, two decimals; null when not reported",
+            ),
+          minPayment: zod
+            .string()
+            .nullable()
+            .describe(
+              "The minimum payment due, two decimals; null when not reported",
+            ),
+          dueDate: zod
+            .string()
+            .nullable()
+            .describe(
+              "When the payment is due (YYYY-MM-DD); null when not reported",
+            ),
+        })
+        .describe(
+          "(WP2) One creditor statement, as Plaid's liabilities report (or the household) gave it.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "(WP2) The creditor's latest statement on file (`debt_statements`,\nthe newest statement date), or null when none was ever reported.\nThis is the real statement — not the card's current balance.\n",
     ),
   plaidAccount: zod
     .union([
@@ -2723,13 +2879,52 @@ export const UpdateDebtResponse = zod.object({
     .string()
     .nullish()
     .describe(
-      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payments tagged\nto this debt that the creditor has not yet reflected in the\nreported `balance`. (WP2) A tagged row counts when it pays the\ndebt down (a positive amount — and, for a row from a bank or card\nfeed, one `classifyLiabilityRow` calls a payment, so a refund or a\nstatement credit never counts), it is not the bank row that\nconfirmed a payment claim, and it is dated AFTER the household\nday of `liabilityAsOf` (a payment dated on or before that day is\ntaken to be in the balance). The Avalanche \/ Debts UI subtracts\nthis from `balance` to render an \"effective\" balance and show a\nsmall \"−$X pending\" hint. Null when the debt has no pending\npayments.\n',
     ),
   pendingPaymentCount: zod
     .number()
     .nullish()
     .describe(
-      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+      "(#421) Number of tagged payments counted in\n`pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
+  liabilityAsOf: zod
+    .string()
+    .nullish()
+    .describe(
+      "(WP2) When the balance on this row was read (ISO instant): for a\nPlaid-sourced linked debt, the later of its account's liability\nfetch and `plaidLastSyncedAt`; otherwise `lastBalanceUpdate`.\nPayments dated after this instant's household day are pending\n(`pendingPaymentTotal`). Null when the balance was never read.\n",
+    ),
+  statement: zod
+    .union([
+      zod
+        .object({
+          date: zod.string().describe("The statement date (YYYY-MM-DD)"),
+          balance: zod
+            .string()
+            .nullable()
+            .describe(
+              "The statement balance, two decimals; null when not reported",
+            ),
+          minPayment: zod
+            .string()
+            .nullable()
+            .describe(
+              "The minimum payment due, two decimals; null when not reported",
+            ),
+          dueDate: zod
+            .string()
+            .nullable()
+            .describe(
+              "When the payment is due (YYYY-MM-DD); null when not reported",
+            ),
+        })
+        .describe(
+          "(WP2) One creditor statement, as Plaid's liabilities report (or the household) gave it.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "(WP2) The creditor's latest statement on file (`debt_statements`,\nthe newest statement date), or null when none was ever reported.\nThis is the real statement — not the card's current balance.\n",
     ),
   plaidAccount: zod
     .union([
@@ -4056,6 +4251,18 @@ export const GetForecastResponse = zod.object({
         snapshotSource: zod.string().nullish(),
         account: zod
           .object({
+            rowId: zod
+              .string()
+              .nullable()
+              .describe(
+                "(WP1) The resolved account's plaid_accounts.id; null when unresolved.",
+              ),
+            externalId: zod
+              .string()
+              .nullable()
+              .describe(
+                "(WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved.",
+              ),
             name: zod.string().nullable(),
             mask: zod.string().nullable(),
             subtype: zod
@@ -4071,7 +4278,7 @@ export const GetForecastResponse = zod.object({
             ]),
           })
           .describe(
-            "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n",
+            "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n(WP1) `rowId` and `externalId` say WHICH account: a screen that finds this\naccount in a list matches on them, never on the mask (two accounts can\nshare a mask, and a missing mask matched every other missing one).\n",
           ),
         horizonDays: zod.number().optional(),
         fromDate: zod.string().optional(),
@@ -4432,6 +4639,18 @@ export const GetForecastCashSignalResponse = zod.object({
   snapshotSource: zod.string().nullish(),
   account: zod
     .object({
+      rowId: zod
+        .string()
+        .nullable()
+        .describe(
+          "(WP1) The resolved account's plaid_accounts.id; null when unresolved.",
+        ),
+      externalId: zod
+        .string()
+        .nullable()
+        .describe(
+          "(WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved.",
+        ),
       name: zod.string().nullable(),
       mask: zod.string().nullable(),
       subtype: zod
@@ -4447,7 +4666,7 @@ export const GetForecastCashSignalResponse = zod.object({
       ]),
     })
     .describe(
-      "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n",
+      "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n(WP1) `rowId` and `externalId` say WHICH account: a screen that finds this\naccount in a list matches on them, never on the mask (two accounts can\nshare a mask, and a missing mask matched every other missing one).\n",
     ),
   horizonDays: zod.number().optional(),
   fromDate: zod.string().optional(),
@@ -5380,8 +5599,16 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
       displayName: zod.string().nullable(),
       weekCharges: zod.number(),
       chargeCount: zod.number(),
-      statementBalance: zod.number(),
-      pctOfStatementThisWeek: zod.number(),
+      statementBalance: zod
+        .number()
+        .describe(
+          "⚠️ NOT the statement balance, despite the name: the card's CURRENT\nbalance as Plaid last reported it (`plaid_accounts.liability_balance`),\nelse the linked debt's balance, else 0. (WP2) The real last statement\nis `Debt.statement`.\n",
+        ),
+      pctOfStatementThisWeek: zod
+        .number()
+        .describe(
+          "weekCharges ÷ statementBalance (the current balance), clamped to 0–1",
+        ),
       topMerchant: zod.union([
         zod.null(),
         zod.object({
@@ -5392,7 +5619,11 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
     }),
   ),
   combinedWeekCharges: zod.number(),
-  combinedStatementBalance: zod.number(),
+  combinedStatementBalance: zod
+    .number()
+    .describe(
+      "The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total",
+    ),
 });
 
 export const ListDashboardBudgetsQueryParams = zod.object({
@@ -5535,6 +5766,21 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
       subtype: zod.string().nullish(),
       importCutoffDate: zod.string().nullish(),
       firstSyncCompletedAt: zod.string().nullish(),
+      snapshot: zod
+        .union([
+          zod.object({
+            balance: zod
+              .string()
+              .describe("The balance as read, as a money string."),
+            at: zod.string().describe("ISO timestamp of the reading."),
+            source: zod.enum(["manual", "plaid"]),
+          }),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(WP3) The account's last balance READING — a snapshot, never\nrolled forward through the ledger. The account the household's\nbank snapshot points at reads the `bank_snapshot_\*` columns;\nany other account its `forecast_settings.account_snapshots`\nentry. null = no reading yet (a screen says \"not tracked yet\",\nnever $0). GET \/plaid\/items always sends it; the single-item\nmutation responses leave it out.\n",
+        ),
     }),
   ),
 });
@@ -5585,6 +5831,21 @@ export const ListPlaidItemsResponseItem = zod.object({
       subtype: zod.string().nullish(),
       importCutoffDate: zod.string().nullish(),
       firstSyncCompletedAt: zod.string().nullish(),
+      snapshot: zod
+        .union([
+          zod.object({
+            balance: zod
+              .string()
+              .describe("The balance as read, as a money string."),
+            at: zod.string().describe("ISO timestamp of the reading."),
+            source: zod.enum(["manual", "plaid"]),
+          }),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(WP3) The account's last balance READING — a snapshot, never\nrolled forward through the ledger. The account the household's\nbank snapshot points at reads the `bank_snapshot_\*` columns;\nany other account its `forecast_settings.account_snapshots`\nentry. null = no reading yet (a screen says \"not tracked yet\",\nnever $0). GET \/plaid\/items always sends it; the single-item\nmutation responses leave it out.\n",
+        ),
     }),
   ),
 });
@@ -5650,6 +5911,21 @@ export const ClearPlaidItemRefreshDisabledResponse = zod.object({
       subtype: zod.string().nullish(),
       importCutoffDate: zod.string().nullish(),
       firstSyncCompletedAt: zod.string().nullish(),
+      snapshot: zod
+        .union([
+          zod.object({
+            balance: zod
+              .string()
+              .describe("The balance as read, as a money string."),
+            at: zod.string().describe("ISO timestamp of the reading."),
+            source: zod.enum(["manual", "plaid"]),
+          }),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(WP3) The account's last balance READING — a snapshot, never\nrolled forward through the ledger. The account the household's\nbank snapshot points at reads the `bank_snapshot_\*` columns;\nany other account its `forecast_settings.account_snapshots`\nentry. null = no reading yet (a screen says \"not tracked yet\",\nnever $0). GET \/plaid\/items always sends it; the single-item\nmutation responses leave it out.\n",
+        ),
     }),
   ),
 });
@@ -5806,6 +6082,21 @@ export const DismissPlaidExpirationWarningResponse = zod.object({
       subtype: zod.string().nullish(),
       importCutoffDate: zod.string().nullish(),
       firstSyncCompletedAt: zod.string().nullish(),
+      snapshot: zod
+        .union([
+          zod.object({
+            balance: zod
+              .string()
+              .describe("The balance as read, as a money string."),
+            at: zod.string().describe("ISO timestamp of the reading."),
+            source: zod.enum(["manual", "plaid"]),
+          }),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(WP3) The account's last balance READING — a snapshot, never\nrolled forward through the ledger. The account the household's\nbank snapshot points at reads the `bank_snapshot_\*` columns;\nany other account its `forecast_settings.account_snapshots`\nentry. null = no reading yet (a screen says \"not tracked yet\",\nnever $0). GET \/plaid\/items always sends it; the single-item\nmutation responses leave it out.\n",
+        ),
     }),
   ),
 });
@@ -6566,6 +6857,87 @@ export const GetSpineResponse = zod.object({
       ])
       .nullable()
       .describe("computeBankFreshness().staleReason"),
+    snapshot: zod
+      .union([
+        zod
+          .object({
+            balance: zod
+              .string()
+              .describe("The snapshot balance, two decimals"),
+            at: zod
+              .string()
+              .describe(
+                "When it was read (ISO instant); its household day is the snapshot day",
+              ),
+            source: zod
+              .enum(["plaid", "manual"])
+              .describe(
+                "Same as bank.source: anything not from Plaid was typed in",
+              ),
+          })
+          .describe(
+            "(WP1) The bank snapshot as it was read: the balance the bank (or the household, for a typed-in one) reported at `at`. Not the balance today — the spine's `bank.balance` is this rolled forward. A different figure from `balance` whenever rows landed since.",
+          ),
+        zod.null(),
+      ])
+      .describe(
+        "(WP1) bankBalanceParts(ledger).snapshot — the bank snapshot `balance` rolls forward from, as read (never rolled forward). Equals \/forecast\/bank-balance-explain .snapshot's balance, at and source. Null when there is no snapshot.",
+      ),
+    sinceSnapshot: zod
+      .union([
+        zod
+          .object({
+            net: zod
+              .string()
+              .describe(
+                "Signed two-decimal dollars (negative = money out since the snapshot)",
+              ),
+            count: zod.number(),
+            through: zod
+              .string()
+              .describe(
+                "The household day (YYYY-MM-DD) the roll runs through: today",
+              ),
+          })
+          .describe(
+            "(WP1) What the roll-forward adds on top of the snapshot. `count` is the rows that count, dated through `through`, including a posted row that adds 0.00 because its pending half was already in the balance; held, other-account and replaced pending rows are not counted.",
+          ),
+        zod.null(),
+      ])
+      .describe(
+        "(WP1) bankBalanceParts(ledger).sinceSnapshot — what the roll-forward adds on top of the snapshot, through `through` (the household's today), by the ledger's own rule (PR4e). Equals \/forecast\/bank-balance-explain .ledger.sinceAnchor (net, rowCount). snapshot.balance + net = balance to the cent: one ledger computes all three. Null when the snapshot has no read time (no roll-forward).",
+      ),
+    account: zod
+      .object({
+        rowId: zod
+          .string()
+          .nullable()
+          .describe(
+            "(WP1) The resolved account's plaid_accounts.id; null when unresolved.",
+          ),
+        externalId: zod
+          .string()
+          .nullable()
+          .describe(
+            "(WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved.",
+          ),
+        name: zod.string().nullable(),
+        mask: zod.string().nullable(),
+        subtype: zod
+          .string()
+          .nullable()
+          .describe("Plaid subtype, e.g. checking or savings."),
+        via: zod.enum([
+          "pointer",
+          "snapshot mask",
+          "sole checking",
+          "sole depository",
+          "unresolved",
+        ]),
+      })
+      .describe(
+        "(WP1) computeCashSignal().account — the account `balance` rolls forward on, with its ids. A screen finds this account in a list by `rowId` \/ `externalId`, never by mask.",
+      ),
   }),
   spentMonth: zod
     .number()
@@ -7575,7 +7947,13 @@ export const GetCategorizationSettingsResponse = zod.object({
           .date()
           .nullable()
           .describe(
-            "The household's date of the last successful sync; null before the first.",
+            "(WP3) The date of the newest bank transaction H2 holds for this bank — the same rule as GET \/plaid\/items `lastBankTxOn`. A data date, not a sync date; null when no transaction has arrived.",
+          ),
+        lastSyncedAt: zod
+          .string()
+          .nullable()
+          .describe(
+            "(WP3) ISO timestamp of the last successful sync; null before the first.",
           ),
         autoUpdates: zod.object({
           on: zod.boolean(),
@@ -7764,7 +8142,13 @@ export const UpdateCategorizationSettingsResponse = zod.object({
           .date()
           .nullable()
           .describe(
-            "The household's date of the last successful sync; null before the first.",
+            "(WP3) The date of the newest bank transaction H2 holds for this bank — the same rule as GET \/plaid\/items `lastBankTxOn`. A data date, not a sync date; null when no transaction has arrived.",
+          ),
+        lastSyncedAt: zod
+          .string()
+          .nullable()
+          .describe(
+            "(WP3) ISO timestamp of the last successful sync; null before the first.",
           ),
         autoUpdates: zod.object({
           on: zod.boolean(),

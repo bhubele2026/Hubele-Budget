@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { PlaidAccountSnapshot } from "./plaidAccountSnapshot";
 
 export interface PlaidAccount {
   id: string;
@@ -23,4 +24,13 @@ export interface PlaidAccount {
   importCutoffDate?: string | null;
   /** @nullable */
   firstSyncCompletedAt?: string | null;
+  /** (WP3) The account's last balance READING — a snapshot, never
+rolled forward through the ledger. The account the household's
+bank snapshot points at reads the `bank_snapshot_*` columns;
+any other account its `forecast_settings.account_snapshots`
+entry. null = no reading yet (a screen says "not tracked yet",
+never $0). GET /plaid/items always sends it; the single-item
+mutation responses leave it out.
+ */
+  snapshot?: PlaidAccountSnapshot | null;
 }

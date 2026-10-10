@@ -79,6 +79,7 @@ import { useListPlaidItems } from "@workspace/api-client-react";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
+import { AMEX_SOURCES } from "@/lib/amexSources";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
 import { AMEX_BALANCE_DISTINCTION } from "@/lib/reportsBalances";
 import {
@@ -112,6 +113,7 @@ import { cardOrderOf, identityOf, type AccountAccentName } from "@/lib/accountId
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { currentWeekRange, type RangeMode } from "@/lib/timeRange";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
+import { asOfWords, cardOwedView } from "@/lib/cardBalance";
 
 /** The identity accent's dot (the same tokens as `AccountChip`). */
 const ACCENT_DOT: Record<AccountAccentName, string> = {
@@ -121,12 +123,10 @@ const ACCENT_DOT: Record<AccountAccentName, string> = {
   other: "bg-acct-other",
 };
 
-// The "American Express" page is really the credit-cards view. Apple Card
-// rows are folded in here so they show alongside the Amex cards without
-// renaming the page — both the Plaid form ("plaid:apple-card", if it ever
-// links) and the FinanceKit/manual form ("apple-card", how it'll actually
-// arrive from the iOS app).
-const AMEX_SOURCES = ["amex", "plaid:amex", "plaid:apple-card", "apple-card"];
+// The "American Express" page is really the credit-cards view: AMEX_SOURCES
+// (`lib/amexSources.ts`) folds the Apple Card sources in beside the Amex ones.
+// (WP7) Shared with the transaction route rules, so a row this page lists is
+// never told it has no ledger.
 
 /** The household calendar day (America/Chicago) of an instant — never the UTC date. */
 function ymd(d: Date) {
@@ -936,11 +936,17 @@ export default function AmexPage({
       return resolvedAnchor;
     }
     // Tier 1: per-card debt row (when the user has linked the card on /debts).
+    // (WP3) The register runs on the CREDITOR's current balance — the card
+    // model's `creditorCurrent`, the figure the account Summary labels "Card's
+    // current balance" — never the netted Owed: the rows below are the card's
+    // own activity, so its own balance is their anchor. The anchor month keeps
+    // its established as-of (`lastBalanceUpdate ?? plaidLastSyncedAt`), so no
+    // running "bal" moves.
     if (cardScopedDebt) {
-      const bal = parseSigned(cardScopedDebt.balance);
-      if (Number.isFinite(bal)) {
+      const creditor = cardOwedView({ debt: cardScopedDebt }).creditorCurrent;
+      if (creditor) {
         return {
-          anchor: bal,
+          anchor: creditor.balance,
           resolvedSource: "debt" as const,
           asOf:
             cardScopedDebt.lastBalanceUpdate ??
@@ -1094,7 +1100,7 @@ export default function AmexPage({
     }
     const sourceLabel =
       endingBalance.source === "debt"
-        ? "From debt row"
+        ? "Card's current balance"
         : endingBalance.source === "anchor"
           ? "From saved anchor"
           : endingBalance.source === "plaid"
@@ -1151,6 +1157,19 @@ export default function AmexPage({
     const tooltip = `${baseTooltip}\n\n${AMEX_BALANCE_DISTINCTION.amexTooltipNote}`;
     return { sourceLabel, asOfLabel, relativeAsOf, footer, tooltip };
   }, [endingBalance, isAmexSyncing]);
+
+  // (WP3) Say what the register's "bal" runs on when it is the card's own
+  // debt row (tier 1), and put the netted Owed beside it, second: the account
+  // Summary and the dashboard lead with Owed, and this is the same card.
+  const anchorNote = useMemo(() => {
+    if (cardFilter === "all" || !cardScopedDebt) return null;
+    const v = cardOwedView({ debt: cardScopedDebt });
+    if (!v.creditorCurrent) return null;
+    const asOf = asOfWords(v.creditorCurrent.asOf);
+    const lead = `Running balances start from the card's current balance, ${formatCurrency(v.creditorCurrent.balance)}${asOf ? ` ${asOf}` : ""}.`;
+    if (v.owed == null || !v.pending) return lead;
+    return `${lead} Owed after payments not yet posted: ${formatCurrency(v.owed)}.`;
+  }, [cardFilter, cardScopedDebt]);
 
   // (#809) Forward-looking ending-balance window, pinned to a fixed
   // 12-month span that rolls forward by month. Credit-card spending
@@ -1992,6 +2011,9 @@ export default function AmexPage({
                   Reviewed rows are hidden.
                 </span>
               )}
+              {anchorNote ? (
+                <span className="text-micro text-neutral-500" data-testid="amex-anchor-note">{anchorNote}</span>
+              ) : null}
             </div>
           }
         >

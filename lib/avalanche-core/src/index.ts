@@ -793,8 +793,14 @@ export function sortDebts<T extends SimDebt>(debts: T[], strat: Strategy): T[] {
 // `./pendingDebt` (a sub-path export, like `./householdTime`), so the web app's
 // landing can net a debt balance without pulling this whole module — the
 // payoff simulator with it — into its entry chunk. Re-exported here, unchanged.
-import { effectiveDebtBalance, type PendingAwareDebt } from "./pendingDebt";
-export { effectiveDebtBalance, pendingPaymentTotalOf, type PendingAwareDebt } from "./pendingDebt";
+import { effectiveDebtBalance, inPayoffPopulation, payoffBasisOf, type PendingAwareDebt } from "./pendingDebt";
+export {
+  effectiveDebtBalance,
+  inPayoffPopulation,
+  payoffBasisOf,
+  pendingPaymentTotalOf,
+  type PendingAwareDebt,
+} from "./pendingDebt";
 
 // ── Payoff progress ─────────────────────────────────────────────────────────
 
@@ -810,16 +816,14 @@ export { effectiveDebtBalance, pendingPaymentTotalOf, type PendingAwareDebt } fr
  * the only way to honour that AND keep the number is to compute the ratio where
  * the balances already live and ship only the ratio.
  *
- * ⚠️ `min(balance, originalBalance)`, NOT `original - balance`. A balance can
- * exceed its own anchor — a card charged back up past the peak we recorded, or
- * an anchor captured after the debt had already been paid down. Subtracting raw
- * would hand back a NEGATIVE contribution and let one misbehaving card drag the
- * household's progress below where it truly is. Clamping per debt keeps every
- * debt's contribution inside [0, original].
- *
- * ⚠️ DEBTS WITH NO ANCHOR ARE EXCLUDED FROM BOTH SIDES OF THE RATIO, not
- * counted as 0% paid. A debt we have no "original" for is unknown, not
- * unstarted, and treating it as unstarted would understate real progress.
+ * ⚠️ (WP4b) EACH DEBT IS MEASURED AGAINST `max(originalBalance, owed now)`
+ * (`payoffBasisOf`), NOT its anchor alone. A balance can exceed its own anchor —
+ * a card charged back up past the peak we recorded, or one put on the plan
+ * while it read $0.00 (the anchor is written only while it is null, so it stays
+ * "0.00"). Such a debt is 0% paid of what it owes now: never a negative
+ * contribution, and never dropped from the ratio — every active debt is in it,
+ * the same debts "$X left" sums. (Before WP4b a debt with no anchor, or an
+ * anchor of 0, was left out of both sides.)
  *
  * ⚠️ (C10) THE BALANCE SIDE IS THE **NETTED** BALANCE. A payment you have
  * already made and tagged counts as progress the moment you tag it, not weeks
@@ -829,8 +833,9 @@ export { effectiveDebtBalance, pendingPaymentTotalOf, type PendingAwareDebt } fr
  * payment is recorded. Callers must pass rows carrying `pendingPaymentTotal`
  * to get the netting; a row without it nets zero and behaves exactly as before.
  *
- * Returns percent in [0, 100] (NOT a 0–1 fraction), or `null` when no debt
- * carries an anchor — `null` means "nothing to show", never "0% paid".
+ * Returns percent in [0, 100] (NOT a 0–1 fraction), or `null` when no active
+ * debt has a basis (none owes anything or carries an anchor) — `null` means
+ * "nothing to show", never "0% paid".
  */
 export function payoffPct(
   debts: Array<
@@ -840,21 +845,21 @@ export function payoffPct(
     }
   >,
 ): number | null {
-  // `status !== "paid_off"` — the landing's own filter. A retired debt must not
-  // keep inflating the numerator forever after it is gone.
-  const active = debts.filter((d) => d.status !== "paid_off");
-  let sumOrig = 0;
-  let sumBal = 0;
-  for (const d of active) {
-    const bal = effectiveDebtBalance(d);
-    const orig = Number(d.originalBalance ?? 0) || 0;
-    if (orig > 0) {
-      sumOrig += orig;
-      sumBal += Math.min(bal, orig);
-    }
+  // ⭐ (WP4b) Every ACTIVE debt (`inPayoffPopulation`) — the population "$X
+  // left" sums — each measured against the larger of its anchor and what it
+  // owes now (`payoffBasisOf`). A debt anchored at $0.00 counts as 0% paid of
+  // what it owes; it is never dropped.
+  let sumBasis = 0;
+  let sumOwed = 0;
+  for (const d of debts) {
+    if (!inPayoffPopulation(d)) continue;
+    const basis = payoffBasisOf(d);
+    if (basis <= 0) continue;
+    sumBasis += basis;
+    sumOwed += effectiveDebtBalance(d);
   }
-  if (sumOrig <= 0) return null;
-  return Math.max(0, Math.min(1, (sumOrig - sumBal) / sumOrig)) * 100;
+  if (sumBasis <= 0) return null;
+  return Math.max(0, Math.min(1, (sumBasis - sumOwed) / sumBasis)) * 100;
 }
 // (PR-B2, decision 7) The everyday hooks: the funding bills become date hooks,
 // each occurrence replaced by the card payoff it stands for.

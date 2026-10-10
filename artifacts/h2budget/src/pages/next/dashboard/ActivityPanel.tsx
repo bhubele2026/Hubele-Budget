@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { Panel, TxnTable, type TxnRow } from "@/components/next";
-import { resolveTxnAccount } from "@/lib/accountIdentity";
+import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { usePlaidItemsQ } from "./queries";
@@ -24,6 +24,11 @@ export default function ActivityPanel() {
   const txns = useRecentTxnsQ(today, addDaysISO(today, -RECENT_WINDOW_DAYS));
   const items = usePlaidItemsQ();
   const cats = useCategoriesQ();
+  // (WP7 review) Where a Plaid row opens needs the linked accounts. Until they
+  // answer (or when they failed) such a row has no link and no note, and its
+  // chip names only the institution: an empty list must never read as "no
+  // longer linked".
+  const accountsKnown = items.data !== undefined;
 
   const rows = useMemo<TxnRow[]>(() => {
     // Keyed by Plaid's EXTERNAL account_id — what `transaction.plaidAccountId`
@@ -35,7 +40,10 @@ export default function ActivityPanel() {
     // items, which say which accounts are cards.
     const types = items.data === undefined ? null : accountTypesOf(items.data);
     return (txns.data ?? []).slice(0, ACTIVITY_ROWS).map((t) => {
-      const identity = resolveTxnAccount(t, byExt);
+      // (WP7) The one route rule: a row opens the ledger that lists it, on its
+      // month, or says why none does — never the checking ledger by default.
+      const route = txnRoute(t, byExt, { entriesKnown: accountsKnown });
+      const identity = route.identity;
       return {
         id: t.id,
         date: t.occurredOn.slice(0, 10),
@@ -48,17 +56,33 @@ export default function ActivityPanel() {
           types && isInflowFiledAsExpense(t, catsById, { isCardAccount: isCardTxn(t, types) })
             ? "Income in an expense category"
             : null,
-        href: identity.known && t.plaidAccountId ? `/next/accounts/${encodeURIComponent(t.plaidAccountId)}` : "/transactions",
+        href: route.href ?? undefined,
+        note: route.note,
       };
     });
-  }, [txns.data, items.data, cats.data]);
+  }, [txns.data, items.data, cats.data, accountsKnown]);
 
   return (
     <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={5}
       variant={["flush", "static"]}
       className={cn(rise(BELOW_FOLD.activity.rise), minH, "self-start")} data-testid="dash-activity"
       actions={<Link href="/transactions" className={cn(LINK, "text-label")} data-testid="dash-all-activity">All activity</Link>}>
-      <Gate q={txns} what="Recent activity" rows={6}>{() => <TxnTable rows={rows} layout="list" />}</Gate>
+      <Gate q={txns} what="Recent activity" rows={6}>
+        {() => (
+          <>
+            {!accountsKnown && items.isError ? (
+              <p role="alert" data-testid="dash-activity-accounts-failed"
+                className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-2 text-label text-neutral-600">
+                <span>Your linked accounts did not load, so these rows are not linked to them.</span>
+                <button type="button" onClick={() => void items.refetch()} className="font-semibold text-brand-navy underline">
+                  Try again
+                </button>
+              </p>
+            ) : null}
+            <TxnTable rows={rows} layout="list" />
+          </>
+        )}
+      </Gate>
     </Panel>
   );
 }

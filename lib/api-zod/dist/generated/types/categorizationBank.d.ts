@@ -12,10 +12,15 @@ export interface CategorizationBank {
     /** @nullable */
     name: string | null;
     /**
-     * The household's date of the last successful sync; null before the first.
+     * (WP3) The date of the newest bank transaction H2 holds for this bank — the same rule as GET /plaid/items `lastBankTxOn`. A data date, not a sync date; null when no transaction has arrived.
      * @nullable
      */
     lastDataOn: Date | null;
+    /**
+     * (WP3) ISO timestamp of the last successful sync; null before the first.
+     * @nullable
+     */
+    lastSyncedAt: string | null;
     autoUpdates: CategorizationBankAutoUpdates;
 }
 //# sourceMappingURL=categorizationBank.d.ts.map

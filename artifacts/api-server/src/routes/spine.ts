@@ -4,6 +4,7 @@ import { db, debtsTable } from "@workspace/db";
 import { payoffPct } from "@workspace/avalanche-core";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
+  bankBalanceParts,
   computeCashSignalDetailed,
   runwayDaysFrom,
   weekStartFor,
@@ -36,6 +37,11 @@ const router: IRouter = Router();
  * value of the same function the owning page's own endpoint calls:
  *
  *   bank.balance / bank.asOfDate  → computeCashSignal().bankToday / .snapshotAt
+ *   bank.snapshot / .sinceSnapshot → bankBalanceParts(ledger)        [lib/cashSignal]
+ *                                   (WP1; the two halves of bank.balance from the
+ *                                   same ledger; also /forecast/bank-balance-explain
+ *                                   .snapshot and .ledger.sinceAnchor)
+ *   bank.account                  → computeCashSignal().account (WP1: with its ids)
  *   bank.source / .lastContactAt / .lastFailureAt / .stale / .staleReason
  *                                 → computeBankFreshness()  [lib/bankFreshness]
  *                                   (also /forecast/bank-balance-explain .freshness)
@@ -124,6 +130,9 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       }),
     ]);
   const signal = cash.signal;
+  // (WP1) The snapshot and what the roll adds since, from the very ledger that
+  // computed `bankToday` — so the account pages can show both halves beside it.
+  const bankParts = bankBalanceParts(cash.ledger);
 
   const { nextBill, billsDueCount } = pickNextBill(billsSummary, today);
 
@@ -155,6 +164,15 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       lastFailureAt: freshness.lastFailureAt,
       stale: freshness.stale,
       staleReason: freshness.staleReason,
+      // (WP1) What `balance` is made of, and whose it is. The snapshot is the
+      // bank's own figure as read (a different number from `balance` whenever
+      // rows landed since); `sinceSnapshot` is what the ledger added on top; the
+      // account carries its ids so no screen has to match it by mask. ⚠️ Still
+      // the household's own cash: nothing under `bank` may name a debt, a limit
+      // or credit (`spineParity` scans for it).
+      snapshot: bankParts.snapshot,
+      sinceSnapshot: bankParts.sinceSnapshot,
+      account: signal.account,
     },
     // (PR7) Household spending: every purchase on any account, categorized or
     // not, through the one spending rule (card payments, transfers, debt
