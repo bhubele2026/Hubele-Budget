@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { fmtMonth } from "@/lib/avalanche";
 import type { PlanLine } from "@/lib/forecastMatch";
 import type { PayoffInfo } from "@/lib/forecastDebts";
+import { hookPayoffWords, type HookPayoffLine } from "@/lib/forecastHooks";
 import { Flame } from "lucide-react";
 import { isPlanRowMatchEligible, statusBadge } from "./statusBadge";
 import { canRecordPartial } from "@/lib/forecastMatch";
@@ -30,6 +31,7 @@ export function PlanDropRow({
   answerDisabled = false,
   activeDragId,
   payoff,
+  hook,
   isBestSuggestion = false,
   isHighlighted = false,
 }: {
@@ -45,6 +47,13 @@ export function PlanDropRow({
   answerDisabled?: boolean;
   activeDragId: string | null;
   payoff?: PayoffInfo;
+  /**
+   * (WP8) An everyday hook's occurrence: the card payoff the curve takes in
+   * place of the stored plan ("card payoff $477.57 · plan $450"), or the bank
+   * row that paid it ("paid on evidence by …"). Display only: the row's
+   * amount and the register's running balance still read the stored plan.
+   */
+  hook?: HookPayoffLine;
   /**
    * (#26) When a bank inbox card is being dragged or hovered, the row whose
    * plan key matches that card's top suggestion gets a tinted ring so the
@@ -195,6 +204,11 @@ export function PlanDropRow({
           <div className="whitespace-nowrap font-mono text-micro tabular-nums text-neutral-400">
             {formatDate(row.date)}
           </div>
+          {hook && (
+            <div className="text-micro text-neutral-500" data-testid={`plan-hook-${testKey}`}>
+              {hookPayoffWords(hook)}
+            </div>
+          )}
           {pp && (
             <div
               className="flex flex-wrap items-center gap-x-2 text-micro text-neutral-500"

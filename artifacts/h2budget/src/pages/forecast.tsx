@@ -152,6 +152,7 @@ import {
   PlannedItemsList,
   type PlannedItem,
 } from "./forecast/PlannedItemsList";
+import { hookPayoffsOf } from "@/lib/forecastHooks";
 import { ForecastBody, TAB_OF_MODE, forecastTitle } from "./forecast/ForecastBody";
 import { statusBadge, isPlanRowMatchEligible } from "./forecast/statusBadge";
 
@@ -996,6 +997,16 @@ export default function ForecastPage({
       (p) => p.itemId === itemId && p.date === writeDate && p.status === "partial",
     );
   };
+
+  // (WP8) Each everyday-hook occurrence's card payoff (or the bank row that
+  // paid it), for the register's words. Display only: the register's amounts
+  // and running balance still read the stored plan.
+  const hookPayoffs = useMemo(() => {
+    const descriptionById = new Map(
+      ((data?.transactions ?? []) as Array<{ id: string; description?: string | null }>).map((t) => [t.id, t.description ?? null]),
+    );
+    return hookPayoffsOf(cashProjection, (id) => descriptionById.get(id) ?? null);
+  }, [cashProjection, data?.transactions]);
 
   // Plan rows used as drop targets (active register, plan-only)
   const planRows: PlanLine[] = useMemo(() => {
@@ -3033,6 +3044,7 @@ export default function ForecastPage({
                   <PlannedItemsList
                     items={plannedItems}
                     payoffsByItem={payoffsByItem}
+                    hookPayoffs={hookPayoffs}
                     bestSuggestionPlanKey={bestSuggestionPlanKey}
                     highlightedPlanKey={highlightedPlanKey}
                     activeDragId={activeDragId}

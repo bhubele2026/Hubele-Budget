@@ -20,6 +20,7 @@ export interface AmexWeeklyPayoffCard {
     periodLabel: string;
     /** @nullable */
     displayName: string | null;
+    /** This card's charges in its billing window (the week, or the month for a monthly card). (WP8, owner's decision) Every charge, filed or not, less refunds dated in the window. */
     weekCharges: number;
     chargeCount: number;
     /** ⚠️ NOT the statement balance, despite the name: the card's CURRENT

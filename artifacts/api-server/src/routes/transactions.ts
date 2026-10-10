@@ -8,6 +8,7 @@ import {
   mappingRulesTable,
   debtsTable,
   merchantAliasesTable,
+  plaidAccountsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -184,6 +185,20 @@ export const UNPLANNED_TRANSFER_REJECT_CODE = "unplanned_transfer_rejected";
 export const UNPLANNED_TRANSFER_REJECT_MESSAGE =
   "This row looks like a transfer or card payment, so it can't be tagged as Unplanned spending.";
 
+/**
+ * (WP8) Is this external Plaid `account_id` one of the household's accounts?
+ * A created row may name its account (a split part of a card charge keeps its
+ * card); an id from nowhere, or from another household, never lands on a row.
+ */
+async function householdOwnsPlaidAccount(householdId: string, externalId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: plaidAccountsTable.id })
+    .from(plaidAccountsTable)
+    .where(and(eq(plaidAccountsTable.householdId, householdId), eq(plaidAccountsTable.accountId, externalId)))
+    .limit(1);
+  return !!row;
+}
+
 async function userOwnsDebt(householdId: string, debtId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: debtsTable.id })
@@ -203,6 +218,13 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid debtId" });
     return;
   }
+  // (WP8) A row that names its Plaid account must name one of the household's.
+  // Empty is "no account", as everywhere else.
+  const plaidAccountId = parsed.data.plaidAccountId?.trim() || null;
+  if (plaidAccountId && !(await householdOwnsPlaidAccount(req.householdId!, plaidAccountId))) {
+    res.status(400).json({ error: "Invalid plaidAccountId", code: "invalid_plaid_account" });
+    return;
+  }
   // Mirror the import / Plaid-sync auto-categorize pipeline so a hand-typed
   // "STARBUCKS COFFEE #221" expense lands in the same category an imported
   // row would (and so the Transactions page's "matched by rule X" chip
@@ -216,6 +238,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // come from Plaid) so categorize() here just runs the description path.
   const insertValues: Record<string, unknown> = {
     ...parsed.data,
+    plaidAccountId,
     userId: req.userId!,
     householdId: req.householdId!,
   };

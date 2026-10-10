@@ -74,13 +74,25 @@ async function insertTxn(
   },
   createdAt?: Date,
 ): Promise<string> {
+  // (WP8) A Plaid row is a Plaid POSTING: it carries a Plaid transaction id, as
+  // every synced row does. Only those are dedupe candidates now (a row the app
+  // wrote on an account — a split part — never is), so a test row from Plaid
+  // gets one unless the test names its own (or null, to model the app's row).
+  const source = values.source ?? "plaid:chase";
+  const plaidTransactionId =
+    values.plaidTransactionId !== undefined
+      ? values.plaidTransactionId
+      : source.startsWith("plaid:")
+        ? `pt-auto-${randomUUID()}`
+        : null;
   const [row] = await db
     .insert(transactionsTable)
     .values({
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
-      source: "plaid:chase",
       ...values,
+      source,
+      plaidTransactionId,
       ...(createdAt ? { createdAt } : {}),
     })
     .returning({ id: transactionsTable.id });
@@ -91,8 +103,7 @@ describe("dedupeTransactionsForAccount (#452)", () => {
   it("collapses two duplicate Chase rows: keeps the one with more user state, merges loser fields, deletes the loser", async () => {
     await cleanup();
     const acct = await seedAccount();
-    // Loser: brand-new, no user state, but has a plaid_transaction_id
-    // (so the survivor can adopt it).
+    // Loser: brand-new, no user state, with its own plaid_transaction_id.
     const loserId = await insertTxn(
       {
         plaidAccountId: acct,
@@ -133,8 +144,10 @@ describe("dedupeTransactionsForAccount (#452)", () => {
       );
     expect(remaining).toHaveLength(1);
     expect(remaining[0].id).toBe(survivorId);
-    // Loser's plaid_transaction_id was adopted onto the survivor so the
-    // next /transactions/sync refreshes via onConflictDoUpdate.
+    // The survivor keeps a Plaid transaction id so the next
+    // /transactions/sync refreshes via onConflictDoUpdate. (WP8) Both rows
+    // are Plaid postings now (only those are candidates), so it is its own:
+    // the old "survivor with no id adopts the loser's" path no longer runs.
     expect(remaining[0].plaidTransactionId).toBeTruthy();
     expect(remaining[0].forecastFlag).toBe(true);
     expect(remaining[0].reimbursable).toBe(true);

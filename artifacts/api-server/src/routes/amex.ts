@@ -577,6 +577,13 @@ router.delete("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
  *
  * `?weekStart=YYYY-MM-DD` selects the week (defaults to the last fully
  * completed Sun–Sat week).
+ *
+ * ⭐ (WP8, owner's decision 2026-10-10) THE CARD PAGE BILLS WHAT THE HOOK BILLS:
+ * every charge on the card, filed or not (`allCoverages`), less refunds. An
+ * unfiled charge is still owed to the card, and the forecast's Saturday payoff
+ * already counts it (`everydayHooks.ts`), so "this week's charges" here plus
+ * what is left of the week IS that payoff, to the cent. Before, this page
+ * counted filed charges only and read lower by every unfiled charge.
  */
 router.get("/amex/weekly-payoff", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
@@ -584,7 +591,7 @@ router.get("/amex/weekly-payoff", requireAuth, async (req, res): Promise<void> =
   const weekStart =
     typeof weekStartRaw === "string" && weekStartRaw.length > 0 ? weekStartRaw : undefined;
 
-  const payoff = await computeWeeklyPayoff(householdId, weekStart, req.householdOwnerId);
+  const payoff = await computeWeeklyPayoff(householdId, weekStart, req.householdOwnerId, { allCoverages: true });
 
   res.json(payoff);
 });

@@ -312,10 +312,13 @@ export async function computeWeeklyPayoff(
   opts: {
     /**
      * ⭐ (PR-B2, decision 7) Every purchase on the card, filed or not — what the
-     * forecast's everyday hooks owe the card. The Amex page (the default, false)
-     * keeps its own rule: categorized real spend only. An unfiled charge is still
-     * owed, and the hooks' remaining allowance already counts it as spent, so
-     * leaving it out of the charges would read HIGH by exactly that charge.
+     * forecast's everyday hooks owe the card. An unfiled charge is still owed,
+     * and the hooks' remaining allowance already counts it as spent, so leaving
+     * it out of the charges would read HIGH by exactly that charge.
+     * (WP8, owner's decision 2026-10-10) `GET /amex/weekly-payoff` — the card
+     * page — passes it too, so the page's "this week's charges" and the
+     * Saturday payoff are one figure. `false` (categorized real spend only) is
+     * kept for a caller that asks for it; none does today.
      */
     allCoverages?: boolean;
   } = {},

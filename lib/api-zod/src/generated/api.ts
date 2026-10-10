@@ -846,6 +846,8 @@ export const ListTransactionsResponseItem = zod.object({
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
 
+export const createTransactionBodyPlaidAccountIdMax = 128;
+
 export const CreateTransactionBody = zod.object({
   occurredOn: zod.string(),
   occurredAt: zod.string().nullish(),
@@ -877,6 +879,13 @@ export const CreateTransactionBody = zod.object({
   member: zod.string().nullish(),
   owedBy: zod.string().nullish(),
   debtId: zod.string().nullish(),
+  plaidAccountId: zod
+    .string()
+    .max(createTransactionBodyPlaidAccountIdMax)
+    .nullish()
+    .describe(
+      "(WP8) The external Plaid `account_id` the new row is on — a split part\nof a card charge keeps its card (with the charge's `source`), so it\nnever lands on the checking ledger. Must be an account of the caller's\nhousehold (400 `invalid_plaid_account` otherwise); null, empty or absent\nleaves the row with no Plaid account.\n",
+    ),
 });
 
 export const UpdateTransactionParams = zod.object({
@@ -5597,7 +5606,11 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
       cadence: zod.enum(["weekly", "monthly"]),
       periodLabel: zod.string(),
       displayName: zod.string().nullable(),
-      weekCharges: zod.number(),
+      weekCharges: zod
+        .number()
+        .describe(
+          "This card's charges in its billing window (the week, or the month for a monthly card). (WP8, owner's decision) Every charge, filed or not, less refunds dated in the window.",
+        ),
       chargeCount: zod.number(),
       statementBalance: zod
         .number()
@@ -5618,7 +5631,11 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
       ]),
     }),
   ),
-  combinedWeekCharges: zod.number(),
+  combinedWeekCharges: zod
+    .number()
+    .describe(
+      "The weekly-cadence band cards' `weekCharges` summed. (WP8, owner's decision) Every charge on the cards, filed or not, less refunds — the basis the forecast's Saturday payoff bills (`allCoverages`), so this plus what is left of the week is that payoff.",
+    ),
   combinedStatementBalance: zod
     .number()
     .describe(

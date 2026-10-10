@@ -37,5 +37,16 @@ export interface CreateTransactionInput {
     owedBy?: string | null;
     /** @nullable */
     debtId?: string | null;
+    /**
+     * (WP8) The external Plaid `account_id` the new row is on — a split part
+  of a card charge keeps its card (with the charge's `source`), so it
+  never lands on the checking ledger. Must be an account of the caller's
+  household (400 `invalid_plaid_account` otherwise); null, empty or absent
+  leaves the row with no Plaid account.
+  
+     * @maxLength 128
+     * @nullable
+     */
+    plaidAccountId?: string | null;
 }
 //# sourceMappingURL=createTransactionInput.d.ts.map
