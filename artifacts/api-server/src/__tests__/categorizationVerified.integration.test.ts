@@ -36,7 +36,7 @@ vi.mock("../middlewares/requireAuth", () => ({
   },
 }));
 
-import { db, pool, categoryDecisionsTable, mappingRulesTable, plaidItemsTable, transactionsTable } from "@workspace/db";
+import { db, pool, categoryDecisionsTable, mappingRulesTable, plaidAccountsTable, plaidItemsTable, transactionsTable } from "@workspace/db";
 import { GetCategorizationSettingsResponse, RunCategorizationResponse } from "@workspace/api-zod";
 import { resetFake } from "../ai/fake";
 import { invalidateTaskConfigCache } from "../ai/config";
@@ -118,6 +118,7 @@ const wipe = async () => {
     await wipeHousehold(h);
     // Plaid items are swept database-wide by other files (the webhook boot sweep): never leave one behind.
     await db.delete(plaidItemsTable).where(eq(plaidItemsTable.householdId, h));
+    await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.householdId, h));
   }
 };
 beforeEach(async () => {
@@ -326,20 +327,29 @@ describe("GET /categorization/settings — V7 fields", () => {
     await addTxn(HH_OTHER, OTHER, { occurredOn: daysAgo(900), description: "V7 THEIRS" });
     const u = randomUUID().slice(0, 8);
     const item = (o: Partial<typeof plaidItemsTable.$inferInsert>) => ({ userId: OWNER, householdId: HH, itemId: `v7-item-${randomUUID()}`, accessToken: `access-sandbox-${randomUUID()}`, ...o });
-    await db.insert(plaidItemsTable).values([
-      // 03:00 UTC on Oct 8 is still Oct 7 in the household's calendar.
+    const inserted = await db.insert(plaidItemsTable).values([
       item({ itemId: `v7-zeta-${u}`, institutionName: "Zeta Bank", lastSyncedAt: new Date("2026-10-08T03:00:00Z"), webhookUrl: WEBHOOK }),
       item({ itemId: `v7-alpha-${u}`, institutionName: "Alpha Card", lastSyncedAt: null, webhookUrl: null }),
       item({ itemId: `seed-v7-${u}`, institutionName: "Seed Bank" }),
       { ...item({ itemId: `v7-theirs-${u}`, institutionName: "Their Bank" }), userId: OTHER, householdId: HH_OTHER },
-    ]);
+    ]).returning({ id: plaidItemsTable.id, itemId: plaidItemsTable.itemId });
+    // (WP3) "Data through" is a DATA date: the newest bank row on the item
+    // (filed rows, so the backlog figures below are unchanged), never the sync
+    // day. Another household's newer row on the same external id never counts.
+    const zetaAcct = `v7-zeta-acct-${u}`;
+    await db.insert(plaidAccountsTable).values({
+      userId: OWNER, householdId: HH, itemId: inserted.find((r) => r.itemId === `v7-zeta-${u}`)!.id, accountId: zetaAcct, type: "depository", subtype: "checking",
+    });
+    await addTxn(HH, OWNER, { occurredOn: daysAgo(5), plaidAccountId: zetaAcct, description: "V7 ZETA NEWEST", categoryId: C.Dining });
+    await addTxn(HH, OWNER, { occurredOn: daysAgo(9), plaidAccountId: zetaAcct, description: "V7 ZETA OLDER", categoryId: C.Dining });
+    await addTxn(HH_OTHER, OTHER, { occurredOn: daysAgo(1), plaidAccountId: zetaAcct, description: "V7 NOT THEIRS", categoryId: null });
     const res = await call("GET", "/categorization/settings", MEMBER);
     expect(res.status).toBe(200);
     expect(() => GetCategorizationSettingsResponse.parse(res.json)).not.toThrow();
     expect(res.json.backlog).toEqual({ unfiled: 2, oldestUnfiledOn: daysAgo(300), provisional: 1 });
     expect(res.json.banks).toEqual([
-      { itemId: `v7-alpha-${u}`, name: "Alpha Card", lastDataOn: null, autoUpdates: { on: false, reason: "not_registered" } },
-      { itemId: `v7-zeta-${u}`, name: "Zeta Bank", lastDataOn: "2026-10-07", autoUpdates: { on: true, reason: "ok" } },
+      { itemId: `v7-alpha-${u}`, name: "Alpha Card", lastDataOn: null, lastSyncedAt: null, autoUpdates: { on: false, reason: "not_registered" } },
+      { itemId: `v7-zeta-${u}`, name: "Zeta Bank", lastDataOn: daysAgo(5), lastSyncedAt: "2026-10-08T03:00:00.000Z", autoUpdates: { on: true, reason: "ok" } },
     ]);
     expect(res.json.model).toMatchObject({ verified: 0, unreviewed: 1 });
     expect(res.json.recent.find((r: { transactionId: string }) => r.transactionId === prov)).toMatchObject({ resolution: "unreviewed", resolvedBy: "silent" });

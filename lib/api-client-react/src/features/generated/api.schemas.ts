@@ -5075,6 +5075,22 @@ export interface PlaidExchangeInput {
   institutionName?: string | null;
 }
 
+export type PlaidAccountSnapshotSource =
+  (typeof PlaidAccountSnapshotSource)[keyof typeof PlaidAccountSnapshotSource];
+
+export const PlaidAccountSnapshotSource = {
+  manual: "manual",
+  plaid: "plaid",
+} as const;
+
+export interface PlaidAccountSnapshot {
+  /** The balance as read, as a money string. */
+  balance: string;
+  /** ISO timestamp of the reading. */
+  at: string;
+  source: PlaidAccountSnapshotSource;
+}
+
 export interface PlaidAccount {
   id: string;
   accountId: string;
@@ -5092,6 +5108,15 @@ export interface PlaidAccount {
   importCutoffDate?: string | null;
   /** @nullable */
   firstSyncCompletedAt?: string | null;
+  /** (WP3) The account's last balance READING — a snapshot, never
+rolled forward through the ledger. The account the household's
+bank snapshot points at reads the `bank_snapshot_*` columns;
+any other account its `forecast_settings.account_snapshots`
+entry. null = no reading yet (a screen says "not tracked yet",
+never $0). GET /plaid/items always sends it; the single-item
+mutation responses leave it out.
+ */
+  snapshot?: PlaidAccountSnapshot | null;
 }
 
 export type PlaidItemDetailAutoUpdatesReason =
@@ -5870,10 +5895,15 @@ export interface CategorizationBank {
   /** @nullable */
   name: string | null;
   /**
-   * The household's date of the last successful sync; null before the first.
+   * (WP3) The date of the newest bank transaction H2 holds for this bank — the same rule as GET /plaid/items `lastBankTxOn`. A data date, not a sync date; null when no transaction has arrived.
    * @nullable
    */
   lastDataOn: string | null;
+  /**
+   * (WP3) ISO timestamp of the last successful sync; null before the first.
+   * @nullable
+   */
+  lastSyncedAt: string | null;
   autoUpdates: CategorizationBankAutoUpdates;
 }
 

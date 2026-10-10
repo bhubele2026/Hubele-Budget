@@ -11902,6 +11902,19 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         importCutoffDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         firstSyncCompletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        snapshot: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            source: zod.ZodEnum<["manual", "plaid"]>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }>, zod.ZodNull]>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         accountId: string;
@@ -11910,6 +11923,11 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }, {
@@ -11920,6 +11938,11 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }>, "many">;
@@ -11935,6 +11958,11 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -11971,6 +11999,11 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -12041,6 +12074,19 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         importCutoffDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         firstSyncCompletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        snapshot: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            source: zod.ZodEnum<["manual", "plaid"]>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }>, zod.ZodNull]>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         accountId: string;
@@ -12049,6 +12095,11 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }, {
@@ -12059,6 +12110,11 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }>, "many">;
@@ -12074,6 +12130,11 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -12110,6 +12171,11 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -12180,6 +12246,19 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         importCutoffDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         firstSyncCompletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        snapshot: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            source: zod.ZodEnum<["manual", "plaid"]>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }>, zod.ZodNull]>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         accountId: string;
@@ -12188,6 +12267,11 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }, {
@@ -12198,6 +12282,11 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }>, "many">;
@@ -12213,6 +12302,11 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -12249,6 +12343,11 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -12336,6 +12435,19 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
         subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         importCutoffDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         firstSyncCompletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        snapshot: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            source: zod.ZodEnum<["manual", "plaid"]>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }>, zod.ZodNull]>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         accountId: string;
@@ -12344,6 +12456,11 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }, {
@@ -12354,6 +12471,11 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }>, "many">;
@@ -12369,6 +12491,11 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -12405,6 +12532,11 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -12719,6 +12851,19 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         importCutoffDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         firstSyncCompletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        snapshot: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            source: zod.ZodEnum<["manual", "plaid"]>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }>, zod.ZodNull]>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         accountId: string;
@@ -12727,6 +12872,11 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }, {
@@ -12737,6 +12887,11 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }>, "many">;
@@ -12752,6 +12907,11 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -12788,6 +12948,11 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        snapshot?: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null | undefined;
         importCutoffDate?: string | null | undefined;
         firstSyncCompletedAt?: string | null | undefined;
     }[];
@@ -16633,6 +16798,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         itemId: zod.ZodString;
         name: zod.ZodNullable<zod.ZodString>;
         lastDataOn: zod.ZodNullable<zod.ZodDate>;
+        lastSyncedAt: zod.ZodNullable<zod.ZodString>;
         autoUpdates: zod.ZodObject<{
             on: zod.ZodBoolean;
             reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
@@ -16646,6 +16812,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         name: string | null;
         itemId: string;
+        lastSyncedAt: string | null;
         autoUpdates: {
             on: boolean;
             reason: "error" | "ok" | "no_url" | "not_registered";
@@ -16654,6 +16821,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     }, {
         name: string | null;
         itemId: string;
+        lastSyncedAt: string | null;
         autoUpdates: {
             on: boolean;
             reason: "error" | "ok" | "no_url" | "not_registered";
@@ -16721,6 +16889,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     banks: {
         name: string | null;
         itemId: string;
+        lastSyncedAt: string | null;
         autoUpdates: {
             on: boolean;
             reason: "error" | "ok" | "no_url" | "not_registered";
@@ -16788,6 +16957,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     banks: {
         name: string | null;
         itemId: string;
+        lastSyncedAt: string | null;
         autoUpdates: {
             on: boolean;
             reason: "error" | "ok" | "no_url" | "not_registered";
@@ -17014,6 +17184,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         itemId: zod.ZodString;
         name: zod.ZodNullable<zod.ZodString>;
         lastDataOn: zod.ZodNullable<zod.ZodDate>;
+        lastSyncedAt: zod.ZodNullable<zod.ZodString>;
         autoUpdates: zod.ZodObject<{
             on: zod.ZodBoolean;
             reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
@@ -17027,6 +17198,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         name: string | null;
         itemId: string;
+        lastSyncedAt: string | null;
         autoUpdates: {
             on: boolean;
             reason: "error" | "ok" | "no_url" | "not_registered";
@@ -17035,6 +17207,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     }, {
         name: string | null;
         itemId: string;
+        lastSyncedAt: string | null;
         autoUpdates: {
             on: boolean;
             reason: "error" | "ok" | "no_url" | "not_registered";
@@ -17102,6 +17275,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     banks: {
         name: string | null;
         itemId: string;
+        lastSyncedAt: string | null;
         autoUpdates: {
             on: boolean;
             reason: "error" | "ok" | "no_url" | "not_registered";
@@ -17169,6 +17343,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     banks: {
         name: string | null;
         itemId: string;
+        lastSyncedAt: string | null;
         autoUpdates: {
             on: boolean;
             reason: "error" | "ok" | "no_url" | "not_registered";

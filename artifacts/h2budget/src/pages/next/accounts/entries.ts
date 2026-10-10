@@ -17,6 +17,8 @@ export interface AccountEntry {
   /** The item's institution, so a row from an unlinked account of the same bank can be named. */
   institutionName?: string | null;
   institutionSlug?: string | null;
+  /** (WP3) The account's last balance reading, never rolled forward (GET /plaid/items). */
+  snapshot?: { balance: string; at: string; source: "manual" | "plaid" } | null;
 }
 
 /** One entry per linked account, in the API's order. Pure. */
@@ -55,6 +57,7 @@ export function buildEntries(items: readonly PlaidItemDetail[] | undefined): Acc
       dataThrough: it.lastBankTxOn ?? null,
       institutionName: it.institutionName ?? null,
       institutionSlug: it.institutionSlug ?? null,
+      snapshot: a.snapshot ?? null,
     };
   });
 }

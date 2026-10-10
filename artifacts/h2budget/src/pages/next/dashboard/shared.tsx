@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { emptyNote } from "@/ui";
-import { shortDate } from "@/components/next";
+// (WP3, bundle) `shortDate` from `lib/dates`, not the `components/next` barrel:
+// that copy lives in `TxnTable.tsx`, and importing it here kept the WHOLE
+// table module (3.4 KB) in the entry chunk — Rollup keeps a shared module in
+// the chunk that statically imports it, and the table is only drawn by the
+// lazy Recent activity panel. Same "Oct 7" for every YYYY-MM-DD.
+import { shortDate } from "@/lib/dates";
 import { householdDayOfAt } from "@/lib/householdDay";
 
 /** Money for a figure that may be missing: an em dash, never $0. */

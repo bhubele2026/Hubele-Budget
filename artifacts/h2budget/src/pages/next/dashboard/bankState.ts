@@ -1,8 +1,20 @@
 import type { PlaidItemDetail } from "@workspace/api-client-react";
 import { isPlaidReauthCode, isSyntheticPlaidItem } from "@/components/plaid-reconnect-button";
+import { agoShort } from "@/lib/accountFreshness";
+import { PLAID_FEED_QUIET_MS } from "@workspace/avalanche-core/freshness";
 
-/** A bank's feed is "out of date" after 36 hours without a successful sync. */
-export const STALE_MS = 36 * 60 * 60 * 1000;
+// (WP3) `agoShort` moved to `lib/accountFreshness.ts` with the account
+// freshness stamps; re-exported so existing callers keep their import.
+export { agoShort };
+
+/**
+ * A bank's feed is "out of date" after 48 hours without a successful sync —
+ * the server's own threshold (`computeBankFreshness`), one constant for both
+ * (`@workspace/avalanche-core/freshness`). (WP3) It was 36 hours here, so for
+ * twelve hours a day this line said "out of date" while the balance beside it
+ * was served as fresh.
+ */
+export const STALE_MS = PLAID_FEED_QUIET_MS;
 
 export type AccountState = "ok" | "stale" | "reauth" | "failed" | "never";
 
@@ -17,19 +29,6 @@ export function connectionState(item: PlaidItemDetail, now: number): AccountStat
 export const STATE_WORD: Record<AccountState, string> = {
   ok: "Up to date", stale: "Out of date", reauth: "Needs reconnecting", failed: "Last sync failed", never: "Not synced yet",
 };
-
-/** "2 h ago", "3 d ago": short enough for a one-line freshness strip. */
-export function agoShort(iso: string | null | undefined, now: number): string | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return null;
-  const min = Math.floor(Math.max(0, now - t) / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min} min ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h} h ago`;
-  return `${Math.floor(h / 24)} d ago`;
-}
 
 export interface BankLine {
   itemId: string;

@@ -1,0 +1,1 @@
+{"version":3,"file":"plaidAccountSnapshot.d.ts","sourceRoot":"","sources":["../../../src/generated/types/plaidAccountSnapshot.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,0BAA0B,EAAE,MAAM,8BAA8B,CAAC;AAE/E,MAAM,WAAW,oBAAoB;IACnC,8CAA8C;IAC9C,OAAO,EAAE,MAAM,CAAC;IAChB,oCAAoC;IACpC,EAAE,EAAE,MAAM,CAAC;IACX,MAAM,EAAE,0BAA0B,CAAC;CACpC"}
