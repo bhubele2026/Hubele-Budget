@@ -27,6 +27,7 @@ import {
   dedupeTransactionsAcrossAccountsForUser,
 } from "./dedupeTransactions";
 import { markRemovedRowsKept, runCategorizationBatch } from "./categorizer";
+import { dedupePlaidAccountsForUser, type DedupeReport } from "./dedupePlaidAccounts";
 import { reconcileSplitsAfterSync } from "./categorizer/splits";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { afterPlaidSyncDebtPass } from "./debtPaymentConfirm";
@@ -157,6 +158,12 @@ export type SyncResult = {
   // Modified rows are intentionally excluded — Plaid surfaces them when
   // metadata changes upstream, not when their categorization first fired.
   ruleAttributions: RuleAttribution[];
+  /**
+   * (WP9) Duplicate plaid_accounts rows this sync merged onto a survivor
+   * (twins are merged only when a bank sync runs, never on a page read).
+   * Absent on the early-return paths, where no merge ran.
+   */
+  accountsMerged?: number;
   error: string | null;
   // True when Plaid responded with PRODUCT_NOT_READY (a freshly linked item
   // whose historical batch is still being staged). Treated as a transient,
@@ -648,6 +655,27 @@ async function reconcileVanishedPendings(opts: {
   return doomed.length;
 }
 
+/**
+ * (WP9) The sync log's one-line summary of a duplicate-account merge, in the
+ * quiet style of the pending-cleanup rows ("Merged 1 duplicate account; 3
+ * transactions moved to the account that stays.").
+ */
+export function accountMergeSummary(m: DedupeReport): string {
+  const parts: string[] = [];
+  if (m.duplicatesRemoved > 0) {
+    parts.push(`Merged ${m.duplicatesRemoved} duplicate account${m.duplicatesRemoved === 1 ? "" : "s"}`);
+  }
+  if (m.syntheticDropped) parts.push("removed the placeholder checking account");
+  const moved: string[] = [];
+  if (m.transactionsRepointed > 0) {
+    moved.push(`${m.transactionsRepointed} transaction${m.transactionsRepointed === 1 ? "" : "s"}`);
+  }
+  if (m.debtsRepointed > 0) moved.push(`${m.debtsRepointed} debt link${m.debtsRepointed === 1 ? "" : "s"}`);
+  const head = parts.join("; ") || "Merged duplicate accounts";
+  const tail = moved.length > 0 ? `; ${moved.join(" and ")} moved to the account that stays` : "";
+  return `${head.charAt(0).toUpperCase()}${head.slice(1)}${tail}.`;
+}
+
 export async function syncPlaidItem(
   userId: string,
   itemRowId: string,
@@ -962,6 +990,8 @@ export async function syncPlaidItem(
   let removed: { transaction_id: string }[] = [];
   let hasMore = true;
   let autoCategorized = 0;
+  // (WP9) Duplicate plaid_accounts rows this sync merged (see the merge below).
+  let accountsMerged = 0;
   // Per-rule attribution counter — only credited for rows in the `added`
   // array (Plaid's "first time we've seen this txn") so the summary toast
   // doesn't double-count when Plaid replays a `modified` event for an
@@ -1900,6 +1930,32 @@ export async function syncPlaidItem(
       }
     }
 
+    // ⭐ (WP9) TWIN ACCOUNTS ARE MERGED HERE — WHEN A BANK SYNC RUNS — AND
+    // NEVER ON A PAGE READ (owner's decision, 2026-10-10). Two plaid_accounts
+    // rows for one physical account (same institution, last four and name: a
+    // re-link's second row) collapse onto one survivor, with their rows, debts
+    // and the snapshot pointer re-pointed (`dedupePlaidAccountsForUser`, keyed
+    // on the item's own user, whose accounts these are). Every GET is
+    // read-only for account rows, so no figure depends on which page was
+    // opened first. Counted in the result (`accountsMerged`, the Sync toast)
+    // and written to the sync log (kind `account_merge`). Non-fatal.
+    try {
+      const merge = await dedupePlaidAccountsForUser(item.userId);
+      accountsMerged = merge.duplicatesRemoved;
+      if (merge.duplicatesRemoved > 0 || merge.syntheticDropped) {
+        await recordPlaidSyncAttempt({
+          userId,
+          plaidItemId: itemRowId,
+          kind: "account_merge",
+          success: true,
+          errorMessage: accountMergeSummary(merge),
+        });
+        logger.info({ householdId, itemRowId, ...merge }, "[plaid-sync] (WP9) merged duplicate accounts");
+      }
+    } catch (e) {
+      logger.warn({ householdId, itemRowId, err: e }, "[plaid-sync] (WP9) duplicate-account merge failed (non-fatal)");
+    }
+
     // (Amex ··1009 / relink) Collapse CROSS-account duplicates too: a
     // categorized "orphan" row whose account row was deleted on a reconnect
     // (now preserved by the orphan-prune guard) plus its fresh live-linked
@@ -2671,6 +2727,8 @@ export async function syncPlaidItem(
       removed: removed.length,
       autoCategorized,
       ruleAttributions,
+      // (WP9) Duplicate accounts this sync merged; the Sync toast says so.
+      accountsMerged,
       // (#403) Min/max date among the rows we actually wrote — null
       // when nothing was inserted.
       importedDateRange:

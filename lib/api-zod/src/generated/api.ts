@@ -5974,6 +5974,7 @@ export const ListPlaidSyncAttemptsResponse = zod.object({
         "balance",
         "liabilities",
         "pending_cleanup",
+        "account_merge",
       ]),
       success: zod.boolean(),
       errorCode: zod.string().nullish(),
@@ -6140,6 +6141,12 @@ export const SyncPlaidTransactionsResponse = zod.object({
           count: zod.number(),
         }),
       ),
+      accountsMerged: zod
+        .number()
+        .optional()
+        .describe(
+          "(WP9) Duplicate bank accounts (two rows for one physical\naccount: same institution, last four and name, e.g. after a\nre-link) this sync merged onto one. Twins are merged only\nwhen a bank sync runs, never on a page read. Absent when the\nsync stopped before the merge (an error, still preparing).\n",
+        ),
       error: zod.string().nullish(),
       stillPreparing: zod.boolean().optional(),
       importedDateRange: zod

@@ -107,102 +107,53 @@ async function seedAmexItem() {
   return item;
 }
 
-describe("(#416) /amex/anchor one-shot heal hook", () => {
-  it("collapses a duplicate Amex plaid_accounts row on the first hit, stamps the cleanup flag, and skips the dedupe pass on subsequent hits", async () => {
+// (WP9) The owner's decision (2026-10-10): duplicate accounts are merged ONLY
+// when a bank sync runs, never on a page read. /amex/anchor used to collapse
+// twin Amex rows on its first hit (#416, gated by `amexCleanupDoneAt`); it is
+// now read-only for account rows and writes no preference. The sync-path merge
+// is pinned in plaidAccountTwinsOnSync.integration.test.ts.
+describe("(WP9) /amex/anchor is read-only for account rows", () => {
+  it("leaves a duplicate Amex plaid_accounts row in place, hit after hit, and stamps nothing", async () => {
     const item = await seedAmexItem();
     // Two `plaid_accounts` rows for the same physical card mask 1001 —
-    // exactly the shape the dedupe routine collapses.
-    const [survivor] = await db
+    // exactly the shape the sync-time merge collapses.
+    const twins = await db
       .insert(plaidAccountsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        itemId: item.id,
-        accountId: `amex-survivor-${randomUUID()}`,
-        name: "Amex Gold",
-        mask: "1001",
-        type: "credit",
-        subtype: "credit card",
-      })
-      .returning();
-    const [loser] = await db
-      .insert(plaidAccountsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        itemId: item.id,
-        accountId: `amex-loser-${randomUUID()}`,
-        name: "Amex Gold",
-        mask: "1001",
-        type: "credit",
-        subtype: "credit card",
-      })
+      .values(
+        ["survivor", "loser"].map((k) => ({
+          userId: TEST_USER,
+          householdId: TEST_HOUSEHOLD_ID,
+          itemId: item.id,
+          accountId: `amex-${k}-${randomUUID()}`,
+          name: "Amex Gold",
+          mask: "1001",
+          type: "credit",
+          subtype: "credit card",
+        })),
+      )
       .returning();
 
-    // First hit: heal runs, the duplicate plaid_account is collapsed,
-    // cleanup flag is stamped.
-    const r1 = await fetch(`${baseUrl}/amex/anchor`);
-    expect(r1.status).toBe(200);
-
-    const accts = await db
-      .select()
-      .from(plaidAccountsTable)
-      .where(eq(plaidAccountsTable.userId, TEST_USER));
-    expect(accts).toHaveLength(1);
-    // Survivor is the row referenced by no debt (most recent created),
-    // exact identity isn't critical — what matters is exactly one row
-    // and its id is one of the originals.
-    expect([survivor.id, loser.id]).toContain(accts[0].id);
+    for (let i = 0; i < 2; i += 1) {
+      const r = await fetch(`${baseUrl}/amex/anchor`);
+      expect(r.status).toBe(200);
+      const accts = await db
+        .select({ id: plaidAccountsTable.id })
+        .from(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.userId, TEST_USER));
+      expect(accts.map((a) => a.id).sort()).toEqual(twins.map((t) => t.id).sort());
+    }
 
     const [settingsAfter] = await db
       .select({ preferences: settingsTable.preferences })
       .from(settingsTable)
       .where(eq(settingsTable.userId, TEST_USER));
     const prefs = (settingsAfter?.preferences ?? {}) as Record<string, unknown>;
-    expect(typeof prefs.amexCleanupDoneAt).toBe("string");
-    const stampedAt = prefs.amexCleanupDoneAt as string;
-
-    // Second hit: cleanup flag is set, heal must NOT run again. Insert
-    // a fresh duplicate plaid_account and confirm it is left alone
-    // (no dedupe pass), proving one-shot gating works.
-    await db.insert(plaidAccountsTable).values({
-      userId: TEST_USER,
-      householdId: TEST_HOUSEHOLD_ID,
-      itemId: item.id,
-      accountId: `amex-post-heal-${randomUUID()}`,
-      name: "Amex Gold",
-      mask: "1001",
-      type: "credit",
-      subtype: "credit card",
-    });
-    const r2 = await fetch(`${baseUrl}/amex/anchor`);
-    expect(r2.status).toBe(200);
-    const acctsFinal = await db
-      .select()
-      .from(plaidAccountsTable)
-      .where(eq(plaidAccountsTable.userId, TEST_USER));
-    expect(acctsFinal).toHaveLength(2);
-
-    // Cleanup flag was not re-stamped on the gated second hit.
-    const [settingsFinal] = await db
-      .select({ preferences: settingsTable.preferences })
-      .from(settingsTable)
-      .where(eq(settingsTable.userId, TEST_USER));
-    const prefsFinal = (settingsFinal?.preferences ?? {}) as Record<
-      string,
-      unknown
-    >;
-    expect(prefsFinal.amexCleanupDoneAt).toBe(stampedAt);
+    expect(prefs.amexCleanupDoneAt).toBeUndefined();
   });
 
-  it("preserves other preference keys (e.g. amexAnchor) when stamping the cleanup flag", async () => {
-    await db.insert(settingsTable).values({
-      userId: TEST_USER,
-      householdId: TEST_HOUSEHOLD_ID,
-      preferences: {
-        amexAnchor: { balance: 1234.56, asOf: "2026-04-01T00:00:00.000Z" },
-      },
-    });
+  it("writes no preference (other keys such as amexAnchor are left exactly as they were)", async () => {
+    const before = { amexAnchor: { balance: 1234.56, asOf: "2026-04-01T00:00:00.000Z" } };
+    await db.insert(settingsTable).values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, preferences: before });
 
     const r = await fetch(`${baseUrl}/amex/anchor`);
     expect(r.status).toBe(200);
@@ -211,11 +162,6 @@ describe("(#416) /amex/anchor one-shot heal hook", () => {
       .select({ preferences: settingsTable.preferences })
       .from(settingsTable)
       .where(eq(settingsTable.userId, TEST_USER));
-    const prefs = (row?.preferences ?? {}) as Record<string, unknown>;
-    expect(typeof prefs.amexCleanupDoneAt).toBe("string");
-    expect(prefs.amexAnchor).toEqual({
-      balance: 1234.56,
-      asOf: "2026-04-01T00:00:00.000Z",
-    });
+    expect(row?.preferences).toEqual(before);
   });
 });

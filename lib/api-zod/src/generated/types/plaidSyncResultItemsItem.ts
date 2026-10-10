@@ -21,6 +21,13 @@ export type PlaidSyncResultItemsItem = {
   removed: number;
   autoCategorized: number;
   ruleAttributions: RuleAttribution[];
+  /** (WP9) Duplicate bank accounts (two rows for one physical
+account: same institution, last four and name, e.g. after a
+re-link) this sync merged onto one. Twins are merged only
+when a bank sync runs, never on a page read. Absent when the
+sync stopped before the merge (an error, still preparing).
+ */
+  accountsMerged?: number;
   /** @nullable */
   error?: string | null;
   stillPreparing?: boolean;

@@ -11,5 +11,6 @@ export declare const PlaidSyncAttemptKind: {
     readonly balance: "balance";
     readonly liabilities: "liabilities";
     readonly pending_cleanup: "pending_cleanup";
+    readonly account_merge: "account_merge";
 };
 //# sourceMappingURL=plaidSyncAttemptKind.d.ts.map

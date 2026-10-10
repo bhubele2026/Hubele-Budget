@@ -24,6 +24,7 @@ const ZERO_TOTALS: SyncTotals = {
   refreshDisabledAsOf: null,
   addedDescriptions: [],
   lastOccurredOn: null,
+  accountsMerged: 0,
 };
 
 // Same backoff schedule baked into PlaidLinkButton.pollAfterLink — we
