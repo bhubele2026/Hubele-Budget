@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTxDeepLink } from "@/hooks/useTxDeepLink";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   useListTransactions,
   useUpdateTransaction,
@@ -80,6 +80,8 @@ import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
 import { AMEX_SOURCES } from "@/lib/amexSources";
+import { accountPageHref } from "@/lib/accountPage";
+import { currentRowDeepLink, rowDeepLinkStatus } from "@/lib/rowDeepLink";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
 import { AMEX_BALANCE_DISTINCTION } from "@/lib/reportsBalances";
 import {
@@ -236,6 +238,7 @@ export default function AmexPage({
 }: { embedded?: boolean; accountId?: string; lead?: ReactNode; params?: unknown } = {}) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
   // (F4) The charge whose "Split by category" dialog is open (from its merchant popover).
   const [splitTx, setSplitTx] = useState<Transaction | null>(null);
@@ -250,11 +253,14 @@ export default function AmexPage({
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [memberFilter, setMemberFilter] = useState<string>("all");
+  // (WP7) A link to one row (`?tx=`, with its `?month=`), read once.
+  const [rowLink] = useState(currentRowDeepLink);
   // Weekly-first: the ledger defaults to the CURRENT week within the loaded
   // month; Mo/Yr widen it back to the whole month. (The Amex balance chart is
   // an inherently forward-12-month projection, so the toggle scopes the
-  // ledger, not that chart.)
-  const [rangeMode, setRangeMode] = useState<RangeMode>("wk");
+  // ledger, not that chart.) (WP7) A row link opens Month mode: Week mode hid a
+  // row from earlier in the month.
+  const [rangeMode, setRangeMode] = useState<RangeMode>(() => (rowLink.tx ? "mo" : "wk"));
   // Honor `?accountId=<external Plaid account_id>` deep-links (per-card
   // drills land here pre-filtered to one card).
   const [cardFilter, setCardFilter] = useState<string>(() => {
@@ -343,16 +349,22 @@ export default function AmexPage({
   // Task #168 — Budget page deep-links into the Amex page when a row's
   // actuals are Amex-dominated. Honor `?month=YYYY-MM-01` from that link
   // so the user lands on the same month they were viewing on Budget.
+  // (WP7) A month a link chose (`?month=`, or a row link's) is never moved by
+  // the first-load jump below.
+  const monthPinnedFromUrlRef = useRef(!!rowLink.tx);
   const [selectedMonth, setSelectedMonth] = useState<MonthKey>(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const m = params.get("month");
       if (m && /^\d{4}-\d{2}-01$/.test(m)) {
+        monthPinnedFromUrlRef.current = true;
         return monthKeyFromISO(m);
       }
     }
     return currentMonth;
   });
+  // (WP7) The month a row link opened, for "Showing <Month> for the row you opened".
+  const rowLinkMonthRef = useRef<MonthKey | null>(rowLink.tx ? selectedMonth : null);
 
   // Task #168 — apply `?category=<name>` once categories load. Mirrors the
   // Transactions page implementation: matches by category name (the deep
@@ -376,14 +388,23 @@ export default function AmexPage({
         : AMEX_SOURCES.join(","),
     [sourceFilter],
   );
+  // (WP7) Embedded for one card (`/next/accounts/:id`), the page asks for that
+  // card's rows by its Plaid account (`plaidAccountId`), so a card from any bank
+  // (a Chase Freedom) lists its own rows; the source list named only Amex and
+  // Apple Card sources, so such a card's page was empty. Standalone it keeps the
+  // source list: "All cards" is the one view that lists the workbook rows.
+  const scopeParams = useMemo<{ plaidAccountId: string } | { source: string }>(
+    () => (embedded && accountId ? { plaidAccountId: accountId } : { source: sourceParam }),
+    [embedded, accountId, sourceParam],
+  );
   const monthQueryParams = useMemo(
     () => ({
       limit: MONTH_LIMIT,
       from: monthFirstISO(selectedMonth),
       to: monthLastISO(selectedMonth),
-      source: sourceParam,
+      ...scopeParams,
     }),
-    [sourceParam, selectedMonth],
+    [scopeParams, selectedMonth],
   );
   const trendQueryParams = useMemo(() => {
     const trendStart = shiftMonth(selectedMonth, -11);
@@ -398,9 +419,9 @@ export default function AmexPage({
       limit: 5000,
       from: monthFirstISO(earlier),
       to: monthLastISO(later),
-      source: sourceParam,
+      ...scopeParams,
     };
-  }, [sourceParam, selectedMonth, currentMonth]);
+  }, [scopeParams, selectedMonth, currentMonth]);
 
   // (#501) Auto-refresh the visible month when the Amex tab regains
   // focus or the user navigates back to the page. React Query keeps
@@ -583,6 +604,11 @@ export default function AmexPage({
   const initialAmexJumpDone = useRef(false);
   useEffect(() => {
     if (initialAmexJumpDone.current) return;
+    // (WP7) A link chose the month (and a row link, Month mode): keep both.
+    if (monthPinnedFromUrlRef.current) {
+      initialAmexJumpDone.current = true;
+      return;
+    }
     if (wideAll.length === 0) return; // wait for data to arrive
     initialAmexJumpDone.current = true;
     let latest: MonthKey | null = null;
@@ -1901,6 +1927,14 @@ export default function AmexPage({
     return m;
   })();
 
+  // (WP7) Embedded, the page lists one card's rows (`scopeParams`), so the band
+  // does not filter in place: another card opens that card's own page, and
+  // "All cards" opens the American Express page.
+  const openCardFromBand = (id: string) => {
+    if (id === cardFilter) return;
+    navigate(id === "all" ? "/amex" : accountPageHref({ plaidAccountId: id }));
+  };
+
   const pageActions = (
     <>
       <SyncButton relevantItemIds={relevantPlaidItemIds} />
@@ -1962,7 +1996,16 @@ export default function AmexPage({
         </div>
 
         <div className="span-12 flex flex-wrap items-center justify-between gap-2" data-testid="amex-controls">
-          <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+          <div className="flex flex-wrap items-center gap-3">
+            <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+            {rangeMode === "mo" &&
+            rowLinkMonthRef.current &&
+            compareMonth(selectedMonth, rowLinkMonthRef.current) === 0 ? (
+              <span role="status" className="text-label text-neutral-600" data-testid="amex-row-link-status">
+                {rowDeepLinkStatus(selectedMonth)}
+              </span>
+            ) : null}
+          </div>
           <TimeRangeToggle value={rangeMode} onChange={setRangeMode} />
         </div>
 
@@ -1973,7 +2016,7 @@ export default function AmexPage({
             card (drill); "All cards" clears it. */}
         <AmexCardBand
           selected={cardFilter}
-          onSelect={setCardFilter}
+          onSelect={embedded ? openCardFromBand : setCardFilter}
           masks={cardMasks}
           leadCount={lead ? 1 : 0}
         />
