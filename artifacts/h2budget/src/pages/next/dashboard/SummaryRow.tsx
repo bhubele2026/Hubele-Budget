@@ -1,27 +1,27 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
+import { Link } from "wouter";
 import type { Spine } from "@workspace/api-client-react";
 import { AccountChip } from "@/components/next";
 import { BankBalanceWhy } from "@/components/bank-balance-why";
 import { FreshnessLine } from "@/components/data-state";
-import { identityOf } from "@/lib/accountIdentity";
+import { isSyntheticPlaidItem } from "@/lib/plaidReauth";
+import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
 import { bankBalanceView, sinceSnapshotWords } from "@/lib/bankBalance";
-import { remainingDebtScope } from "@/lib/debtBalance";
+import { debtForAccount, needsLiability } from "@/lib/cardBalance";
+import { joinNames, offPlanCards, offPlanWords, remainingDebtScope } from "@/lib/debtBalance";
 import { lowPointView } from "@/lib/lowPoint";
 import { useSpine } from "@/hooks/useSpine";
 import { cn } from "@/lib/utils";
-import { useDebtsQ, useMoneyPositionQ } from "./queries";
-import { dayLabel, Kpi, money, PanelError, rise, weekdayLabel } from "./shared";
+import { useAmexQ, useDebtsQ, useLiabilityAccountsQ, useMoneyPositionQ, usePlaidItemsQ } from "./queries";
+import { dayLabel, Kpi, LINK, money, PanelError, rise, weekdayLabel } from "./shared";
 
 /** "$500" for a round amount, "$512.40" otherwise (the buffer is usually round). */
 function wholeMoney(v: string | number | null | undefined): string {
   return money(v).replace(/\.00$/, "");
 }
 
-/** "A", "A and B", "A, B and C". */
-export function joinNames(names: readonly string[]): string {
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
+// (WP4) Moved to `lib/debtBalance.ts` beside the scope it names; re-exported.
+export { joinNames };
 
 /**
  * The words for each money-position figure, ONE phrase per figure everywhere the
@@ -136,7 +136,28 @@ function LowCell({ s }: { s: Spine }) {
 
 function DebtCell({ s }: { s: Spine }) {
   const debts = useDebtsQ();
+  const items = usePlaidItemsQ();
   const pct = s.debt.payoffPct;
+  // (WP4) The linked cards, named as the Accounts panel names them, so the
+  // tile can say which cards its "$X left" does not cover.
+  const cards = useMemo(() => {
+    const flat = (items.data ?? []).filter((it) => !isSyntheticPlaidItem(it)).flatMap((it) =>
+      it.accounts.map((a) => ({
+        id: a.id, accountId: a.accountId, name: a.name, mask: a.mask, type: a.type, subtype: a.subtype,
+        institutionName: it.institutionName, institutionSlug: it.institutionSlug,
+      })),
+    );
+    const cardOrder = cardOrderOf(flat);
+    return flat.flatMap((a) => {
+      const id = identityOf(a, { cardOrder });
+      return id.isCard ? [{ id: a.id, accountId: a.accountId, name: `${id.label}${id.mask4 ? ` ••${id.mask4}` : ""}` }] : [];
+    });
+  }, [items.data]);
+  // Asked only when a card is off the plan: Plaid's stored figures (the
+  // Accounts panel's own read, same key) and the weekly payoff's billing word.
+  const anyOff = debts.data !== undefined && cards.some((c) => needsLiability(debtForAccount(debts.data, c)));
+  const liab = useLiabilityAccountsQ(anyOff);
+  const amex = useAmexQ(anyOff);
   let left: ReactNode;
   if (debts.data === undefined) {
     left = debts.isError
@@ -149,11 +170,23 @@ function DebtCell({ s }: { s: Spine }) {
       : (
         <span data-testid="dash-debt-left">
           <span className="font-mono tabular-nums text-brand-ink">{money(scope.total)}</span>
-          {scope.names.length === 1 ? " left on " : " left across "}
-          {joinNames(scope.names)}
+          {` left on your payoff plan (${joinNames(scope.names)})`}
         </span>
       );
   }
+  // Said once both reads have answered (or failed): never a sentence that
+  // gains its "paid in full weekly" a moment later.
+  const off = anyOff && (liab.data !== undefined || liab.isError) && (amex.data !== undefined || amex.isError)
+    ? offPlanWords(offPlanCards(cards, debts.data, {
+        liabilities: liab.data,
+        weeklyAccountIds: new Set((amex.data?.cards ?? []).filter((c) => c.cadence === "weekly").map((c) => c.accountId)),
+      }))
+    : null;
+  const offLine = off ? (
+    <span data-testid="dash-debt-offplan">
+      {off.text} · <Link href="/avalanche" className={LINK} data-testid="dash-debt-offplan-link">{off.link}</Link>
+    </span>
+  ) : null;
   const noDebts = debts.data !== undefined && !debts.data.some((d) => d.status === "active");
   return (
     <Kpi
@@ -161,7 +194,7 @@ function DebtCell({ s }: { s: Spine }) {
       label="Debt paid off"
       value={pct == null ? "—" : `${Math.round(pct)}%`}
       missing={noDebts ? "No debts on the payoff plan yet." : pct == null ? "No debt has a starting balance yet." : undefined}
-      lines={noDebts ? [] : [left]}
+      lines={noDebts ? [offLine] : [left, offLine]}
     />
   );
 }

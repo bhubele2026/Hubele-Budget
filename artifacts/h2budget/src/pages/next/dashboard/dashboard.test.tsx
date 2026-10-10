@@ -86,8 +86,9 @@ const acct = (id: string, o: Record<string, unknown>) => ({ id, accountId: `p-${
 const item = (id: string, institutionName: string, slug: string, accounts: unknown[], o: Record<string, unknown> = {}) => ({
   id, itemId: `i-${id}`, institutionName, institutionSlug: slug, lastSyncedAt: "2026-10-08T12:00:00Z", lastSyncError: null, lastSyncErrorCode: null, accounts, ...o,
 });
+// The API's shape: every debt GET /debts returns carries an anchor (`originalBalance`, backfilled).
 const debt = (id: string, name: string, balance: string, o: Record<string, unknown> = {}) => ({
-  id, name, balance, status: "active", minPayment: "0", apr: "0.2", ...o,
+  id, name, balance, originalBalance: balance, status: "active", minPayment: "0", apr: "0.2", ...o,
 });
 const wrap = (n: ReactNode) => render(<div>{n}</div>);
 const cashAcct = { name: "Total Checking", mask: "5526", subtype: "checking", via: "sole checking" };
@@ -242,7 +243,7 @@ describe("summary row: four figures, status-aware", () => {
     expect(screen.getByTestId("dash-room-week").textContent).toBe("This week's plan $210.00 left");
     expect(screen.getByTestId("dash-room-cover").textContent).toBe("Checking covers $400.00 until Fri Oct 16, after the $500 buffer");
     expect(screen.getByTestId("dash-kpi-debt-value").textContent).toBe("42%");
-    expect(screen.getByTestId("dash-debt-left").textContent).toBe("$2,000.25 left across Amex Blue Cash Preferred and Amex Platinum");
+    expect(screen.getByTestId("dash-debt-left").textContent).toBe("$2,000.25 left on your payoff plan (Amex Blue Cash Preferred and Amex Platinum)");
   });
   it("not_yet: the low point is SHOWN, with its date and 'below your buffer' (it used to be blank)", () => {
     wrap(<SummaryRow />);
@@ -343,10 +344,84 @@ describe("summary row: four figures, status-aware", () => {
     expect(screen.getByTestId("dash-room-week").className).toContain("text-bad-ink");
     expect(screen.getByTestId("dash-kpi-room-value").className).toMatch(/\btext-bad\b/);
   });
-  it("one debt is 'left on' it; several are 'left across' an and-list", () => {
+  it("(WP4) the amount left names its scope as the payoff plan: one debt, or an and-list", () => {
     h.Q.debts = ok([debt("h1", "HELOC", "18500.00")]);
     wrap(<SummaryRow />);
-    expect(screen.getByTestId("dash-debt-left").textContent).toBe("$18,500.00 left on HELOC");
+    expect(screen.getByTestId("dash-debt-left").textContent).toBe("$18,500.00 left on your payoff plan (HELOC)");
+  });
+  it("(WP4) the amount left measures the debts % paid measures: an unanchored active debt is in neither", () => {
+    h.Q.debts = ok([debt("h1", "HELOC", "18500.00"), debt("z1", "Never anchored", "120.00", { originalBalance: "0.00" })]);
+    wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-debt-left").textContent).toBe("$18,500.00 left on your payoff plan (HELOC)");
+  });
+  describe("(WP4) the cards the amount left does not cover", () => {
+    const amexItem = (o: Record<string, unknown> = {}) => item("b", "American Express", "amex", [
+      acct("b1", { name: "Blue Cash Preferred", mask: "1001", type: "credit", subtype: "credit card" }),
+      acct("x1", { name: "Platinum Card", mask: "1005", type: "credit", subtype: "credit card" }),
+    ], o);
+    beforeEach(() => {
+      h.Q.items = ok([amexItem()]);
+      h.Q.debts = ok([debt("d1", "Amex ••1001", "1500.00", { plaidAccountId: "b1" }), debt("h1", "HELOC", "18500.00")]);
+      h.Q.liab = ok([{ id: "x1", accountId: "p-x1", balance: "3842.98", minPayment: null, lastFetchedAt: "2026-10-08T12:00:00Z", suggestedDebt: null }]);
+      h.Q.amex = ok({ cards: [{ accountId: "p-x1", cadence: "weekly" }] });
+    });
+    it("names the card off the plan, says it is paid in full weekly when the weekly payoff bills it so, and links to the plan", () => {
+      wrap(<SummaryRow />);
+      expect(screen.getByTestId("dash-debt-left").textContent).toBe("$20,000.00 left on your payoff plan (Amex ••1001 and HELOC)");
+      expect(screen.getByTestId("dash-debt-offplan").textContent).toBe(
+        "American Express Platinum Card ••1005 is paid in full weekly, not on the plan · Put it on the plan",
+      );
+      expect(screen.getByTestId("dash-debt-offplan-link").getAttribute("href")).toBe("/avalanche");
+    });
+    it("without the weekly payoff's word (monthly, or not in it), it says only that the card is not on the plan", () => {
+      h.Q.amex = ok({ cards: [{ accountId: "p-x1", cadence: "monthly" }] });
+      wrap(<SummaryRow />);
+      expect(screen.getByTestId("dash-debt-offplan").textContent).toBe("American Express Platinum Card ••1005 is not on the plan · Put it on the plan");
+    });
+    it("several cards: one sentence, an and-list, 'Put them on the plan'", () => {
+      h.Q.debts = ok([debt("h1", "HELOC", "18500.00")]);
+      h.Q.liab = ok([
+        { id: "b1", accountId: "p-b1", balance: "684.12", suggestedDebt: null },
+        { id: "x1", accountId: "p-x1", balance: "3842.98", suggestedDebt: null },
+      ]);
+      h.Q.amex = ok({ cards: [{ accountId: "p-b1", cadence: "weekly" }, { accountId: "p-x1", cadence: "weekly" }] });
+      wrap(<SummaryRow />);
+      expect(screen.getByTestId("dash-debt-offplan").textContent).toBe(
+        "American Express Blue Cash Preferred ••1001 and American Express Platinum Card ••1005 are paid in full weekly, not on the plan · Put them on the plan",
+      );
+    });
+    it("waits for Plaid's figures and the weekly payoff, so the sentence never changes under the reader", () => {
+      h.Q.amex = loading;
+      const a = wrap(<SummaryRow />);
+      expect(screen.queryByTestId("dash-debt-offplan")).toBeNull();
+      a.unmount();
+      h.Q.amex = failed; // a failed payoff read drops only the weekly word
+      wrap(<SummaryRow />);
+      expect(screen.getByTestId("dash-debt-offplan").textContent).toBe("American Express Platinum Card ••1005 is not on the plan · Put it on the plan");
+    });
+    it("a card off the plan that owes nothing changes nothing about the total, so it is not named", () => {
+      h.Q.liab = ok([{ id: "x1", accountId: "p-x1", balance: "0.00", suggestedDebt: null }]);
+      wrap(<SummaryRow />);
+      expect(screen.queryByTestId("dash-debt-offplan")).toBeNull();
+    });
+    it("an archived card is off the plan too (and never in the amount left)", () => {
+      h.Q.debts = ok([debt("d1", "Amex ••1001", "1500.00", { plaidAccountId: "b1" }), debt("h1", "HELOC", "18500.00"),
+        debt("dx", "Amex ••1005", "0.00", { plaidAccountId: "x1", status: "archived", balanceSource: "manual" })]);
+      h.Q.amex = ok({ cards: [] }); // a debt-linked card is not in the weekly payoff
+      wrap(<SummaryRow />);
+      expect(screen.getByTestId("dash-debt-left").textContent).toBe("$20,000.00 left on your payoff plan (Amex ••1001 and HELOC)");
+      expect(screen.getByTestId("dash-debt-offplan").textContent).toBe("American Express Platinum Card ••1005 is not on the plan · Put it on the plan");
+    });
+    it("no debt on the plan at all: the words, and still the card that is off it", () => {
+      h.Q.debts = ok([]);
+      h.Q.liab = ok([
+        { id: "b1", accountId: "p-b1", balance: "0.00", suggestedDebt: null },
+        { id: "x1", accountId: "p-x1", balance: "3842.98", suggestedDebt: null },
+      ]);
+      wrap(<SummaryRow />);
+      expect(screen.getByTestId("dash-kpi-debt").textContent).toContain("No debts on the payoff plan yet.");
+      expect(screen.getByTestId("dash-debt-offplan").textContent).toContain("American Express Platinum Card ••1005 is paid in full weekly, not on the plan");
+    });
   });
   it("the debt line says when its amount did not load, and never a balance on loading", () => {
     h.Q.debts = failed;
@@ -455,6 +530,15 @@ describe("accounts list", () => {
     expect(within(row).getByTestId("dash-account-due").textContent).toContain("the 22nd");
     expect(row.textContent).not.toContain("$0.00");
   });
+  it("(WP4) a row off the plan links onto it; a row on the plan does not", () => {
+    h.Q.debts = ok([debt("d1", "Amex Platinum", "1500.00", { plaidAccountId: "x1" })]);
+    h.Q.liab = ok([{ id: "k1", accountId: "p-k1", balance: "642.18", minPayment: null, suggestedDebt: null }]);
+    wrap(<AccountsPanel />);
+    const rows = screen.getAllByTestId("dash-account");
+    expect(within(rows[2]!).queryByTestId("dash-account-add-plan")).toBeNull(); // Platinum is on the plan
+    expect(within(rows[3]!).getByTestId("dash-account-plan-row").textContent).toBe("Not on the payoff plan · Add to the plan");
+    expect(within(rows[3]!).getByTestId("dash-account-add-plan").getAttribute("href")).toBe("/avalanche");
+  });
   it("(WP3) the live case: Owed is netted, and the card's own balance sits beside it, each named", () => {
     h.Q.debts = ok([debt("d1", "Amex Platinum", "3842.98", { plaidAccountId: "x1", pendingPaymentTotal: "2615.71", pendingPaymentCount: 2 })]);
     wrap(<AccountsPanel />);
@@ -549,7 +633,7 @@ describe("accounts list", () => {
     const sum = Math.round(owed.reduce((a, b) => a + b, 0) * 100) / 100;
     expect(sum).toBe(Math.round(remainingDebtTotal(debts as never) * 100) / 100); // 1,200.00 + 642.18
     expect(sum).toBe(1842.18);
-    expect(screen.getByTestId("dash-debt-left").textContent).toContain("$1,842.18 left across");
+    expect(screen.getByTestId("dash-debt-left").textContent).toContain("$1,842.18 left on your payoff plan (");
   });
   it("shows a skeleton while loading and an error when it failed", () => {
     h.Q.items = loading;
@@ -738,7 +822,7 @@ describe("debt progress", () => {
     const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(hrefs).toEqual(expect.arrayContaining(["/avalanche", "/reports/debt"]));
     // The amount owed is the summary tile's job; this panel carries no balance.
-    expect(screen.getByTestId("dash-debt").textContent).not.toMatch(/left across|Total balance/);
+    expect(screen.getByTestId("dash-debt").textContent).not.toMatch(/left on your payoff plan|Total balance/);
   });
   it("no debts at all: words and the way to add one, never a row of $0.00", () => {
     h.Q.debts = ok([]);

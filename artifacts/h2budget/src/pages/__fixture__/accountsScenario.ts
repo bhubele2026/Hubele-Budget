@@ -140,4 +140,6 @@ export const EXPECT = {
   /** Active debts, netted; the archived Gold (412.50) and the off-plan Costco (684.12) are not in it. */
   left: "$20,715.85",
   leftNames: "HELOC, Amex Platinum, Amex Platinum (AU), Amex Green and Quicksilver",
+  /** (WP4) The cards the total leaves out that still carry (or may carry) a balance: archived Gold, off-plan Costco, Double Cash (unknown). */
+  offPlanLine: "American Express Gold Card ••1009, Citi Costco Anywhere ••4410 and Citi Double Cash ••4411 are not on the plan",
 } as const;

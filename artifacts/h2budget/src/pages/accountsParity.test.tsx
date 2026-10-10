@@ -300,13 +300,26 @@ describe("savings: the last reading, not rolled forward — or words", () => {
 });
 
 describe("the amount left: one total, the same scope", () => {
-  it("the dashboard's \"$X left across …\" = the Avalanche total, without the archived or off-plan cards", () => {
+  it("the dashboard's \"$X left on your payoff plan (…)\" = the Avalanche total, without the archived or off-plan cards", () => {
     renderIn(<SummaryRow />);
-    expect(screen.getByTestId("dash-debt-left").textContent).toBe(`${F.EXPECT.left} left across ${F.EXPECT.leftNames}`);
+    expect(screen.getByTestId("dash-debt-left").textContent).toBe(`${F.EXPECT.left} left on your payoff plan (${F.EXPECT.leftNames})`);
     cleanup();
     renderIn(<AvalanchePage />);
     const totals = screen.getByText("Totals").closest("tr")!;
     expect((totals.querySelectorAll("td")[1]?.textContent ?? "").trim()).toBe(F.EXPECT.left);
+  });
+});
+
+describe("(WP4) the tile names exactly the cards its total leaves out", () => {
+  it("the off-plan line names the archived and off-plan cards the rows mark, and nothing on the plan", () => {
+    renderIn(<><SummaryRow /><AccountsPanel /></>);
+    expect(screen.getByTestId("dash-debt-offplan").textContent).toBe(`${F.EXPECT.offPlanLine} · Put them on the plan`);
+    for (const ext of [F.EXPECT.archived.ext, F.EXPECT.offPlan.ext, F.EXPECT.missing.ext]) {
+      expect(within(dashRow(ext)).getByTestId("dash-account-add-plan").getAttribute("href")).toBe("/avalanche");
+    }
+    for (const ext of [F.EXPECT.live.ext, F.EXPECT.twin.ext, F.EXPECT.zero.ext, F.EXPECT.noMask.ext, F.EXPECT.stale.ext]) {
+      expect(within(dashRow(ext)).queryByTestId("dash-account-add-plan")).toBeNull();
+    }
   });
 });
 

@@ -11,7 +11,7 @@ import { bankBalanceView, isSpineAccount } from "@/lib/bankBalance";
 import { useSpine } from "@/hooks/useSpine";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { FreshnessLine } from "@/components/data-state";
-import { isSyntheticPlaidItem, plaidReauthReason } from "@/components/plaid-reconnect-button";
+import { isSyntheticPlaidItem, plaidReauthReason } from "@/lib/plaidReauth";
 import { btnSecondarySm } from "@/ui";
 import { cn } from "@/lib/utils";
 import { useDebtsQ, useLiabilityAccountsQ, usePlaidItemsQ } from "./queries";
@@ -184,7 +184,13 @@ export default function AccountsPanel() {
                           )}
                         </div>
                         {planWords ? (
-                          <div className="mt-0.5 text-micro font-semibold text-neutral-600" data-testid="dash-account-plan">{planWords}</div>
+                          // (WP4) Off the plan, the way onto it: the Avalanche page
+                          // (add the card as a debt, or restore an archived one).
+                          <div className="mt-0.5 text-micro text-neutral-600" data-testid="dash-account-plan-row">
+                            <span className="font-semibold" data-testid="dash-account-plan">{planWords}</span>
+                            {" · "}
+                            <Link href="/avalanche" className={LINK} data-testid="dash-account-add-plan">Add to the plan</Link>
+                          </div>
                         ) : null}
                       </div>
                     </div>

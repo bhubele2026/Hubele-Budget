@@ -37,8 +37,13 @@ export const useCashSignalQ = (horizonDays: number) => {
 export const useDebtsQ = () =>
   useListDebts({ query: { queryKey: getListDebtsQueryKey(), staleTime: 5 * MIN, gcTime: GC } });
 
-export const useAmexQ = () =>
-  useGetAmexWeeklyPayoff(undefined, { query: { queryKey: getGetAmexWeeklyPayoffQueryKey(), staleTime: 5 * MIN, gcTime: GC } });
+/**
+ * The weekly payoff, same key as the Amex page. (WP4) The debt tile asks only
+ * when a card off the payoff plan exists, for its billing word ("paid in full
+ * weekly"): `enabled`.
+ */
+export const useAmexQ = (enabled = true) =>
+  useGetAmexWeeklyPayoff(undefined, { query: { queryKey: getGetAmexWeeklyPayoffQueryKey(), staleTime: 5 * MIN, gcTime: GC, enabled } });
 
 export const useMoneyPositionQ = () =>
   useGetMoneyPosition({ query: { queryKey: getGetMoneyPositionQueryKey(), staleTime: MIN, gcTime: GC } });
