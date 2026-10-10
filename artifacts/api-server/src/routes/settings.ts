@@ -97,6 +97,9 @@ router.post(
  */
 export const SERVER_OWNED_PREFERENCE_KEYS = [
   "amexAnchor",
+  // (WP9) Retired: the Amex page no longer heals on a read, so nothing writes
+  // this any more. Kept server-owned so a stamp already stored is never taken
+  // from (or set by) a client save.
   "amexCleanupDoneAt",
   "budgetCategoriesV2",
   "budgetMay2026AmountsV1",
