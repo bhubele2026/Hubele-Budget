@@ -6443,18 +6443,21 @@ export declare const ListMappingRulesResponseItem: zod.ZodObject<{
     matchType: zod.ZodString;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     priority: zod.ZodNumber;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }>;
 export declare const ListMappingRulesResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -6462,33 +6465,40 @@ export declare const ListMappingRulesResponse: zod.ZodArray<zod.ZodObject<{
     matchType: zod.ZodString;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     priority: zod.ZodNumber;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }>, "many">;
+export declare const createMappingRuleBodyNoteMax = 500;
 export declare const CreateMappingRuleBody: zod.ZodObject<{
     pattern: zod.ZodString;
     matchType: zod.ZodOptional<zod.ZodString>;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     priority: zod.ZodOptional<zod.ZodNumber>;
+    note: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     pattern: string;
     categoryId?: string | null | undefined;
     matchType?: string | undefined;
+    note?: string | null | undefined;
     priority?: number | undefined;
 }, {
     pattern: string;
     categoryId?: string | null | undefined;
     matchType?: string | undefined;
+    note?: string | null | undefined;
     priority?: number | undefined;
 }>;
 export declare const UpdateMappingRuleParams: zod.ZodObject<{
@@ -6498,20 +6508,24 @@ export declare const UpdateMappingRuleParams: zod.ZodObject<{
 }, {
     id: string;
 }>;
+export declare const updateMappingRuleBodyNoteMax = 500;
 export declare const UpdateMappingRuleBody: zod.ZodObject<{
     pattern: zod.ZodString;
     matchType: zod.ZodOptional<zod.ZodString>;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     priority: zod.ZodOptional<zod.ZodNumber>;
+    note: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     pattern: string;
     categoryId?: string | null | undefined;
     matchType?: string | undefined;
+    note?: string | null | undefined;
     priority?: number | undefined;
 }, {
     pattern: string;
     categoryId?: string | null | undefined;
     matchType?: string | undefined;
+    note?: string | null | undefined;
     priority?: number | undefined;
 }>;
 export declare const UpdateMappingRuleResponse: zod.ZodObject<{
@@ -6520,18 +6534,21 @@ export declare const UpdateMappingRuleResponse: zod.ZodObject<{
     matchType: zod.ZodString;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     priority: zod.ZodNumber;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }>;
 export declare const DeleteMappingRuleParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -6539,6 +6556,159 @@ export declare const DeleteMappingRuleParams: zod.ZodObject<{
     id: string;
 }, {
     id: string;
+}>;
+/**
+ * (WP5b) Every recorded change to one mapping rule, newest first:
+created, seeded, edited, reordered, deleted, with the rule before and
+after, who changed it and the note given. A deleted rule keeps its
+history, so this answers for an id that no longer exists; an id from
+another household has no entries here. Read-only.
+
+ */
+export declare const GetMappingRuleHistoryParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const GetMappingRuleHistoryResponse: zod.ZodObject<{
+    ruleId: zod.ZodString;
+    entries: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        ruleId: zod.ZodString;
+        action: zod.ZodEnum<["created", "updated", "deleted", "reordered", "seeded"]>;
+        actor: zod.ZodString;
+        actorKind: zod.ZodEnum<["person", "seed", "script", "system"]>;
+        byYou: zod.ZodBoolean;
+        previous: zod.ZodUnion<[zod.ZodObject<{
+            pattern: zod.ZodString;
+            matchType: zod.ZodString;
+            categoryId: zod.ZodNullable<zod.ZodString>;
+            priority: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        }, {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        }>, zod.ZodNull]>;
+        next: zod.ZodUnion<[zod.ZodObject<{
+            pattern: zod.ZodString;
+            matchType: zod.ZodString;
+            categoryId: zod.ZodNullable<zod.ZodString>;
+            priority: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        }, {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        }>, zod.ZodNull]>;
+        note: zod.ZodNullable<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        ruleId: string;
+        note: string | null;
+        action: "created" | "updated" | "deleted" | "reordered" | "seeded";
+        actor: string;
+        actorKind: "person" | "seed" | "script" | "system";
+        byYou: boolean;
+        previous: {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        } | null;
+        next: {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        } | null;
+    }, {
+        id: string;
+        createdAt: Date;
+        ruleId: string;
+        note: string | null;
+        action: "created" | "updated" | "deleted" | "reordered" | "seeded";
+        actor: string;
+        actorKind: "person" | "seed" | "script" | "system";
+        byYou: boolean;
+        previous: {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        } | null;
+        next: {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        } | null;
+    }>, "many">;
+    truncated: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    entries: {
+        id: string;
+        createdAt: Date;
+        ruleId: string;
+        note: string | null;
+        action: "created" | "updated" | "deleted" | "reordered" | "seeded";
+        actor: string;
+        actorKind: "person" | "seed" | "script" | "system";
+        byYou: boolean;
+        previous: {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        } | null;
+        next: {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        } | null;
+    }[];
+    ruleId: string;
+    truncated: boolean;
+}, {
+    entries: {
+        id: string;
+        createdAt: Date;
+        ruleId: string;
+        note: string | null;
+        action: "created" | "updated" | "deleted" | "reordered" | "seeded";
+        actor: string;
+        actorKind: "person" | "seed" | "script" | "system";
+        byYou: boolean;
+        previous: {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        } | null;
+        next: {
+            categoryId: string | null;
+            pattern: string;
+            matchType: string;
+            priority: number;
+        } | null;
+    }[];
+    ruleId: string;
+    truncated: boolean;
 }>;
 /**
  * Replace the priority of every rule whose id appears in `orderedIds`.
@@ -6562,18 +6732,21 @@ export declare const ReorderMappingRulesResponseItem: zod.ZodObject<{
     matchType: zod.ZodString;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     priority: zod.ZodNumber;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }>;
 export declare const ReorderMappingRulesResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -6581,18 +6754,21 @@ export declare const ReorderMappingRulesResponse: zod.ZodArray<zod.ZodObject<{
     matchType: zod.ZodString;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     priority: zod.ZodNumber;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }, {
     id: string;
     pattern: string;
     matchType: string;
     priority: number;
     categoryId?: string | null | undefined;
+    updatedAt?: Date | null | undefined;
 }>, "many">;
 /**
  * Preview which of the user's mapping rules would match the given
@@ -6615,18 +6791,21 @@ export declare const TestMappingRulesResponse: zod.ZodObject<{
             matchType: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             priority: zod.ZodNumber;
+            updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
         }, "strip", zod.ZodTypeAny, {
             id: string;
             pattern: string;
             matchType: string;
             priority: number;
             categoryId?: string | null | undefined;
+            updatedAt?: Date | null | undefined;
         }, {
             id: string;
             pattern: string;
             matchType: string;
             priority: number;
             categoryId?: string | null | undefined;
+            updatedAt?: Date | null | undefined;
         }>;
         winner: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
@@ -6636,6 +6815,7 @@ export declare const TestMappingRulesResponse: zod.ZodObject<{
             matchType: string;
             priority: number;
             categoryId?: string | null | undefined;
+            updatedAt?: Date | null | undefined;
         };
         winner: boolean;
     }, {
@@ -6645,6 +6825,7 @@ export declare const TestMappingRulesResponse: zod.ZodObject<{
             matchType: string;
             priority: number;
             categoryId?: string | null | undefined;
+            updatedAt?: Date | null | undefined;
         };
         winner: boolean;
     }>, "many">;
@@ -6657,6 +6838,7 @@ export declare const TestMappingRulesResponse: zod.ZodObject<{
             matchType: string;
             priority: number;
             categoryId?: string | null | undefined;
+            updatedAt?: Date | null | undefined;
         };
         winner: boolean;
     }[];
@@ -6669,6 +6851,7 @@ export declare const TestMappingRulesResponse: zod.ZodObject<{
             matchType: string;
             priority: number;
             categoryId?: string | null | undefined;
+            updatedAt?: Date | null | undefined;
         };
         winner: boolean;
     }[];
@@ -13501,16 +13684,16 @@ export declare const ListInvitationsResponseItem: zod.ZodObject<{
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
     createdAt: number;
-    emailAddress: string;
     updatedAt: number;
+    emailAddress: string;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
 }, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
     createdAt: number;
-    emailAddress: string;
     updatedAt: number;
+    emailAddress: string;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
 }>;
@@ -13526,16 +13709,16 @@ export declare const ListInvitationsResponse: zod.ZodArray<zod.ZodObject<{
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
     createdAt: number;
-    emailAddress: string;
     updatedAt: number;
+    emailAddress: string;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
 }, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
     createdAt: number;
-    emailAddress: string;
     updatedAt: number;
+    emailAddress: string;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
 }>, "many">;
@@ -13571,16 +13754,16 @@ export declare const RevokeInvitationResponse: zod.ZodObject<{
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
     createdAt: number;
-    emailAddress: string;
     updatedAt: number;
+    emailAddress: string;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
 }, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
     createdAt: number;
-    emailAddress: string;
     updatedAt: number;
+    emailAddress: string;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
 }>;
@@ -14002,17 +14185,17 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
             monthIndex: number;
         }>, "many">;
     }, "strip", zod.ZodTypeAny, {
+        next: {
+            label: string;
+            key: string;
+            estimatedMonth: string;
+        } | null;
         achieved: {
             debtId: string | null;
             label: string;
             key: string;
             achievedOn: string;
         }[];
-        next: {
-            label: string;
-            key: string;
-            estimatedMonth: string;
-        } | null;
         upcoming: {
             kind: "debt_paid_off" | "first_card_zero" | "percent_paid";
             debtId: string | null;
@@ -14022,17 +14205,17 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
             monthIndex: number;
         }[];
     }, {
+        next: {
+            label: string;
+            key: string;
+            estimatedMonth: string;
+        } | null;
         achieved: {
             debtId: string | null;
             label: string;
             key: string;
             achievedOn: string;
         }[];
-        next: {
-            label: string;
-            key: string;
-            estimatedMonth: string;
-        } | null;
         upcoming: {
             kind: "debt_paid_off" | "first_card_zero" | "percent_paid";
             debtId: string | null;
@@ -14138,17 +14321,17 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
         key: string;
     }[];
     milestones: {
+        next: {
+            label: string;
+            key: string;
+            estimatedMonth: string;
+        } | null;
         achieved: {
             debtId: string | null;
             label: string;
             key: string;
             achievedOn: string;
         }[];
-        next: {
-            label: string;
-            key: string;
-            estimatedMonth: string;
-        } | null;
         upcoming: {
             kind: "debt_paid_off" | "first_card_zero" | "percent_paid";
             debtId: string | null;
@@ -14232,17 +14415,17 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
         key: string;
     }[];
     milestones: {
+        next: {
+            label: string;
+            key: string;
+            estimatedMonth: string;
+        } | null;
         achieved: {
             debtId: string | null;
             label: string;
             key: string;
             achievedOn: string;
         }[];
-        next: {
-            label: string;
-            key: string;
-            estimatedMonth: string;
-        } | null;
         upcoming: {
             kind: "debt_paid_off" | "first_card_zero" | "percent_paid";
             debtId: string | null;
@@ -18795,8 +18978,8 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         plaidAccountId: string | null;
         name: string;
         priority: number;
-        cashBuffer: string | null;
         updatedAt: string;
+        cashBuffer: string | null;
         remaining: string | null;
         targetDate: string | null;
         targetAmount: string | null;
@@ -18819,8 +19002,8 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         plaidAccountId: string | null;
         name: string;
         priority: number;
-        cashBuffer: string | null;
         updatedAt: string;
+        cashBuffer: string | null;
         remaining: string | null;
         targetDate: string | null;
         targetAmount: string | null;
@@ -18851,8 +19034,8 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         plaidAccountId: string | null;
         name: string;
         priority: number;
-        cashBuffer: string | null;
         updatedAt: string;
+        cashBuffer: string | null;
         remaining: string | null;
         targetDate: string | null;
         targetAmount: string | null;
@@ -18880,8 +19063,8 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         plaidAccountId: string | null;
         name: string;
         priority: number;
-        cashBuffer: string | null;
         updatedAt: string;
+        cashBuffer: string | null;
         remaining: string | null;
         targetDate: string | null;
         targetAmount: string | null;
@@ -19022,8 +19205,8 @@ export declare const UpdateGoalResponse: zod.ZodObject<{
     plaidAccountId: string | null;
     name: string;
     priority: number;
-    cashBuffer: string | null;
     updatedAt: string;
+    cashBuffer: string | null;
     remaining: string | null;
     targetDate: string | null;
     targetAmount: string | null;
@@ -19046,8 +19229,8 @@ export declare const UpdateGoalResponse: zod.ZodObject<{
     plaidAccountId: string | null;
     name: string;
     priority: number;
-    cashBuffer: string | null;
     updatedAt: string;
+    cashBuffer: string | null;
     remaining: string | null;
     targetDate: string | null;
     targetAmount: string | null;

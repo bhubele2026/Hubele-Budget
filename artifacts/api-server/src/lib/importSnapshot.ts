@@ -10,7 +10,14 @@ import {
   monthlySnapshotsTable,
   debtsTable,
   budgetCategoriesTable,
+  type MappingRule,
 } from "@workspace/db";
+import {
+  recordRuleChanges,
+  ruleSnapshot,
+  sameRule,
+  type RuleChange,
+} from "./mappingRuleAudit";
 
 // The set of per-user tables that POST /api/import/workbook WIPES (see
 // lib/workbookImporter.ts → the `tx.delete(...).where(eq(... .userId, userId))`
@@ -156,6 +163,13 @@ export async function restoreImportSnapshot(
   const counts: Record<string, number> = {};
 
   await db.transaction(async (tx) => {
+    // (WP5b) The user's rules as they stand, so the restore can record what it
+    // changes in the rule history (below).
+    const rulesBefore = await tx
+      .select()
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.userId, userId));
+
     // Wipe the user's CURRENT data in the reverse of restore order (children
     // first) so we don't trip any reference while clearing.
     for (const key of [...RESTORE_ORDER].reverse()) {
@@ -179,6 +193,16 @@ export async function restoreImportSnapshot(
       counts[key] = inserted;
     }
 
+    await recordRuleChanges(
+      tx,
+      ruleRestoreChanges(
+        rulesBefore,
+        (payload.mappingRules ?? []) as Record<string, unknown>[],
+        snap.householdId ?? null,
+        userId,
+      ),
+    );
+
     await tx
       .update(importSnapshotsTable)
       .set({ status: "restored", restoredAt: new Date() })
@@ -186,4 +210,56 @@ export async function restoreImportSnapshot(
   });
 
   return { ok: true, snapshotId, counts };
+}
+
+const RESTORE_NOTE = "Restored from the snapshot taken before a workbook import.";
+
+/**
+ * (WP5b) What a restore did to the rules, as history rows: a rule the restore
+ * removed is "deleted", a rule it brought back is "created" (under its
+ * original id, so its earlier history continues), and a rule present on both
+ * sides but different is "updated". Unchanged rules record nothing. Each rule
+ * keeps the `updated_at` it had in the snapshot: a restore puts it back as it
+ * was, and its history says when that happened.
+ */
+function ruleRestoreChanges(
+  before: MappingRule[],
+  restored: Record<string, unknown>[],
+  snapshotHouseholdId: string | null,
+  actor: string,
+): RuleChange[] {
+  const restoredById = new Map(
+    restored.map((r) => [
+      String(r.id),
+      {
+        householdId: (r.householdId as string | null | undefined) ?? null,
+        state: ruleSnapshot({
+          pattern: String(r.pattern ?? ""),
+          matchType: String(r.matchType ?? "contains"),
+          categoryId: (r.categoryId as string | null | undefined) ?? null,
+          priority: Number(r.priority ?? 0),
+        }),
+      },
+    ]),
+  );
+  const beforeIds = new Set(before.map((r) => r.id));
+  const changes: RuleChange[] = [];
+  for (const b of before) {
+    const householdId = b.householdId ?? snapshotHouseholdId;
+    if (!householdId) continue;
+    const back = restoredById.get(b.id);
+    const previous = ruleSnapshot(b);
+    if (!back) {
+      changes.push({ householdId, ruleId: b.id, action: "deleted", actor, previous, next: null, note: RESTORE_NOTE });
+    } else if (!sameRule(previous, back.state)) {
+      changes.push({ householdId, ruleId: b.id, action: "updated", actor, previous, next: back.state, note: RESTORE_NOTE });
+    }
+  }
+  for (const [id, back] of restoredById) {
+    if (beforeIds.has(id)) continue;
+    const householdId = back.householdId ?? snapshotHouseholdId;
+    if (!householdId) continue;
+    changes.push({ householdId, ruleId: id, action: "created", actor, previous: null, next: back.state, note: RESTORE_NOTE });
+  }
+  return changes;
 }

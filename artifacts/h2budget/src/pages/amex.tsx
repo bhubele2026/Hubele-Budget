@@ -79,6 +79,7 @@ import { useListPlaidItems } from "@workspace/api-client-react";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
+import { AMEX_SOURCES } from "@/lib/amexSources";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
 import { AMEX_BALANCE_DISTINCTION } from "@/lib/reportsBalances";
 import {
@@ -121,12 +122,10 @@ const ACCENT_DOT: Record<AccountAccentName, string> = {
   other: "bg-acct-other",
 };
 
-// The "American Express" page is really the credit-cards view. Apple Card
-// rows are folded in here so they show alongside the Amex cards without
-// renaming the page — both the Plaid form ("plaid:apple-card", if it ever
-// links) and the FinanceKit/manual form ("apple-card", how it'll actually
-// arrive from the iOS app).
-const AMEX_SOURCES = ["amex", "plaid:amex", "plaid:apple-card", "apple-card"];
+// The "American Express" page is really the credit-cards view: AMEX_SOURCES
+// (`lib/amexSources.ts`) folds the Apple Card sources in beside the Amex ones.
+// (WP7) Shared with the transaction route rules, so a row this page lists is
+// never told it has no ledger.
 
 /** The household calendar day (America/Chicago) of an instant — never the UTC date. */
 function ymd(d: Date) {

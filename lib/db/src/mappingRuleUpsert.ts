@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { mappingRulesTable } from "./schema";
+import { mappingRulesTable, type MappingRuleSnapshot } from "./schema";
 
 export type UpsertMappingRuleInput = {
   userId: string;
@@ -23,6 +23,13 @@ export type UpsertMappingRuleStatus = "inserted" | "updated" | "noop";
 export type UpsertMappingRuleResult = {
   status: UpsertMappingRuleStatus;
   ruleId: string | null;
+  /**
+   * (WP5b) The rule before this call wrote it: null when it inserted, or when
+   * nothing was written (`noop`).
+   */
+  previous: MappingRuleSnapshot | null;
+  /** (WP5b) The rule after this call wrote it: null when nothing was written. */
+  next: MappingRuleSnapshot | null;
 };
 
 /**
@@ -36,6 +43,12 @@ export type UpsertMappingRuleResult = {
  * callers reference the rule afterward — used by the auto-learn flow to
  * report a "created" rule's id back to the client so it can offer an
  * Undo affordance from the toast.
+ *
+ * ⚠️ (WP5b) EVERY RULE WRITE IS AUDITED. This helper cannot reach the
+ * api-server's `recordRuleChange`, so it hands back `previous`/`next` and the
+ * caller records them in the same transaction (`status` "inserted" → action
+ * "created", "updated" → "updated"; "noop" wrote nothing). An update stamps
+ * `updated_at`, as every direct edit does.
  */
 export async function upsertMappingRule(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,7 +57,8 @@ export async function upsertMappingRule(
 ): Promise<UpsertMappingRuleResult> {
   const { userId, householdId, pattern, matchType, categoryId, priority } =
     input;
-  if (!pattern || pattern.length < 3) return { status: "noop", ruleId: null };
+  if (!pattern || pattern.length < 3)
+    return { status: "noop", ruleId: null, previous: null, next: null };
 
   const existing = await conn
     .select()
@@ -69,7 +83,12 @@ export async function upsertMappingRule(
         priority,
       })
       .returning({ id: mappingRulesTable.id });
-    return { status: "inserted", ruleId: inserted!.id };
+    return {
+      status: "inserted",
+      ruleId: inserted!.id,
+      previous: null,
+      next: { pattern, matchType, categoryId, priority },
+    };
   }
 
   const row = existing[0];
@@ -77,15 +96,27 @@ export async function upsertMappingRule(
   const sameMatch = row.matchType === matchType;
   const samePriority = row.priority >= priority;
   if (sameTarget && sameMatch && samePriority)
-    return { status: "noop", ruleId: row.id };
+    return { status: "noop", ruleId: row.id, previous: null, next: null };
 
+  const nextPriority = Math.max(row.priority, priority);
   await conn
     .update(mappingRulesTable)
     .set({
       categoryId,
       matchType,
-      priority: Math.max(row.priority, priority),
+      priority: nextPriority,
+      updatedAt: sql`now()`,
     })
     .where(eq(mappingRulesTable.id, row.id));
-  return { status: "updated", ruleId: row.id };
+  return {
+    status: "updated",
+    ruleId: row.id,
+    previous: {
+      pattern: row.pattern,
+      matchType: row.matchType,
+      categoryId: row.categoryId,
+      priority: row.priority,
+    },
+    next: { pattern: row.pattern, matchType, categoryId, priority: nextPriority },
+  };
 }

@@ -14,6 +14,7 @@ import {
 import { categorize, type RuleRow } from "./autoCategorize";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { captureImportSnapshot } from "./importSnapshot";
+import { recordRuleChanges, ruleSnapshot, type RuleChange } from "./mappingRuleAudit";
 
 type Row = (string | number | Date | null)[];
 
@@ -246,7 +247,26 @@ export async function importWorkbook(
     await tx.delete(budgetLinesTable).where(eq(budgetLinesTable.userId, userId));
     await tx.delete(budgetMonthsTable).where(eq(budgetMonthsTable.userId, userId));
     await tx.delete(recurringItemsTable).where(eq(recurringItemsTable.userId, userId));
-    await tx.delete(mappingRulesTable).where(eq(mappingRulesTable.userId, userId));
+    // (WP5b) Every wiped rule is recorded as deleted by this import; the
+    // rules re-inserted below are recorded as created (new ids).
+    const wipedRules = await tx
+      .delete(mappingRulesTable)
+      .where(eq(mappingRulesTable.userId, userId))
+      .returning();
+    await recordRuleChanges(
+      tx,
+      wipedRules.map(
+        (r): RuleChange => ({
+          householdId: r.householdId ?? householdId,
+          ruleId: r.id,
+          action: "deleted",
+          actor: userId,
+          previous: ruleSnapshot(r),
+          next: null,
+          note: "Replaced by a workbook import.",
+        }),
+      ),
+    );
     await tx.delete(monthlySnapshotsTable).where(eq(monthlySnapshotsTable.userId, userId));
     await tx.delete(debtsTable).where(eq(debtsTable.userId, userId));
     await tx.delete(budgetCategoriesTable).where(eq(budgetCategoriesTable.userId, userId));
@@ -440,6 +460,30 @@ export async function importWorkbook(
           })
       : [];
     counts.mapping_rules_preserved = insertedPreservedRules.length;
+    await recordRuleChanges(tx, [
+      ...insertedRules.map(
+        (r): RuleChange => ({
+          householdId,
+          ruleId: r.id,
+          action: "created",
+          actor: userId,
+          previous: null,
+          next: ruleSnapshot(r),
+          note: "From the workbook's Mapping sheet.",
+        }),
+      ),
+      ...insertedPreservedRules.map(
+        (r): RuleChange => ({
+          householdId,
+          ruleId: r.id,
+          action: "created",
+          actor: userId,
+          previous: null,
+          next: ruleSnapshot(r),
+          note: "Kept from before the workbook import.",
+        }),
+      ),
+    ]);
 
     // Sort highest-priority first so categorize() picks the user's most
     // specific rules before generic ones.
