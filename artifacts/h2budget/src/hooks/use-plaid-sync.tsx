@@ -102,6 +102,10 @@ export type SyncTotals = {
   // falling back to a global most-recent-transaction lookup that can
   // point at an unrelated charge from another bank.
   lastOccurredOn: string | null;
+  // (WP9) Duplicate bank accounts this sync merged (summed over items). Twins
+  // are merged only when a bank sync runs, never on a page read; the toast
+  // says so when it happens.
+  accountsMerged: number;
 };
 
 const ZERO: SyncTotals = {
@@ -117,7 +121,14 @@ const ZERO: SyncTotals = {
   refreshDisabledAsOf: null,
   addedDescriptions: [],
   lastOccurredOn: null,
+  accountsMerged: 0,
 };
+
+/** (WP9) The toast's sentence for a merge, or "" when nothing merged. */
+export function accountsMergedHint(n: number): string {
+  if (n <= 0) return "";
+  return ` Merged ${n} duplicate account${n === 1 ? "" : "s"}.`;
+}
 
 // (#723) Honest toast copy when no rows came back AND the server
 // surfaced `refreshDisabledReason` on at least one item — i.e. the
@@ -245,6 +256,7 @@ export function usePlaidSync() {
                   acc.added += r.added ?? 0;
                   acc.modified += r.modified ?? 0;
                   acc.removed += r.removed ?? 0;
+                  acc.accountsMerged += r.accountsMerged ?? 0;
                   if (r.error) {
                     acc.errors.push(r.error);
                     acc.errorDetails.push({
@@ -336,6 +348,7 @@ export function usePlaidSync() {
                   refreshDisabledAsOf: null,
                   addedDescriptions: [],
                   lastOccurredOn: null,
+                  accountsMerged: 0,
                 },
               );
               totals.importedDateRange =
@@ -482,7 +495,7 @@ export function usePlaidSync() {
                         isRateLimited
                           ? RATE_LIMITED_MESSAGE
                           : REFRESH_DISABLED_MESSAGE
-                      }${asOfHint}`,
+                      }${asOfHint}${accountsMergedHint(totals.accountsMerged)}`,
                     });
                   } else {
                     // No PRODUCT_NOT_READY signal but also nothing new —
@@ -491,8 +504,9 @@ export function usePlaidSync() {
                     // message.
                     toast({
                       title: "No new transactions yet",
-                      description:
-                        "Your bank is still preparing the initial batch. Try Sync again in a minute.",
+                      description: `Your bank is still preparing the initial batch. Try Sync again in a minute.${accountsMergedHint(
+                        totals.accountsMerged,
+                      )}`,
                     });
                   }
                 } else {
@@ -600,7 +614,7 @@ export function usePlaidSync() {
                   ) : undefined;
                   toast({
                     title: viaGapBackfill ? "Caught up via direct fetch" : "Sync complete",
-                    description,
+                    description: `${description}${accountsMergedHint(totals.accountsMerged)}`,
                     action: toastAction,
                   });
                 }

@@ -12593,7 +12593,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
     attempts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         attemptedAt: zod.ZodString;
-        kind: zod.ZodEnum<["transactions", "balance", "liabilities", "pending_cleanup"]>;
+        kind: zod.ZodEnum<["transactions", "balance", "liabilities", "pending_cleanup", "account_merge"]>;
         success: zod.ZodBoolean;
         errorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         errorMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -12653,7 +12653,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         }>, zod.ZodNull]>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
-        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "account_merge";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -12678,7 +12678,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         } | null | undefined;
     }, {
         id: string;
-        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "account_merge";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -12705,7 +12705,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     attempts: {
         id: string;
-        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "account_merge";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -12732,7 +12732,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
 }, {
     attempts: {
         id: string;
-        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "account_merge";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -13014,6 +13014,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             ruleId: string;
             pattern: string;
         }>, "many">;
+        accountsMerged: zod.ZodOptional<zod.ZodNumber>;
         error: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
         importedDateRange: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
@@ -13069,6 +13070,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
+        accountsMerged?: number | undefined;
         importedDateRange?: {
             min: string;
             max: string;
@@ -13103,6 +13105,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
+        accountsMerged?: number | undefined;
         importedDateRange?: {
             min: string;
             max: string;
@@ -13139,6 +13142,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
+        accountsMerged?: number | undefined;
         importedDateRange?: {
             min: string;
             max: string;
@@ -13175,6 +13179,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
+        accountsMerged?: number | undefined;
         importedDateRange?: {
             min: string;
             max: string;

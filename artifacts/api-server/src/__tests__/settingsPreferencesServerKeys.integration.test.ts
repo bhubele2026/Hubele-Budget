@@ -711,7 +711,16 @@ describe("SERVER_OWNED_PREFERENCE_KEYS matches the server's preference writers",
     const writtenByMigration: Record<string, string> = {
       everydayHooks: "lib/db/migrations/0042_everyday_hooks.sql",
     };
+    // (WP9) Retired keys: nothing writes them any more, but a stored value is
+    // still protected from client saves. Each says why.
+    const retired: Record<string, string> = {
+      amexCleanupDoneAt: "WP9: the Amex page no longer merges accounts on a read; merges run on a bank sync",
+    };
     for (const key of SERVER_OWNED_PREFERENCE_KEYS) {
+      if (retired[key]) {
+        expect(seen.has(key), `${key} is retired (${retired[key]}) but something writes it again`).toBe(false);
+        continue;
+      }
       const migration = writtenByMigration[key];
       if (migration) {
         expect(readFileSync(join(REPO_ROOT, migration), "utf8"), `${migration} writes ${key}`).toContain(`'${key}'`);

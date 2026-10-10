@@ -42,6 +42,8 @@ type SyncItem = {
   // lacks the `transactions_refresh` add-on.
   refreshDisabledReason?: string | null;
   lastSyncedAt?: string | null;
+  // (WP9) Duplicate accounts this item's sync merged.
+  accountsMerged?: number;
 };
 
 let syncResponse: { items: SyncItem[] } = { items: [] };
@@ -722,6 +724,42 @@ describe("usePlaidSync — #723 no-rows toast copy", () => {
     expect(arg.title).toBe("Still preparing");
     expect(arg.description).toContain("preparing the initial batch");
     expect(arg.description).not.toContain("Real-time refresh isn't enabled");
+  });
+});
+
+describe("(WP9) usePlaidSync — says when a sync merged duplicate accounts", () => {
+  const toastArg = () => toastFn.mock.calls[0]![0] as { title: string; description: string };
+
+  it("adds the merge to the success toast, summed over items", async () => {
+    syncResponse = {
+      items: [
+        { added: 2, modified: 0, removed: 0, error: null, accountsMerged: 1 },
+        { added: 1, modified: 0, removed: 0, error: null, accountsMerged: 1 },
+      ],
+    };
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    expect(toastArg().title).toBe("Sync complete");
+    expect(toastArg().description).toContain("Added 3");
+    expect(toastArg().description).toMatch(/Merged 2 duplicate accounts\.$/);
+  });
+
+  it("says it on a sync that brought no new rows, too; and says nothing when nothing merged", async () => {
+    syncResponse = { items: [{ added: 0, modified: 0, removed: 0, error: null, accountsMerged: 1 }] };
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    expect(toastArg().title).toBe("No new transactions yet");
+    expect(toastArg().description).toMatch(/Merged 1 duplicate account\.$/);
+
+    cleanup();
+    toastFn.mockClear();
+    syncResponse = { items: [{ added: 1, modified: 0, removed: 0, error: null, accountsMerged: 0 }] };
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    expect(toastArg().description).not.toContain("Merged");
   });
 });
 

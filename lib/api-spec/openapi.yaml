@@ -8113,6 +8113,14 @@ components:
               ruleAttributions:
                 type: array
                 items: { $ref: "#/components/schemas/RuleAttribution" }
+              accountsMerged:
+                type: integer
+                description: |
+                  (WP9) Duplicate bank accounts (two rows for one physical
+                  account: same institution, last four and name, e.g. after a
+                  re-link) this sync merged onto one. Twins are merged only
+                  when a bank sync runs, never on a page read. Absent when the
+                  sync stopped before the merge (an error, still preparing).
               error: { type: ["string", "null"] }
               # True when Plaid responded with PRODUCT_NOT_READY (i.e. it is
               # still staging the historical batch for a freshly linked
@@ -8349,9 +8357,13 @@ components:
         #                         cleanupDetails populated; only written
         #                         when one or more rows were actually
         #                         deleted, never on empty sweeps.
+        #   * "account_merge"   — (WP9) audit row: a bank sync merged
+        #                         duplicate accounts. success=true; the
+        #                         summary line rides in errorMessage;
+        #                         only written when something merged.
         kind:
           type: string
-          enum: [transactions, balance, liabilities, pending_cleanup]
+          enum: [transactions, balance, liabilities, pending_cleanup, account_merge]
         success: { type: boolean }
         # Plaid's structured `error_code` when success=false; null on
         # success or when Plaid did not return one.

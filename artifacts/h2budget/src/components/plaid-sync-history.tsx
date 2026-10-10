@@ -64,6 +64,8 @@ function kindLabel(k: string): string {
   if (k === "balance") return "Balance";
   if (k === "liabilities") return "Liabilities";
   if (k === "pending_cleanup") return "Pending cleanup";
+  // (WP9) A bank sync merged duplicate accounts; the summary is in the row's message.
+  if (k === "account_merge") return "Duplicate accounts merged";
   return k;
 }
 

@@ -10,7 +10,6 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { AMEX_TXN_SOURCES, computeWeeklyPayoff } from "../lib/amexAnchor";
-import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
 import { householdTodayISO } from "../lib/householdClock";
 
 const router: IRouter = Router();
@@ -45,68 +44,11 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       ? scopedAccountIdRaw
       : null;
 
-  // (#416) One-shot heal hook. Collapse any duplicate Amex
-  // `plaid_accounts` rows the user accumulated from re-linking
-  // American Express (one Plaid item, three physical cards) AND merge
-  // any duplicate `debts` rows pointing at the same survivor account,
-  // before we resolve the ending-balance anchor. Gated by
-  // `settings.preferences.amexCleanupDoneAt` so the heal runs once
-  // per user instead of on every Amex page hit; once stamped, the
-  // (institution, mask) upsert guard at /plaid/exchange and the
-  // post-exchange dedupe sweep keep things clean going forward.
-  try {
-    const [prefRow] = await db
-      .select({ preferences: settingsTable.preferences })
-      .from(settingsTable)
-      .where(eq(settingsTable.userId, ownerId));
-    const prefs =
-      (prefRow?.preferences as Record<string, unknown> | null | undefined) ??
-      {};
-    const alreadyCleaned =
-      typeof prefs.amexCleanupDoneAt === "string" &&
-      prefs.amexCleanupDoneAt.length > 0;
-    if (!alreadyCleaned) {
-      const report = await dedupePlaidAccountsForUser(userId);
-      if (
-        report.duplicatesRemoved > 0 ||
-        report.snapshotRepointed ||
-        report.syntheticDropped
-      ) {
-        req.log.info(
-          { userId, ...report },
-          "[amex-anchor] one-shot heal collapsed duplicate plaid_accounts on Amex page hit",
-        );
-      }
-      // NB: a parallel debt-side merge is unnecessary because the
-      // `debts_plaid_account_unique` constraint already prevents two
-      // debt rows from pointing at the same plaid_account — the
-      // dedupe above repoints surviving debts atomically.
-      const nextPrefs = {
-        ...prefs,
-        amexCleanupDoneAt: new Date().toISOString(),
-      };
-      if (prefRow) {
-        await db
-          .update(settingsTable)
-          .set({ preferences: nextPrefs, updatedAt: new Date() })
-          .where(eq(settingsTable.userId, ownerId));
-      } else {
-        await db
-          .insert(settingsTable)
-          .values({ userId: ownerId, householdId, preferences: nextPrefs })
-          .onConflictDoUpdate({
-            target: settingsTable.userId,
-            set: { preferences: nextPrefs, updatedAt: new Date() },
-          });
-      }
-    }
-  } catch (e) {
-    req.log.warn(
-      { err: e, userId },
-      "[amex-anchor] one-shot heal failed (non-fatal)",
-    );
-  }
-
+  // (WP9) No heal here. Twin plaid_accounts rows (a re-link's second row for
+  // the same card) are merged only when a bank sync runs (syncPlaidItem →
+  // dedupePlaidAccountsForUser), never on a page read: this GET is read-only
+  // for account rows, so a figure never depends on which page opened first.
+  // (It used to collapse twins on the first Amex page hit, #416.)
   const acctRows = await db
     .selectDistinct({ plaidAccountId: transactionsTable.plaidAccountId })
     .from(transactionsTable)

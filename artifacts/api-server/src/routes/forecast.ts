@@ -56,7 +56,6 @@ import { recordPlaidSyncAttempt } from "../lib/plaidSyncAttempts";
 import { archiveExpiredOneTime } from "./bills";
 import {
   dedupePlaidAccountsForUser,
-  runAutoDedupeIfNeeded,
 } from "../lib/dedupePlaidAccounts";
 import {
   countDuplicateTransactionsForUser,
@@ -112,14 +111,9 @@ export async function listCheckingAccounts(
 ) {
   const ownerId = ownerUserId ?? userId;
   const hhId = householdId ?? userId;
-  // (#411) First time this user lands on the Chase / transactions page,
-  // collapse any leftover duplicate `plaid_accounts` rows so the picker
-  // and balances render against a single survivor row. Gated by
-  // `forecast_settings.auto_dedupe_ran_at` so it runs at most once per
-  // user; explicit hooks (Plaid (re)link, the maintenance endpoint)
-  // bypass the gate. Best-effort — failures are logged but never block
-  // the page load.
-  await runAutoDedupeIfNeeded(userId, "listCheckingAccounts");
+  // (WP9) Read-only. Duplicate `plaid_accounts` rows are merged only when a
+  // bank sync runs (syncPlaidItem), never on a page read; until then the
+  // picker collapses them in the response below (no write).
 
   // (#410) Read the bank-snapshot pointer first so dedupe can prefer the
   // snapshot row when collapsing duplicates by (institutionName, mask).
@@ -207,22 +201,10 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const ownerUserId = req.householdOwnerId!;
   await archiveExpiredOneTime(householdId);
   let settings = await ensureSettings(ownerUserId, householdId);
-  // (#411) Auto-dedupe / accountSnapshots auto-repair pass. Gated by
-  // `forecast_settings.auto_dedupe_ran_at` so it runs at most once per
-  // user from this code path instead of re-firing on every /forecast
-  // request. Idempotent and best-effort — failures are logged but never
-  // block the page load.
-  const autoReport = await runAutoDedupeIfNeeded(userId, "/forecast");
-  if (
-    autoReport &&
-    (autoReport.accountSnapshotsRepointed > 0 ||
-      autoReport.accountSnapshotsPruned > 0 ||
-      autoReport.duplicatesRemoved > 0)
-  ) {
-    // Re-read settings so the response below reflects the repaired
-    // accountSnapshots map instead of the stale pre-dedupe copy.
-    settings = await ensureSettings(ownerUserId, householdId);
-  }
+  // (WP9) No duplicate-account merge here: it runs only when a bank sync runs
+  // (syncPlaidItem → dedupePlaidAccountsForUser), never on a page read, so the
+  // forecast never depends on which page was opened first. (It used to run
+  // once per user on the first /forecast hit, #411.)
   // (#432-followup) Heal stale snapshot identity: when
   // `bank_snapshot_account_id` points at a real plaid_accounts row but
   // the stored `bank_snapshot_mask` / `bank_snapshot_name` are out of
