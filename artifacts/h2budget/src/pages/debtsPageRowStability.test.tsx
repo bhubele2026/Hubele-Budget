@@ -76,6 +76,9 @@ let extraAmount = "0";
 vi.mock("@workspace/api-client-react", () => {
   return {
     useListDebts: () => ({ data: SEEDED_DEBTS, isLoading: false }),
+    // (WP3c) The archived rule reads Plaid's stored figures (none here).
+    useListPlaidLiabilityAccounts: () => ({ data: undefined, isLoading: false }),
+    getListPlaidLiabilityAccountsQueryKey: () => ["liability-accounts"],
     useListDebtBalanceHistory: () => ({ data: [], isLoading: false }),
     useGetAvalancheSettings: () => ({
       data: {

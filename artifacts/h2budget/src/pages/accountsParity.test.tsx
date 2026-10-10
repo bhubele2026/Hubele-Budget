@@ -219,7 +219,29 @@ describe("other card cases, one string per surface", () => {
     // Avalanche: off the Debts table and out of the total, in its Archived tab.
     renderIn(<AvalanchePage />);
     expect(screen.queryByTestId(`row-debt-${E.debtId}`)).toBeNull();
-    expect(screen.getByText(/Archived \(1\)/)).toBeTruthy();
+    expect(screen.getByText(/Archived \(3\)/)).toBeTruthy();
+  });
+  it.each([
+    ["case A — a $0.00 row Plaid says owes $412.50", "caseA"],
+    ["case B — a $12.00 row with no Plaid figure", "caseB"],
+  ] as const)("(WP3c) archived, %s: ONE decision on every surface, the Debts page included", async (_l, key) => {
+    const E = F.EXPECT[key];
+    renderIn(<AccountsPanel />);
+    const row = dashRow(E.ext);
+    expect(within(row).getByTestId("dash-account-plan").textContent).toBe(E.words);
+    expect(within(row).getByTestId("dash-account-creditor").textContent).toBe(`Card's current balance${E.creditor}`);
+    cleanup();
+    renderIn(<NextAccountsPage />, "/next/accounts");
+    expect(within(chip(E.ext)).getByTestId("chip-plan").textContent).toBe(E.words);
+    expect(within(chip(E.ext)).getByTestId("chip-balance").textContent).toBe(`Card's current balance ${E.creditor}`);
+    const s = await summaryOf(E.ext);
+    expect(within(s).getByTestId("summary-plan").textContent).toBe(E.words);
+    cleanup();
+    renderIn(<DebtsPage />);
+    const r = screen.getAllByTestId("debt-card-paid-off").find((x) => x.getAttribute("data-debt-id") === E.debtId)!;
+    expect(within(r).getByTestId("debt-card-paid-off-headline").textContent).toBe("Archived");
+    expect(within(r).getByTestId("debt-card-paid-off-month").textContent).toBe("Not on the payoff plan");
+    expect(r.textContent).not.toContain("Paid off");
   });
   it("missing mask: no ••, and still its own debt's figure", () => {
     const E = F.EXPECT.noMask;

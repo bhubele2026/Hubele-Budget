@@ -13,6 +13,8 @@
  *   zero            Amex Blue Cash ••1001           debt, active, 0.00 (a real zero)
  *   archived        Amex Gold ••1009                debt, ARCHIVED, 412.50 reported (still owing: "Archived", not "Paid off")
  *   missing mask    Amex Green (no mask)            debt, active, 96.40
+ *   archived (A)    Amex Hilton ••1011              debt, ARCHIVED by hand at 0.00; Plaid says it owes 412.50
+ *   archived (B)    Amex Delta ••1012               debt, ARCHIVED by hand holding 12.00; Plaid reported nothing
  *   off-plan        Citi Costco ••4410              no debt row; Plaid liability 684.12, min 40, due 14th
  *   missing         Citi Double Cash ••4411         no debt row; Plaid reported nothing
  *   stale           Capital One Quicksilver ••7788  debt, active, 642.18; its bank last synced 3 days ago
@@ -54,6 +56,8 @@ export const ITEMS = [
     acct("blue", "Blue Cash Preferred", "1001", "credit", "credit card"),
     acct("gold", "Gold Card", "1009", "credit", "credit card"),
     acct("green", "Green Card", null, "credit", "credit card"),
+    acct("hilton", "Hilton Honors Card", "1011", "credit", "credit card"),
+    acct("delta", "Delta Gold Card", "1012", "credit", "credit card"),
   ]),
   item("citi", "Citi", "citi", "2026-10-09T11:00:00.000Z", "2026-10-07", [
     acct("citi", "Costco Anywhere", "4410", "credit", "credit card"),
@@ -79,11 +83,19 @@ export const DEBTS = [
   debt("blue", "Amex Blue Cash", "0.00", { plaidAccountId: "row-blue", dueDay: 3, originalBalance: "1200.00", sortOrder: 4 }),
   debt("gold", "Amex Gold", "412.50", { plaidAccountId: "row-gold", status: "archived", originalBalance: "900.00", sortOrder: 5 }),
   debt("green", "Amex Green", "96.40", { plaidAccountId: "row-green", minPayment: "25.00", dueDay: 9, originalBalance: "150.00", sortOrder: 6 }),
+  debt("hilton", "Amex Hilton", "0.00", { plaidAccountId: "row-hilton", status: "archived", balanceSource: "manual", originalBalance: "800.00", lastBalanceUpdate: "2026-09-19T12:00:00.000Z", plaidLastSyncedAt: null, sortOrder: 8 }),
+  debt("delta", "Amex Delta", "12.00", { plaidAccountId: "row-delta", status: "archived", balanceSource: "manual", originalBalance: "300.00", lastBalanceUpdate: "2026-09-20T12:00:00.000Z", plaidLastSyncedAt: null, sortOrder: 9 }),
   debt("cap", "Quicksilver", "642.18", { plaidAccountId: "row-cap", minPayment: "40.00", dueDay: 18, originalBalance: "1500.00", lastBalanceUpdate: "2026-10-06T12:00:00.000Z", plaidLastSyncedAt: "2026-10-06T12:00:05.000Z", sortOrder: 7 }),
 ];
 
-/** Plaid's stored liability figures (`GET /plaid/liability-accounts`) for the cards with no debt row. */
+/** Plaid's stored liability figures (`GET /plaid/liability-accounts`): the cards with no debt row and the archived ones. */
 export const LIABILITIES = [
+  { id: "row-hilton", accountId: "ext-hilton", itemId: "item-amex", name: "Hilton Honors Card", mask: "1011", type: "credit", subtype: "credit card",
+    liabilityKind: "credit", balance: "412.50", apr: "0.2099", minPayment: "35.00", lastFetchedAt: "2026-10-09T10:00:00.000Z",
+    institutionName: "American Express", institutionSlug: "amex", linkedDebt: { id: "d-hilton", name: "Amex Hilton" }, suggestedDebt: null },
+  { id: "row-delta", accountId: "ext-delta", itemId: "item-amex", name: "Delta Gold Card", mask: "1012", type: "credit", subtype: "credit card",
+    liabilityKind: "credit", balance: null, apr: null, minPayment: null, lastFetchedAt: null,
+    institutionName: "American Express", institutionSlug: "amex", linkedDebt: { id: "d-delta", name: "Amex Delta" }, suggestedDebt: null },
   { id: "row-citi", accountId: "ext-citi", itemId: "item-citi", name: "Costco Anywhere", mask: "4410", type: "credit", subtype: "credit card",
     liabilityKind: "credit", balance: "684.12", apr: "0.2049", minPayment: "40.00", lastFetchedAt: "2026-10-09T10:00:00.000Z",
     institutionName: "Citi", institutionSlug: "citi", linkedDebt: null,
@@ -132,6 +144,10 @@ export const EXPECT = {
   zero: { ext: "ext-blue", debtId: "d-blue", owed: "$0.00" },
   archived: { ext: "ext-gold", debtId: "d-gold", words: "Archived · not on the payoff plan", creditor: "$412.50" },
   noMask: { ext: "ext-green", debtId: "d-green", owed: "$96.40" },
+  /** (WP3c) One archived decision: Plaid's figure beats the row ($0 row, Plaid $412.50 → Archived)… */
+  caseA: { ext: "ext-hilton", debtId: "d-hilton", name: "Amex Hilton", words: "Archived · not on the payoff plan", creditor: "$412.50" },
+  /** …and with no Plaid figure the row's balance decides ($12 row → Archived). */
+  caseB: { ext: "ext-delta", debtId: "d-delta", name: "Amex Delta", words: "Archived · not on the payoff plan", creditor: "$12.00" },
   offPlan: { ext: "ext-citi", words: "Not on the payoff plan", creditor: "$684.12" },
   missing: { ext: "ext-citi2", words: "No balance, minimum or due date reported for this card yet." },
   stale: { ext: "ext-cap", debtId: "d-cap", owed: "$642.18" },
@@ -141,5 +157,5 @@ export const EXPECT = {
   left: "$20,715.85",
   leftNames: "HELOC, Amex Platinum, Amex Platinum (AU), Amex Green and Quicksilver",
   /** (WP4) The cards the total leaves out that still carry (or may carry) a balance: archived Gold, off-plan Costco, Double Cash (unknown). */
-  offPlanLine: "American Express Gold Card ••1009, Citi Costco Anywhere ••4410 and Citi Double Cash ••4411 are not on the plan",
+  offPlanLine: "American Express Gold Card ••1009, American Express Hilton Honors Card ••1011, American Express Delta Gold Card ••1012, Citi Costco Anywhere ••4410 and Citi Double Cash ••4411 are not on the plan",
 } as const;
