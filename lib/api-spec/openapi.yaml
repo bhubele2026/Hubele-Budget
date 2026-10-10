@@ -7700,7 +7700,12 @@ components:
                 balance: { type: number }
             - type: "null"
         cashBuffer: { type: number }
-        bankBalance: { type: number }
+        bankBalance:
+          type: ["number", "null"]
+          description: |
+            The cash signal's bankToday as a number. (WP9b) Null with no bank
+            snapshot: there is no bank balance to show, so never 0 (WP10's
+            rule; the schedule still runs off the projection).
         scheduleThroughDate: { type: ["string", "null"] }
     ForecastBundle:
       type: object

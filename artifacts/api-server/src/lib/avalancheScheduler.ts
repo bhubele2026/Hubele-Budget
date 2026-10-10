@@ -87,7 +87,9 @@ export interface AvalancheScheduleFacts {
     balance: number;
   } | null;
   cashBuffer: number;
-  bankBalance: number;
+  // (WP9b) The cash signal's `bankToday` as a number; null with no bank
+  // snapshot — there is no bank balance to show, so never a 0 (WP10's rule).
+  bankBalance: number | null;
   // Convenience for the narrative + footer: the last covered month.
   scheduleThroughDate: string | null;
   // Deterministic payoff picture (how long until debt-free, interest/months
@@ -125,7 +127,8 @@ export async function buildAvalancheSchedule(
     horizonDays: HORIZON_DAYS,
   });
   const cashBuffer = Number(signal.cashBuffer) || 0;
-  const bankBalance = Number(signal.bankToday) || 0;
+  const bankToday = signal.bankToday == null ? null : Number(signal.bankToday);
+  const bankBalance = bankToday != null && Number.isFinite(bankToday) ? round2(bankToday) : null;
   const daily = signal.daily ?? [];
 
   // Debts + avalanche target (for the narrative facts).
@@ -162,7 +165,7 @@ export async function buildAvalancheSchedule(
     lowestPostScheduleDate: signal.lowestDate ?? null,
     currentAvalancheTarget,
     cashBuffer: round2(cashBuffer),
-    bankBalance: round2(bankBalance),
+    bankBalance,
     scheduleThroughDate: null,
     payoff,
   };
@@ -316,7 +319,7 @@ export async function buildAvalancheSchedule(
     lowestPostScheduleDate,
     currentAvalancheTarget,
     cashBuffer: round2(cashBuffer),
-    bankBalance: round2(bankBalance),
+    bankBalance,
     scheduleThroughDate,
     payoff,
   };

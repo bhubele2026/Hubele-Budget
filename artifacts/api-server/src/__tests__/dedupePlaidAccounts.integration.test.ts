@@ -374,7 +374,7 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
     }
   });
 
-  it("(#429) repoints accountSnapshots from loser to survivor and prunes orphan keys via (institutionName, mask) salvage", async () => {
+  it("(#429, WP9b) moves the loser's snapshot onto the survivor within the merge; an orphan key is pruned, never salvaged", async () => {
     const otherUser = `${TEST_USER}-acctsnap`;
     try {
       const suffix = randomUUID().slice(0, 8);
@@ -389,8 +389,9 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
         })
         .returning();
       // Survivor (snapshot pointer wins) + loser, plus an unrelated
-      // orphan-id entry that should be salvaged onto the survivor by
-      // (institutionName, mask).
+      // orphan-id entry. (WP9b) The orphan is dropped, never salvaged onto
+      // the survivor by (institutionName, mask): a reading moves only with
+      // its own account's merge.
       const [survivor] = await db
         .insert(plaidAccountsTable)
         .values({
@@ -417,9 +418,9 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
           createdAt: new Date(Date.now() - 10_000),
         })
         .returning();
-      // Orphan id: a plaid_accounts row that no longer exists. Its
-      // entry in accountSnapshots must be salvaged onto the survivor
-      // because it shares the same (institutionName, mask).
+      // Orphan id: a plaid_accounts row that no longer exists. (WP9b) Its
+      // entry is pruned even though it shares the survivor's
+      // (institutionName, mask).
       const orphanId = randomUUID();
 
       await db.insert(forecastSettingsTable).values({
@@ -447,10 +448,8 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
             name: "Chase Checking",
             mask: "5526",
           },
-          // Orphan entry that no live row owns — salvage candidate.
-          // Its (institutionName via name fuzzy + mask) matches the
-          // survivor, but the survivor's entry is fresher after the
-          // loser merge above so the orphan is just pruned.
+          // Orphan entry that no live row owns. Its (institution via name
+          // + mask) matches the survivor; (WP9b) it is pruned, not moved.
           [orphanId]: {
             balance: "999.99",
             at: "2026-04-01T00:00:00.000Z",
@@ -463,10 +462,9 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
 
       const report = await dedupePlaidAccountsForUser(otherUser);
       expect(report.duplicatesRemoved).toBe(1);
-      // 1 from the loser→survivor merge step. The orphan-id entry
-      // was salvaged onto the survivor key but the survivor already
-      // had a fresher snapshot after the merge, so no new repoint
-      // was counted.
+      // 1 from the loser→survivor merge step (the loser's reading is the
+      // newer one, so it is what the survivor now shows). The orphan-id
+      // entry moved nowhere.
       expect(report.accountSnapshotsRepointed).toBe(1);
       expect(report.accountSnapshotsPruned).toBe(1);
 
@@ -497,6 +495,107 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
       await db
         .delete(plaidItemsTable)
         .where(eq(plaidItemsTable.userId, otherUser));
+    }
+  });
+
+  it("(WP9b) a reading never moves by its last four alone: an orphan ··5526 reading stays off Capital One ··5526; a household member's account keeps its reading", async () => {
+    const otherUser = `${TEST_USER}-lastfour`;
+    const memberUser = `${TEST_USER}-member`;
+    try {
+      const suffix = randomUUID().slice(0, 8);
+      const [capItem] = await db
+        .insert(plaidItemsTable)
+        .values({
+          userId: otherUser,
+          itemId: `lastfour-item-${suffix}`,
+          accessToken: "test-no-access",
+          institutionName: "Capital One",
+          institutionSlug: "capital-one",
+        })
+        .returning();
+      const [cap360] = await db
+        .insert(plaidAccountsTable)
+        .values({
+          userId: otherUser,
+          itemId: capItem!.id,
+          accountId: `lastfour-cap-${suffix}`,
+          name: "360 Checking",
+          mask: "5526",
+          type: "depository",
+          subtype: "checking",
+        })
+        .returning();
+      // A household member linked their own card; its reading sits in the
+      // owner's map, keyed by the member's live account id.
+      const [memberItem] = await db
+        .insert(plaidItemsTable)
+        .values({
+          userId: memberUser,
+          itemId: `lastfour-member-item-${suffix}`,
+          accessToken: "test-no-access",
+          institutionName: "Discover",
+          institutionSlug: "discover",
+        })
+        .returning();
+      const [memberCard] = await db
+        .insert(plaidAccountsTable)
+        .values({
+          userId: memberUser,
+          itemId: memberItem!.id,
+          accountId: `lastfour-member-${suffix}`,
+          name: "Discover it",
+          mask: "5526",
+          type: "credit",
+          subtype: "credit card",
+        })
+        .returning();
+      // A removed Chase account's reading: same last four as Capital One
+      // 360, nothing else in common.
+      const removedChaseId = randomUUID();
+      const memberReading = {
+        balance: "312.40",
+        at: "2026-05-03T00:00:00.000Z",
+        source: "plaid" as const,
+        name: "Discover it",
+        mask: "5526",
+      };
+      await db.insert(forecastSettingsTable).values({
+        userId: otherUser,
+        accountSnapshots: {
+          [removedChaseId]: {
+            balance: "4812.37",
+            at: "2026-05-04T00:00:00.000Z",
+            source: "plaid",
+            name: "Chase Total Checking",
+            mask: "5526",
+          },
+          [memberCard!.id]: memberReading,
+        },
+      });
+
+      const report = await dedupePlaidAccountsForUser(otherUser);
+      expect(report.duplicatesRemoved).toBe(0);
+      expect(report.accountSnapshotsRepointed).toBe(0);
+      expect(report.accountSnapshotsPruned).toBe(1);
+
+      const [settings] = await db
+        .select()
+        .from(forecastSettingsTable)
+        .where(eq(forecastSettingsTable.userId, otherUser));
+      const map =
+        (settings!.accountSnapshots as Record<string, unknown> | null) ?? {};
+      // Capital One 360 did not get Chase's balance; the removed account's
+      // key is gone; the member's card kept its reading.
+      expect(map[cap360!.id]).toBeUndefined();
+      expect(map).toEqual({ [memberCard!.id]: memberReading });
+    } finally {
+      await db
+        .delete(forecastSettingsTable)
+        .where(eq(forecastSettingsTable.userId, otherUser));
+      for (const u of [otherUser, memberUser]) {
+        await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.userId, u));
+        await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, u));
+      }
     }
   });
 

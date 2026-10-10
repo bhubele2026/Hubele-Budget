@@ -19,14 +19,14 @@ export type DedupeReport = {
   debtsRepointed: number;
   snapshotRepointed: boolean;
   syntheticDropped: boolean;
-  // (#429) Number of `forecast_settings.accountSnapshots` keys that
-  // were repointed onto a survivor row during this run.
+  // (#429, WP9b) Balance snapshots (`forecast_settings.accountSnapshots`
+  // entries) that moved onto the account that stays INSIDE a merge: the
+  // merged account's reading is now the survivor's. The only way a reading
+  // ever moves; the sync names it in its `account_merge` log line.
   accountSnapshotsRepointed: number;
-  // (#429) Number of orphaned `forecast_settings.accountSnapshots`
-  // keys (no live `plaid_accounts.id` match) that the trailing
-  // backfill removed. Some of these may have been salvaged onto a
-  // surviving row first via (institutionName, mask) matching — those
-  // also bump `accountSnapshotsRepointed`.
+  // (#429, WP9b) `accountSnapshots` keys dropped because their
+  // `plaid_accounts` row no longer exists at all (a reading for an account
+  // that is gone, which nothing reads). Never moved onto another account.
   accountSnapshotsPruned: number;
   // (#452) Number of duplicate `transactions` rows collapsed by the
   // post-merge row-level dedupe pass that runs in the same
@@ -48,6 +48,10 @@ type AcctSnapshotEntry = {
   mask: string | null;
 };
 type AcctSnapshotMap = Record<string, AcctSnapshotEntry>;
+
+// `plaid_accounts.id` is a uuid; a map key that is not one cannot name an
+// account (and must not reach the uuid column in a query).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // (#429) Pick the entry with the newer `at` timestamp; falls back to
 // `incoming` when timestamps are unparseable or equal so a fresher
@@ -326,16 +330,22 @@ export async function dedupePlaidAccountsForUser(
       // this, a survivor whose id has no entry in the map renders the
       // "Unavailable" placeholder on the Chase page even though
       // Money in / Money out are correct.
+      //
+      // (WP9b) This merge is the ONLY place a reading moves from one account
+      // to another. Counted only when the merged account's reading is what the
+      // account that stays now shows (when the survivor's own reading is
+      // newer, nothing moved); the sync names the move in its `account_merge`
+      // log line (`accountMergeSummary`).
       const loserSnap = acctSnapshots[loser.acct.id];
       if (loserSnap) {
         const winning = pickFresherSnapshot(
           acctSnapshots[survivor.acct.id],
           loserSnap,
         );
+        if (winning === loserSnap) report.accountSnapshotsRepointed += 1;
         acctSnapshots[survivor.acct.id] = winning;
         delete acctSnapshots[loser.acct.id];
         acctSnapshotsDirty = true;
-        report.accountSnapshotsRepointed += 1;
       }
       await tx
         .delete(plaidAccountsTable)
@@ -411,77 +421,34 @@ export async function dedupePlaidAccountsForUser(
       }
     }
 
-    // (#429) Trailing backfill: prune `accountSnapshots` keys that no
-    // longer correspond to a live `plaid_accounts.id` for this user.
-    // Before dropping an orphan key we try to salvage it onto the
-    // current survivor for the same (institutionName, mask) — this
-    // repairs already-broken users whose loser id was never moved
-    // because the dedupe that removed it predated this fix. Idempotent:
-    // a clean user is a no-op.
-    const liveRows = await tx
-      .select({
-        id: plaidAccountsTable.id,
-        mask: plaidAccountsTable.mask,
-        name: plaidAccountsTable.name,
-        officialName: plaidAccountsTable.officialName,
-        institutionName: plaidItemsTable.institutionName,
-      })
-      .from(plaidAccountsTable)
-      .leftJoin(
-        plaidItemsTable,
-        eq(plaidAccountsTable.itemId, plaidItemsTable.id),
-      )
-      .where(eq(plaidAccountsTable.userId, userId));
-    const liveIds = new Set(liveRows.map((r) => r.id));
-    for (const orphanId of Object.keys(acctSnapshots)) {
-      if (liveIds.has(orphanId)) continue;
-      const entry = acctSnapshots[orphanId]!;
-      // Try to find a surviving row with the same mask.
-      // (#754) Prefer the (mask, accountName) pair when BOTH the
-      // orphan entry and the candidate row carry a name — two cards
-      // can share a mask (e.g. Platinum ··1009 and Delta Gold ··1009)
-      // and conflating them here would re-create the bug we just
-      // fixed above. Fall back to mask + institution-name heuristic
-      // when no name is present on either side, and mask-only as the
-      // last resort.
-      const entryMask = entry.mask?.toLowerCase() ?? null;
-      const entryName = (entry.name ?? "").toLowerCase().trim();
-      let salvageId: string | null = null;
-      if (entryMask) {
-        const candidates = liveRows.filter(
-          (r) => (r.mask ?? "").toLowerCase() === entryMask,
-        );
-        const byName =
-          entryName.length > 0
-            ? candidates.find((r) => {
-                const rowName = (r.name ?? r.officialName ?? "")
-                  .toLowerCase()
-                  .trim();
-                return rowName.length > 0 && rowName === entryName;
-              })
-            : undefined;
-        const byInstitution =
-          byName
-            ? undefined
-            : candidates.find((r) => {
-                const inst = (r.institutionName ?? "").toLowerCase();
-                return inst.length > 0 && entryName.includes(inst);
-              });
-        salvageId = (byName ?? byInstitution ?? candidates[0])?.id ?? null;
+    // (#429 → WP9b) Trailing prune: drop `accountSnapshots` keys whose
+    // `plaid_accounts` row no longer exists at all — a reading for an account
+    // that is gone, which nothing reads (every reader looks a reading up by a
+    // live account's id). ⛔ A reading is NEVER moved onto another account
+    // here, not by last four and not by name: it moves only inside
+    // `mergeLoserIntoSurvivor`, when its account is merged into that twin (the
+    // merge the sync logs as `account_merge`). The salvage that used to run
+    // here could put a removed Chase ··5526 reading on Capital One ··5526,
+    // unlogged, on every sync. Liveness is by id across every user, so a
+    // household member's account, whose reading sits in the owner's map,
+    // keeps it. Idempotent: a clean map is a no-op.
+    const mapKeys = Object.keys(acctSnapshots);
+    if (mapKeys.length > 0) {
+      const uuidKeys = mapKeys.filter((k) => UUID_RE.test(k));
+      const live =
+        uuidKeys.length === 0
+          ? []
+          : await tx
+              .select({ id: plaidAccountsTable.id })
+              .from(plaidAccountsTable)
+              .where(inArray(plaidAccountsTable.id, uuidKeys));
+      const liveIds = new Set(live.map((r) => r.id));
+      for (const key of mapKeys) {
+        if (liveIds.has(key)) continue;
+        delete acctSnapshots[key];
+        acctSnapshotsDirty = true;
+        report.accountSnapshotsPruned += 1;
       }
-      if (salvageId) {
-        const winning = pickFresherSnapshot(acctSnapshots[salvageId], entry);
-        // Only count as a repoint when the salvage actually changed the
-        // survivor's entry (avoids inflating the count for an orphan
-        // whose survivor already has a fresher snapshot).
-        if (acctSnapshots[salvageId] !== winning) {
-          acctSnapshots[salvageId] = winning;
-          report.accountSnapshotsRepointed += 1;
-        }
-      }
-      delete acctSnapshots[orphanId];
-      acctSnapshotsDirty = true;
-      report.accountSnapshotsPruned += 1;
     }
 
     if (acctSnapshotsDirty) {

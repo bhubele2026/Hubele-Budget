@@ -659,6 +659,11 @@ async function reconcileVanishedPendings(opts: {
  * (WP9) The sync log's one-line summary of a duplicate-account merge, in the
  * quiet style of the pending-cleanup rows ("Merged 1 duplicate account; 3
  * transactions moved to the account that stays.").
+ *
+ * (WP9b) A balance snapshot that moved with the merge is named here too ("1
+ * transaction and 1 balance snapshot moved …"; "the bank balance" when the
+ * bank balance's own account was the one merged away): the merge is the only
+ * place a reading ever moves, so the log row is its trail.
  */
 export function accountMergeSummary(m: DedupeReport): string {
   const parts: string[] = [];
@@ -671,8 +676,13 @@ export function accountMergeSummary(m: DedupeReport): string {
     moved.push(`${m.transactionsRepointed} transaction${m.transactionsRepointed === 1 ? "" : "s"}`);
   }
   if (m.debtsRepointed > 0) moved.push(`${m.debtsRepointed} debt link${m.debtsRepointed === 1 ? "" : "s"}`);
+  if (m.accountSnapshotsRepointed > 0) {
+    moved.push(`${m.accountSnapshotsRepointed} balance snapshot${m.accountSnapshotsRepointed === 1 ? "" : "s"}`);
+  }
+  if (m.snapshotRepointed) moved.push("the bank balance");
   const head = parts.join("; ") || "Merged duplicate accounts";
-  const tail = moved.length > 0 ? `; ${moved.join(" and ")} moved to the account that stays` : "";
+  const list = moved.length <= 1 ? moved.join("") : `${moved.slice(0, -1).join(", ")} and ${moved[moved.length - 1]}`;
+  const tail = moved.length > 0 ? `; ${list} moved to the account that stays` : "";
   return `${head.charAt(0).toUpperCase()}${head.slice(1)}${tail}.`;
 }
 
@@ -1933,12 +1943,14 @@ export async function syncPlaidItem(
     // ⭐ (WP9) TWIN ACCOUNTS ARE MERGED HERE — WHEN A BANK SYNC RUNS — AND
     // NEVER ON A PAGE READ (owner's decision, 2026-10-10). Two plaid_accounts
     // rows for one physical account (same institution, last four and name: a
-    // re-link's second row) collapse onto one survivor, with their rows, debts
-    // and the snapshot pointer re-pointed (`dedupePlaidAccountsForUser`, keyed
-    // on the item's own user, whose accounts these are). Every GET is
-    // read-only for account rows, so no figure depends on which page was
-    // opened first. Counted in the result (`accountsMerged`, the Sync toast)
-    // and written to the sync log (kind `account_merge`). Non-fatal.
+    // re-link's second row) collapse onto one survivor, with their rows, debts,
+    // the snapshot pointer and the merged account's balance snapshot re-pointed
+    // (`dedupePlaidAccountsForUser`, keyed on the item's own user, whose
+    // accounts these are). (WP9b) A balance snapshot moves ONLY with such a
+    // merge, never by last four alone. Every GET is read-only for account rows,
+    // so no figure depends on which page was opened first. Counted in the
+    // result (`accountsMerged`, the Sync toast) and written to the sync log
+    // (kind `account_merge`, naming any snapshot that moved). Non-fatal.
     try {
       const merge = await dedupePlaidAccountsForUser(item.userId);
       accountsMerged = merge.duplicatesRemoved;
@@ -1951,6 +1963,13 @@ export async function syncPlaidItem(
           errorMessage: accountMergeSummary(merge),
         });
         logger.info({ householdId, itemRowId, ...merge }, "[plaid-sync] (WP9) merged duplicate accounts");
+      } else if (merge.accountSnapshotsPruned > 0) {
+        // (WP9b) Readings of accounts that no longer exist were dropped; none
+        // moved (a reading moves only with a merge, logged above).
+        logger.info(
+          { householdId, itemRowId, accountSnapshotsPruned: merge.accountSnapshotsPruned },
+          "[plaid-sync] (WP9b) dropped balance snapshots of removed accounts; none moved",
+        );
       }
     } catch (e) {
       logger.warn({ householdId, itemRowId, err: e }, "[plaid-sync] (WP9) duplicate-account merge failed (non-fatal)");

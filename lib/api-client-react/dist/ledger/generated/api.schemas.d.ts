@@ -4361,7 +4361,14 @@ export interface AvalancheSchedule {
     lowestPostScheduleDate: string | null;
     currentAvalancheTarget: AvalancheScheduleCurrentAvalancheTarget;
     cashBuffer: number;
-    bankBalance: number;
+    /**
+     * The cash signal's bankToday as a number. (WP9b) Null with no bank
+  snapshot: there is no bank balance to show, so never 0 (WP10's
+  rule; the schedule still runs off the projection).
+  
+     * @nullable
+     */
+    bankBalance: number | null;
     /** @nullable */
     scheduleThroughDate: string | null;
 }

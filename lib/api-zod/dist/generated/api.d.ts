@@ -9642,7 +9642,7 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
         debtName: string;
     }>, zod.ZodNull]>;
     cashBuffer: zod.ZodNumber;
-    bankBalance: zod.ZodNumber;
+    bankBalance: zod.ZodNullable<zod.ZodNumber>;
     scheduleThroughDate: zod.ZodNullable<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     cashBuffer: number;
@@ -9663,7 +9663,7 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
         apr: number;
         debtName: string;
     } | null;
-    bankBalance: number;
+    bankBalance: number | null;
     scheduleThroughDate: string | null;
 }, {
     cashBuffer: number;
@@ -9684,7 +9684,7 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
         apr: number;
         debtName: string;
     } | null;
-    bankBalance: number;
+    bankBalance: number | null;
     scheduleThroughDate: string | null;
 }>;
 /**
