@@ -39,10 +39,17 @@ function snapshotCaptionOf(v: BankBalanceView): string | null {
 }
 
 export function AccountSummary({
-  entry, debt, liability = null, payoffCard, bank = null, now = Date.now(),
+  entry, debt, liability = null, payoffCard, bank = null, pending = null, now = Date.now(),
 }: {
   entry: AccountEntry;
   debt: CardDebtInput | null;
+  /**
+   * (WP3b) The read this account's figures come from has not answered (the
+   * debts for a card, the spine for a depository account) — or failed. Then no
+   * figure and no plan words are drawn: a skeleton, or "<what> did not load ·
+   * Try again".
+   */
+  pending?: { failed: boolean; what: string; onRetry?: () => void } | null;
   /** Plaid's stored liability figures, for a card or loan with no debt row. */
   liability?: CardLiabilityInput | null;
   payoffCard: AmexWeeklyPayoffCard | null;
@@ -62,7 +69,20 @@ export function AccountSummary({
   const stamps = freshnessStamps({ syncedAt: entry.lastSyncedAt, balanceAt, dataThrough: entry.dataThrough }, now);
   return (
     <Panel title="Summary" sub={`${id.label}${id.mask4 ? ` ••${id.mask4}` : ""}`} accent={id.accent} span={4} data-testid="account-summary">
-      {view ? (
+      {pending ? (
+        pending.failed ? (
+          <p role="alert" className="text-label text-neutral-600" data-testid="summary-failed">
+            {pending.what} did not load ·{" "}
+            <button type="button" onClick={pending.onRetry} className="font-semibold text-brand-navy underline">Try again</button>
+          </p>
+        ) : (
+          <div className="space-y-2" aria-busy="true" data-testid="summary-loading">
+            <div className="skeleton h-3 w-24 rounded" />
+            <div className="skeleton h-7 w-32 rounded" />
+            <div className="skeleton h-3 w-40 max-w-full rounded" />
+          </div>
+        )
+      ) : view ? (
         <div className="space-y-4">
           {!view.onPlan ? (
             <p className="text-label font-semibold text-neutral-600" data-testid="summary-plan">{view.status}</p>

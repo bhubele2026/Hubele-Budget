@@ -70,7 +70,8 @@ function Fact({ label, value, testid }: { label: string; value: ReactNode; testi
 export default function AccountsPanel() {
   const items = usePlaidItemsQ();
   const debts = useDebtsQ();
-  const { data: spine } = useSpine();
+  const spineRead = useSpine();
+  const spine = spineRead.data;
   // (WP3) The account the bank balance rolls forward on, BY ID, from the spine
   // itself (WP1's `bank.account`): matching the cash signal's mask made every
   // account without a mask "the checking account" (`"" === ""`), and two
@@ -143,7 +144,13 @@ export default function AccountsPanel() {
                   balanceAt: view ? view.creditorCurrent?.asOf : snap?.at,
                   dataThrough: item.lastBankTxOn,
                 }, now);
-                const planWords = view && !view.onPlan ? view.status : null;
+                // (WP3b) Plan words only once the debts have answered: a missing
+                // list is not "Not on the payoff plan".
+                const planWords = view && !view.onPlan && debts.data !== undefined ? view.status : null;
+                const debtsFailed = debts.data === undefined && !!debts.isError;
+                // The spine decides which depository account rolls forward: until
+                // it answers, no depository row is labelled.
+                const bankWait = !liability && !spine;
                 return (
                   <li key={acct.id} data-testid="dash-account" data-state={st} data-accent={identity.accent} data-plan={view?.state}
                     className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 px-4 py-3 md:grid-cols-[minmax(14rem,1.2fr)_minmax(0,2fr)_auto] md:items-center md:gap-x-6">
@@ -195,9 +202,20 @@ export default function AccountsPanel() {
                       </div>
                     </div>
                     {/* A <dl> only when it holds facts: a sentence in its place is a plain <div> (axe: definition-list). */}
-                    <FactsBox asList={view ? !waiting && cardHasFigures(view) : isCash && !noBank}>
-                      {view ? (
-                        waiting ? (
+                    <FactsBox asList={view ? !waiting && cardHasFigures(view) : isCash && !noBank && !bankWait}>
+                      {bankWait ? (
+                        spineRead.state === "failed" ? (
+                          <p role="alert" className="text-label text-neutral-600" data-testid="dash-account-bank-failed">Balance did not load.</p>
+                        ) : (
+                          <span className="skeleton block h-8 w-48 rounded" aria-busy="true" />
+                        )
+                      ) : view ? (
+                        debtsFailed ? (
+                          <p role="alert" className="text-label text-neutral-600" data-testid="dash-account-debts-failed">
+                            Debts did not load ·{" "}
+                            <button type="button" onClick={() => void debts.refetch()} className="font-semibold text-brand-navy underline">Try again</button>
+                          </p>
+                        ) : waiting ? (
                           <span className="skeleton block h-8 w-48 rounded" aria-busy="true" />
                         ) : cardHasFigures(view) ? (
                           <>

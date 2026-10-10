@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, within, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, within, waitFor, fireEvent } from "@testing-library/react";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import type { ReactNode } from "react";
@@ -12,6 +12,10 @@ const h = vi.hoisted(() => ({
   extraTxns: [] as unknown[],
   /** (WP7 review) The linked accounts' read: "ok", "loading" or "failed". */
   itemsState: "ok" as "ok" | "loading" | "failed",
+  debtsState: "ok" as "ok" | "loading" | "failed",
+  refetchDebts: vi.fn(),
+  bankState: "loaded" as "loaded" | "cold" | "failed",
+  refetchBank: vi.fn(),
   refetchItems: vi.fn(),
 }));
 
@@ -23,7 +27,10 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
       : h.itemsState === "loading"
         ? { data: undefined, isLoading: true, isError: false, refetch: h.refetchItems }
         : { data: h.items, isLoading: false, isError: false, refetch: h.refetchItems },
-  useListDebts: () => ({ data: h.debts }),
+  useListDebts: () =>
+    h.debtsState === "ok"
+      ? { data: h.debts, isError: false, refetch: h.refetchDebts }
+      : { data: undefined, isError: h.debtsState === "failed", refetch: h.refetchDebts },
   useGetAmexWeeklyPayoff: () => ({ data: h.payoff }),
   // (WP3) A card with no debt row reads Plaid's stored liability figures; the
   // page asks only when such a card exists.
@@ -39,7 +46,9 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   useListCategories: () => ({ data: [{ id: "c1", name: "Dining" }] }),
 }));
 // (WP3) The checking balance is the spine's bank view (WP1), no request of its own.
-vi.mock("@/hooks/useBankBalanceView", () => ({ useBankBalanceView: () => ({ view: h.bank, state: "loaded", refetch: () => {} }) }));
+vi.mock("@/hooks/useBankBalanceView", () => ({
+  useBankBalanceView: () => ({ view: h.bankState === "loaded" ? h.bank : null, state: h.bankState, refetch: h.refetchBank }),
+}));
 // (C10) The Amex page renders the host's `lead` (the Summary panel) itself.
 vi.mock("@/pages/amex", () => ({ default: (p: { lead?: ReactNode }) => { h.amexProps(p); return <div data-testid="amex-ledger">{p.lead}</div>; } }));
 // (C9) The Chase page renders the host's `lead` (the Summary panel) itself.
@@ -54,6 +63,7 @@ import { identityOf } from "@/lib/accountIdentity";
 afterEach(() => {
   cleanup(); h.amexProps.mockClear(); h.chaseProps.mockClear(); h.extraTxns = [];
   h.liabs = []; h.liabEnabled = []; h.itemsState = "ok"; h.refetchItems.mockClear();
+  h.debtsState = "ok"; h.refetchDebts.mockClear(); h.bankState = "loaded"; h.refetchBank.mockClear();
 });
 
 const item = (id: string, inst: string, slug: string, accounts: object[], extra: object = {}) =>
@@ -133,6 +143,58 @@ describe("the checking account is picked BY ID (WP3, on WP1's ids)", () => {
     renderAt("/next/accounts");
     expect(within(screen.getByTestId("account-chip-ext-chk")).getByTestId("chip-balance").textContent).toBe("Balance $2,156.55");
     expect(within(screen.getByTestId("account-chip-ext-other")).getByTestId("chip-balance").textContent).toBe("Balance is not tracked for this account.");
+  });
+});
+
+describe("(WP3b) a read that has not answered is never a state", () => {
+  it("debts loading: cards show a dash and NO plan words; the card's Summary waits", async () => {
+    seed(); h.debtsState = "loading";
+    renderAt("/next/accounts");
+    const amex = screen.getByTestId("account-chip-ext-amex");
+    expect(within(amex).getByTestId("chip-balance").textContent).toBe("—");
+    expect(within(amex).queryByTestId("chip-plan")).toBeNull();
+    expect(amex.textContent).not.toContain("Not on the payoff plan");
+    cleanup();
+    renderAt("/next/accounts/ext-amex");
+    await waitFor(() => expect(screen.getByTestId("amex-ledger")).toBeTruthy());
+    expect(screen.getByTestId("summary-loading")).toBeTruthy();
+    expect(screen.getByTestId("account-summary").textContent).not.toContain("Not on the payoff plan");
+  });
+  it("debts failed: the chip says so, the page and the Summary offer Try again", async () => {
+    seed(); h.debtsState = "failed";
+    renderAt("/next/accounts");
+    expect(within(screen.getByTestId("account-chip-ext-amex")).getByTestId("chip-balance").textContent).toBe("Debts did not load");
+    expect(screen.getByTestId("account-chip-ext-amex").textContent).not.toContain("Not on the payoff plan");
+    fireEvent.click(within(screen.getByTestId("accounts-debts-failed")).getByRole("button", { name: "Try again" }));
+    expect(h.refetchDebts).toHaveBeenCalledTimes(1);
+    cleanup();
+    renderAt("/next/accounts/ext-amex");
+    await waitFor(() => expect(screen.getByTestId("amex-ledger")).toBeTruthy());
+    expect(screen.getByTestId("summary-failed").textContent).toBe("Debts did not load · Try again");
+  });
+  it("spine loading: no depository balance is labelled — not 'Snapshot … not rolled forward' for the one that rolls", async () => {
+    seed(); h.bankState = "cold";
+    h.items = [item("i1", "Chase", "chase", [{ id: "r-chk", accountId: "ext-chk", name: "Total Checking", mask: "4821", type: "depository", subtype: "checking",
+      snapshot: { balance: "3458.98", at: "2026-10-02T15:00:00Z", source: "plaid" } }])];
+    renderAt("/next/accounts");
+    const chk = screen.getByTestId("account-chip-ext-chk");
+    expect(within(chk).getByTestId("chip-balance").textContent).toBe("—");
+    expect(chk.textContent).not.toContain("not rolled forward");
+    cleanup();
+    renderAt("/next/accounts/ext-chk");
+    await waitFor(() => expect(screen.getByTestId("chase-ledger")).toBeTruthy());
+    expect(screen.getByTestId("summary-loading")).toBeTruthy();
+  });
+  it("spine failed: the words and Try again, still no snapshot words", async () => {
+    seed(); h.bankState = "failed";
+    renderAt("/next/accounts");
+    expect(within(screen.getByTestId("account-chip-ext-chk")).getByTestId("chip-balance").textContent).toBe("Balance did not load");
+    fireEvent.click(within(screen.getByTestId("accounts-bank-failed")).getByRole("button", { name: "Try again" }));
+    expect(h.refetchBank).toHaveBeenCalledTimes(1);
+    cleanup();
+    renderAt("/next/accounts/ext-chk");
+    await waitFor(() => expect(screen.getByTestId("chase-ledger")).toBeTruthy());
+    expect(screen.getByTestId("summary-failed").textContent).toBe("Your bank balance did not load · Try again");
   });
 });
 

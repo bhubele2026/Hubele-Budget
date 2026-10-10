@@ -535,6 +535,37 @@ describe("accounts list", () => {
     expect(within(row).getByTestId("dash-account-due").textContent).toContain("the 22nd");
     expect(row.textContent).not.toContain("$0.00");
   });
+  it("(WP3b) debts not answered: card rows wait with NO plan words; a failed read says so with Try again", () => {
+    h.Q.debts = loading;
+    h.Q.liab = ok([]);
+    const a = wrap(<AccountsPanel />);
+    let rows = screen.getAllByTestId("dash-account");
+    expect(within(rows[2]!).queryByTestId("dash-account-plan")).toBeNull();
+    expect(rows[2]!.textContent).not.toContain("Not on the payoff plan");
+    a.unmount();
+    const refetch = vi.fn();
+    h.Q.debts = { ...failed, refetch };
+    wrap(<AccountsPanel />);
+    rows = screen.getAllByTestId("dash-account");
+    expect(within(rows[2]!).getByTestId("dash-account-debts-failed").textContent).toBe("Debts did not load · Try again");
+    expect(within(rows[2]!).queryByTestId("dash-account-plan")).toBeNull();
+    fireEvent.click(within(rows[2]!).getByRole("button", { name: "Try again" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+  it("(WP3b) the spine not answered: depository rows wait — never 'not rolled forward' for the account that rolls", () => {
+    h.Q.items = ok([item("a", "Chase", "chase", [
+      acct("c1", { name: "Total Checking", mask: "5526", snapshot: { balance: "4180.50", at: "2026-10-07T20:00:00Z", source: "plaid" } }),
+      acct("s1", { name: "Premier Savings", mask: "7001", subtype: "savings", snapshot: { balance: "900.00", at: "2026-10-07T20:00:00Z", source: "plaid" } }),
+    ])]);
+    h.spine = { data: undefined, state: "cold", refetch: () => {} };
+    const a = wrap(<AccountsPanel />);
+    expect(screen.queryByTestId("dash-account-snapshot")).toBeNull();
+    expect(screen.getByTestId("dash-accounts").textContent).not.toContain("not rolled forward");
+    a.unmount();
+    h.spine = { data: undefined, state: "failed", refetch: () => {} };
+    wrap(<AccountsPanel />);
+    expect(screen.getAllByTestId("dash-account-bank-failed").map((n) => n.textContent)).toEqual(["Balance did not load.", "Balance did not load."]);
+  });
   it("(WP4) a row off the plan links onto it; a row on the plan does not", () => {
     h.Q.debts = ok([debt("d1", "Amex Platinum", "1500.00", { plaidAccountId: "x1" })]);
     h.Q.liab = ok([{ id: "k1", accountId: "p-k1", balance: "642.18", minPayment: null, suggestedDebt: null }]);

@@ -118,6 +118,11 @@ const positive = (v: string | null | undefined): number | null => {
   const n = num(v);
   return n != null && n > 0 ? n : null;
 };
+/** The debt's real statement (GET /debts `statement`, archived rows included), or null. */
+const statementOf = (debt: CardDebtInput | null | undefined): CardOwedView["statement"] => {
+  const st = debt?.statement;
+  return st ? { date: st.date ?? null, balance: num(st.balance), minPayment: num(st.minPayment), dueDate: st.dueDate ?? null } : null;
+};
 
 /** The one view of a card or loan. Pure. */
 export function cardOwedView({
@@ -135,7 +140,6 @@ export function cardOwedView({
     const total = pendingPaymentTotalOf(debt);
     // An archived row's own balance is the card's only while Plaid keeps it current.
     const bal = onPlan || plaid ? num(debt.balance) : null;
-    const st = debt.statement;
     return {
       state: onPlan ? "on_plan" : "archived",
       onPlan,
@@ -153,9 +157,7 @@ export function cardOwedView({
       creditorCurrent: bal == null
         ? null
         : { balance: bal, asOf: debt.liabilityAsOf ?? debt.lastBalanceUpdate ?? debt.plaidLastSyncedAt ?? null, source: plaid ? "plaid" : "manual" },
-      statement: st
-        ? { date: st.date ?? null, balance: num(st.balance), minPayment: num(st.minPayment), dueDate: st.dueDate ?? null }
-        : null,
+      statement: statementOf(debt),
       minPayment: positive(debt.minPayment),
       dueDay: debt.dueDay ?? null,
       status: onPlan ? CARD_WORDS.onPlan : CARD_WORDS.archived,
@@ -169,7 +171,8 @@ export function cardOwedView({
     owed: null,
     pending: null,
     creditorCurrent: bal == null ? null : { balance: bal, asOf: liability?.lastFetchedAt ?? null, source: "plaid" },
-    statement: null,
+    // An archived debt still has its statements (GET /debts serves them).
+    statement: statementOf(debt),
     minPayment: positive(liability?.minPayment),
     dueDay: liability?.suggestedDebt?.dueDay ?? debt?.dueDay ?? null,
     status: debt ? CARD_WORDS.archived : CARD_WORDS.offPlan,

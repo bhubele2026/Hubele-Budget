@@ -104,6 +104,14 @@ describe("cardOwedView", () => {
     expect(v.minPayment).toBe(40);
     expect(v.dueDay).toBe(22); // the liability list sends no due day for a linked card; the row's stands
   });
+  it("an archived card read from Plaid's figures keeps its debt's real statement", () => {
+    const row = { balance: "0.00", status: "archived", balanceSource: "manual",
+      statement: { date: "2026-09-27", balance: "2980.44", minPayment: "85.00", dueDate: "2026-10-22" } };
+    const v = cardOwedView({ debt: row, liability: { balance: "3842.98", lastFetchedAt: "2026-10-09T13:00:00Z" } });
+    expect(v.creditorCurrent?.balance).toBe(3842.98);
+    expect(v.statement).toEqual({ date: "2026-09-27", balance: 2980.44, minPayment: 85, dueDate: "2026-10-22" });
+    expect(cardOwedView({ liability: { balance: "10.00" } }).statement).toBeNull(); // no debt, no statement
+  });
   it("needsLiability: no debt row, or an archived one", () => {
     expect(needsLiability(null)).toBe(true);
     expect(needsLiability({ status: "archived" })).toBe(true);

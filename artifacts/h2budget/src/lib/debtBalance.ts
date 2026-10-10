@@ -150,9 +150,11 @@ export interface OffPlanCard {
  * linked card with no debt row, or an archived one (`cardOwedView` state
  * `off_plan` / `archived`). A card whose own current balance is $0.00 is left
  * out (it changes nothing about the total); one whose balance is unknown is
- * kept (never assumed to be zero). Inputs already on the landing: the linked
- * cards, `GET /debts`, Plaid's stored liability figures (the Accounts panel's
- * own read) and, for the weekly word, the weekly payoff's cards. Pure.
+ * kept (never assumed to be zero). Inputs: the linked cards, `GET /debts` and
+ * Plaid's stored liability figures (the Accounts panel's own read), all on the
+ * landing already; and, for the weekly word, the weekly payoff's cards — ONE
+ * extra, bounded request (`useAmexQ`, the Amex page's key), asked only when a
+ * card is off the plan. Pure.
  */
 export function offPlanCards(
   cards: readonly { id: string; accountId: string; name: string }[],
