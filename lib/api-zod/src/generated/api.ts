@@ -5129,7 +5129,12 @@ export const GetForecastAvalancheScheduleResponse = zod.object({
     zod.null(),
   ]),
   cashBuffer: zod.number(),
-  bankBalance: zod.number(),
+  bankBalance: zod
+    .number()
+    .nullable()
+    .describe(
+      "The cash signal's bankToday as a number. (WP9b) Null with no bank\nsnapshot: there is no bank balance to show, so never 0 (WP10's\nrule; the schedule still runs off the projection).\n",
+    ),
   scheduleThroughDate: zod.string().nullable(),
 });
 

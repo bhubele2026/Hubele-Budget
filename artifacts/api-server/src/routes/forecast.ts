@@ -60,7 +60,6 @@ import {
 import {
   countDuplicateTransactionsForUser,
   dedupeTransactionsForUser,
-  dedupeTransactionsAcrossAccountsForUser,
 } from "../lib/dedupeTransactions";
 
 const router: IRouter = Router();
@@ -190,11 +189,6 @@ export async function listCheckingAccounts(
   }));
 }
 
-// In-process per-user gate for the forecast safety-net dedupe passes.
-// Each /forecast hit was paying ~600-900ms re-running both passes; once
-// per process per user is sufficient (see commentary below).
-const FORECAST_DEDUPE_DONE = new Set<string>();
-
 router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const householdId = req.householdId!;
@@ -253,45 +247,13 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       );
     }
   }
-  // (#475-followup) Two-stage transaction dedupe heal:
-  //   1. Per-account dedupe (#452): collapses duplicate rows that
-  //      share (plaidAccountId, occurredOn, amount, normalizedDesc).
-  //      This is the dominant case once `dedupePlaidAccountsForUser`
-  //      has already collapsed duplicate plaid_accounts rows — every
-  //      twin is now stacked on the same surviving account_id.
-  //   2. Cross-account dedupe: collapses twins that still live under
-  //      different `plaid_account_id` strings (an orphan + a live
-  //      account from a relink that hasn't been collapsed yet).
-  // Both passes are idempotent — clean data is a no-op. We run them
-  // best-effort so the page never fails just because dedupe choked.
-  //
-  // Perf: gate to once per process per user. These are safety-net heals,
-  // not a per-request responsibility — they re-scan every transaction for
-  // the user on every call and were costing ~600-900ms per /forecast hit
-  // (the page loads on every dashboard mount). The user-triggered cleanup
-  // path (POST /forecast/dedupe-transactions, route below) is unaffected
-  // and continues to run on demand. New duplicates introduced after the
-  // first run are still caught by the next process boot or by the explicit
-  // cleanup button on Settings.
-  if (!FORECAST_DEDUPE_DONE.has(userId)) {
-    try {
-      await dedupeTransactionsForUser(userId);
-    } catch (err) {
-      console.error(
-        "[forecast] per-account transaction dedupe failed",
-        { userId, err: err instanceof Error ? err.message : String(err) },
-      );
-    }
-    try {
-      await dedupeTransactionsAcrossAccountsForUser(userId);
-    } catch (err) {
-      console.error(
-        "[forecast] cross-account transaction dedupe failed",
-        { userId, err: err instanceof Error ? err.message : String(err) },
-      );
-    }
-    FORECAST_DEDUPE_DONE.add(userId);
-  }
+  // (WP9b) No transaction dedupe here either: GET /forecast is a read and
+  // changes no transaction rows. Both passes run when a bank sync runs
+  // (syncPlaidItem: the per-account pass over every account the sync touched,
+  // then the cross-account pass), and the per-account pass over every account
+  // runs on demand from Settings (POST /forecast/dedupe-transactions, below).
+  // They used to run here once per process per user (#475-followup), so the
+  // first page read after a boot could delete rows.
   const days = Number(req.query.days) || settings.daysAhead || 90;
 
   // `now` is the instant; `today` is the household's date (America/Chicago) as a
