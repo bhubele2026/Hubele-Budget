@@ -516,6 +516,8 @@ export * from "./spendingFactsUncategorized";
 export * from "./spendingFactsUncategorizedSampleMerchantsItem";
 export * from "./spendingFactsUnplanned";
 export * from "./spendingFactsUnplannedTransactionsItem";
+export * from "./spendingReconciliation";
+export * from "./spendingReconciliationTerms";
 export * from "./spine";
 export * from "./spineBank";
 export * from "./spineBankSnapshot";

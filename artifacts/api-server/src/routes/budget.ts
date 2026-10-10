@@ -3,6 +3,9 @@ import { and, eq, ne, sql, asc, desc, lt, gte, inArray, isNull, notInArray } fro
 import { findSupersededPendingForRange } from "../lib/supersededPending";
 import { uncategorizedCategoryIds } from "../lib/pendingFiling";
 import { aggregateBudgetMonth } from "../lib/budgetActuals";
+import { reconcileMonthSpend, type MonthSpendReconciliation } from "../lib/spendingReconcile";
+import { TRACKING_START } from "../lib/spendingFacts";
+import { todayDate } from "../lib/billsSummary";
 import { expandSplits, loadSplitsByTxn } from "../lib/categorizer/splits";
 import {
   db,
@@ -47,7 +50,7 @@ import {
   SEED_MAPPING_RULES,
   SEED_MAPPING_PRIORITY,
 } from "../lib/mappingSeed";
-import { expandItem, parseISO, addDays, isPastOneTime } from "../lib/cashSignal";
+import { expandItem, parseISO, addDays, isPastOneTime, fmtISO } from "../lib/cashSignal";
 import { addDaysISO, householdTodayISO } from "../lib/householdClock";
 import { logger } from "../lib/logger";
 import { planSourceOf, rollUpPlanBySource } from "../lib/budgetPlanSource";
@@ -1724,6 +1727,7 @@ router.get(
         allowance: buildAllowanceRollup([], { weekly: "0", monthly: "0", unplanned: "0" }, 30),
         replacedPendingIds: [],
         inheritedCategories: [],
+        spendingReconciliation: null,
       });
       return;
     }
@@ -1911,6 +1915,11 @@ router.get(
             // (round 4, review H1/H2) THE signal `effectiveFiling` decides
             // hand-vs-automatic and transfer inheritance from.
             isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
+            // (WP6) What the one spending rule reads beside the filing, so the
+            // month's reconciliation with household spending uses these rows.
+            occurredOn: transactionsTable.occurredOn,
+            plaidAccountId: transactionsTable.plaidAccountId,
+            pfcDetailed: transactionsTable.pfcDetailed,
           })
           .from(transactionsTable)
           .where(
@@ -2147,6 +2156,41 @@ router.get(
     const pct = (n: number, d: number) =>
       d > 0 ? ((n / d) * 100).toFixed(1) : "0.0";
 
+    // ⭐ (WP6) Why "this month" here and household spending to date differ —
+    // the same rows, the same pairs and filing, the same lines, split into
+    // named dollar terms (`reconcileMonthSpend`). Today is the spine's clock.
+    // Null before spending is tracked (`TRACKING_START`): household spending
+    // has no window there to compare with.
+    const todayISO = fmtISO(todayDate());
+    let spendingReconciliation: ReturnType<typeof presentReconciliation> | null = null;
+    if (monthStart >= TRACKING_START) {
+      const recon = reconcileMonthSpend(
+        snapshot.monthRows,
+        snapshot.supersede,
+        { uncategorizedIds },
+        {
+          categoriesById: new Map(allCats.map((c) => [c.id, { name: c.name, debtId: c.debtId, kind: c.kind }])),
+          debtCategoryIds: new Set(allCats.filter((c) => c.debtId).map((c) => c.id)),
+        },
+        splitParts,
+        {
+          today: todayISO,
+          expenseLineIds: new Set(responseLines.filter((l) => l.kind !== "income").map((l) => l.categoryId)),
+        },
+      );
+      if (recon.unexplained !== 0) {
+        req.log?.warn?.(
+          { householdId, monthStart, unexplainedCents: recon.unexplained },
+          "[budget] the month's spending reconciliation does not close",
+        );
+      }
+      const monthLast = addDaysISO(monthEndStr, -1);
+      spendingReconciliation = presentReconciliation(
+        recon,
+        todayISO < monthStart ? null : todayISO < monthLast ? todayISO : monthLast,
+      );
+    }
+
     const summary = {
       income: { budget: incomeBudget.toFixed(2), actual: incomeActual.toFixed(2) },
       expenses: { budget: expenseBudget.toFixed(2), actual: expenseActual.toFixed(2) },
@@ -2212,9 +2256,34 @@ router.get(
       allowance,
       replacedPendingIds: replacedInMonth,
       inheritedCategories: monthSpend.inheritedCategories,
+      spendingReconciliation,
     });
   },
 );
+
+/** (WP6) The reconciliation in dollars (two-decimal strings), as `SpendingReconciliation` serves it. */
+function presentReconciliation(r: MonthSpendReconciliation, through: string | null) {
+  const d = (cents: number) => (cents / 100).toFixed(2);
+  return {
+    budgetActual: d(r.budgetActual),
+    householdSpendToDate: d(r.householdSpendToDate),
+    through,
+    difference: d(r.difference),
+    terms: {
+      futureDated: d(r.terms.futureDated),
+      cardPayments: d(r.terms.cardPayments),
+      debtPayments: d(r.terms.debtPayments),
+      excludedNames: d(r.terms.excludedNames),
+      reimbursable: d(r.terms.reimbursable),
+      bankNoise: d(r.terms.bankNoise),
+      splitsOutsideLines: d(r.terms.splitsOutsideLines),
+      uncategorized: d(r.terms.uncategorized),
+      parkedUncategorized: d(r.terms.parkedUncategorized),
+      refundsNetted: d(r.terms.refundsNetted),
+    },
+    unexplained: d(r.unexplained),
+  };
+}
 
 router.post("/budget/lines", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpsertBudgetLineBody.safeParse(req.body);

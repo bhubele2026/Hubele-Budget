@@ -77,6 +77,8 @@ import moneyRouter from "../routes/money";
 // (PR-D) `/debt-plan` owns `debt.nextMilestone` and `debt.paidDownMtd`
 // (V5: and `debt.confirmedPaymentsMtd` / `debt.newChargesMtd`).
 import debtPlanRouter from "../routes/debtPlan";
+// (WP6) The Budget month quotes `spentMonth` in its spending reconciliation.
+import budgetRouter from "../routes/budget";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import { householdTodayDate } from "../lib/householdClock";
@@ -101,6 +103,7 @@ app.use(dashboardRouter);
 app.use(bankBalanceExplainRouter);
 app.use(moneyRouter);
 app.use(debtPlanRouter);
+app.use(budgetRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -824,6 +827,23 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     // previous month, so it can (it failed every run that week: 221.14 month vs 285.24 week).
     expect(spine.spentMonth).toBeGreaterThan(0);
     if (weekStartFor(TODAY) >= MONTH_START_ISO) expect(spine.spentMonth).toBeGreaterThanOrEqual(spine.spentWeek);
+  });
+
+  it("(WP6) the Budget month's spending reconciliation quotes spentMonth as household spending to date, and closes", async () => {
+    const [spine, month] = await Promise.all([
+      get<Spine>("/spine"),
+      get<{
+        summary: { expenses: { actual: string } };
+        spendingReconciliation: { budgetActual: string; householdSpendToDate: string; through: string | null; unexplained: string } | null;
+      }>(`/budget/months/${MONTH_START_ISO}`),
+    ]);
+    const recon = month.spendingReconciliation!;
+    expect(recon.householdSpendToDate).toBe(spine.spentMonth.toFixed(2));
+    expect(recon.budgetActual).toBe(month.summary.expenses.actual);
+    expect(recon.through).toBe(TODAY_ISO);
+    expect(recon.unexplained).toBe("0.00");
+    // Not vacuous: the fixture's purchases this month are household spending.
+    expect(spine.spentMonth).toBeGreaterThan(0);
   });
 
   it("(PR-H) spentMonth + spentWeek equal the household money classifier (mode 'today') over the spine's own windows", async () => {

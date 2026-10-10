@@ -6033,6 +6033,83 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         categoryId: string;
         transactionId: string;
     }>, "many">;
+    spendingReconciliation: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        budgetActual: zod.ZodString;
+        householdSpendToDate: zod.ZodString;
+        through: zod.ZodNullable<zod.ZodString>;
+        difference: zod.ZodString;
+        terms: zod.ZodObject<{
+            futureDated: zod.ZodString;
+            cardPayments: zod.ZodString;
+            debtPayments: zod.ZodString;
+            excludedNames: zod.ZodString;
+            reimbursable: zod.ZodString;
+            bankNoise: zod.ZodString;
+            splitsOutsideLines: zod.ZodString;
+            uncategorized: zod.ZodString;
+            parkedUncategorized: zod.ZodString;
+            refundsNetted: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            reimbursable: string;
+            uncategorized: string;
+            futureDated: string;
+            cardPayments: string;
+            debtPayments: string;
+            excludedNames: string;
+            bankNoise: string;
+            splitsOutsideLines: string;
+            parkedUncategorized: string;
+            refundsNetted: string;
+        }, {
+            reimbursable: string;
+            uncategorized: string;
+            futureDated: string;
+            cardPayments: string;
+            debtPayments: string;
+            excludedNames: string;
+            bankNoise: string;
+            splitsOutsideLines: string;
+            parkedUncategorized: string;
+            refundsNetted: string;
+        }>;
+        unexplained: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        budgetActual: string;
+        householdSpendToDate: string;
+        through: string | null;
+        difference: string;
+        terms: {
+            reimbursable: string;
+            uncategorized: string;
+            futureDated: string;
+            cardPayments: string;
+            debtPayments: string;
+            excludedNames: string;
+            bankNoise: string;
+            splitsOutsideLines: string;
+            parkedUncategorized: string;
+            refundsNetted: string;
+        };
+        unexplained: string;
+    }, {
+        budgetActual: string;
+        householdSpendToDate: string;
+        through: string | null;
+        difference: string;
+        terms: {
+            reimbursable: string;
+            uncategorized: string;
+            futureDated: string;
+            cardPayments: string;
+            debtPayments: string;
+            excludedNames: string;
+            bankNoise: string;
+            splitsOutsideLines: string;
+            parkedUncategorized: string;
+            refundsNetted: string;
+        };
+        unexplained: string;
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     monthStart: string;
     monthPinned: boolean;
@@ -6176,6 +6253,25 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         transactionId: string;
     }[];
     note?: string | null | undefined;
+    spendingReconciliation?: {
+        budgetActual: string;
+        householdSpendToDate: string;
+        through: string | null;
+        difference: string;
+        terms: {
+            reimbursable: string;
+            uncategorized: string;
+            futureDated: string;
+            cardPayments: string;
+            debtPayments: string;
+            excludedNames: string;
+            bankNoise: string;
+            splitsOutsideLines: string;
+            parkedUncategorized: string;
+            refundsNetted: string;
+        };
+        unexplained: string;
+    } | null | undefined;
 }, {
     monthStart: string;
     monthPinned: boolean;
@@ -6319,6 +6415,25 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         transactionId: string;
     }[];
     note?: string | null | undefined;
+    spendingReconciliation?: {
+        budgetActual: string;
+        householdSpendToDate: string;
+        through: string | null;
+        difference: string;
+        terms: {
+            reimbursable: string;
+            uncategorized: string;
+            futureDated: string;
+            cardPayments: string;
+            debtPayments: string;
+            excludedNames: string;
+            bankNoise: string;
+            splitsOutsideLines: string;
+            parkedUncategorized: string;
+            refundsNetted: string;
+        };
+        unexplained: string;
+    } | null | undefined;
 }>;
 /**
  * @summary Seed default categories and May 2026 budget lines (idempotent)
@@ -7892,6 +8007,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             offCurve: zod.ZodBoolean;
             remainderAmount: zod.ZodOptional<zod.ZodString>;
         }, "strip", zod.ZodTypeAny, {
+            difference: string;
             txnAmount: string;
             planKey: string;
             planAmount: string;
@@ -7899,13 +8015,13 @@ export declare const GetForecastResponse: zod.ZodObject<{
             confidence: string;
             planItemId: string;
             planDate: string;
-            difference: string;
             dayDelta: number;
             ambiguous: boolean;
             tier: 1 | 2 | 3;
             offCurve: boolean;
             remainderAmount?: string | undefined;
         }, {
+            difference: string;
             txnAmount: string;
             planKey: string;
             planAmount: string;
@@ -7913,7 +8029,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
             confidence: string;
             planItemId: string;
             planDate: string;
-            difference: string;
             dayDelta: number;
             ambiguous: boolean;
             tier: 1 | 2 | 3;
@@ -7937,6 +8052,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
         matches?: {
+            difference: string;
             txnAmount: string;
             planKey: string;
             planAmount: string;
@@ -7944,7 +8060,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
             confidence: string;
             planItemId: string;
             planDate: string;
-            difference: string;
             dayDelta: number;
             ambiguous: boolean;
             tier: 1 | 2 | 3;
@@ -8028,6 +8143,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
         matches?: {
+            difference: string;
             txnAmount: string;
             planKey: string;
             planAmount: string;
@@ -8035,7 +8151,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
             confidence: string;
             planItemId: string;
             planDate: string;
-            difference: string;
             dayDelta: number;
             ambiguous: boolean;
             tier: 1 | 2 | 3;
@@ -8276,6 +8391,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
         matches?: {
+            difference: string;
             txnAmount: string;
             planKey: string;
             planAmount: string;
@@ -8283,7 +8399,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
             confidence: string;
             planItemId: string;
             planDate: string;
-            difference: string;
             dayDelta: number;
             ambiguous: boolean;
             tier: 1 | 2 | 3;
@@ -8471,6 +8586,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
         matches?: {
+            difference: string;
             txnAmount: string;
             planKey: string;
             planAmount: string;
@@ -8478,7 +8594,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
             confidence: string;
             planItemId: string;
             planDate: string;
-            difference: string;
             dayDelta: number;
             ambiguous: boolean;
             tier: 1 | 2 | 3;
@@ -8961,6 +9076,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         offCurve: zod.ZodBoolean;
         remainderAmount: zod.ZodOptional<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
+        difference: string;
         txnAmount: string;
         planKey: string;
         planAmount: string;
@@ -8968,13 +9084,13 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         confidence: string;
         planItemId: string;
         planDate: string;
-        difference: string;
         dayDelta: number;
         ambiguous: boolean;
         tier: 1 | 2 | 3;
         offCurve: boolean;
         remainderAmount?: string | undefined;
     }, {
+        difference: string;
         txnAmount: string;
         planKey: string;
         planAmount: string;
@@ -8982,7 +9098,6 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         confidence: string;
         planItemId: string;
         planDate: string;
-        difference: string;
         dayDelta: number;
         ambiguous: boolean;
         tier: 1 | 2 | 3;
@@ -9006,6 +9121,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     maxSafeExtra: string;
     snapshotAt?: string | null | undefined;
     matches?: {
+        difference: string;
         txnAmount: string;
         planKey: string;
         planAmount: string;
@@ -9013,7 +9129,6 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         confidence: string;
         planItemId: string;
         planDate: string;
-        difference: string;
         dayDelta: number;
         ambiguous: boolean;
         tier: 1 | 2 | 3;
@@ -9097,6 +9212,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     maxSafeExtra: string;
     snapshotAt?: string | null | undefined;
     matches?: {
+        difference: string;
         txnAmount: string;
         planKey: string;
         planAmount: string;
@@ -9104,7 +9220,6 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         confidence: string;
         planItemId: string;
         planDate: string;
-        difference: string;
         dayDelta: number;
         ambiguous: boolean;
         tier: 1 | 2 | 3;
@@ -9735,19 +9850,19 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         replacedPending: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         reimbursable: number;
+        cardPayments: number;
         transfersTotal: number;
         debtPaymentsTotal: number;
         reimbursementTotal: number;
         ignoreTotal: number;
-        cardPayments: number;
         replacedPending: number;
     }, {
         reimbursable: number;
+        cardPayments: number;
         transfersTotal: number;
         debtPaymentsTotal: number;
         reimbursementTotal: number;
         ignoreTotal: number;
-        cardPayments: number;
         replacedPending: number;
     }>;
     byCategory: zod.ZodArray<zod.ZodObject<{
@@ -9933,11 +10048,11 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
     };
     excluded: {
         reimbursable: number;
+        cardPayments: number;
         transfersTotal: number;
         debtPaymentsTotal: number;
         reimbursementTotal: number;
         ignoreTotal: number;
-        cardPayments: number;
         replacedPending: number;
     };
     byCategory: {
@@ -10031,11 +10146,11 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
     };
     excluded: {
         reimbursable: number;
+        cardPayments: number;
         transfersTotal: number;
         debtPaymentsTotal: number;
         reimbursementTotal: number;
         ignoreTotal: number;
-        cardPayments: number;
         replacedPending: number;
     };
     byCategory: {
@@ -13042,13 +13157,13 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             ledger: zod.ZodString;
             unexplained: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
+            unexplained: string;
             ledger: string;
             bank: string;
-            unexplained: string;
         }, {
+            unexplained: string;
             ledger: string;
             bank: string;
-            unexplained: string;
         }>>>;
     }, "strip", zod.ZodTypeAny, {
         itemId: string;
@@ -13081,9 +13196,9 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
         balanceDrift?: {
+            unexplained: string;
             ledger: string;
             bank: string;
-            unexplained: string;
         } | null | undefined;
     }, {
         itemId: string;
@@ -13116,9 +13231,9 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
         balanceDrift?: {
+            unexplained: string;
             ledger: string;
             bank: string;
-            unexplained: string;
         } | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
@@ -13153,9 +13268,9 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
         balanceDrift?: {
+            unexplained: string;
             ledger: string;
             bank: string;
-            unexplained: string;
         } | null | undefined;
     }[];
 }, {
@@ -13190,9 +13305,9 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
         balanceDrift?: {
+            unexplained: string;
             ledger: string;
             bank: string;
-            unexplained: string;
         } | null | undefined;
     }[];
 }>;
