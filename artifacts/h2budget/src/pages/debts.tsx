@@ -4,6 +4,8 @@ import {
   useGetAvalancheSettings,
   useGetAvalancheExtra,
   useListDebtBalanceHistory,
+  useListPlaidLiabilityAccounts,
+  getListPlaidLiabilityAccountsQueryKey,
 } from "@workspace/api-client-react";
 import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
 import { PageSkeleton } from "@/components/page-skeleton";
@@ -28,7 +30,7 @@ import {
 } from "@/lib/avalanche";
 import { debtToSim, effectiveDebtBalance } from "@/lib/debtBalance";
 import { DebtPendingHint } from "@/components/debt-pending-hint";
-import { CARD_WORDS } from "@/lib/cardBalance";
+import { CARD_WORDS, archivedCardWords } from "@/lib/cardBalance";
 
 const MANUAL_EXTRA_CAP = 5000;
 
@@ -99,6 +101,22 @@ export default function DebtsPage() {
   const { data: settings } = useGetAvalancheSettings();
   const { data: resolvedExtra } = useGetAvalancheExtra();
   const { data: balanceHistory } = useListDebtBalanceHistory();
+  // (WP3c) An archived debt's "Paid off" vs "Archived" is the card model's ONE
+  // decision (`archivedCardWords`): Plaid's stored figure when there is one,
+  // else the row's balance. So this page reads Plaid's stored figures too —
+  // the dashboard's and the accounts page's read, same key, never `refresh`,
+  // asked only when an archived debt is linked to an account.
+  const needLiabilities = (debts ?? []).some((d) => d.status !== "active" && !!d.plaidAccountId);
+  const { data: liabs, isError: liabsFailed } = useListPlaidLiabilityAccounts(undefined, {
+    query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * 60_000, enabled: needLiabilities },
+  });
+  const liabsPending = needLiabilities && liabs === undefined && !liabsFailed;
+  /** An archived debt's words, or null while Plaid's figure is still on its way. */
+  const archivedWordsOf = (d: Debt): string | null => {
+    if (d.plaidAccountId && liabsPending) return null;
+    const liability = d.plaidAccountId ? (liabs ?? []).find((l) => l.id === d.plaidAccountId) ?? null : null;
+    return archivedCardWords({ debt: d, liability });
+  };
 
   const killMonthByDebtId = useMemo(() => {
     const m = new Map<string, Date | null>();
@@ -192,13 +210,13 @@ export default function DebtsPage() {
   // Netted, so a debt whose tagged payments already clear it counts as
   // cleared here exactly as it does in the /avalanche active-debt filter.
   // (WP3) An archived debt is off the payoff plan whatever it still reports:
-  // never "Active", never a target (the simulator already skips it), the same
-  // rule as the card model (`lib/cardBalance.ts`: "Paid off · not on the
-  // payoff plan").
+  // never "Active", never a target (the simulator already skips it). (WP3c) It
+  // is "Cleared" only when the shared decision says paid off; one still owing
+  // (or unknown) is in neither count.
   const paidOffCount = sortedDebts.filter((d) =>
-    d.status !== "active" || isPaidOff(effectiveDebtBalance(d)),
+    d.status !== "active" ? archivedWordsOf(d) === CARD_WORDS.archived : isPaidOff(effectiveDebtBalance(d)),
   ).length;
-  const activeCount = sortedDebts.length - paidOffCount;
+  const activeCount = sortedDebts.filter((d) => d.status === "active" && !isPaidOff(effectiveDebtBalance(d))).length;
 
   const payoffFor = (debtId: string): { date: Date | null; reason: string } => {
     const date = killById.get(debtId) ?? null;
@@ -258,10 +276,14 @@ export default function DebtsPage() {
             <tbody>
               {sortedDebts.map((debt) => {
                 const balanceNum = effectiveDebtBalance(debt);
-                // An archived row still carrying a balance is off the plan, not
-                // owed on it: no plan balance, and the payoff cell says so.
-                const offPlan = debt.status !== "active" && !isPaidOff(balanceNum);
-                const paidOff = offPlan || isPaidOff(balanceNum);
+                // (WP3c) An archived row reads the card model's ONE decision:
+                // "Paid off" only at a best-known $0.00; otherwise "Archived"
+                // (still owing, or the balance unknown) — no plan balance, and the
+                // payoff cell says why. Null while Plaid's figure is on its way.
+                const archived = debt.status !== "active";
+                const words = archived ? archivedWordsOf(debt) : null;
+                const offPlan = archived && words !== CARD_WORDS.archived;
+                const paidOff = archived || isPaidOff(balanceNum);
                 const originalNum = Number(debt.originalBalance ?? 0);
                 const paidRatio =
                   originalNum > 0
@@ -290,9 +312,13 @@ export default function DebtsPage() {
                       <td className={td}>
                         {/* (WP6 live check) Archived while it still reports a
                             balance: "Archived", never "Paid off". */}
-                        <span className={offPlan ? "chip gray" : "chip ok"} data-testid="debt-card-paid-off-headline">
-                          {offPlan ? "Archived" : "Paid off"}
-                        </span>
+                        {archived && words == null ? (
+                          <span className="skeleton inline-block h-4 w-16 rounded" aria-busy="true" data-testid="debt-card-paid-off-pending" />
+                        ) : (
+                          <span className={offPlan ? "chip gray" : "chip ok"} data-testid="debt-card-paid-off-headline">
+                            {offPlan ? "Archived" : "Paid off"}
+                          </span>
+                        )}
                       </td>
                       <td className={`${tdNum} text-neutral-400`}>{fmtPct(Number(debt.apr))}</td>
                       <td className={`${tdNum} text-neutral-400`}>{offPlan ? "—" : formatCurrency(0)}</td>
@@ -302,7 +328,11 @@ export default function DebtsPage() {
                         data-testid="debt-card-paid-off-month"
                         data-debt-id={debt.id}
                       >
-                        {offPlan ? CARD_WORDS.offPlan : killLabel ? `Paid off ${killLabel}` : "Paid off"}
+                        {archived && words == null
+                          ? null
+                          : offPlan
+                            ? words === CARD_WORDS.archivedUnknown ? "Balance unknown" : CARD_WORDS.offPlan
+                            : killLabel ? `Paid off ${killLabel}` : "Paid off"}
                       </td>
                       <td className={td} />
                       <td className={td} />

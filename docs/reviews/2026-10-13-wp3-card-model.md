@@ -60,3 +60,18 @@ On the branch after the WP7b merge (710196ab; this note is the only later change
 - `dupmask` fixture: the first Chase-ledger read runs the existing one-time duplicate-account collapse, which folds the re-linked twin's ATM row into checking ($4,812.37 → $4,752.37 on later pages; consistent within each page). Pre-existing.
 - The plan's `householdScenario` extension (sinceNet/sinceCount, Platinum liability, feed payment + refund) was not in this lane's brief.
 - E2E (Clerk keys) not run.
+
+## WP3c addendum: one archived decision (branch `fin/wp3c-archived-rule`)
+- **Problem:** "Paid off" vs "Archived" was decided from two different balances.
+  - The Debts page used the debt row's balance.
+  - The card model used Plaid's figure, or ignored a manual row.
+  - A $0.00 row that Plaid says owes $412.50 read "Archived" on Accounts but "Paid off" on Debts (case A). A manual $12 row with no Plaid figure read the reverse (case B).
+- **Fix:** `archivedCardWords({debt, liability})` (`lib/cardBalance.ts`) is now the one decision. The best-known current balance is Plaid's stored figure, else the row's. It gives $0.00 → "Paid off · not on the payoff plan", a balance → "Archived · not on the payoff plan", and none known → "Archived · balance unknown".
+  - The card's current balance follows the same rule.
+  - The Debts page calls the helper, reading Plaid's stored figures through the shared liabilities key (only for a linked archived debt). It waits while that read loads.
+  - Its "Cleared" tile now counts only the paid-off ones.
+- **Tests:** cases A and B in `cardBalance.test.ts`, `accountsParity.test.tsx` (every surface, the Debts page included) and `debtsPagePaidOff.test.tsx` (plus paid off, Cleared, waiting).
+- **Figures that move:**
+  - Case A on Debts: "Paid off" → "Archived".
+  - Case B on Accounts and the dashboard: "Paid off · not on the payoff plan" (no figure) → "Archived · not on the payoff plan", and the card's current balance shows $12.00.
+  - No amount changes.

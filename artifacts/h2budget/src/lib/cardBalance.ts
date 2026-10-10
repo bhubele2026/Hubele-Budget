@@ -23,15 +23,14 @@ import { dayOf } from "./accountFreshness";
  *   - `statement`       a real statement (the API's `statement`, once it sends
  *                       one) — never the current balance under another name
  *
- * An archived debt is never "Owed" and never in a total; it reads "Paid off ·
- * not on the payoff plan" only when its card's current balance is $0.00 or
- * unknown, and "Archived · not on the payoff plan" while the card still
- * carries a balance. Its card's own current balance is Plaid's stored liability figure
- * when there is one, else the row's only while Plaid keeps the row current
- * (`balanceSource: "plaid"`): a manual archived row holds the $0.00 it was
- * archived at, not what the card owes now that it is in use again. A card with
- * no debt row reads Plaid's stored liability figures and is "Not on the payoff
- * plan". A field no source has is null, never 0.
+ * An archived debt is never "Owed" and never in a total. Its words and its
+ * card's current balance come from ONE decision (`archivedCardWords`, shared
+ * with the Debts page): the best-known current balance — Plaid's stored
+ * liability figure when there is one, else the debt row's balance — decides
+ * "Paid off · not on the payoff plan" ($0.00), "Archived · not on the payoff
+ * plan" (a balance) or "Archived · balance unknown". A card with no debt row
+ * reads Plaid's stored liability figures and is "Not on the payoff plan". A
+ * field no source has is null, never 0.
  */
 
 /** The debt fields this model reads. `liabilityAsOf` and `statement` arrive with
@@ -75,6 +74,8 @@ export const CARD_WORDS = {
   archived: "Paid off · not on the payoff plan",
   /** (WP6 live check) Archived, yet the card still carries a balance: never "Paid off". */
   archivedOwing: "Archived · not on the payoff plan",
+  /** (WP3c) Archived, and no balance is known for it (neither Plaid nor the row). */
+  archivedUnknown: "Archived · balance unknown",
   offPlan: "Not on the payoff plan",
   nothing: "No balance, minimum or due date reported for this card yet.",
 } as const;
@@ -128,9 +129,23 @@ const statementOf = (debt: CardDebtInput | null | undefined): CardOwedView["stat
   return st ? { date: st.date ?? null, balance: num(st.balance), minPayment: num(st.minPayment), dueDate: st.dueDate ?? null } : null;
 };
 
-/** An archived card's words: "Paid off" only at $0.00 or an unknown balance. */
-const archivedWords = (bal: number | null | undefined): string =>
-  bal != null && Math.abs(bal) >= 0.005 ? CARD_WORDS.archivedOwing : CARD_WORDS.archived;
+/**
+ * ⭐ (WP3c) THE ONE ARCHIVED DECISION — the card model (dashboard row, chip,
+ * Summary) and the Debts page both call this, so "Paid off" and "Archived"
+ * can never be decided from two different balances. The best-known current
+ * balance is Plaid's stored figure when there is one, else the debt row's:
+ *   - $0.00     → "Paid off · not on the payoff plan"
+ *   - a balance → "Archived · not on the payoff plan"
+ *   - unknown   → "Archived · balance unknown"
+ */
+export function archivedBalance(input: { debt?: { balance?: string | null } | null; liability?: { balance?: string | null } | null }): number | null {
+  return num(input.liability?.balance) ?? num(input.debt?.balance);
+}
+export function archivedCardWords(input: { debt?: { balance?: string | null } | null; liability?: { balance?: string | null } | null }): string {
+  const bal = archivedBalance(input);
+  if (bal == null) return CARD_WORDS.archivedUnknown;
+  return Math.abs(bal) < 0.005 ? CARD_WORDS.archived : CARD_WORDS.archivedOwing;
+}
 
 /** The one view of a card or loan. Pure. */
 export function cardOwedView({
@@ -146,8 +161,9 @@ export function cardOwedView({
     const onPlan = debt.status === "active";
     const plaid = debt.balanceSource === "plaid";
     const total = pendingPaymentTotalOf(debt);
-    // An archived row's own balance is the card's only while Plaid keeps it current.
-    const bal = onPlan || plaid ? num(debt.balance) : null;
+    // On the plan, the row's balance; archived with no Plaid figure, the row's
+    // balance is the best known (`archivedBalance`).
+    const bal = num(debt.balance);
     return {
       state: onPlan ? "on_plan" : "archived",
       onPlan,
@@ -168,7 +184,7 @@ export function cardOwedView({
       statement: statementOf(debt),
       minPayment: positive(debt.minPayment),
       dueDay: debt.dueDay ?? null,
-      status: onPlan ? CARD_WORDS.onPlan : archivedWords(bal),
+      status: onPlan ? CARD_WORDS.onPlan : archivedCardWords({ debt, liability }),
     };
   }
   const bal = num(liability?.balance);
@@ -183,13 +199,13 @@ export function cardOwedView({
     statement: statementOf(debt),
     minPayment: positive(liability?.minPayment),
     dueDay: liability?.suggestedDebt?.dueDay ?? debt?.dueDay ?? null,
-    status: debt ? archivedWords(bal) : CARD_WORDS.offPlan,
+    status: debt ? archivedCardWords({ debt, liability }) : CARD_WORDS.offPlan,
   };
 }
 
 /**
  * Whether a card needs Plaid's stored liability figures: no debt row at all, or
- * an archived one (whose own balance may be the $0.00 it was archived at).
+ * an archived one (Plaid's figure, when there is one, beats the row's).
  */
 export const needsLiability = (debt: { status: string } | null | undefined): boolean => !debt || debt.status !== "active";
 
