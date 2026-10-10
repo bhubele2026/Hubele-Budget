@@ -27,6 +27,7 @@ const SEEDED_DEBTS: Debt[] = [
     name: "Amex Delta",
     apr: "0.2849",
     balance: "1000",
+    originalBalance: "1000", // every debt GET /debts returns carries its anchor
     minPayment: "50",
     payment: "50",
     status: "active",
@@ -41,6 +42,7 @@ const SEEDED_DEBTS: Debt[] = [
     name: "Chase Visa",
     apr: "0.18",
     balance: "500",
+    originalBalance: "500", // every debt GET /debts returns carries its anchor
     minPayment: "30",
     payment: "30",
     status: "active",
@@ -55,6 +57,7 @@ const SEEDED_DEBTS: Debt[] = [
     name: "Mattress Firm",
     apr: "0.3499",
     balance: "5000",
+    originalBalance: "5000", // every debt GET /debts returns carries its anchor
     minPayment: "33",
     payment: "33",
     status: "active",

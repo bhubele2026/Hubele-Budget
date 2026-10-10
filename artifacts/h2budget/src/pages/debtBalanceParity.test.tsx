@@ -125,6 +125,11 @@ vi.mock("@workspace/api-client-react", () => {
     useGetSettings: () => ({ data: undefined }),
     useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
     useGetAmexWeeklyPayoff: () => ({ data: undefined, isLoading: false }),
+    // (WP4) The debt tile names cards off the plan from the linked accounts (none here).
+    useListPlaidItems: () => ({ data: [], isLoading: false }),
+    getListPlaidItemsQueryKey: () => ["plaid-items"],
+    useListPlaidLiabilityAccounts: () => ({ data: undefined, isLoading: false }),
+    getListPlaidLiabilityAccountsQueryKey: () => ["liability-accounts"],
     useUpdateSettings: mutation2,
     useBulkCreateDebtsFromPlaidAccounts: mutation2,
     getGetSettingsQueryKey: () => ["settings"],
@@ -261,7 +266,7 @@ describe("Debt balance parity — Debts page vs Avalanche page (owner-authorized
 });
 
 describe("⭐ The amount left — dashboard debt tile vs Avalanche vs Reports (owner's decision, 2026-10-09)", () => {
-  it("the dashboard's \"$X left across …\" equals the Avalanche page's Totals row, to the cent", () => {
+  it("the dashboard's \"$X left on your payoff plan (…)\" equals the Avalanche page's Totals row, to the cent", () => {
     renderPage(<AvalanchePage />);
     const totals = screen.getByText("Totals").closest("tr")!;
     const avalancheTotal = (totals.querySelectorAll("td")[1]?.textContent ?? "").trim();
@@ -279,7 +284,7 @@ describe("⭐ The amount left — dashboard debt tile vs Avalanche vs Reports (o
       const left = screen.getByTestId("dash-debt-left").textContent ?? "";
       // Netted: $8,120.55 + $500.00, never the raw $8,420.55 the creditor reports.
       expect(avalancheTotal).toBe("$8,620.55");
-      expect(left).toContain(`${avalancheTotal} left across`);
+      expect(left).toContain(`${avalancheTotal} left on your payoff plan (`);
       // …and the scope is named.
       expect(left).toContain("Amex Delta");
       expect(left).toContain("Chase Visa");
