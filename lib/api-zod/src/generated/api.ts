@@ -3397,6 +3397,90 @@ export const GetBudgetMonthResponse = zod.object({
     .describe(
       "(PR-D review H1) Posted rows dated in this month that count under a\ncategory they do not store: the category of the pending row they\nreplaced, because the posted row arrived with none (or only the\nsystem Uncategorized). Read-time only; nothing is written. Listed so\nthe page's actuals drill files the row where its figure counts.\n",
     ),
+  spendingReconciliation: zod
+    .union([
+      zod
+        .object({
+          budgetActual: zod
+            .string()
+            .describe(
+              "Every row filed to an expense line, the whole month, transfers skipped (summary.expenses.actual)",
+            ),
+          householdSpendToDate: zod
+            .string()
+            .describe(
+              "Purchases by the one spending rule through `through`, refunds netted per account (the spine's spentMonth for the current month)",
+            ),
+          through: zod
+            .string()
+            .nullable()
+            .describe(
+              "The last day householdSpendToDate covers: today in the current month, the month's last day for a past month, null for a future month",
+            ),
+          difference: zod
+            .string()
+            .describe("budgetActual − householdSpendToDate"),
+          terms: zod.object({
+            futureDated: zod.string().describe("Budget rows dated after today"),
+            cardPayments: zod
+              .string()
+              .describe(
+                "Budget rows that are card payments (the card's purchases are counted already)",
+              ),
+            debtPayments: zod
+              .string()
+              .describe(
+                "Budget rows that pay a debt (debt-tagged, or in a debt line)",
+              ),
+            excludedNames: zod
+              .string()
+              .describe(
+                "Budget rows in a category excluded by name (Transfer, Ignore, Reimbursement…)",
+              ),
+            reimbursable: zod
+              .string()
+              .describe("Budget rows flagged reimbursable"),
+            bankNoise: zod
+              .string()
+              .describe(
+                "Budget rows with a bank-noise description (ACH PMT, WEB ID…)",
+              ),
+            splitsOutsideLines: zod
+              .string()
+              .describe(
+                "Signed: split parts the Budget counts less what spending counts of the same rows; normally ≤ 0",
+              ),
+            uncategorized: zod
+              .string()
+              .describe(
+                "Purchases with no category (spending counts them; no Budget line does)",
+              ),
+            parkedUncategorized: zod
+              .string()
+              .describe(
+                "Purchases parked in a category with no Budget line (the system Uncategorized)",
+              ),
+            refundsNetted: zod
+              .string()
+              .describe(
+                "What refunds took off household spending (the Budget never nets them)",
+              ),
+          }),
+          unexplained: zod
+            .string()
+            .describe(
+              "Must be 0.00: the part no term explains, disclosed rather than hidden",
+            ),
+        })
+        .describe(
+          "(WP6) budgetActual − householdSpendToDate = futureDated + cardPayments\n+ debtPayments + excludedNames + reimbursable + bankNoise\n+ splitsOutsideLines − uncategorized − parkedUncategorized\n+ refundsNetted + unexplained, to the cent. Each row is in exactly one\nterm. Dollars as two-decimal strings.\n",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "(WP6) Why this month's Budget actual (summary.expenses.actual) and\nhousehold spending to date (the spine's spentMonth) differ, in\ndollars, from the same rows (reconcileMonthSpend). Null for a month\nbefore spending is tracked (2026-05).\n",
+    ),
 });
 
 /**

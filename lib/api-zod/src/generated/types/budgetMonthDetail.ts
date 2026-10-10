@@ -11,6 +11,7 @@ import type { BudgetLineWithActual } from "./budgetLineWithActual";
 import type { BudgetMonthDetailInheritedCategoriesItem } from "./budgetMonthDetailInheritedCategoriesItem";
 import type { BudgetPlanBySource } from "./budgetPlanBySource";
 import type { BudgetSummary } from "./budgetSummary";
+import type { SpendingReconciliation } from "./spendingReconciliation";
 
 export interface BudgetMonthDetail {
   monthStart: string;
@@ -40,4 +41,10 @@ system Uncategorized). Read-time only; nothing is written. Listed so
 the page's actuals drill files the row where its figure counts.
  */
   inheritedCategories: BudgetMonthDetailInheritedCategoriesItem[];
+  /** (WP6) Why this month's Budget actual (summary.expenses.actual) and
+household spending to date (the spine's spentMonth) differ, in
+dollars, from the same rows (reconcileMonthSpend). Null for a month
+before spending is tracked (2026-05).
+ */
+  spendingReconciliation?: SpendingReconciliation | null;
 }

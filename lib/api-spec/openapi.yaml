@@ -6008,6 +6008,47 @@ components:
             properties:
               transactionId: { type: string }
               categoryId: { type: string }
+        spendingReconciliation:
+          description: |
+            (WP6) Why this month's Budget actual (summary.expenses.actual) and
+            household spending to date (the spine's spentMonth) differ, in
+            dollars, from the same rows (reconcileMonthSpend). Null for a month
+            before spending is tracked (2026-05).
+          oneOf:
+            - $ref: "#/components/schemas/SpendingReconciliation"
+            - type: "null"
+    SpendingReconciliation:
+      type: object
+      description: |
+        (WP6) budgetActual − householdSpendToDate = futureDated + cardPayments
+        + debtPayments + excludedNames + reimbursable + bankNoise
+        + splitsOutsideLines − uncategorized − parkedUncategorized
+        + refundsNetted + unexplained, to the cent. Each row is in exactly one
+        term. Dollars as two-decimal strings.
+      required: [budgetActual, householdSpendToDate, through, difference, terms, unexplained]
+      properties:
+        budgetActual: { type: string, description: "Every row filed to an expense line, the whole month, transfers skipped (summary.expenses.actual)" }
+        householdSpendToDate:
+          type: string
+          description: "Purchases by the one spending rule through `through`, refunds netted per account (the spine's spentMonth for the current month)"
+        through: { type: ["string", "null"], description: "The last day householdSpendToDate covers: today in the current month, the month's last day for a past month, null for a future month" }
+        difference: { type: string, description: budgetActual − householdSpendToDate }
+        terms: { $ref: "#/components/schemas/SpendingReconciliationTerms" }
+        unexplained: { type: string, description: "Must be 0.00: the part no term explains, disclosed rather than hidden" }
+    SpendingReconciliationTerms:
+      type: object
+      required: [futureDated, cardPayments, debtPayments, excludedNames, reimbursable, bankNoise, splitsOutsideLines, uncategorized, parkedUncategorized, refundsNetted]
+      properties:
+        futureDated: { type: string, description: "Budget rows dated after today" }
+        cardPayments: { type: string, description: "Budget rows that are card payments (the card's purchases are counted already)" }
+        debtPayments: { type: string, description: "Budget rows that pay a debt (debt-tagged, or in a debt line)" }
+        excludedNames: { type: string, description: "Budget rows in a category excluded by name (Transfer, Ignore, Reimbursement…)" }
+        reimbursable: { type: string, description: "Budget rows flagged reimbursable" }
+        bankNoise: { type: string, description: "Budget rows with a bank-noise description (ACH PMT, WEB ID…)" }
+        splitsOutsideLines: { type: string, description: "Signed: split parts the Budget counts less what spending counts of the same rows; normally ≤ 0" }
+        uncategorized: { type: string, description: "Purchases with no category (spending counts them; no Budget line does)" }
+        parkedUncategorized: { type: string, description: "Purchases parked in a category with no Budget line (the system Uncategorized)" }
+        refundsNetted: { type: string, description: "What refunds took off household spending (the Budget never nets them)" }
     BudgetLineWithActual:
       type: object
       required: [categoryId, categoryName, plannedAmount, actualAmount, postedAmount, pendingAmount, combinedAmount, groupName, sourceKind, sortOrder, kind, pinned, planSource]
