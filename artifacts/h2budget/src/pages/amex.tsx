@@ -115,7 +115,7 @@ import { cardOrderOf, identityOf, type AccountAccentName } from "@/lib/accountId
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { currentWeekRange, type RangeMode } from "@/lib/timeRange";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
-import { asOfWords, cardOwedView } from "@/lib/cardBalance";
+import { asOfWords, cardOwedView, needsLiability } from "@/lib/cardBalance";
 
 /** The identity accent's dot (the same tokens as `AccountChip`). */
 const ACCENT_DOT: Record<AccountAccentName, string> = {
@@ -381,6 +381,16 @@ export default function AmexPage({
   //      (`netChangeByMonth`) and Plaid-item scoping. Hydrates after
   //      the list so it never blocks the first paint.
   const MONTH_LIMIT = 1000;
+  // ⭐ (WP8b) Why the trend is ONE read of up to 5,000 rows — the size CLAUDE.md
+  // §2 bans for list views. The forward chart (`buildBalanceWindow`) and the
+  // balance roll-forward to the selected month (`makeAmexBalanceAtEndOf`) need
+  // EVERY row of the window, and the server has no aggregate of a card's
+  // balance by week yet. The read is bounded by `from`/`to` (the 12-month trend
+  // window, out to today and back to the selected month), and this is not a
+  // list: no screen lists these rows. The server answers newest first, so at
+  // the cap it is the window's OLDEST rows that are left out, and the page says
+  // so (`trendCapHit`). A per-week net aggregate on the server retires it.
+  const TREND_LIMIT = 5000;
   const sourceParam = useMemo(
     () =>
       sourceFilter && sourceFilter !== "all"
@@ -416,7 +426,7 @@ export default function AmexPage({
       if (compareMonth(c, later) > 0) later = c;
     }
     return {
-      limit: 5000,
+      limit: TREND_LIMIT,
       from: monthFirstISO(earlier),
       to: monthLastISO(later),
       ...scopeParams,
@@ -441,7 +451,7 @@ export default function AmexPage({
   // Lower-priority — page renders as soon as the month query resolves.
   const { data: wideTxns } = useListTransactions(trendQueryParams);
   const { data: categories } = useListCategories();
-  const { data: debts } = useListDebts();
+  const { data: debts, isError: debtsFailed } = useListDebts();
   // Combined statement balance across the live Amex cards — used as the
   // all-cards forward-chart anchor when no debt/anchor is resolved (otherwise
   // the projection collapses to a flat $0 line).
@@ -471,6 +481,7 @@ export default function AmexPage({
   const {
     data: amexAnchorPerCardResp,
     fetchStatus: amexAnchorPerCardFetchStatus,
+    isError: amexAnchorPerCardFailed,
   } = useQuery<{
     amexEndingBalance: number | null;
     asOf: string;
@@ -637,6 +648,8 @@ export default function AmexPage({
   // so users know their filters need to narrow rather than silently
   // truncating.
   const monthCapHit = monthAll.length >= MONTH_LIMIT;
+  // (WP8b) The trend read reached its cap: its oldest rows are left out.
+  const trendCapHit = (wideTxns?.length ?? 0) >= TREND_LIMIT;
 
   // Members from server-returned set so the dropdown reflects current source.
   const members = useMemo(() => {
@@ -961,59 +974,63 @@ export default function AmexPage({
       }
       return resolvedAnchor;
     }
-    // Tier 1: per-card debt row (when the user has linked the card on /debts).
-    // (WP3) The register runs on the CREDITOR's current balance — the card
-    // model's `creditorCurrent`, the figure the account Summary labels "Card's
-    // current balance" — never the netted Owed: the rows below are the card's
-    // own activity, so its own balance is their anchor. The anchor month keeps
-    // its established as-of (`lastBalanceUpdate ?? plaidLastSyncedAt`), so no
-    // running "bal" moves.
-    if (cardScopedDebt) {
-      const creditor = cardOwedView({ debt: cardScopedDebt }).creditorCurrent;
-      if (creditor) {
-        return {
-          anchor: creditor.balance,
-          resolvedSource: "debt" as const,
-          asOf:
-            cardScopedDebt.lastBalanceUpdate ??
-            cardScopedDebt.plaidLastSyncedAt ??
-            null,
-        };
-      }
+    // ⭐ (WP8b) ONE CARD RUNS ON ITS OWN CURRENT BALANCE — the card model's
+    // `creditorCurrent` (WP3), the figure the account Summary labels "Card's
+    // current balance", from the same inputs: the card's debt row, or Plaid's
+    // stored liability balance when the card has no debt row or an archived
+    // one (`needsLiability`). The per-card /api/amex/anchor answers that Plaid
+    // figure for ANY credit card (it answered only the Amex set). Never the
+    // netted Owed: the rows below are the card's own activity. With no figure
+    // there is no anchor — no running "bal", no chart, and the pane says so;
+    // never a running sum from $0 (a non-Amex card's page ran its "bal" and its
+    // chart up from a $0 "Calculated" balance while its Summary showed the
+    // card's real one).
+    // The debts read decides which input applies: wait for it.
+    if (debts === undefined) {
+      return { anchor: null, resolvedSource: "plaid" as const, asOf: null };
     }
-    // Tier 2: server-resolved per-card anchor (Plaid live liability or
-    // settings.amexAnchor or computed-from-txns scoped to this card).
-    // The /api/amex/anchor?accountId=... route does the heavy lifting
-    // so the client doesn't need to know about plaid_accounts.
-    if (
-      amexAnchorPerCardResp &&
-      amexAnchorPerCardResp.amexEndingBalance !== null &&
-      amexAnchorPerCardResp.source !== "missing"
-    ) {
-      return {
-        anchor: amexAnchorPerCardResp.amexEndingBalance,
-        resolvedSource:
-          amexAnchorPerCardResp.source === "debt"
-            ? ("anchor" as const)
-            : (amexAnchorPerCardResp.source as
-                | "anchor"
-                | "computed"
-                | "plaid"),
-        asOf: amexAnchorPerCardResp.asOf ?? null,
-      };
+    const plaidFigure =
+      amexAnchorPerCardResp?.source === "plaid" &&
+      amexAnchorPerCardResp.amexEndingBalance !== null
+        ? {
+            balance: String(amexAnchorPerCardResp.amexEndingBalance),
+            lastFetchedAt: amexAnchorPerCardResp.asOf ?? null,
+          }
+        : null;
+    const fromPlaid = needsLiability(cardScopedDebt) && plaidFigure !== null;
+    const creditor = cardOwedView({
+      debt: cardScopedDebt,
+      liability: fromPlaid ? plaidFigure : null,
+    }).creditorCurrent;
+    if (!creditor) {
+      return { anchor: null, resolvedSource: "plaid" as const, asOf: null };
     }
-    // Tier 3: no per-card anchor available. Anchor at $0 with no
-    // asOf so makeAmexBalanceAtEndOf becomes the running-sum of this
-    // card's transactions, surfaced under the "computed" footer
-    // ("Calculated"). This is the spec'd fallback for cards that
-    // genuinely have no debt link and no Plaid liability — never fall
-    // back to the combined anchor (that was the original bug).
+    if (fromPlaid) {
+      return { anchor: creditor.balance, resolvedSource: "plaid" as const, asOf: creditor.asOf };
+    }
+    // The debt row's figure. The anchor month keeps its established as-of
+    // (`lastBalanceUpdate ?? plaidLastSyncedAt`), so no running "bal" moves.
     return {
-      anchor: 0,
-      resolvedSource: "computed" as const,
-      asOf: null,
+      anchor: creditor.balance,
+      resolvedSource: "debt" as const,
+      asOf:
+        cardScopedDebt?.lastBalanceUpdate ??
+        cardScopedDebt?.plaidLastSyncedAt ??
+        null,
     };
-  }, [cardFilter, cardScopedDebt, resolvedAnchor, amexAnchorPerCardResp, amexPayoff]);
+  }, [cardFilter, cardScopedDebt, debts, resolvedAnchor, amexAnchorPerCardResp, amexPayoff]);
+  // (WP8b) The selected card's figure is still being read (the debts, or the
+  // per-card anchor): no words about a missing balance yet. A read that failed
+  // is said as that.
+  const cardAnchorPending =
+    cardFilter !== "all" &&
+    ((debts === undefined && !debtsFailed) ||
+      (amexAnchorPerCardResp === undefined &&
+        amexAnchorPerCardFetchStatus === "fetching"));
+  const cardAnchorFailed =
+    cardFilter !== "all" &&
+    ((debts === undefined && debtsFailed) ||
+      (amexAnchorPerCardResp === undefined && amexAnchorPerCardFailed));
 
   const wideAllForBalance = useMemo(() => {
     if (cardFilter === "all") return wideAll;
@@ -1185,17 +1202,29 @@ export default function AmexPage({
   }, [endingBalance, isAmexSyncing]);
 
   // (WP3) Say what the register's "bal" runs on when it is the card's own
-  // debt row (tier 1), and put the netted Owed beside it, second: the account
-  // Summary and the dashboard lead with Owed, and this is the same card.
+  // debt row, and put the netted Owed beside it, second: the account Summary
+  // and the dashboard lead with Owed, and this is the same card.
+  // (WP8b) The same words when it is Plaid's figure for the card, and words —
+  // never a $0 — when the card has no figure at all.
   const anchorNote = useMemo(() => {
-    if (cardFilter === "all" || !cardScopedDebt) return null;
+    if (cardFilter === "all") return null;
+    if (cardScopedAnchor.anchor === null) {
+      if (cardAnchorFailed) return "The card's balance did not load, so there is no running balance or chart.";
+      if (cardAnchorPending) return null;
+      return "No running balance or chart: this card has not reported a current balance yet.";
+    }
+    if (cardScopedAnchor.resolvedSource === "plaid") {
+      const asOf = asOfWords(cardScopedAnchor.asOf);
+      return `Running balances start from the card's current balance, ${formatCurrency(cardScopedAnchor.anchor)}${asOf ? ` ${asOf}` : ""}.`;
+    }
+    if (!cardScopedDebt) return null;
     const v = cardOwedView({ debt: cardScopedDebt });
     if (!v.creditorCurrent) return null;
     const asOf = asOfWords(v.creditorCurrent.asOf);
     const lead = `Running balances start from the card's current balance, ${formatCurrency(v.creditorCurrent.balance)}${asOf ? ` ${asOf}` : ""}.`;
     if (v.owed == null || !v.pending) return lead;
     return `${lead} Owed after payments not yet posted: ${formatCurrency(v.owed)}.`;
-  }, [cardFilter, cardScopedDebt]);
+  }, [cardFilter, cardScopedDebt, cardScopedAnchor, cardAnchorPending, cardAnchorFailed]);
 
   // (#809) Forward-looking ending-balance window, pinned to a fixed
   // 12-month span that rolls forward by month. Credit-card spending
@@ -2056,6 +2085,18 @@ export default function AmexPage({
               )}
               {anchorNote ? (
                 <span className="text-micro text-neutral-500" data-testid="amex-anchor-note">{anchorNote}</span>
+              ) : null}
+              {/* (WP8b) A capped read says so (CLAUDE.md §2). */}
+              {monthCapHit ? (
+                <span className="text-micro text-neutral-500" data-testid="amex-month-cap">
+                  Showing the most recent {MONTH_LIMIT.toLocaleString("en-US")} rows of this month.
+                </span>
+              ) : null}
+              {trendCapHit ? (
+                <span className="text-micro text-neutral-500" data-testid="amex-trend-cap">
+                  Only the most recent {TREND_LIMIT.toLocaleString("en-US")} rows feed the chart and earlier
+                  months&apos; running balances.
+                </span>
               ) : null}
             </div>
           }

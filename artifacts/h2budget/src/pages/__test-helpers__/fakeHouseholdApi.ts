@@ -23,7 +23,9 @@ import {
  *     the linked depository accounts (`listCheckingAccounts` with its twin
  *     collapse);
  *   - debts, weekly payoff, liabilities, categories, mapping rules, settings and
- *     the Amex anchor: empty, the shapes the pages expect.
+ *     the Amex anchor: empty, the shapes the pages expect — except (WP8b) a
+ *     card named in `cardBalances`, whose Plaid liability balance GET
+ *     /plaid/liability-accounts lists and the per-card GET /amex/anchor answers.
  * Anything else answers 404 and is recorded (`unknown()`), so a test can see an
  * endpoint it did not plan for.
  *
@@ -75,6 +77,12 @@ export type FakeHouseholdOptions = {
   refuse?: string[];
   /** The bank balance today. */
   balanceToday?: string;
+  /**
+   * (WP8b) Plaid's stored liability balance per card (`key` → figure), as GET
+   * /plaid/liability-accounts lists it and GET /amex/anchor?accountId= answers
+   * it (`source: "plaid"`). A card not named has no figure (`missing`).
+   */
+  cardBalances?: Record<string, { balance: string; lastFetchedAt: string }>;
 };
 
 const json = (status: number, body: unknown) =>
@@ -234,15 +242,47 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
         });
       case "/api/forecast/cash-signal":
         return json(200, { daily: [], events: [], account: null, status: "no_data" });
-      case "/api/debts":
       case "/api/plaid/liability-accounts":
+        return json(
+          200,
+          Object.entries(opts.cardBalances ?? {}).map(([key, fig]) => {
+            const a = byKey.get(key)!;
+            const it = itemOf(a.item);
+            return {
+              id: a.id,
+              accountId: a.accountId,
+              itemId: a.item,
+              name: a.name,
+              officialName: null,
+              mask: a.mask,
+              type: a.type,
+              subtype: a.subtype,
+              liabilityKind: "credit",
+              balance: fig.balance,
+              apr: null,
+              minPayment: null,
+              lastFetchedAt: fig.lastFetchedAt,
+              institutionId: null,
+              institutionName: it.institutionName,
+              institutionSlug: it.institutionSlug,
+              linkedDebt: null,
+              suggestedDebt: null,
+            };
+          }),
+        );
+      case "/api/debts":
       case "/api/budget/categories":
       case "/api/mapping-rules":
         return json(200, []);
       case "/api/amex/weekly-payoff":
         return json(200, { weekStart: opts.today, weekEnd: opts.today, combinedWeekCharges: 0, combinedStatementBalance: 0, cards: [] });
-      case "/api/amex/anchor":
-        return json(200, { amexEndingBalance: null, asOf: `${opts.today}T12:00:00.000Z`, source: "missing" });
+      case "/api/amex/anchor": {
+        const card = opts.accounts.find((a) => a.accountId === q.get("accountId"));
+        const fig = card ? opts.cardBalances?.[card.key] : undefined;
+        return fig
+          ? json(200, { amexEndingBalance: Number(fig.balance), asOf: fig.lastFetchedAt, source: "plaid" })
+          : json(200, { amexEndingBalance: null, asOf: `${opts.today}T12:00:00.000Z`, source: "missing" });
+      }
       case "/api/settings":
         return json(200, { preferences: {} });
     }
