@@ -5,8 +5,11 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { CashSignalAccount } from "./cashSignalAccount";
+import type { SpineBankSnapshot } from "./spineBankSnapshot";
 import type { SpineBankSource } from "./spineBankSource";
 import type { SpineBankStaleReason } from "./spineBankStaleReason";
+import type { SpineSinceSnapshot } from "./spineSinceSnapshot";
 export type SpineBank = {
     /** computeCashSignal().bankToday — snapshot rolled forward through the ledger */
     balance: string;
@@ -37,5 +40,11 @@ export type SpineBank = {
      * @nullable
      */
     staleReason: SpineBankStaleReason;
+    /** (WP1) bankBalanceParts(ledger).snapshot — the bank snapshot `balance` rolls forward from, as read (never rolled forward). Equals /forecast/bank-balance-explain .snapshot's balance, at and source. Null when there is no snapshot. */
+    snapshot: SpineBankSnapshot | null;
+    /** (WP1) bankBalanceParts(ledger).sinceSnapshot — what the roll-forward adds on top of the snapshot, through `through` (the household's today), by the ledger's own rule (PR4e). Equals /forecast/bank-balance-explain .ledger.sinceAnchor (net, rowCount). snapshot.balance + net = balance to the cent: one ledger computes all three. Null when the snapshot has no read time (no roll-forward). */
+    sinceSnapshot: SpineSinceSnapshot | null;
+    /** (WP1) computeCashSignal().account — the account `balance` rolls forward on, with its ids. A screen finds this account in a list by `rowId` / `externalId`, never by mask. */
+    account: CashSignalAccount;
 };
 //# sourceMappingURL=spineBank.d.ts.map

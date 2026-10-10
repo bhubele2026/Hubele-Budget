@@ -23,7 +23,13 @@ export interface AmexWeeklyPayoffCard {
   displayName: string | null;
   weekCharges: number;
   chargeCount: number;
+  /** ⚠️ NOT the statement balance, despite the name: the card's CURRENT
+balance as Plaid last reported it (`plaid_accounts.liability_balance`),
+else the linked debt's balance, else 0. (WP2) The real last statement
+is `Debt.statement`.
+ */
   statementBalance: number;
+  /** weekCharges ÷ statementBalance (the current balance), clamped to 0–1 */
   pctOfStatementThisWeek: number;
   topMerchant: AmexWeeklyPayoffCardTopMerchant;
 }

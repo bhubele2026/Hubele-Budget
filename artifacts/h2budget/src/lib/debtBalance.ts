@@ -5,8 +5,10 @@ import type { SimDebt } from "@workspace/avalanche-core";
 // the whole payoff simulator into the entry chunk with it.
 import {
   effectiveDebtBalance as effectiveDebtBalanceCore,
+  inPayoffPopulation,
   pendingPaymentTotalOf as pendingPaymentTotalOfCore,
 } from "@workspace/avalanche-core/pendingDebt";
+import { cardOwedView, debtForAccount, type CardLiabilityInput } from "./cardBalance";
 
 /**
  * ⭐ THE ONE DEBT-BALANCE BASIS FOR THE WHOLE APP.
@@ -87,16 +89,22 @@ export function debtToSim(d: Debt): SimDebt {
 const CLEARED_EPSILON = 0.005;
 
 /**
- * ⭐ THE ONE "WHAT IS LEFT" TOTAL: every ACTIVE debt, netted of its pending
- * payments ({@link effectiveDebtBalance}). The Avalanche page's "Total debt"
- * Stat and Totals row, the Reports Debt page's hero (`totalsForDebts`) and the
- * dashboard's debt tile all call this, so the three cannot disagree. It was an
- * inline `reduce` on the Avalanche page; the body is that reduce, unchanged.
+ * ⭐ THE ONE "WHAT IS LEFT" TOTAL: every debt on the payoff plan, netted of its
+ * pending payments ({@link effectiveDebtBalance}). The Avalanche page's "Total
+ * debt" Stat and Totals row, the Reports Debt page's hero (`totalsForDebts`)
+ * and the dashboard's debt tile all call this, so the three cannot disagree.
+ *
+ * (WP4b) "On the payoff plan" is `inPayoffPopulation` — every ACTIVE debt —
+ * the SAME population the spine's "% paid" measures, so the landing's
+ * percentage and its "$X left" always cover the same debts. A debt anchored at
+ * $0.00 (put on the plan while it read $0; the anchor is written only while
+ * null) is money owed and is counted here; "% paid" counts it as 0% paid of
+ * what it owes. WP4 had dropped it while the Avalanche rows counted it.
  */
 export function remainingDebtTotal(debts: readonly Debt[] | null | undefined): number {
   let total = 0;
   for (const d of debts ?? []) {
-    if (d.status !== "active") continue;
+    if (!inPayoffPopulation(d)) continue;
     total += effectiveDebtBalance(d);
   }
   return total;
@@ -104,8 +112,8 @@ export function remainingDebtTotal(debts: readonly Debt[] | null | undefined): n
 
 /**
  * The total above plus the names it covers, so a surface that quotes the
- * amount can always say what it is the total OF. Names are the active debts
- * still carrying a balance (a cleared one adds nothing, so naming it would
+ * amount can always say what it is the total OF. Names are the debts on the
+ * plan still carrying a balance (a cleared one adds nothing, so naming it would
  * overstate the scope), in the payload's order.
  */
 export function remainingDebtScope(debts: readonly Debt[] | null | undefined): {
@@ -114,9 +122,68 @@ export function remainingDebtScope(debts: readonly Debt[] | null | undefined): {
 } {
   const names: string[] = [];
   for (const d of debts ?? []) {
-    if (d.status !== "active") continue;
+    if (!inPayoffPopulation(d)) continue;
     if (Math.abs(effectiveDebtBalance(d)) < CLEARED_EPSILON) continue;
     names.push(d.name.trim() || "Unnamed debt");
   }
   return { total: remainingDebtTotal(debts), names };
+}
+
+/** "A", "A and B", "A, B and C". */
+export function joinNames(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** A linked card that is NOT on the payoff plan, as the debt tile names it. */
+export interface OffPlanCard {
+  /** The account's internal row id. */
+  id: string;
+  /** The Accounts row's own name: "American Express Platinum Card® ••1005". */
+  name: string;
+  /** The weekly payoff bills it weekly (`AmexWeeklyPayoffCard.cadence`). */
+  weekly: boolean;
+}
+
+/**
+ * ⭐ (WP4) THE CARDS THE "$X LEFT" DOES NOT COVER, so the tile can say so: a
+ * linked card with no debt row, or an archived one (`cardOwedView` state
+ * `off_plan` / `archived`). A card whose own current balance is $0.00 is left
+ * out (it changes nothing about the total); one whose balance is unknown is
+ * kept (never assumed to be zero). Inputs: the linked cards, `GET /debts` and
+ * Plaid's stored liability figures (the Accounts panel's own read), all on the
+ * landing already; and, for the weekly word, the weekly payoff's cards — ONE
+ * extra, bounded request (`useAmexQ`, the Amex page's key), asked only when a
+ * card is off the plan. Pure.
+ */
+export function offPlanCards(
+  cards: readonly { id: string; accountId: string; name: string }[],
+  debts: readonly Debt[] | null | undefined,
+  opts: { liabilities?: readonly CardLiabilityInput[] | null; weeklyAccountIds?: ReadonlySet<string> } = {},
+): OffPlanCard[] {
+  const out: OffPlanCard[] = [];
+  for (const c of cards) {
+    const debt = debtForAccount(debts, c);
+    const v = cardOwedView({ debt, liability: (opts.liabilities ?? []).find((l) => l.id === c.id) });
+    if (v.onPlan) continue;
+    const bal = v.creditorCurrent?.balance;
+    if (bal != null && Math.abs(bal) < CLEARED_EPSILON) continue;
+    out.push({ id: c.id, name: c.name, weekly: !!opts.weeklyAccountIds?.has(c.accountId) });
+  }
+  return out;
+}
+
+/**
+ * "American Express Platinum Card® ••1005 is paid in full weekly, not on the
+ * plan" — "paid in full weekly" only when the weekly payoff bills every named
+ * card weekly — and the link's words.
+ */
+export function offPlanWords(cards: readonly OffPlanCard[]): { text: string; link: string } | null {
+  if (cards.length === 0) return null;
+  const many = cards.length > 1;
+  const weekly = cards.every((c) => c.weekly);
+  return {
+    text: `${joinNames(cards.map((c) => c.name))} ${many ? "are" : "is"} ${weekly ? "paid in full weekly, " : ""}not on the plan`,
+    link: many ? "Put them on the plan" : "Put it on the plan",
+  };
 }

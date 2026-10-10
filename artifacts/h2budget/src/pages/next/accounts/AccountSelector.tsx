@@ -1,11 +1,35 @@
 import { Link } from "wouter";
-import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
-import { AccountChip, shortDate } from "@/components/next";
+import { cn } from "@/lib/utils";
+import { AccountChip } from "@/components/next";
+import { freshnessStamps } from "@/lib/accountFreshness";
 import { accountPageHref } from "@/lib/accountRoute";
 import { STATE_WORD, type AccountEntry } from "./entries";
 
-/** Balance shown on a chip, already resolved by the page ("" = unknown). */
-export type BalanceByRow = Record<string, string | undefined>;
+/**
+ * What a chip says about its account's balance, resolved by the page from the
+ * ONE card model (`lib/cardBalance.ts`) and the snapshot rule
+ * (`lib/snapshotWords.ts`), so a chip and the dashboard row print the same
+ * words for the same concept (WP3):
+ *   - a card on the plan: "Owed" + the netted figure;
+ *   - a card off the plan: its own current balance, and `plan` says so;
+ *   - checking (the account the balance rolls forward on): "Balance" + the
+ *     dashboard's figure, and `sub` = the bank snapshot under it ("Snapshot
+ *     $3,458.98 · Oct 2 · +20 entries", WP1's `snapshotWords`);
+ *   - savings and any other depository account: "Snapshot" + the reading +
+ *     "as of <day> · not rolled forward", or only words when nothing has been read.
+ * `null` figure and words = not known: an em dash, never $0.
+ */
+export interface ChipBalance {
+  label: string | null;
+  figure: string | null;
+  words?: string | null;
+  /** A second line under the figure (the checking account's bank snapshot). */
+  sub?: string | null;
+  plan?: string | null;
+  /** When the balance on the chip was read (the "balance read" stamp). */
+  balanceAt?: string | null;
+}
+export type BalanceByRow = Record<string, ChipBalance | undefined>;
 
 const EDGE: Record<AccountEntry["identity"]["accent"], string> = {
   checking: "border-acct-checking",
@@ -21,8 +45,8 @@ const chipBase =
 
 /** One chip per account. The selected one is `aria-current`; "All accounts" clears it. */
 export function AccountSelector({
-  entries, selectedId, balances,
-}: { entries: AccountEntry[]; selectedId: string | null; balances: BalanceByRow }) {
+  entries, selectedId, balances, now = Date.now(),
+}: { entries: AccountEntry[]; selectedId: string | null; balances: BalanceByRow; now?: number }) {
   return (
     <nav aria-label="Accounts" data-testid="account-selector" className="flex gap-2 overflow-x-auto pb-1">
       <Link
@@ -35,8 +59,10 @@ export function AccountSelector({
         <span className="text-micro text-neutral-500">Recent activity from every account</span>
       </Link>
       {entries.map((e) => {
-        const bal = balances[e.rowId];
+        const b = balances[e.rowId];
         const sel = e.plaidAccountId === selectedId;
+        // Three stamps, three moments (WP3): synced · balance read · data through.
+        const stamps = freshnessStamps({ syncedAt: e.lastSyncedAt, balanceAt: b?.balanceAt, dataThrough: e.dataThrough }, now);
         return (
           <Link
             key={e.rowId}
@@ -48,15 +74,22 @@ export function AccountSelector({
           >
             <AccountChip identity={e.identity} />
             <span className="flex flex-wrap items-baseline gap-x-2 text-micro text-neutral-600">
-              <span className="font-mono tabular-nums" data-testid="chip-balance">
-                {e.identity.isCard ? "Owed " : "Balance "}
-                {bal ? formatCurrency(bal) : "—"}
+              <span data-testid="chip-balance">
+                {b?.label ? `${b.label} ` : null}
+                {b?.figure ? <span className="font-mono tabular-nums">{b.figure}</span> : b?.words ? null : "—"}
+                {b?.words ? `${b.figure ? " · " : ""}${b.words}` : null}
               </span>
-              <span data-testid="chip-state" className={cn(e.state === "reconnect" || e.state === "problem" ? "text-status-bad font-medium" : "")}>
-                {STATE_WORD[e.state]}
-                {e.state === "synced" && e.lastSyncedAt ? ` ${formatRelativeTime(e.lastSyncedAt)}` : ""}
-              </span>
-              {e.dataThrough ? <span data-testid="chip-through">Data through {shortDate(e.dataThrough)}</span> : null}
+              {b?.plan ? <span className="font-medium" data-testid="chip-plan">{b.plan}</span> : null}
+            </span>
+            {b?.sub ? <span className="text-micro text-neutral-500" data-testid="chip-snapshot">{b.sub}</span> : null}
+            <span className="flex flex-wrap gap-x-1 text-micro text-neutral-500">
+              {e.state !== "synced" ? (
+                <span data-testid="chip-state" className={cn(e.state === "reconnect" || e.state === "problem" ? "text-status-bad font-medium" : "")}>
+                  {STATE_WORD[e.state]}
+                  {stamps.length ? " ·" : ""}
+                </span>
+              ) : null}
+              {stamps.length ? <span data-testid="chip-stamps">{stamps.join(" · ")}</span> : null}
             </span>
           </Link>
         );

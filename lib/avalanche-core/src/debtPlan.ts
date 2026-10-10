@@ -19,6 +19,7 @@ import {
   type SimResult,
   type Strategy,
 } from "./index";
+import { inPayoffPopulation, payoffBasisOf } from "./pendingDebt";
 
 /**
  * A debt as the plan reads it: the simulator's fields plus where each figure
@@ -291,17 +292,20 @@ export function milestonesFor(simulation: SimResult, debts: PlanDebt[]): Milesto
   }
 
   if (first) {
-    const anchored = debts.filter(
-      (d) => d.status !== "paid_off" && Number(d.originalBalance ?? 0) > 0,
-    );
+    // (WP4b) `payoffPct`'s population and basis, so a milestone named "50% paid"
+    // is that same 50%: every active debt (`inPayoffPopulation`), measured
+    // against the larger of its anchor and what it owes at the start
+    // (`payoffBasisOf`; `balance` here is already netted).
+    const population = debts.filter(inPayoffPopulation);
+    const basisById = new Map(population.map((d) => [d.id, payoffBasisOf(d)] as const));
+    const sumBasis = population.reduce((s, d) => s + basisById.get(d.id)!, 0);
     let pctAt: (i: number) => number;
     let startPct: number;
-    if (anchored.length > 0) {
-      const sumOrig = anchored.reduce((s, d) => s + Number(d.originalBalance), 0);
+    if (sumBasis > 0) {
       const pctFrom = (balOf: (d: PlanDebt) => number) => {
-        let sumBal = 0;
-        for (const d of anchored) sumBal += Math.min(Math.max(0, balOf(d)), Number(d.originalBalance));
-        return Math.max(0, Math.min(1, (sumOrig - sumBal) / sumOrig)) * 100;
+        let sumOwed = 0;
+        for (const d of population) sumOwed += Math.min(Math.max(0, balOf(d)), basisById.get(d.id)!);
+        return Math.max(0, Math.min(1, (sumBasis - sumOwed) / sumBasis)) * 100;
       };
       startPct = pctFrom((d) => d.balance);
       pctAt = (i) => {

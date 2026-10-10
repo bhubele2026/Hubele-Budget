@@ -110,8 +110,8 @@ const SAMPLE = {
   reviewCount: 3,
   backlog: { unfiled: 23, oldestUnfiledOn: "2026-03-14", provisional: 6 },
   banks: [
-    { itemId: "item-1", name: "Sample Bank", lastDataOn: "2026-10-07", autoUpdates: { on: true, reason: "ok" } },
-    { itemId: "item-2", name: "Sample Card", lastDataOn: "2026-10-05", autoUpdates: { on: false, reason: "not_registered" } },
+    { itemId: "item-1", name: "Sample Bank", lastDataOn: "2026-10-07", lastSyncedAt: "2026-10-08T15:00:00Z", autoUpdates: { on: true, reason: "ok" } },
+    { itemId: "item-2", name: "Sample Card", lastDataOn: "2026-10-05", lastSyncedAt: "2026-10-06T15:00:00Z", autoUpdates: { on: false, reason: "not_registered" } },
   ],
 };
 
@@ -322,8 +322,8 @@ describe("Automation — backlog and bank data (V7)", () => {
     mount();
     expect((await screen.findByTestId("backlog-line")).textContent).toBe("Unfiled charges: 23 · oldest Mar 14, 2026");
     expect(screen.getAllByTestId("bank").map((b) => b.textContent)).toEqual([
-      "Sample Bank · data through Oct 7, 2026 · Automatic updates On",
-      "Sample Card · data through Oct 5, 2026 · Automatic updates Off",
+      "Sample Bank · data through Oct 7, 2026 · last synced Oct 8, 2026 · Automatic updates On",
+      "Sample Card · data through Oct 5, 2026 · last synced Oct 6, 2026 · Automatic updates Off",
     ]);
     expect(screen.queryByTestId("backlog-result")).toBeNull();
     expect(screen.getByTestId("backlog-run").textContent).toBe("File everything up to today");

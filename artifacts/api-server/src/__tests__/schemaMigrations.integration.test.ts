@@ -44,7 +44,11 @@ const ADDED_COLUMNS: Record<string, string[]> = {
     "refund_of_txn_id",
     "plaid_removed_at",
     "splits_invalid",
+    // FIN-2 (0180): a typed row a sync merge adopted.
+    "adopted_from_household",
   ],
+  // WP5b (0170): the last direct edit of a rule.
+  mapping_rules: ["updated_at"],
 };
 
 type ColumnShape = {

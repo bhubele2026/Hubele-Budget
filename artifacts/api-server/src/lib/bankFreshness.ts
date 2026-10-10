@@ -6,6 +6,7 @@ import {
   plaidItemsTable,
   plaidSyncAttemptsTable,
 } from "@workspace/db";
+import { MANUAL_SNAPSHOT_STALE_MS, PLAID_FEED_QUIET_MS } from "@workspace/avalanche-core/freshness";
 import { BANK_FEED_DEAD_CODES } from "./plaidReauthCodes";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 
@@ -46,10 +47,11 @@ import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
  * ⚠️ READ-ONLY AND FREE. No Plaid call: this sits on the spine's path.
  */
 
-/** A Plaid feed silent this long (no balance re-read, no successful sync) is old. */
-export const PLAID_FEED_QUIET_MS = 48 * 60 * 60 * 1000;
-/** A typed-in balance older than this is old. */
-export const MANUAL_SNAPSHOT_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+// (WP1) The thresholds live in avalanche-core so the browser judges "out of
+// date" by the same clock: a Plaid feed silent 48 hours (no balance re-read, no
+// successful sync) is old; a typed-in balance older than 7 days is old.
+// Re-exported so existing importers keep their path.
+export { PLAID_FEED_QUIET_MS, MANUAL_SNAPSHOT_STALE_MS };
 
 export type BankStaleReason = "refresh_failed" | "old" | "manual_old";
 

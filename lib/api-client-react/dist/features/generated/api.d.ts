@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlan, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlan, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -342,6 +342,31 @@ export type ListRecapHistoryQueryError = ErrorType<unknown>;
  */
 export declare function useListRecapHistory<TData = Awaited<ReturnType<typeof listRecapHistory>>, TError = ErrorType<unknown>>(params?: ListRecapHistoryParams, options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof listRecapHistory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * (WP5b) Every recorded change to one mapping rule, newest first:
+created, seeded, edited, reordered, deleted, with the rule before and
+after, who changed it and the note given. A deleted rule keeps its
+history, so this answers for an id that no longer exists; an id from
+another household has no entries here. Read-only.
+
+ */
+export declare const getGetMappingRuleHistoryUrl: (id: string) => string;
+export declare const getMappingRuleHistory: (id: string, options?: RequestInit) => Promise<MappingRuleHistory>;
+export declare const getGetMappingRuleHistoryQueryKey: (id: string) => readonly [`/api/mapping-rules/${string}/history`];
+export declare const getGetMappingRuleHistoryQueryOptions: <TData = Awaited<ReturnType<typeof getMappingRuleHistory>>, TError = ErrorType<unknown>>(id: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getMappingRuleHistory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getMappingRuleHistory>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetMappingRuleHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getMappingRuleHistory>>>;
+export type GetMappingRuleHistoryQueryError = ErrorType<unknown>;
+export declare function useGetMappingRuleHistory<TData = Awaited<ReturnType<typeof getMappingRuleHistory>>, TError = ErrorType<unknown>>(id: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getMappingRuleHistory>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -13,6 +13,7 @@ import type {
   CategorizationRunResult,
   CategorizationSettingsModelMode,
 } from "@workspace/api-client-react/features";
+import { householdDateOf } from "@workspace/avalanche-core/householdTime";
 
 
 export const MODE_LADDER: ReadonlyArray<{ key: CategorizationSettingsModelMode; text: string }> = [
@@ -55,10 +56,18 @@ export function runResultLine(r: Pick<CategorizationRunResult, "filed" | "sugges
   return `Filed ${r.filed} · Suggested ${r.suggested} (provisional) · ${r.queued} need a look · ${r.unreviewed} left unchanged`;
 }
 
-/** (V7) The Bank data section: one line per bank. */
-export function bankLine(b: Pick<CategorizationBank, "name" | "lastDataOn" | "autoUpdates">): string {
+/**
+ * (V7) The Bank data section: one line per bank. (WP3) Two different dates,
+ * each named: "data through" the newest bank transaction H2 holds
+ * (`lastDataOn`), "last synced" the last successful sync (`lastSyncedAt`, on
+ * the household's calendar). A sync that brings nothing new moves only the
+ * second.
+ */
+export function bankLine(b: Pick<CategorizationBank, "name" | "lastDataOn" | "lastSyncedAt" | "autoUpdates">): string {
   const through = b.lastDataOn ? fullDate(b.lastDataOn) : "not yet";
-  return `${b.name ?? "Bank"} · data through ${through} · Automatic updates ${b.autoUpdates.on ? "On" : "Off"}`;
+  const t = b.lastSyncedAt ? new Date(b.lastSyncedAt) : null;
+  const synced = t && !Number.isNaN(t.getTime()) ? fullDate(householdDateOf(t)) : "not yet";
+  return `${b.name ?? "Bank"} · data through ${through} · last synced ${synced} · Automatic updates ${b.autoUpdates.on ? "On" : "Off"}`;
 }
 
 export const AI_STATUS = {

@@ -101,6 +101,17 @@ export function defaultMappingRulesFeaturesMock(
     useUpdateLearnedRule: noopMutation,
     useDeleteLearnedRule: noopMutation,
     useApplyLearnedRuleRetroactively: noopMutation,
+    // (WP5b) A rule's History popover. Its query only mounts while the popover
+    // is open, so the default (an empty history) is never even read by tests
+    // that do not open one.
+    useGetMappingRuleHistory: () => ({
+      data: { ruleId: "", entries: [], truncated: false },
+      isFetching: false,
+      isLoadingError: false,
+      isRefetchError: false,
+      refetch: vi.fn(),
+    }),
+    getGetMappingRuleHistoryQueryKey: (id: string) => [`/api/mapping-rules/${id}/history`],
   };
   return { ...defaults, ...overrides };
 }

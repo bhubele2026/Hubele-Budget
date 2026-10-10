@@ -4,16 +4,19 @@ import { Link } from "wouter";
 import type { PlaidItemDetail, PlaidAccount } from "@workspace/api-client-react";
 import { Panel } from "@/components/next";
 import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
-import { effectiveDebtBalance, pendingPaymentTotalOf } from "@/lib/debtBalance";
+import { CARD_WORDS, cardHasFigures, cardOwedView, creditorLabel, debtForAccount, needsLiability } from "@/lib/cardBalance";
+import { freshnessStamps } from "@/lib/accountFreshness";
+import { NOT_TRACKED, snapshotLine } from "@/lib/snapshotWords";
+import { bankBalanceView, isSpineAccount } from "@/lib/bankBalance";
 import { useSpine } from "@/hooks/useSpine";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { FreshnessLine } from "@/components/data-state";
-import { isSyntheticPlaidItem, plaidReauthReason } from "@/components/plaid-reconnect-button";
+import { isSyntheticPlaidItem, plaidReauthReason } from "@/lib/plaidReauth";
 import { btnSecondarySm } from "@/ui";
 import { cn } from "@/lib/utils";
-import { useCashSignalQ, useDebtsQ, useLiabilityAccountsQ, usePlaidItemsQ } from "./queries";
+import { useDebtsQ, useLiabilityAccountsQ, usePlaidItemsQ } from "./queries";
 import { connectionState, STATE_WORD } from "./bankState";
-import { dayLabel, Gate, LABEL, LINK, money, ordinal, rise } from "./shared";
+import { Gate, LABEL, LINK, money, ordinal, rise } from "./shared";
 
 export { connectionState } from "./bankState";
 export type { AccountState } from "./bankState";
@@ -51,19 +54,29 @@ function Fact({ label, value, testid }: { label: string; value: ReactNode; testi
 
 /**
  * ⭐ ACCOUNTS: one row per linked account in ONE list surface (not a card
- * each). Full name and ••last4, wrapping and never truncated. Checking and
- * savings say the cash they hold (checking from the spine's roll-forward, the
- * one balance the app reports for a depository account); cards and loans say
- * what is owed, then statement, minimum and due — only the fields that exist.
- * Freshness per row, Sync per BANK (once, on its first row), and the name opens
- * the account's own view. Checking's figure is not repeated at hero size here:
- * the summary row leads with it.
+ * each). Full name and ••last4, wrapping and never truncated. Checking says the
+ * cash it holds (the spine's roll-forward, the one balance the app reports for
+ * it); savings and any other depository account its last reading, "not rolled
+ * forward" (`lib/snapshotWords.ts`). Cards and loans read the ONE card model
+ * (`lib/cardBalance.ts`, WP3): Owed (netted) only when on the payoff plan, the
+ * card's own current balance beside it when a payment has not posted, then
+ * minimum and due — only the fields that exist; an archived debt says "Paid
+ * off · not on the payoff plan", a card with no debt row "Not on the payoff
+ * plan". Freshness per row as three stamps (synced · balance read · data
+ * through), Sync per BANK (once, on its first row), and the name opens the
+ * account's own view. Checking's figure is not repeated at hero size here: the
+ * summary row leads with it.
  */
 export default function AccountsPanel() {
   const items = usePlaidItemsQ();
-  const cash = useCashSignalQ(90);
   const debts = useDebtsQ();
-  const { data: spine } = useSpine();
+  const spineRead = useSpine();
+  const spine = spineRead.data;
+  // (WP3) The account the bank balance rolls forward on, BY ID, from the spine
+  // itself (WP1's `bank.account`): matching the cash signal's mask made every
+  // account without a mask "the checking account" (`"" === ""`), and two
+  // accounts can share four digits.
+  const spineAcct = spine ? bankBalanceView(spine.bank).account : null;
   const now = Date.now();
 
   const rows = useMemo(() => {
@@ -80,15 +93,16 @@ export default function AccountsPanel() {
     return list.map((r) => ({ ...r, identity: identityOf(asInput(r), { cardOrder }) }));
   }, [items.data]);
 
-  const debtFor = (acct: PlaidAccount) =>
-    (debts.data ?? []).find(
-      (d) => d.status !== "archived" && (d.plaidAccountId === acct.id || d.plaidAccountId === acct.accountId),
-    );
-  // A card or loan that is not on the debt list reads Plaid's stored
-  // liability figures instead (asked only when such an account exists).
+  const allAccts = rows.map((r) => r.acct);
+  // (WP3) The debt row by the account's internal id only, any status: an
+  // archived row is still this card's row, and the card model says what it is.
+  const debtFor = (acct: PlaidAccount) => debtForAccount(debts.data, acct);
+  // A card or loan with no debt row — or an archived one — reads Plaid's stored
+  // liability figures (asked only when such an account exists).
   const needLiabilities =
-    debts.data !== undefined && rows.some((r) => (r.identity.isCard || r.identity.kind === "loan") && !debtFor(r.acct));
+    debts.data !== undefined && rows.some((r) => (r.identity.isCard || r.identity.kind === "loan") && needsLiability(debtFor(r.acct)));
   const liab = useLiabilityAccountsQ(needLiabilities);
+  const liabPending = needLiabilities && liab.data === undefined && !liab.isError;
 
   return (
     <Panel
@@ -110,28 +124,35 @@ export default function AccountsPanel() {
             <ul className="list-none divide-y divide-brand-line p-0">
               {rows.map(({ item, acct, identity, firstOfItem }) => {
                 const st = connectionState(item, now);
-                const through = dayLabel(item.lastSyncedAt);
-                const csAcct = cash.data?.account;
-                const isCash =
-                  identity.kind === "checking" && !!csAcct && csAcct.via !== "unresolved" &&
-                  (csAcct.mask ?? "") === (acct.mask ?? "");
-                const debt = debtFor(acct);
                 const liability = identity.isCard || identity.kind === "loan";
-                const pending = debt ? pendingPaymentTotalOf(debt) : 0;
-                const la = !debt && liability ? (liab.data ?? []).find((l) => l.id === acct.id || l.accountId === acct.accountId) : undefined;
-                // One basis per row: the debt row when the account is on the
-                // debt list, else Plaid's stored liability figures. A field
-                // neither source has is left out, never drawn as $0.
-                // ⭐ A debt's Owed is NETTED of its pending payments
-                // (`effectiveDebtBalance`, the app's one balance basis), so the
-                // rows add up to the summary tile's "$X left" on the same
-                // screen; "Paid, not posted" says what was netted.
-                const owed = debt ? effectiveDebtBalance(debt) : la?.balance ?? null;
-                const minPay = debt ? (Number(debt.minPayment) > 0 ? debt.minPayment : null) : la?.minPayment && Number(la.minPayment) > 0 ? la.minPayment : null;
-                const dueDay = debt ? debt.dueDay ?? null : la?.suggestedDebt?.dueDay ?? null;
+                const isCash = !liability && isSpineAccount(acct, spineAcct, allAccts);
+                const debt = liability ? debtFor(acct) : null;
+                const la = liability && needsLiability(debt) ? (liab.data ?? []).find((l) => l.id === acct.id) : undefined;
+                // Off the plan, the card's figures wait for Plaid's stored ones:
+                // never a flash of an archived row's old $0.00.
+                const waiting = liability && (debts.data === undefined || (needsLiability(debt) && liabPending));
+                // ⭐ ONE card model (WP3): the same view the account chips, the
+                // account's Summary and the Amex register read. Owed is NETTED
+                // (`effectiveDebtBalance`) and only for a debt on the payoff
+                // plan; the card's own figure shows beside it when a payment has
+                // not posted, so the two numbers are on one row, each named.
+                const view = liability ? cardOwedView({ debt, liability: la }) : null;
+                const snap = !liability && !isCash ? acct.snapshot ?? null : null;
                 const noBank = isCash && !spine?.bank.source && !spine?.bank.asOfDate;
+                const stamps = freshnessStamps({
+                  syncedAt: item.lastSyncedAt,
+                  balanceAt: view ? view.creditorCurrent?.asOf : snap?.at,
+                  dataThrough: item.lastBankTxOn,
+                }, now);
+                // (WP3b) Plan words only once the debts have answered: a missing
+                // list is not "Not on the payoff plan".
+                const planWords = view && !view.onPlan && debts.data !== undefined ? view.status : null;
+                const debtsFailed = debts.data === undefined && !!debts.isError;
+                // The spine decides which depository account rolls forward: until
+                // it answers, no depository row is labelled.
+                const bankWait = !liability && !spine;
                 return (
-                  <li key={acct.id} data-testid="dash-account" data-state={st} data-accent={identity.accent}
+                  <li key={acct.id} data-testid="dash-account" data-state={st} data-accent={identity.accent} data-plan={view?.state}
                     className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 px-4 py-3 md:grid-cols-[minmax(14rem,1.2fr)_minmax(0,2fr)_auto] md:items-center md:gap-x-6">
                     <div className="col-start-1 row-start-1 flex min-w-0 items-start gap-2">
                       <span aria-hidden className={cn("mt-2 h-6 w-1 shrink-0 rounded-full", DOT[identity.accent])} />
@@ -165,32 +186,55 @@ export default function AccountsPanel() {
                               <span className={cn("font-semibold", st === "ok" ? "text-neutral-600" : "text-bad-ink")} data-testid="dash-account-state">
                                 {STATE_WORD[st]}
                               </span>
-                              {through ? <span> · data through {through}</span> : null}
+                              {stamps.length ? <span data-testid="dash-account-stamps"> · {stamps.join(" · ")}</span> : null}
                             </>
                           )}
                         </div>
+                        {planWords ? (
+                          // (WP4) Off the plan, the way onto it: the Avalanche page
+                          // (add the card as a debt, or restore an archived one).
+                          <div className="mt-0.5 text-micro text-neutral-600" data-testid="dash-account-plan-row">
+                            <span className="font-semibold" data-testid="dash-account-plan">{planWords}</span>
+                            {" · "}
+                            <Link href="/avalanche" className={LINK} data-testid="dash-account-add-plan">Add to the plan</Link>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     {/* A <dl> only when it holds facts: a sentence in its place is a plain <div> (axe: definition-list). */}
-                    <FactsBox asList={liability ? owed != null || minPay != null || dueDay != null : isCash && !noBank}>
-                      {liability ? (
-                        owed != null || minPay != null || dueDay != null ? (
-                          <>
-                            {owed != null ? (
-                              <Fact label="Owed" value={<span className="font-semibold text-brand-navy" data-testid="dash-account-balance">{money(owed)}</span>} />
-                            ) : (
-                              <Fact label="Owed" value={<span className="font-sans text-neutral-500" data-testid="dash-account-noowed">not reported</span>} />
-                            )}
-                            {minPay != null ? <Fact label="Minimum" value={money(minPay)} testid="dash-account-min" /> : null}
-                            {dueDay ? <Fact label="Due" value={`the ${ordinal(dueDay)}`} testid="dash-account-due" /> : null}
-                            {pending > 0 ? <Fact label="Paid, not posted" value={money(pending)} testid="dash-account-pending" /> : null}
-                          </>
-                        ) : debts.data === undefined || (needLiabilities && liab.data === undefined && !liab.isError) ? (
-                          <span className="skeleton block h-8 w-48 rounded" aria-busy="true" />
+                    <FactsBox asList={view ? !waiting && cardHasFigures(view) : isCash && !noBank && !bankWait}>
+                      {bankWait ? (
+                        spineRead.state === "failed" ? (
+                          <p role="alert" className="text-label text-neutral-600" data-testid="dash-account-bank-failed">Balance did not load.</p>
                         ) : (
-                          <p className="text-label text-neutral-500" data-testid="dash-account-nodebt">
-                            No balance, minimum or due date reported for this card yet.
+                          <span className="skeleton block h-8 w-48 rounded" aria-busy="true" />
+                        )
+                      ) : view ? (
+                        debtsFailed ? (
+                          <p role="alert" className="text-label text-neutral-600" data-testid="dash-account-debts-failed">
+                            Debts did not load ·{" "}
+                            <button type="button" onClick={() => void debts.refetch()} className="font-semibold text-brand-navy underline">Try again</button>
                           </p>
+                        ) : waiting ? (
+                          <span className="skeleton block h-8 w-48 rounded" aria-busy="true" />
+                        ) : cardHasFigures(view) ? (
+                          <>
+                            {view.owed != null ? (
+                              <Fact label={CARD_WORDS.owed} value={<span className="font-semibold text-brand-navy" data-testid="dash-account-balance">{money(view.owed)}</span>} />
+                            ) : null}
+                            {view.creditorCurrent && (!view.onPlan || view.pending) ? (
+                              <Fact label={creditorLabel(identity.kind === "loan")} testid="dash-account-creditor"
+                                value={<span className={cn(!view.onPlan && "font-semibold text-brand-navy")}>{money(view.creditorCurrent.balance)}</span>} />
+                            ) : null}
+                            {view.owed == null && !view.creditorCurrent ? (
+                              <Fact label={creditorLabel(identity.kind === "loan")} value={<span className="font-sans text-neutral-500" data-testid="dash-account-noowed">not reported</span>} />
+                            ) : null}
+                            {view.minPayment != null ? <Fact label={CARD_WORDS.minimum} value={money(view.minPayment)} testid="dash-account-min" /> : null}
+                            {view.dueDay ? <Fact label={CARD_WORDS.due} value={`the ${ordinal(view.dueDay)}`} testid="dash-account-due" /> : null}
+                            {view.pending ? <Fact label={CARD_WORDS.pending} value={money(view.pending.total)} testid="dash-account-pending" /> : null}
+                          </>
+                        ) : (
+                          <p className="text-label text-neutral-500" data-testid="dash-account-nodebt">{CARD_WORDS.nothing}</p>
                         )
                       ) : isCash ? (
                         noBank ? (
@@ -198,9 +242,11 @@ export default function AccountsPanel() {
                         ) : (
                           <Fact label="Cash held" value={<span className="font-semibold text-brand-navy" data-testid="dash-account-balance">{money(spine?.bank.balance)}</span>} />
                         )
+                      ) : snap ? (
+                        <p className="text-label text-neutral-600" data-testid="dash-account-snapshot">{snapshotLine(snap)}</p>
                       ) : (
                         <p className="text-label text-neutral-500" data-testid="dash-account-nobalance">
-                          {identity.kind === "savings" ? "Savings balance is not tracked yet." : "Balance is not tracked for this account."}
+                          {identity.kind === "savings" ? NOT_TRACKED.savings : NOT_TRACKED.other}
                         </p>
                       )}
                     </FactsBox>

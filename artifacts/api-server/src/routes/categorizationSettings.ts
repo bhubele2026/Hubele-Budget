@@ -18,14 +18,15 @@ import {
   categoryDecisionsTable,
   mappingRulesTable,
   merchantMemoryTable,
+  plaidAccountsTable,
   plaidItemsTable,
   recurringItemsTable,
   settingsTable,
   transactionsTable,
 } from "@workspace/db";
-import { householdDateOf } from "@workspace/avalanche-core";
 import { requireAuth } from "../middlewares/requireAuth";
 import { isSyntheticPlaidItem } from "../lib/plaid";
+import { lastBankTxOnByItem } from "../lib/bankCoverage";
 import { evaluateModelGate } from "../lib/categorizer/modelGate";
 import { backlogOf, openReviewCount, undoRefusal, unreviewedCount } from "../lib/categorizer/review";
 import { autoUpdatesOf } from "./plaid";
@@ -97,20 +98,31 @@ async function recentDecisions(householdId: string) {
 /**
  * (V7) One row per linked bank: the same rows GET /plaid/items lists (this
  * household's items, synthetic seed rows hidden) and the same `autoUpdatesOf`.
- * Read from the table only; no Plaid call. `lastDataOn` is the household's
- * calendar date of the last successful sync.
+ * Read from the tables only; no Plaid call.
+ *
+ * (WP3) `lastDataOn` is a DATA date — the newest bank transaction H2 holds for
+ * the item, by the same rule as GET /plaid/items `lastBankTxOn`
+ * (`lib/bankCoverage.ts`). It used to be the household day of the last sync,
+ * which a sync that brought nothing new still moved. The sync moment is its
+ * own field, `lastSyncedAt`.
  */
 async function banksOf(householdId: string) {
   const items = (await db.select().from(plaidItemsTable).where(eq(plaidItemsTable.householdId, householdId))).filter(
     (it) => !isSyntheticPlaidItem(it),
   );
+  const accts = await db
+    .select({ accountId: plaidAccountsTable.accountId, itemId: plaidAccountsTable.itemId })
+    .from(plaidAccountsTable)
+    .where(eq(plaidAccountsTable.householdId, householdId));
+  const lastByItem = await lastBankTxOnByItem(householdId, accts);
   return items
     .map((it) => {
       const auto = autoUpdatesOf(it);
       return {
         itemId: it.itemId,
         name: it.institutionName ?? null,
-        lastDataOn: it.lastSyncedAt ? householdDateOf(it.lastSyncedAt) : null,
+        lastDataOn: lastByItem.get(it.id) ?? null,
+        lastSyncedAt: it.lastSyncedAt ? it.lastSyncedAt.toISOString() : null,
         autoUpdates: { on: auto.on, reason: auto.reason },
       };
     })

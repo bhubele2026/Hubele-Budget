@@ -1,27 +1,27 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
+import { Link } from "wouter";
 import type { Spine } from "@workspace/api-client-react";
 import { AccountChip } from "@/components/next";
 import { BankBalanceWhy } from "@/components/bank-balance-why";
 import { FreshnessLine } from "@/components/data-state";
-import { identityOf } from "@/lib/accountIdentity";
-import { remainingDebtScope } from "@/lib/debtBalance";
+import { isSyntheticPlaidItem } from "@/lib/plaidReauth";
+import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
+import { bankBalanceView, sinceSnapshotWords } from "@/lib/bankBalance";
+import { debtForAccount, needsLiability } from "@/lib/cardBalance";
+import { joinNames, offPlanCards, offPlanWords, remainingDebtScope } from "@/lib/debtBalance";
 import { lowPointView } from "@/lib/lowPoint";
 import { useSpine } from "@/hooks/useSpine";
-import { householdDayOfAt, householdToday } from "@/lib/householdDay";
 import { cn } from "@/lib/utils";
-import { useBankExplainQ, useCashSignalQ, useDebtsQ, useMoneyPositionQ } from "./queries";
-import { dayLabel, Kpi, money, PanelError, rise, weekdayLabel } from "./shared";
+import { useAmexQ, useDebtsQ, useLiabilityAccountsQ, useMoneyPositionQ, usePlaidItemsQ } from "./queries";
+import { dayLabel, Kpi, LINK, money, PanelError, rise, weekdayLabel } from "./shared";
 
 /** "$500" for a round amount, "$512.40" otherwise (the buffer is usually round). */
 function wholeMoney(v: string | number | null | undefined): string {
   return money(v).replace(/\.00$/, "");
 }
 
-/** "A", "A and B", "A, B and C". */
-export function joinNames(names: readonly string[]): string {
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
+// (WP4) Moved to `lib/debtBalance.ts` beside the scope it names; re-exported.
+export { joinNames };
 
 /**
  * The words for each money-position figure, ONE phrase per figure everywhere the
@@ -48,21 +48,20 @@ export function roomLines(p: Spine["position"], buffer: string, reservesHeld?: s
 }
 
 function CheckingCell({ s }: { s: Spine }) {
-  const cash = useCashSignalQ(90);
-  const acct = cash.data?.account;
-  const identity = acct && acct.via !== "unresolved"
+  // (WP1) The checking balance's one model, from the spine itself: the figure
+  // (the snapshot rolled forward through the ledger — bank rows AND manual
+  // entries on the account, by design, PR #22), whose account it is, and how
+  // many entries rolled on top of the snapshot. No second request: the label
+  // used to wait on the cash signal and the count on the "Why this number?"
+  // diagnostic.
+  const v = bankBalanceView(s.bank);
+  const acct = v.account;
+  const identity = acct
     ? identityOf({ id: "cash", name: acct.name, mask: acct.mask, subtype: acct.subtype, type: "depository", institutionName: null })
     : null;
-  const noBank = !s.bank.source && !s.bank.asOfDate;
+  const noBank = v.balance == null;
   const bal = Number(s.bank.balance);
-  // The figure is the snapshot rolled forward through the ledger (bank rows AND
-  // manual entries on the account, by design — PR #22). When the snapshot is
-  // from an earlier day, say how many rows it adds, from the diagnostic
-  // "Why this number?" reads (asked only then).
-  const snapDay = s.bank.asOfDate ? householdDayOfAt(s.bank.asOfDate) : null;
-  const rolled = !!snapDay && snapDay < householdToday(new Date());
-  const explain = useBankExplainQ(rolled);
-  const since = rolled ? explain.data?.ledger.sinceAnchor ?? null : null;
+  const since = sinceSnapshotWords(v);
   return (
     // `relative`: "Why this number?" pins itself to the corner of its box.
     <div className="relative">
@@ -76,11 +75,7 @@ function CheckingCell({ s }: { s: Spine }) {
         identity ? <AccountChip identity={identity} size="sm" wrap /> : <span>Checking</span>,
         <span className="inline-flex flex-wrap items-center gap-x-2 text-micro text-neutral-500" data-testid="dash-freshness">
           <FreshnessLine bank={s.bank} />
-          {since && since.rowCount > 0 ? (
-            <span data-testid="dash-since-snapshot" className="block w-full">
-              Includes {since.rowCount} {since.rowCount === 1 ? "entry" : "entries"} since the {dayLabel(snapDay)} snapshot
-            </span>
-          ) : null}
+          {since ? <span data-testid="dash-since-snapshot" className="block w-full">{since}</span> : null}
           <BankBalanceWhy />
         </span>,
       ]}
@@ -141,7 +136,28 @@ function LowCell({ s }: { s: Spine }) {
 
 function DebtCell({ s }: { s: Spine }) {
   const debts = useDebtsQ();
+  const items = usePlaidItemsQ();
   const pct = s.debt.payoffPct;
+  // (WP4) The linked cards, named as the Accounts panel names them, so the
+  // tile can say which cards its "$X left" does not cover.
+  const cards = useMemo(() => {
+    const flat = (items.data ?? []).filter((it) => !isSyntheticPlaidItem(it)).flatMap((it) =>
+      it.accounts.map((a) => ({
+        id: a.id, accountId: a.accountId, name: a.name, mask: a.mask, type: a.type, subtype: a.subtype,
+        institutionName: it.institutionName, institutionSlug: it.institutionSlug,
+      })),
+    );
+    const cardOrder = cardOrderOf(flat);
+    return flat.flatMap((a) => {
+      const id = identityOf(a, { cardOrder });
+      return id.isCard ? [{ id: a.id, accountId: a.accountId, name: `${id.label}${id.mask4 ? ` ••${id.mask4}` : ""}` }] : [];
+    });
+  }, [items.data]);
+  // Asked only when a card is off the plan: Plaid's stored figures (the
+  // Accounts panel's own read, same key) and the weekly payoff's billing word.
+  const anyOff = debts.data !== undefined && cards.some((c) => needsLiability(debtForAccount(debts.data, c)));
+  const liab = useLiabilityAccountsQ(anyOff);
+  const amex = useAmexQ(anyOff);
   let left: ReactNode;
   if (debts.data === undefined) {
     left = debts.isError
@@ -154,11 +170,23 @@ function DebtCell({ s }: { s: Spine }) {
       : (
         <span data-testid="dash-debt-left">
           <span className="font-mono tabular-nums text-brand-ink">{money(scope.total)}</span>
-          {scope.names.length === 1 ? " left on " : " left across "}
-          {joinNames(scope.names)}
+          {` left on your payoff plan (${joinNames(scope.names)})`}
         </span>
       );
   }
+  // Said once both reads have answered (or failed): never a sentence that
+  // gains its "paid in full weekly" a moment later.
+  const off = anyOff && (liab.data !== undefined || liab.isError) && (amex.data !== undefined || amex.isError)
+    ? offPlanWords(offPlanCards(cards, debts.data, {
+        liabilities: liab.data,
+        weeklyAccountIds: new Set((amex.data?.cards ?? []).filter((c) => c.cadence === "weekly").map((c) => c.accountId)),
+      }))
+    : null;
+  const offLine = off ? (
+    <span data-testid="dash-debt-offplan">
+      {off.text} · <Link href="/avalanche" className={LINK} data-testid="dash-debt-offplan-link">{off.link}</Link>
+    </span>
+  ) : null;
   const noDebts = debts.data !== undefined && !debts.data.some((d) => d.status === "active");
   return (
     <Kpi
@@ -166,7 +194,7 @@ function DebtCell({ s }: { s: Spine }) {
       label="Debt paid off"
       value={pct == null ? "—" : `${Math.round(pct)}%`}
       missing={noDebts ? "No debts on the payoff plan yet." : pct == null ? "No debt has a starting balance yet." : undefined}
-      lines={noDebts ? [] : [left]}
+      lines={noDebts ? [offLine] : [left, offLine]}
     />
   );
 }

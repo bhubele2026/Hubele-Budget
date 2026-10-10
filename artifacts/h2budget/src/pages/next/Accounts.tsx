@@ -1,8 +1,9 @@
 import { lazy, Suspense, useMemo } from "react";
 import { useRoute } from "wouter";
 import {
-  useGetAmexWeeklyPayoff, useGetForecast, useListCategories, useListDebts,
-  useListPlaidItems, useListTransactions,
+  useGetAmexWeeklyPayoff, useListCategories, useListDebts,
+  useListPlaidItems, useListPlaidLiabilityAccounts, useListTransactions,
+  getListPlaidLiabilityAccountsQueryKey,
   type AmexWeeklyPayoffCard,
 } from "@workspace/api-client-react";
 import { Page, emptyNote } from "@/ui";
@@ -11,7 +12,11 @@ import { AccountPageSkeleton } from "@/components/account-page/account-page-skel
 import { displayAmount } from "@/lib/amountDisplay";
 import { txnRoute } from "@/lib/accountRoute";
 import { householdToday } from "@/lib/householdDay";
-import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
+import { formatCurrency } from "@/lib/utils";
+import { isSpineAccount, snapshotWords } from "@/lib/bankBalance";
+import { useBankBalanceView } from "@/hooks/useBankBalanceView";
+import { CARD_WORDS, cardOwedView, creditorLabel, debtForAccount, needsLiability } from "@/lib/cardBalance";
+import { NOT_TRACKED, snapshotCaption } from "@/lib/snapshotWords";
 import { AccountSelector, type BalanceByRow } from "./accounts/AccountSelector";
 import { AccountSummary } from "./accounts/AccountSummary";
 import { accountViewOf, buildEntries } from "./accounts/entries";
@@ -100,9 +105,22 @@ export default function NextAccountsPage() {
   const { data: items, isLoading, isError: itemsFailed, refetch: refetchItems } = useListPlaidItems();
   // (WP7 review) A failed read of the linked accounts is unknown, never "none".
   const itemsKnown = items !== undefined;
-  const { data: debts } = useListDebts();
+  const debtsQ = useListDebts();
+  const debts = debtsQ.data;
+  // (WP3b) Until the debts answer, a card's plan state is UNKNOWN: never "Not
+  // on the payoff plan" because the list is missing, and a failed read says so.
+  const debtsUnknown = debts === undefined;
+  const debtsFailed = debtsUnknown && !!debtsQ.isError;
   const { data: payoff } = useGetAmexWeeklyPayoff();
-  const { data: forecast } = useGetForecast({ days: 90 });
+  // (WP3) The checking balance comes from the spine's bank view (WP1) — the
+  // figure the dashboard shows, with the snapshot under it — so this page no
+  // longer asks for the whole forecast to find one number.
+  const { view: bank, state: bankState, refetch: refetchBank } = useBankBalanceView();
+  // (WP3b) The spine decides which depository account rolls forward: until it
+  // answers, no depository balance is labelled (never "not rolled forward" for
+  // the one that is).
+  const bankUnknown = bank === null;
+  const bankFailed = bankUnknown && bankState === "failed";
   const entries = useMemo(() => buildEntries(items), [items]);
   // The id may be the Plaid account_id or the items response's row id.
   const selected = entries.find((e) => e.plaidAccountId === selectedId || e.rowId === selectedId) ?? null;
@@ -110,17 +128,64 @@ export default function NextAccountsPage() {
   // other depository account, at any bank), or words for a loan or anything else.
   const view = selected ? accountViewOf(selected) : null;
 
-  const debtFor = (rowId: string) => (debts ?? []).find((d) => d.plaidAccountId === rowId) ?? null;
-  const snapshotFor = (rowId: string) =>
-    deriveEffectiveSnapshot({
-      bankSnapshot: forecast?.bankSnapshot ?? null,
-      accountSnapshots: forecast?.accountSnapshots ?? {},
-      selectedAccountInternalId: rowId,
-      plaidCheckingAccounts: forecast?.plaidCheckingAccounts ?? [],
-    });
+  // (WP3) The debt row by the account's INTERNAL row id only, any status —
+  // the card model says what an archived row is. The dashboard's own rule.
+  const debtFor = (rowId: string) => debtForAccount(debts, { id: rowId });
+  const owes = (e: (typeof entries)[number]) => e.identity.isCard || e.identity.kind === "loan";
+  // A card or loan with no debt row — or an archived one — reads Plaid's STORED
+  // liability figures, as the dashboard does (same key; asked only when such an
+  // account exists and never with `refresh`).
+  const needLiabilities = debts !== undefined && entries.some((e) => owes(e) && needsLiability(debtFor(e.rowId)));
+  const { data: liabs } = useListPlaidLiabilityAccounts(undefined, {
+    query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * 60_000, enabled: needLiabilities },
+  });
+  const liabilityFor = (rowId: string) =>
+    needsLiability(debtFor(rowId)) ? (liabs ?? []).find((l) => l.id === rowId) ?? null : null;
+  // The account the bank balance rolls forward on — BY ID (`isSpineAccount`),
+  // never by mask.
+  const allKeys = entries.map((e) => ({ id: e.rowId, accountId: e.plaidAccountId, mask: e.identity.mask4 || null }));
+  const isSpine = (e: (typeof entries)[number]) =>
+    !owes(e) && isSpineAccount({ id: e.rowId, accountId: e.plaidAccountId, mask: e.identity.mask4 || null }, bank?.account, allKeys);
+  const bankFor = (e: (typeof entries)[number]) => (isSpine(e) ? bank : null);
+  const pendingFor = (e: (typeof entries)[number]) =>
+    owes(e)
+      ? debtsUnknown ? { failed: debtsFailed, what: "Debts", onRetry: () => void debtsQ.refetch() } : null
+      : bankUnknown ? { failed: bankFailed, what: "Your bank balance", onRetry: () => void refetchBank() } : null;
   const balances: BalanceByRow = {};
   for (const e of entries) {
-    balances[e.rowId] = e.identity.isCard ? debtFor(e.rowId)?.balance : e.identity.kind === "checking" ? snapshotFor(e.rowId)?.balance : undefined;
+    if (owes(e) ? debtsUnknown : bankUnknown) {
+      // Not known yet: a dash, or the words when the read failed.
+      const failed = owes(e) ? debtsFailed : bankFailed;
+      balances[e.rowId] = { label: null, figure: null, words: failed ? (owes(e) ? "Debts did not load" : "Balance did not load") : null };
+    } else if (owes(e)) {
+      // ⭐ The ONE card model: the chip prints what the dashboard row prints.
+      const v = cardOwedView({ debt: debtFor(e.rowId), liability: liabilityFor(e.rowId) });
+      balances[e.rowId] = v.owed != null
+        ? { label: CARD_WORDS.owed, figure: formatCurrency(v.owed), balanceAt: v.creditorCurrent?.asOf }
+        : {
+            label: v.creditorCurrent ? creditorLabel(e.identity.kind === "loan") : null,
+            figure: v.creditorCurrent ? formatCurrency(v.creditorCurrent.balance) : null,
+            plan: v.status,
+            balanceAt: v.creditorCurrent?.asOf,
+          };
+    } else if (isSpine(e) && bank) {
+      // ⭐ The checking balance: the dashboard's figure ("Balance" = the
+      // snapshot rolled forward), with the bank's own snapshot under it, dated,
+      // and how many entries rolled on top (WP1's `snapshotWords`).
+      balances[e.rowId] = {
+        label: "Balance",
+        figure: bank.balance != null ? formatCurrency(bank.balance) : null,
+        sub: snapshotWords(bank),
+        balanceAt: bank.snapshot?.at,
+      };
+    } else {
+      // Every other depository account (savings, a second checking account):
+      // its last reading, never rolled forward, or words (`lib/snapshotWords.ts`).
+      const r = e.snapshot;
+      balances[e.rowId] = r
+        ? { label: "Snapshot", figure: formatCurrency(r.balance), words: snapshotCaption(r), balanceAt: r.at }
+        : { label: null, figure: null, words: e.identity.kind === "savings" ? NOT_TRACKED.savings : NOT_TRACKED.other };
+    }
   }
 
   return (
@@ -142,6 +207,18 @@ export default function NextAccountsPage() {
             ) : (
               <p className={emptyNote}>No linked accounts yet.</p>
             )}
+            {entries.length && debtsFailed ? (
+              <p role="alert" className="mt-2 text-label text-neutral-600" data-testid="accounts-debts-failed">
+                Debts did not load ·{" "}
+                <button type="button" onClick={() => void debtsQ.refetch()} className="font-semibold text-brand-navy underline">Try again</button>
+              </p>
+            ) : null}
+            {entries.length && bankFailed ? (
+              <p role="alert" className="mt-2 text-label text-neutral-600" data-testid="accounts-bank-failed">
+                Your bank balance did not load ·{" "}
+                <button type="button" onClick={() => void refetchBank()} className="font-semibold text-brand-navy underline">Try again</button>
+              </p>
+            ) : null}
             {selectedId && !selected && itemsKnown ? (
               <p role="status" className="mt-2 text-label text-neutral-600">That account is not linked here. Showing all accounts.</p>
             ) : null}
@@ -165,8 +242,9 @@ export default function NextAccountsPage() {
                     <AccountSummary
                       entry={selected}
                       debt={debtFor(selected.rowId)}
+                      pending={pendingFor(selected)}
                       payoffCard={null}
-                      snapshot={snapshotFor(selected.rowId)}
+                      bank={bankFor(selected)}
                     />
                   }
                 />
@@ -186,8 +264,9 @@ export default function NextAccountsPage() {
                     <AccountSummary
                       entry={selected}
                       debt={debtFor(selected.rowId)}
+                      pending={pendingFor(selected)}
+                      liability={liabilityFor(selected.rowId)}
                       payoffCard={payoffCardFor(payoff?.cards, selected)}
-                      snapshot={null}
                     />
                   }
                 />
@@ -198,8 +277,10 @@ export default function NextAccountsPage() {
               <AccountSummary
                 entry={selected}
                 debt={debtFor(selected.rowId)}
+                pending={pendingFor(selected)}
+                liability={liabilityFor(selected.rowId)}
                 payoffCard={null}
-                snapshot={snapshotFor(selected.rowId)}
+                bank={bankFor(selected)}
               />
               <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" variant="static" data-testid="account-activity">
                 {/* (WP7) Said plainly: no ledger exists for these yet. */}
