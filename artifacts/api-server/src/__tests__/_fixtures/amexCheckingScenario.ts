@@ -132,11 +132,14 @@ const CHASE_KROGER = "Chase ••1234 | 2026-10-05 | KROGER #442 | -42.10 | pos
 // S1 · Mon 10/5 — the Amex charge arrives pending. It is owed on the card, it is
 // household spending this week, and it moves allowance from "left" to
 // "charged": the Saturday payoff holds at $300.00 (86.33 + 213.67).
+// (WP8, owner's decision 2026-10-10) The Amex page bills what the hook bills —
+// every charge on the card, filed or not — so it shows the unfiled $86.33 now
+// (it showed $0.00 until a person filed it, at S3a).
 EXPECTED.S1 = {
   ...EXPECTED.S0,
   rows: [AMEX_PENDING, HIST],
   chaseEndOfDay: ["2500.00", "2500.00", null, null, null, null, null, null, null],
-  amex: { ...EXPECTED.S0.amex, endingBalance: "586.33" },
+  amex: { ...EXPECTED.S0.amex, endingBalance: "586.33", weekCharges: "86.33", chargeCount: 1, combinedWeekCharges: "86.33" },
   spentWeek: "86.33",
   spentMonth: "86.33",
   debt: { ...EXPECTED.S0.debt, payoffPct: "41.367" },
@@ -159,8 +162,9 @@ EXPECTED.S2 = {
   forecast: { ...EXPECTED.S1.forecast, hookEvents: ["2026-10-10 -257.90", "2026-10-17 -300.00"] },
 };
 
-// S3a · Tue 10/6 — a person files the pending Amex charge as Groceries. The Amex
-// page counts filed charges, so it now shows $86.33; no other figure moves.
+// S3a · Tue 10/6 — a person files the pending Amex charge as Groceries. No figure
+// moves. (WP8) The Amex page already counted the charge unfiled ($86.33 since S1);
+// before the owner's decision it counted filed charges only and moved here.
 const AMEX_PENDING_FILED = "American Express ••1005 | 2026-10-05 | KROGER #442 | -86.33 | pending | Groceries | locked";
 EXPECTED.S3a = {
   ...EXPECTED.S2,
