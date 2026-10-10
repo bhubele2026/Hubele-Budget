@@ -6,6 +6,7 @@ Branch `fin/wp4-debt-labels`, from `origin/fin/integration` a1d2b4ff. Not merged
 - **One population:** `remainingDebtTotal` / `remainingDebtScope` use `inPayoffPopulation` (active and anchored, `@workspace/avalanche-core/pendingDebt`), the rule % paid uses. GET /debts anchors every debt it returns, so only an active debt anchored at $0.00 leaves "$ left". % paid already left it out.
 - **Debt tile (`SummaryRow` DebtCell):** "$X left on your payoff plan (A and B)". An off-plan line follows, linked to /avalanche: "<card> is paid in full weekly, not on the plan · Put it on the plan".
   - "Paid in full weekly" appears only when the weekly payoff bills every named card weekly (`useAmexQ`).
+  - (WP3b correction) The weekly payoff is NOT already on the landing: it is one extra, bounded request (the Amex page's key), asked only when a card is off the plan. The cards, debts and Plaid figures are the landing's own reads.
   - Several cards share one sentence ("are … · Put them on the plan").
   - The line waits for Plaid's figures and the payoff (no late rewording).
 - **`lib/debtBalance.ts`:** `offPlanCards` covers cards with no debt row or an archived one, using the card model. A $0.00 card is left out and an unknown balance is kept. It also has `offPlanWords`, and `joinNames` moved here.

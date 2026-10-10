@@ -105,12 +105,22 @@ export default function NextAccountsPage() {
   const { data: items, isLoading, isError: itemsFailed, refetch: refetchItems } = useListPlaidItems();
   // (WP7 review) A failed read of the linked accounts is unknown, never "none".
   const itemsKnown = items !== undefined;
-  const { data: debts } = useListDebts();
+  const debtsQ = useListDebts();
+  const debts = debtsQ.data;
+  // (WP3b) Until the debts answer, a card's plan state is UNKNOWN: never "Not
+  // on the payoff plan" because the list is missing, and a failed read says so.
+  const debtsUnknown = debts === undefined;
+  const debtsFailed = debtsUnknown && !!debtsQ.isError;
   const { data: payoff } = useGetAmexWeeklyPayoff();
   // (WP3) The checking balance comes from the spine's bank view (WP1) — the
   // figure the dashboard shows, with the snapshot under it — so this page no
   // longer asks for the whole forecast to find one number.
-  const { view: bank } = useBankBalanceView();
+  const { view: bank, state: bankState, refetch: refetchBank } = useBankBalanceView();
+  // (WP3b) The spine decides which depository account rolls forward: until it
+  // answers, no depository balance is labelled (never "not rolled forward" for
+  // the one that is).
+  const bankUnknown = bank === null;
+  const bankFailed = bankUnknown && bankState === "failed";
   const entries = useMemo(() => buildEntries(items), [items]);
   // The id may be the Plaid account_id or the items response's row id.
   const selected = entries.find((e) => e.plaidAccountId === selectedId || e.rowId === selectedId) ?? null;
@@ -134,9 +144,17 @@ export default function NextAccountsPage() {
   const isSpine = (e: (typeof entries)[number]) =>
     !owes(e) && isSpineAccount({ id: e.rowId, accountId: e.plaidAccountId, mask: e.identity.mask4 || null }, bank?.account, allKeys);
   const bankFor = (e: (typeof entries)[number]) => (isSpine(e) ? bank : null);
+  const pendingFor = (e: (typeof entries)[number]) =>
+    owes(e)
+      ? debtsUnknown ? { failed: debtsFailed, what: "Debts", onRetry: () => void debtsQ.refetch() } : null
+      : bankUnknown ? { failed: bankFailed, what: "Your bank balance", onRetry: () => void refetchBank() } : null;
   const balances: BalanceByRow = {};
   for (const e of entries) {
-    if (owes(e)) {
+    if (owes(e) ? debtsUnknown : bankUnknown) {
+      // Not known yet: a dash, or the words when the read failed.
+      const failed = owes(e) ? debtsFailed : bankFailed;
+      balances[e.rowId] = { label: null, figure: null, words: failed ? (owes(e) ? "Debts did not load" : "Balance did not load") : null };
+    } else if (owes(e)) {
       // ⭐ The ONE card model: the chip prints what the dashboard row prints.
       const v = cardOwedView({ debt: debtFor(e.rowId), liability: liabilityFor(e.rowId) });
       balances[e.rowId] = v.owed != null
@@ -186,6 +204,18 @@ export default function NextAccountsPage() {
             ) : (
               <p className={emptyNote}>No linked accounts yet.</p>
             )}
+            {entries.length && debtsFailed ? (
+              <p role="alert" className="mt-2 text-label text-neutral-600" data-testid="accounts-debts-failed">
+                Debts did not load ·{" "}
+                <button type="button" onClick={() => void debtsQ.refetch()} className="font-semibold text-brand-navy underline">Try again</button>
+              </p>
+            ) : null}
+            {entries.length && bankFailed ? (
+              <p role="alert" className="mt-2 text-label text-neutral-600" data-testid="accounts-bank-failed">
+                Your bank balance did not load ·{" "}
+                <button type="button" onClick={() => void refetchBank()} className="font-semibold text-brand-navy underline">Try again</button>
+              </p>
+            ) : null}
             {selectedId && !selected && itemsKnown ? (
               <p role="status" className="mt-2 text-label text-neutral-600">That account is not linked here. Showing all accounts.</p>
             ) : null}
@@ -206,6 +236,7 @@ export default function NextAccountsPage() {
                     <AccountSummary
                       entry={selected}
                       debt={debtFor(selected.rowId)}
+                      pending={pendingFor(selected)}
                       payoffCard={null}
                       bank={bankFor(selected)}
                     />
@@ -226,6 +257,7 @@ export default function NextAccountsPage() {
                     <AccountSummary
                       entry={selected}
                       debt={debtFor(selected.rowId)}
+                      pending={pendingFor(selected)}
                       liability={liabilityFor(selected.rowId)}
                       payoffCard={payoffCardFor(payoff?.cards, selected)}
                     />
@@ -238,6 +270,7 @@ export default function NextAccountsPage() {
               <AccountSummary
                 entry={selected}
                 debt={debtFor(selected.rowId)}
+                pending={pendingFor(selected)}
                 liability={liabilityFor(selected.rowId)}
                 payoffCard={null}
                 bank={bankFor(selected)}
