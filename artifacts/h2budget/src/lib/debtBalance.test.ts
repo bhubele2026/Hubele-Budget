@@ -6,16 +6,16 @@ const d = (o: Partial<Debt> & { id: string }): Debt =>
   ({ name: o.id, balance: "0", apr: "0", minPayment: "0", payment: "0", status: "active", sortOrder: 0,
     balanceSource: "manual", aprSource: "manual", minPaymentSource: "manual", originalBalance: "1000.00", ...o }) as Debt;
 
-describe("(WP4) the amount left and % paid measure one population", () => {
-  it("active and anchored only: archived and unanchored debts are in neither", () => {
+describe("(WP4b) the amount left and % paid measure one population: every active debt", () => {
+  it("an archived debt is in neither; an active debt anchored at $0.00 is money left, in both (WP4 dropped it)", () => {
     const debts = [
       d({ id: "a", balance: "500.00", pendingPaymentTotal: "100.00" }),
       d({ id: "b", balance: "250.00" }),
       d({ id: "gone", balance: "999.00", status: "archived" }),
       d({ id: "bare", balance: "120.00", originalBalance: "0.00" }),
     ];
-    expect(remainingDebtTotal(debts)).toBe(650);
-    expect(remainingDebtScope(debts).names).toEqual(["a", "b"]);
+    expect(remainingDebtTotal(debts)).toBe(770);
+    expect(remainingDebtScope(debts).names).toEqual(["a", "b", "bare"]);
   });
 });
 
