@@ -12,6 +12,10 @@
  *     category that's still set.
  *   - Dry-run by default: prints how many WOULD be recovered and writes
  *     nothing. Add --apply to actually write.
+ *   - (WP5d) Never files a row against its money's direction: a rule that
+ *     would put money in under an expense category (a paycheck under
+ *     Dining), or money out under an income one, is skipped and counted —
+ *     the same guard the sync's insert-time fill applies.
  *
  * Run from the repo root:
  *   pnpm --filter @workspace/scripts exec tsx ./src/reapplyCategories.ts          # dry-run (just counts)
@@ -22,11 +26,13 @@ import {
   db,
   pool,
   householdsTable,
+  plaidAccountsTable,
   transactionsTable,
 } from "@workspace/db";
 import {
-  loadUserRules,
-  matchRule,
+  categorize,
+  directionGuard,
+  loadRuleContext,
 } from "../../artifacts/api-server/src/lib/autoCategorize";
 
 function argValue(flag: string): string | null {
@@ -55,13 +61,32 @@ async function main(): Promise<void> {
 
   let totalScanned = 0;
   let totalMatched = 0;
+  let totalConflicts = 0;
 
   for (const h of households) {
-    const rules = await loadUserRules(h.id);
+    const ruleCtx = await loadRuleContext(h.id);
+    const rules = ruleCtx.rules;
+    const accountTypes = new Map(
+      (
+        await db
+          .select({ accountId: plaidAccountsTable.accountId, type: plaidAccountsTable.type })
+          .from(plaidAccountsTable)
+          .where(eq(plaidAccountsTable.householdId, h.id))
+      ).map((a) => [a.accountId, a.type]),
+    );
     const rows = await db
       .select({
         id: transactionsTable.id,
         description: transactionsTable.description,
+        amount: transactionsTable.amount,
+        source: transactionsTable.source,
+        plaidAccountId: transactionsTable.plaidAccountId,
+        pfcPrimary: transactionsTable.pfcPrimary,
+        pfcDetailed: transactionsTable.pfcDetailed,
+        isTransfer: transactionsTable.isTransfer,
+        debtId: transactionsTable.debtId,
+        isExternalCardPayment: transactionsTable.isExternalCardPayment,
+        reimbursable: transactionsTable.reimbursable,
       })
       .from(transactionsTable)
       .where(
@@ -75,9 +100,27 @@ async function main(): Promise<void> {
 
     totalScanned += rows.length;
     let matched = 0;
+    let conflicts = 0;
 
     for (const row of rows) {
-      const categoryId = matchRule(row.description ?? "", rules);
+      const result = categorize(
+        { description: row.description ?? "", pfcPrimary: row.pfcPrimary, pfcDetailed: row.pfcDetailed },
+        rules,
+        directionGuard(ruleCtx, {
+          amount: row.amount,
+          source: row.source,
+          accountType: row.plaidAccountId ? accountTypes.get(row.plaidAccountId) ?? null : null,
+          isTransfer: row.isTransfer,
+          debtId: row.debtId,
+          isExternalCardPayment: row.isExternalCardPayment,
+          reimbursable: row.reimbursable,
+        }),
+      );
+      if (result.directionConflict) {
+        conflicts++;
+        continue;
+      }
+      const categoryId = result.categoryId;
       if (!categoryId) continue;
       matched++;
       if (apply) {
@@ -89,10 +132,17 @@ async function main(): Promise<void> {
     }
 
     totalMatched += matched;
+    totalConflicts += conflicts;
     console.log(
       `Household ${h.id}: ${rows.length} uncategorized · ${matched} match a rule${
         apply ? " (applied)" : ""
-      } · ${rules.length} rules loaded`,
+      } · ${conflicts} skipped (the rule would file them against the money's direction) · ${rules.length} rules loaded`,
+    );
+  }
+  if (totalConflicts > 0) {
+    console.log(
+      `${totalConflicts} rows were left uncategorized because the matching rule would file money in ` +
+        `under an expense category (or money out under an income one). Review them by hand.`,
     );
   }
 

@@ -11,7 +11,8 @@ import {
   transactionsTable,
   monthlySnapshotsTable,
 } from "@workspace/db";
-import { categorize, type RuleRow } from "./autoCategorize";
+import { categorize, directionGuard, type RuleRow } from "./autoCategorize";
+import { spendContextOf } from "./spendContext";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { captureImportSnapshot } from "./importSnapshot";
 import { recordRuleChanges, ruleSnapshot, type RuleChange } from "./mappingRuleAudit";
@@ -329,10 +330,17 @@ export async function importWorkbook(
       ? await tx.insert(budgetCategoriesTable).values(catValues).returning({
           id: budgetCategoriesTable.id,
           name: budgetCategoriesTable.name,
+          kind: budgetCategoriesTable.kind,
+          debtId: budgetCategoriesTable.debtId,
         })
       : [];
     counts.budget_categories = insertedCats.length;
     const catByName = new Map(insertedCats.map((c) => [c.name, c.id]));
+    // (WP5d) The categories a rule can file into here, for the direction
+    // guard. Every imported category is an expense and every row an Amex card
+    // row, so today the guard never fires on an import; it is wired so the
+    // insert-time fill has one rule everywhere.
+    const importCtx = { spendCtx: spendContextOf(insertedCats), uncategorizedIds: new Set<string>() };
 
     // Budget month + lines (current month)
     const now = new Date();
@@ -519,7 +527,11 @@ export async function importWorkbook(
             matchedRuleId: null as string | null,
             matchedRulePattern: null as string | null,
           }
-        : categorize({ description }, ruleRows);
+        : categorize(
+            { description },
+            ruleRows,
+            directionGuard(importCtx, { amount: signed, source: "amex", accountType: null }),
+          );
 
       // Preserve manual category overrides: if the prior transaction with
       // the same (date, description, amount, source) had a categoryId that

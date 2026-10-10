@@ -53,6 +53,7 @@ vi.mock("../lib/plaid", async () => {
 
 import {
   budgetCategoriesTable,
+  categoryDecisionsTable,
   db,
   mappingRulesTable,
   plaidAccountsTable,
@@ -99,7 +100,7 @@ beforeEach(async () => {
   nextSyncResponse = { added: [], modified: [], removed: [] };
 });
 
-async function seedCheckingAccount(): Promise<{ itemRowId: string; acct: string }> {
+async function seedCheckingAccount(type = "depository"): Promise<{ itemRowId: string; acct: string }> {
   const [item] = await db
     .insert(plaidItemsTable)
     .values({
@@ -117,9 +118,9 @@ async function seedCheckingAccount(): Promise<{ itemRowId: string; acct: string 
     householdId: TEST_HOUSEHOLD_ID,
     itemId: item!.id,
     accountId: acct,
-    name: "Test Checking",
-    type: "depository",
-    subtype: "checking",
+    name: type === "credit" ? "Test Card" : "Test Checking",
+    type,
+    subtype: type === "credit" ? "credit card" : "checking",
     firstSyncCompletedAt: new Date("2026-01-01T00:00:00Z"),
   });
   return { itemRowId: item!.id, acct };
@@ -239,5 +240,68 @@ describe("Plaid sync and category_locked_by_user", () => {
     const row = await byPlaidId(ptid);
     expect(row!.categoryId).toBe(RULE_CAT);
     expect(row!.locked).toBe(false);
+  });
+});
+
+// (WP5d) The insert-time rule fill never files money against its direction:
+// a payroll deposit a rule would put under an expense category is inserted
+// UNcategorized, and the engine at the end of the sync queues it, naming the
+// rule. A card's credit and the right direction are filed as before.
+describe("(WP5d) the sync's insert-time fill and the direction guard", () => {
+  async function rule(pattern: string): Promise<string> {
+    const [r] = await db
+      .insert(mappingRulesTable)
+      .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, pattern, matchType: "contains", categoryId: RULE_CAT, priority: 100 })
+      .returning({ id: mappingRulesTable.id });
+    return r!.id;
+  }
+  const decisionsOf = async (ptid: string) => {
+    const [row] = await db.select({ id: transactionsTable.id }).from(transactionsTable).where(eq(transactionsTable.plaidTransactionId, ptid));
+    return db.select().from(categoryDecisionsTable).where(eq(categoryDecisionsTable.transactionId, row!.id));
+  };
+
+  it("a deposit a rule would file under an expense category inserts uncategorized and is queued, naming the rule", async () => {
+    const { itemRowId, acct } = await seedCheckingAccount();
+    const ruleId = await rule("SYNCDIR BIGCO");
+    const pay = `DIRP-${randomUUID()}`;
+    const cafe = `DIRC-${randomUUID()}`;
+    nextSyncResponse = {
+      added: [
+        // Plaid's sign: negative = money in.
+        { transaction_id: pay, account_id: acct, date: "2026-05-12", amount: -2500, name: "SYNCDIR BIGCO PAYROLL" },
+        { transaction_id: cafe, account_id: acct, date: "2026-05-12", amount: 8.5, name: "SYNCDIR BIGCO CAFE" },
+      ],
+      modified: [],
+      removed: [],
+    };
+    const result = await syncPlaidItem(TEST_USER, itemRowId);
+
+    expect(await byPlaidId(pay)).toMatchObject({ categoryId: null, locked: false, amount: "2500.00" });
+    const [d] = await decisionsOf(pay);
+    expect(d).toMatchObject({
+      source: "rule",
+      band: "queue",
+      categoryId: RULE_CAT,
+      ruleId,
+      explanation: "Money in, but this would file it under an expense category.",
+    });
+    // The cafeteria charge is money out under an expense: filed by the rule as before.
+    expect(await byPlaidId(cafe)).toMatchObject({ categoryId: RULE_CAT, locked: false });
+    // Only the filed row is counted as auto-categorized by the rule.
+    expect(result.autoCategorized).toBe(1);
+    expect(result.ruleAttributions).toEqual([expect.objectContaining({ ruleId, count: 1 })]);
+  });
+
+  it("must not change: a credit on a card of any bank is filed by the rule as before", async () => {
+    const { itemRowId, acct } = await seedCheckingAccount("credit");
+    await rule("SYNCDIR STORE");
+    const credit = `DIRK-${randomUUID()}`;
+    nextSyncResponse = {
+      added: [{ transaction_id: credit, account_id: acct, date: "2026-05-12", amount: -20, name: "SYNCDIR STORE 9" }],
+      modified: [],
+      removed: [],
+    };
+    await syncPlaidItem(TEST_USER, itemRowId);
+    expect(await byPlaidId(credit)).toMatchObject({ categoryId: RULE_CAT, locked: false, amount: "20.00" });
   });
 });

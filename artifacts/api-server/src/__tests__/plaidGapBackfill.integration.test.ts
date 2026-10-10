@@ -63,12 +63,16 @@ vi.mock("../lib/plaid", async () => {
 
 import {
   db,
+  budgetCategoriesTable,
+  categoryDecisionsTable,
   debtsTable,
   forecastSettingsTable,
+  mappingRulesTable,
   plaidAccountsTable,
   plaidItemsTable,
   transactionsTable,
 } from "@workspace/db";
+import { inArray } from "drizzle-orm";
 import { runGapBackfillForItem } from "../lib/plaidSync";
 
 async function cleanup(): Promise<void> {
@@ -469,5 +473,97 @@ describe("(#408) runGapBackfillForItem", () => {
     });
     expect(result.added).toBe(0);
     expect(lastGetCall).toBeNull();
+  });
+});
+
+// (WP5d) The gap backfill runs the same tail as the cursor path: the
+// insert-time fill is guarded (money in never goes under an expense category
+// by a rule), and the deterministic engine decides every row it upserted,
+// `freshIds` = the rows it inserted. A second run records nothing new.
+describe("(WP5d) the gap backfill's fill and categorization", () => {
+  it("files the purchase, leaves the deposit uncategorized with a queue decision naming the rule, and is idempotent", async () => {
+    const [cat] = await db
+      .insert(budgetCategoriesTable)
+      .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, name: `Dining ${randomUUID().slice(0, 6)}`, kind: "expense" })
+      .returning({ id: budgetCategoriesTable.id });
+    const [rule] = await db
+      .insert(mappingRulesTable)
+      .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, pattern: "GAPDIR BIGCO", matchType: "contains", categoryId: cat!.id, priority: 100 })
+      .returning({ id: mappingRulesTable.id });
+    const externalAcctId = `acct-${randomUUID()}`;
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: `item-${randomUUID()}`,
+        accessToken: "access-sandbox-fresh-token-wp5d",
+        institutionId: "ins_56",
+        institutionName: "Chase",
+        institutionSlug: "chase",
+      })
+      .returning();
+    await db.insert(plaidAccountsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      itemId: item!.id,
+      accountId: externalAcctId,
+      name: "Chase Checking",
+      type: "depository",
+      subtype: "checking",
+      mask: "5526",
+    });
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: "2026-04-20",
+      description: "older row",
+      amount: "-15.50",
+      source: "plaid:chase",
+      plaidAccountId: externalAcctId,
+      plaidTransactionId: `pre-${randomUUID()}`,
+    });
+    nextGetResponse = {
+      transactions: [
+        // Plaid's sign: negative = money in.
+        { transaction_id: `gapdir-pay-${randomUUID()}`, account_id: externalAcctId, date: "2026-05-01", amount: -2500, name: "GAPDIR BIGCO PAYROLL" },
+        { transaction_id: `gapdir-cafe-${randomUUID()}`, account_id: externalAcctId, date: "2026-05-02", amount: 8.5, name: "GAPDIR BIGCO CAFE" },
+      ],
+      total_transactions: 2,
+    };
+    const today = new Date("2026-05-07T12:00:00Z");
+    const result = await runGapBackfillForItem(TEST_USER, item!.id, { today });
+    expect(result.added).toBe(2);
+
+    const rows = await db
+      .select()
+      .from(transactionsTable)
+      .where(inArray(transactionsTable.description, ["GAPDIR BIGCO PAYROLL", "GAPDIR BIGCO CAFE"]));
+    const pay = rows.find((r) => r.description === "GAPDIR BIGCO PAYROLL")!;
+    const cafe = rows.find((r) => r.description === "GAPDIR BIGCO CAFE")!;
+    expect(pay).toMatchObject({ categoryId: null, amount: "2500.00" });
+    expect(cafe).toMatchObject({ categoryId: cat!.id, amount: "-8.50" });
+    const decisions = async (id: string) =>
+      db.select().from(categoryDecisionsTable).where(eq(categoryDecisionsTable.transactionId, id));
+    // The engine ran over the backfilled rows: the deposit is a question naming the rule…
+    expect(await decisions(pay.id)).toEqual([
+      expect.objectContaining({
+        source: "rule",
+        band: "queue",
+        categoryId: cat!.id,
+        ruleId: rule!.id,
+        explanation: "Money in, but this would file it under an expense category.",
+      }),
+    ]);
+    // …and the purchase carries the engine's own rule decision (fresh row, its fill confirmed).
+    expect(await decisions(cafe.id)).toEqual([expect.objectContaining({ source: "rule", categoryId: cat!.id })]);
+
+    // A second backfill over the same window records nothing new.
+    await runGapBackfillForItem(TEST_USER, item!.id, { today, overlapDays: 30 });
+    expect(await decisions(pay.id)).toHaveLength(1);
+    expect(await decisions(cafe.id)).toHaveLength(1);
+
+    await db.delete(mappingRulesTable).where(eq(mappingRulesTable.householdId, TEST_HOUSEHOLD_ID));
+    await db.delete(budgetCategoriesTable).where(eq(budgetCategoriesTable.id, cat!.id));
   });
 });
