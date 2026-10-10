@@ -3529,6 +3529,54 @@ export interface BudgetAllowanceRollup {
   weeksInMonth: string;
 }
 
+export interface SpendingReconciliationTerms {
+  /** Budget rows dated after today */
+  futureDated: string;
+  /** Budget rows that are card payments (the card's purchases are counted already) */
+  cardPayments: string;
+  /** Budget rows that pay a debt (debt-tagged, or in a debt line) */
+  debtPayments: string;
+  /** Budget rows in a category excluded by name (Transfer, Ignore, Reimbursement…) */
+  excludedNames: string;
+  /** Budget rows flagged reimbursable */
+  reimbursable: string;
+  /** Budget rows with a bank-noise description (ACH PMT, WEB ID…) */
+  bankNoise: string;
+  /** Signed: split parts the Budget counts less what spending counts of the same rows; normally ≤ 0 */
+  splitsOutsideLines: string;
+  /** Purchases with no category (spending counts them; no Budget line does) */
+  uncategorized: string;
+  /** Purchases parked in a category with no Budget line (the system Uncategorized) */
+  parkedUncategorized: string;
+  /** What refunds took off household spending (the Budget never nets them) */
+  refundsNetted: string;
+}
+
+/**
+ * (WP6) budgetActual − householdSpendToDate = futureDated + cardPayments
++ debtPayments + excludedNames + reimbursable + bankNoise
++ splitsOutsideLines − uncategorized − parkedUncategorized
++ refundsNetted + unexplained, to the cent. Each row is in exactly one
+term. Dollars as two-decimal strings.
+
+ */
+export interface SpendingReconciliation {
+  /** Every row filed to an expense line, the whole month, transfers skipped (summary.expenses.actual) */
+  budgetActual: string;
+  /** Purchases by the one spending rule through `through`, refunds netted per account (the spine's spentMonth for the current month) */
+  householdSpendToDate: string;
+  /**
+   * The last day householdSpendToDate covers: today in the current month, the month's last day for a past month, null for a future month
+   * @nullable
+   */
+  through: string | null;
+  /** budgetActual − householdSpendToDate */
+  difference: string;
+  terms: SpendingReconciliationTerms;
+  /** Must be 0.00: the part no term explains, disclosed rather than hidden */
+  unexplained: string;
+}
+
 export interface BudgetMonthDetail {
   monthStart: string;
   /** @nullable */
@@ -3557,6 +3605,12 @@ system Uncategorized). Read-time only; nothing is written. Listed so
 the page's actuals drill files the row where its figure counts.
  */
   inheritedCategories: BudgetMonthDetailInheritedCategoriesItem[];
+  /** (WP6) Why this month's Budget actual (summary.expenses.actual) and
+household spending to date (the spine's spentMonth) differ, in
+dollars, from the same rows (reconcileMonthSpend). Null for a month
+before spending is tracked (2026-05).
+ */
+  spendingReconciliation?: SpendingReconciliation | null;
 }
 
 export interface SeedDefaultBudgetResult {
