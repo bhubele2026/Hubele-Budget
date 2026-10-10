@@ -14,7 +14,15 @@ import type { CashSignalListedPlan } from "./cashSignalListedPlan";
 import type { CashSignalMatchesItem } from "./cashSignalMatchesItem";
 import type { CashSignalStatus } from "./cashSignalStatus";
 export interface CashSignal {
-    bankToday: string;
+    /**
+     * The bank snapshot rolled forward through the ledger to today. (WP10)
+  Null with no bank snapshot — never "0.00". The curve (`daily`,
+  `lowestProjected`) still runs off the household's starting balance
+  then, and `status` is `no_data`.
+  
+     * @nullable
+     */
+    bankToday: string | null;
     lowestProjected: string;
     /** @nullable */
     lowestDate: string | null;

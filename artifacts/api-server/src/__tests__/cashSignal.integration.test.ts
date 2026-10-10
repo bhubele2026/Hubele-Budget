@@ -1146,9 +1146,10 @@ describe("computeCashSignal — status thresholds", () => {
     });
 
     expect(sig.status).toBe("no_data");
-    // No-snapshot fallback uses startingBalance for both bankToday and
-    // the chart's starting balance.
-    expect(sig.bankToday).toBe("750.00");
+    // (WP10) No snapshot, no bank balance: `bankToday` is null — never the
+    // starting balance passed off as the bank's, never "0.00". The chart still
+    // starts from the starting balance.
+    expect(sig.bankToday).toBeNull();
     expect(sig.startingBalance).toBe("750.00");
     expect(sig.snapshotAt).toBeNull();
     expect(sig.snapshotSource).toBeNull();
@@ -2234,14 +2235,15 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
     expect(sig.bankToday).toBe("1000.00");
   });
 
-  it("without a snapshot, bankToday stays on startingBalance (no roll-forward)", async () => {
+  it("(WP10) without a snapshot there is no bankToday (null); the curve stays on startingBalance (no roll-forward)", async () => {
     await setSettings({ startingBalance: "750", cashBuffer: "0" });
     await addLedgerTxn({ occurredOn: "2026-05-05", amount: "-200" });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       horizonDays: 30,
     });
-    expect(sig.bankToday).toBe("750.00");
+    expect(sig.bankToday).toBeNull();
+    expect(sig.startingBalance).toBe("750.00");
   });
 });
 

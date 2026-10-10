@@ -599,8 +599,15 @@ export interface BankFreshness {
     staleReason: BankFreshnessStaleReason;
 }
 export type BankBalanceExplainDisplayed = {
-    /** computeCashSignal().bankToday — what every screen shows */
-    bankToday: string;
+    /**
+     * computeCashSignal().bankToday — what every screen shows. (WP10)
+  Null with no bank snapshot: there is no bank balance to show, so
+  never "0.00" (the forecast curve still runs off the starting
+  balance).
+  
+     * @nullable
+     */
+    bankToday: string | null;
 };
 export type BankBalanceExplainSnapshot = {
     /** @nullable */
@@ -792,8 +799,14 @@ export interface CashSignalAccount {
     via: CashSignalAccountVia;
 }
 export type SpineBank = {
-    /** computeCashSignal().bankToday — snapshot rolled forward through the ledger */
-    balance: string;
+    /**
+     * computeCashSignal().bankToday — snapshot rolled forward through
+  the ledger. (WP10) Null with no bank snapshot, never "0.00": a
+  screen says there is no bank balance yet in words.
+  
+     * @nullable
+     */
+    balance: string | null;
     /**
      * computeCashSignal().snapshotAt — when the bank snapshot was taken
      * @nullable
@@ -3813,7 +3826,15 @@ export interface CashSignalAssumedPaidPlan {
     unpaidRemainder: string;
 }
 export interface CashSignal {
-    bankToday: string;
+    /**
+     * The bank snapshot rolled forward through the ledger to today. (WP10)
+  Null with no bank snapshot — never "0.00". The curve (`daily`,
+  `lowestProjected`) still runs off the household's starting balance
+  then, and `status` is `no_data`.
+  
+     * @nullable
+     */
+    bankToday: string | null;
     lowestProjected: string;
     /** @nullable */
     lowestDate: string | null;

@@ -12,8 +12,14 @@ import type { SpineBankStaleReason } from "./spineBankStaleReason";
 import type { SpineSinceSnapshot } from "./spineSinceSnapshot";
 
 export type SpineBank = {
-  /** computeCashSignal().bankToday — snapshot rolled forward through the ledger */
-  balance: string;
+  /**
+   * computeCashSignal().bankToday — snapshot rolled forward through
+the ledger. (WP10) Null with no bank snapshot, never "0.00": a
+screen says there is no bank balance yet in words.
+
+   * @nullable
+   */
+  balance: string | null;
   /**
    * computeCashSignal().snapshotAt — when the bank snapshot was taken
    * @nullable

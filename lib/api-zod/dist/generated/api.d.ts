@@ -7700,7 +7700,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         accountId?: string | null | undefined;
     }>, zod.ZodNull]>>;
     cashSignal: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
-        bankToday: zod.ZodString;
+        bankToday: zod.ZodNullable<zod.ZodString>;
         lowestProjected: zod.ZodString;
         lowestDate: zod.ZodNullable<zod.ZodString>;
         cashBuffer: zod.ZodString;
@@ -7931,7 +7931,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             externalId: string | null;
         };
         cashBuffer: string;
-        bankToday: string;
+        bankToday: string | null;
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
@@ -8022,7 +8022,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             externalId: string | null;
         };
         cashBuffer: string;
-        bankToday: string;
+        bankToday: string | null;
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
@@ -8270,7 +8270,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             externalId: string | null;
         };
         cashBuffer: string;
-        bankToday: string;
+        bankToday: string | null;
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
@@ -8465,7 +8465,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             externalId: string | null;
         };
         cashBuffer: string;
-        bankToday: string;
+        bankToday: string | null;
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
@@ -8769,7 +8769,7 @@ export declare const GetForecastCashSignalQueryParams: zod.ZodObject<{
     horizonDays?: number | undefined;
 }>;
 export declare const GetForecastCashSignalResponse: zod.ZodObject<{
-    bankToday: zod.ZodString;
+    bankToday: zod.ZodNullable<zod.ZodString>;
     lowestProjected: zod.ZodString;
     lowestDate: zod.ZodNullable<zod.ZodString>;
     cashBuffer: zod.ZodString;
@@ -9000,7 +9000,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         externalId: string | null;
     };
     cashBuffer: string;
-    bankToday: string;
+    bankToday: string | null;
     lowestProjected: string;
     lowestDate: string | null;
     maxSafeExtra: string;
@@ -9091,7 +9091,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         externalId: string | null;
     };
     cashBuffer: string;
-    bankToday: string;
+    bankToday: string | null;
     lowestProjected: string;
     lowestDate: string | null;
     maxSafeExtra: string;
@@ -9178,11 +9178,11 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
 export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
     asOf: zod.ZodString;
     displayed: zod.ZodObject<{
-        bankToday: zod.ZodString;
+        bankToday: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
-        bankToday: string;
+        bankToday: string | null;
     }, {
-        bankToday: string;
+        bankToday: string | null;
     }>;
     freshness: zod.ZodObject<{
         source: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"plaid">, zod.ZodLiteral<"manual">, zod.ZodLiteral<null>]>>;
@@ -9373,7 +9373,7 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
     }[];
     asOf: string;
     displayed: {
-        bankToday: string;
+        bankToday: string | null;
     };
     freshness: {
         source: "plaid" | "manual" | null;
@@ -9434,7 +9434,7 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
     }[];
     asOf: string;
     displayed: {
-        bankToday: string;
+        bankToday: string | null;
     };
     freshness: {
         source: "plaid" | "manual" | null;
@@ -15044,7 +15044,7 @@ export declare const RecomputeMetricsResponse: zod.ZodObject<{
 export declare const GetSpineResponse: zod.ZodObject<{
     asOf: zod.ZodString;
     bank: zod.ZodObject<{
-        balance: zod.ZodString;
+        balance: zod.ZodNullable<zod.ZodString>;
         asOfDate: zod.ZodNullable<zod.ZodString>;
         source: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"plaid">, zod.ZodLiteral<"manual">, zod.ZodLiteral<null>]>>;
         lastContactAt: zod.ZodNullable<zod.ZodString>;
@@ -15109,7 +15109,7 @@ export declare const GetSpineResponse: zod.ZodObject<{
             rowId: string | null;
             externalId: string | null;
         };
-        balance: string;
+        balance: string | null;
         lastContactAt: string | null;
         lastFailureAt: string | null;
         stale: boolean;
@@ -15135,7 +15135,7 @@ export declare const GetSpineResponse: zod.ZodObject<{
             rowId: string | null;
             externalId: string | null;
         };
-        balance: string;
+        balance: string | null;
         lastContactAt: string | null;
         lastFailureAt: string | null;
         stale: boolean;
@@ -15295,7 +15295,7 @@ export declare const GetSpineResponse: zod.ZodObject<{
             rowId: string | null;
             externalId: string | null;
         };
-        balance: string;
+        balance: string | null;
         lastContactAt: string | null;
         lastFailureAt: string | null;
         stale: boolean;
@@ -15365,7 +15365,7 @@ export declare const GetSpineResponse: zod.ZodObject<{
             rowId: string | null;
             externalId: string | null;
         };
-        balance: string;
+        balance: string | null;
         lastContactAt: string | null;
         lastFailureAt: string | null;
         stale: boolean;

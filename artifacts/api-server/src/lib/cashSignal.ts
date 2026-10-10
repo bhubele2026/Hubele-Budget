@@ -198,7 +198,13 @@ export function expandItem(item: RecurringRow, from: Date, to: Date): CashEvent[
 }
 
 export type CashSignal = {
-  bankToday: string;
+  /**
+   * The bank snapshot rolled forward through the ledger to today. (WP10) Null
+   * with no bank snapshot — there is no bank balance, and "0.00" would read as
+   * a real one. The curve (`daily`, `lowestProjected`) still runs off the
+   * household's starting balance then, and `status` is `no_data`.
+   */
+  bankToday: string | null;
   lowestProjected: string;
   lowestDate: string | null;
   cashBuffer: string;
@@ -444,7 +450,7 @@ export async function computeCashSignalDetailed(
   );
 
   const signal: CashSignal = {
-    bankToday: r2(ledger.bankToday),
+    bankToday: ledger.snapshotBalance == null ? null : r2(ledger.bankToday),
     lowestProjected: r2(lowest),
     lowestDate,
     cashBuffer: r2(cashBuffer),
