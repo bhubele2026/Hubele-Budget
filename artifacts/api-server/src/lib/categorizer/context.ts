@@ -10,8 +10,9 @@ import {
   recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
-import { addDaysISO, type SpendContext } from "@workspace/avalanche-core";
+import { addDaysISO } from "@workspace/avalanche-core";
 import { loadUserRules } from "../autoCategorize";
+import { spendContextOf } from "../spendContext";
 import { refundSignature } from "../merchantNameExtract";
 import { uncategorizedCategoryIds } from "../pendingFiling";
 import { findSupersededPending } from "../supersededPending";
@@ -116,13 +117,9 @@ export function inputHash(row: EngineRow, ctx: EngineContext): string {
   );
 }
 
-export function spendContextOf(
-  cats: { id: string; name: string; debtId: string | null; kind: string }[],
-): SpendContext {
-  const categoriesById = new Map(cats.map((c) => [c.id, { name: c.name, debtId: c.debtId, kind: c.kind }]));
-  const debtCategoryIds = new Set(cats.filter((c) => c.debtId).map((c) => c.id));
-  return { categoriesById, debtCategoryIds };
-}
+// (WP5d) Moved to ../spendContext.ts (shared with the insert-time rule fill);
+// re-exported so existing importers keep working.
+export { spendContextOf };
 
 /** Earlier purchases by their refund-link signature (B6: `refundSignature`, the same key a credit looks up). */
 export function groupOutflows(

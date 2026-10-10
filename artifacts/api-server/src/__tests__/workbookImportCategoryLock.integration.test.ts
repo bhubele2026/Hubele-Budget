@@ -64,6 +64,9 @@ function buildWorkbook(): XLSX.WorkBook {
       [null, "2026-03-05", "CAFE CORNER 7", "Expense", null, 4.5, null, null],
       // Target empty, no rule → uncategorized.
       [null, "2026-03-06", "UNMATCHED THING", "Expense", null, 9, null, null],
+      // (WP5d) A CREDIT the Mapping rule files: money back on the card, so the
+      // direction guard leaves it with its purchase category.
+      [null, "2026-03-07", "CAFE CORNER 7 REVERSAL", "Credit", null, 4.5, null, null],
     ],
     "Payments",
   );
@@ -99,6 +102,8 @@ describe("workbook import and the category lock", () => {
     expect(r.get("CAFE CORNER 7")!.categoryId).not.toBeNull();
     expect(r.get("CAFE CORNER 7")!.locked).toBe(false);
     expect(r.get("UNMATCHED THING")).toEqual({ categoryId: null, locked: false });
+    // (WP5d) The card's credit is filed by the rule like its purchase, unlocked.
+    expect(r.get("CAFE CORNER 7 REVERSAL")).toEqual({ categoryId: r.get("CAFE CORNER 7")!.categoryId, locked: false });
   });
 
   it("a re-import keeps a preserved override's lock", async () => {

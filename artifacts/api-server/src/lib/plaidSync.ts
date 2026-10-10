@@ -20,7 +20,7 @@ import {
   ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
   type PlaidTxn,
 } from "./plaid";
-import { loadUserRules, categorize } from "./autoCategorize";
+import { categorize, directionGuard, loadRuleContext } from "./autoCategorize";
 import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
 import {
   dedupeTransactionsForAccount,
@@ -833,7 +833,9 @@ export async function syncPlaidItem(
 
   const slug = item.institutionSlug || institutionSlug(item.institutionName);
   const source = `plaid:${slug}`;
-  const rules = await loadUserRules(householdId);
+  // (WP5d) The rules plus the categories the insert-time direction guard reads.
+  const ruleCtx = await loadRuleContext(householdId);
+  const rules = ruleCtx.rules;
 
   // Identify the user's chosen "checking" Plaid account (if any) so we can
   // auto-flag its transactions for the cash forecast and try to auto-match
@@ -1361,6 +1363,28 @@ export async function syncPlaidItem(
       const pfc = (t as unknown as {
         personal_finance_category?: { primary?: string; detailed?: string } | null;
       }).personal_finance_category;
+      const signedAmount = plaidAmountToSigned(t);
+      // Only attribute a transaction to a debt when it is actually a
+      // balance-reducing PAYMENT on the linked liability account, never a
+      // purchase. Plaid uses positive=debit/charge on liability accounts; our
+      // convention flips the sign (`amount = -Plaid.amount`), so payments
+      // appear as POSITIVE amounts in our app and purchases as negative.
+      // Tagging purchases would make the dashboard double-count debt growth
+      // as "paid off" and worsen the original bug.
+      // (WP2) And only a PAYMENT among the positive rows: a refund or a
+      // statement credit lowers the card too, but tagging it netted the debt as
+      // if it were a payment (`debtIdForSyncedRow`, the pending reader's rule).
+      // (WP5d) Computed before the rule fill: the direction guard reads it.
+      const debtId = debtIdForSyncedRow(debtIdByPlaidAccount.get(t.account_id) ?? null, {
+        source,
+        amount: signedAmount,
+        description,
+        pfcPrimary: pfc?.primary ?? null,
+        pfcDetailed: pfc?.detailed ?? null,
+      });
+      // ⭐ (WP5d) The rule fill never files money in under an expense
+      // category, nor money out under an income one: such a row inserts
+      // uncategorized and the engine below queues it, naming the rule.
       const cat = categorize(
         {
           description,
@@ -1368,6 +1392,12 @@ export async function syncPlaidItem(
           pfcDetailed: pfc?.detailed ?? null,
         },
         rules,
+        directionGuard(ruleCtx, {
+          amount: signedAmount,
+          source,
+          accountType: acctByExternalId.get(t.account_id)?.type ?? null,
+          debtId,
+        }),
       );
       if (cat.categoryId) autoCategorized++;
       // Credit the per-rule attribution counter ONLY for first-sight rows
@@ -1417,7 +1447,6 @@ export async function syncPlaidItem(
       // circuiting on the first non-null value.
       const occurredAt =
         pickRealTime(t.datetime) ?? pickRealTime(t.authorized_datetime);
-      const signedAmount = plaidAmountToSigned(t);
       // (PR4d review) A row already holding this id makes this an update of that
       // row. Nothing below may move another row onto the id — the first-sync
       // merge, the pending→posted re-key, the re-mint — or it collides on the
@@ -1427,23 +1456,6 @@ export async function syncPlaidItem(
         .from(transactionsTable)
         .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
         .limit(1);
-      // Only attribute a transaction to a debt when it is actually a
-      // balance-reducing PAYMENT on the linked liability account, never a
-      // purchase. Plaid uses positive=debit/charge on liability accounts; our
-      // convention flips the sign (`amount = -Plaid.amount`), so payments
-      // appear as POSITIVE amounts in our app and purchases as negative.
-      // Tagging purchases would make the dashboard double-count debt growth
-      // as "paid off" and worsen the original bug.
-      // (WP2) And only a PAYMENT among the positive rows: a refund or a
-      // statement credit lowers the card too, but tagging it netted the debt as
-      // if it were a payment (`debtIdForSyncedRow`, the pending reader's rule).
-      const debtId = debtIdForSyncedRow(debtIdByPlaidAccount.get(t.account_id) ?? null, {
-        source,
-        amount: signedAmount,
-        description,
-        pfcPrimary: pfc?.primary ?? null,
-        pfcDetailed: pfc?.detailed ?? null,
-      });
 
       // (#361) First-sync cutoff gate. For *added* rows on an account
       // that hasn't yet completed its first sync AND has a cutoff on
@@ -3461,7 +3473,9 @@ export async function runGapBackfillForItem(
   const ownerUserId = householdRow?.ownerUserId ?? userId;
   const slug = item.institutionSlug || institutionSlug(item.institutionName);
   const source = `plaid:${slug}`;
-  const rules = await loadUserRules(householdId);
+  // (WP5d) The rules plus the categories the insert-time direction guard reads.
+  const ruleCtx = await loadRuleContext(householdId);
+  const rules = ruleCtx.rules;
 
   const accounts = await db
     .select()
@@ -3516,6 +3530,10 @@ export async function runGapBackfillForItem(
   let totalAdded = 0;
   let minDate: string | null = null;
   let maxDate: string | null = null;
+  // (WP5d) Every row this backfill's upsert wrote, and which it INSERTED —
+  // the categorization engine runs over them at the end, as on the cursor path.
+  const backfillTxnIds: string[] = [];
+  const backfillInsertedIds = new Set<string>();
   const perAccount: Array<{
     externalAcctId: string;
     start: string;
@@ -3652,6 +3670,18 @@ export async function runGapBackfillForItem(
         const pfc = (t as unknown as {
           personal_finance_category?: { primary?: string; detailed?: string } | null;
         }).personal_finance_category;
+        const signedAmount = plaidAmountToSigned(t);
+        // (WP2) The cursor path's rule: only a payment is tagged to the debt.
+        // (WP5d) Computed before the rule fill: the direction guard reads it.
+        const debtId = debtIdForSyncedRow(debtIdByExternal.get(t.account_id) ?? null, {
+          source,
+          amount: signedAmount,
+          description,
+          pfcPrimary: pfc?.primary ?? null,
+          pfcDetailed: pfc?.detailed ?? null,
+        });
+        // ⭐ (WP5d) Twin of the cursor path: a rule never files money against
+        // its direction; such a row inserts uncategorized and is queued below.
         const cat = categorize(
           {
             description,
@@ -3659,8 +3689,8 @@ export async function runGapBackfillForItem(
             pfcDetailed: pfc?.detailed ?? null,
           },
           rules,
+          directionGuard(ruleCtx, { amount: signedAmount, source, accountType: acct.type, debtId }),
         );
-        const signedAmount = plaidAmountToSigned(t);
         // (PR4d review) A row already holding this id makes this an update of that
         // row: the manual merge, the pending→posted re-key and the re-mint below
         // must not move another row onto it (23505 would abandon the account).
@@ -3669,14 +3699,6 @@ export async function runGapBackfillForItem(
           .from(transactionsTable)
           .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
           .limit(1);
-        // (WP2) The cursor path's rule: only a payment is tagged to the debt.
-        const debtId = debtIdForSyncedRow(debtIdByExternal.get(t.account_id) ?? null, {
-          source,
-          amount: signedAmount,
-          description,
-          pfcPrimary: pfc?.primary ?? null,
-          pfcDetailed: pfc?.detailed ?? null,
-        });
 
         // ±7-day merge with an unattached manual row (same
         // userId+amount+date+source-scope, plaidTransactionId NULL).
@@ -3907,7 +3929,7 @@ export async function runGapBackfillForItem(
             ),
           )
           .limit(1);
-        await db
+        const [upserted] = await db
           .insert(transactionsTable)
           .values(values)
           .onConflictDoUpdate({
@@ -3946,7 +3968,12 @@ export async function runGapBackfillForItem(
                 : {}),
               ...(debtId ? { debtId } : {}),
             },
-          });
+          })
+          .returning({ id: transactionsTable.id, inserted: sql<boolean>`(xmax = 0)` });
+        if (upserted) {
+          backfillTxnIds.push(upserted.id);
+          if (upserted.inserted) backfillInsertedIds.add(upserted.id);
+        }
         if (before.length === 0) {
           acctAdded++;
           if (minDate === null || t.date < minDate) minDate = t.date;
@@ -4002,6 +4029,32 @@ export async function runGapBackfillForItem(
       end: todayStr,
       added: acctAdded,
     });
+  }
+
+  // ⭐ (WP5d) Twin of the cursor path's tail: split parents whose amount moved
+  // are rescaled or flagged, the deterministic engine decides every row this
+  // backfill upserted (`freshIds` = the ones it inserted, whose category is
+  // the fill above), and what it left ambiguous goes to the job pipeline.
+  // Idempotent: the engine records nothing twice for the same input hash.
+  // Non-fatal: a failure leaves the rows as the upsert wrote them.
+  try {
+    const alive = [...new Set(backfillTxnIds)];
+    if (alive.length > 0) {
+      await reconcileSplitsAfterSync(householdId, alive);
+      const batch = await runCategorizationBatch(householdId, {
+        txnIds: alive,
+        trigger: "sync",
+        freshIds: backfillInsertedIds,
+      });
+      await emit(QUEUES.txnArrived, {
+        householdId,
+        ownerUserId,
+        txnIds: (batch?.ambiguous ?? []).slice(0, 2000),
+        arrived: alive.length,
+      });
+    }
+  } catch (e) {
+    logger.warn({ userId, itemRowId, err: e }, "[plaid-backfill] categorization batch failed (non-fatal)");
   }
 
   return {

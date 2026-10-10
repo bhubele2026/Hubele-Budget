@@ -43,6 +43,7 @@ import {
   budgetCategoriesTable,
   budgetLinesTable,
   budgetMonthsTable,
+  categoryDecisionsTable,
   importBatchesTable,
   mappingRulesTable,
   plaidItemsTable,
@@ -411,6 +412,68 @@ describe("categorization pipeline (integration)", () => {
     expect((b.json as { updated: number }).updated).toBe(1);
     const rows = await db.select().from(transactionsTable).where(inArray(transactionsTable.id, [n1!.id, n2!.id, f1!.id]));
     expect(rows.every((r) => r.categoryId === to!.id && r.categoryLockedByUser)).toBe(true);
+  });
+
+  it("(WP5d) POST /transactions never lets a rule file money against its direction: stored uncategorized, queued naming the rule", async () => {
+    const [dining] = await db
+      .insert(budgetCategoriesTable)
+      .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, name: `Dir Dining ${randomUUID().slice(0, 6)}`, kind: "expense", groupName: "Other" })
+      .returning();
+    const merchant = `DIRMERCH${randomUUID().slice(0, 6).toUpperCase()}`;
+    const [rule] = await db
+      .insert(mappingRulesTable)
+      .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, pattern: merchant, matchType: "contains", categoryId: dining!.id, priority: 100 })
+      .returning();
+
+    // Money in that the rule would file under Dining: stored uncategorized, queued.
+    const inflow = await api("POST", "/transactions", {
+      occurredOn: dateInCurrentMonth(14),
+      description: `${merchant} PAYROLL`,
+      amount: "2500.00",
+      source: "manual",
+    });
+    expect(inflow.status).toBe(201);
+    const inRow = inflow.json as { id: string; categoryId: string | null; categoryLockedByUser: boolean; autoCategorizedRuleId: string | null };
+    expect(inRow).toMatchObject({ categoryId: null, categoryLockedByUser: false, autoCategorizedRuleId: null });
+    const decisions = await db.select().from(categoryDecisionsTable).where(eq(categoryDecisionsTable.transactionId, inRow.id));
+    expect(decisions).toEqual([
+      expect.objectContaining({
+        source: "rule",
+        band: "queue",
+        categoryId: dining!.id,
+        ruleId: rule!.id,
+        explanation: "Money in, but this would file it under an expense category.",
+      }),
+    ]);
+
+    // Money out: filed by the rule as before, attributed, not locked.
+    const outflow = await api("POST", "/transactions", {
+      occurredOn: dateInCurrentMonth(14),
+      description: `${merchant} CAFE`,
+      amount: "-8.50",
+      source: "manual",
+    });
+    expect(outflow.json).toMatchObject({ categoryId: dining!.id, categoryLockedByUser: false, autoCategorizedRuleId: rule!.id });
+
+    // A person's explicit pick is never second-guessed: kept and locked.
+    const explicit = await api("POST", "/transactions", {
+      occurredOn: dateInCurrentMonth(14),
+      description: `${merchant} PAYROLL 2`,
+      amount: "2500.00",
+      source: "manual",
+      categoryId: dining!.id,
+    });
+    expect(explicit.json).toMatchObject({ categoryId: dining!.id, categoryLockedByUser: true });
+
+    // A reimbursable credit is expected in an expense category: filed by the rule.
+    const reimbursed = await api("POST", "/transactions", {
+      occurredOn: dateInCurrentMonth(14),
+      description: `${merchant} SPLIT FROM J`,
+      amount: "30.00",
+      source: "manual",
+      reimbursable: true,
+    });
+    expect(reimbursed.json).toMatchObject({ categoryId: dining!.id, autoCategorizedRuleId: rule!.id });
   });
 
   it("POST /transactions auto-categorizes hand-entered rows via the existing rules", async () => {
