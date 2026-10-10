@@ -67,7 +67,6 @@ import {
 } from "../lib/plaidSyncAttempts";
 import {
   dedupePlaidAccountsForUser,
-  markAutoDedupeRan,
 } from "../lib/dedupePlaidAccounts";
 import {
   upsertPlaidAccountFromApi,
@@ -869,10 +868,6 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       console.info(
         `[auto-dedupe] userId=${req.userId} trigger=plaid-exchange groupsScanned=${healed.groupsScanned} duplicatesRemoved=${healed.duplicatesRemoved} transactionsRepointed=${healed.transactionsRepointed} debtsRepointed=${healed.debtsRepointed} snapshotRepointed=${healed.snapshotRepointed} syntheticDropped=${healed.syntheticDropped} accountSnapshotsRepointed=${healed.accountSnapshotsRepointed} accountSnapshotsPruned=${healed.accountSnapshotsPruned} transactionsDeduped=${healed.transactionsDeduped ?? 0}`,
       );
-      // (#411) We just ran the heal — flip the per-user gate so the
-      // next listCheckingAccounts / /forecast hit doesn't re-run an
-      // identical no-op pass. No-op for users whose flag is already set.
-      await markAutoDedupeRan(req.userId!);
       if (
         healed &&
         (healed.duplicatesRemoved > 0 ||

@@ -26,7 +26,12 @@ export type PlaidSyncAttemptKind =
   // whenever it actually deletes one or more dropped pre-auths.
   // Always written with success=true and a populated cleanupDetails
   // blob; never produced for empty sweeps.
-  | "pending_cleanup";
+  | "pending_cleanup"
+  // (WP9) Audit row written when a bank sync merged duplicate accounts
+  // (twin plaid_accounts rows for one physical account). success=true; the
+  // one-line summary rides in errorMessage, as pending_cleanup's does. Never
+  // written when nothing was merged.
+  | "account_merge";
 
 // (#733) Shape of `cleanupDetails` rows persisted on a
 // kind="pending_cleanup" attempt. Mirrors the JSONB blob the schema
