@@ -19,7 +19,7 @@ import { CARD_WORDS, cardOwedView, creditorLabel, debtForAccount, needsLiability
 import { NOT_TRACKED, snapshotCaption } from "@/lib/snapshotWords";
 import { AccountSelector, type BalanceByRow } from "./accounts/AccountSelector";
 import { AccountSummary } from "./accounts/AccountSummary";
-import { buildEntries } from "./accounts/entries";
+import { accountViewOf, buildEntries } from "./accounts/entries";
 
 // Both ledgers are the existing pages, moved in whole (same hooks, bulk bars,
 // dialogs and tests). Lazy, so nothing here joins the landing bundle.
@@ -124,6 +124,9 @@ export default function NextAccountsPage() {
   const entries = useMemo(() => buildEntries(items), [items]);
   // The id may be the Plaid account_id or the items response's row id.
   const selected = entries.find((e) => e.plaidAccountId === selectedId || e.rowId === selectedId) ?? null;
+  // (WP7) Which ledger the account opens: card, bank (any checking, savings or
+  // other depository account, at any bank), or words for a loan or anything else.
+  const view = selected ? accountViewOf(selected) : null;
 
   // (WP3) The debt row by the account's INTERNAL row id only, any status —
   // the card model says what an archived row is. The dashboard's own rule.
@@ -220,13 +223,16 @@ export default function NextAccountsPage() {
               <p role="status" className="mt-2 text-label text-neutral-600">That account is not linked here. Showing all accounts.</p>
             ) : null}
           </div>
-          {selected && !selected.identity.isCard && selected.identity.kind === "checking" ? (
+          {selected && view === "bank" ? (
             // (C9) One account experience: a checking account opens the Chase
             // page's own layout (the same as /transactions, minus the title the
             // account page already shows), full width, with the Summary as the
             // first panel of its figures row. Nothing between this cell and the
             // ledger is a scroll container: the ledger panel inside is
             // sticky-safe, so its pane and bulk bar stick to <main>.
+            // (WP7) Any checking or savings account, at any bank, and for THAT
+            // account: the embedded ledger never swaps it for the bank balance's
+            // account, and says so in place when the server has no ledger for it.
             <div className="span-12 min-w-0" data-testid="account-activity">
               <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
                 <ChaseLedger
@@ -244,10 +250,11 @@ export default function NextAccountsPage() {
                 />
               </Suspense>
             </div>
-          ) : selected && selected.identity.isCard ? (
+          ) : selected && view === "card" ? (
             // (C10) A card opens the Amex page's own layout the same way: full
             // width, the card's Summary first in its card row, the ledger in
-            // its own sticky-safe panel.
+            // its own sticky-safe panel. (WP7) Any card, at any bank: embedded,
+            // the page asks for this card's rows by its Plaid account.
             <div className="span-12 min-w-0" data-testid="account-activity">
               <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
                 <AmexLedger
@@ -276,9 +283,18 @@ export default function NextAccountsPage() {
                 bank={bankFor(selected)}
               />
               <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" variant="static" data-testid="account-activity">
-                <p className={emptyNote}>This account type has no activity view yet.</p>
+                {/* (WP7) Said plainly: no ledger exists for these yet. */}
+                <p className={emptyNote} data-testid="account-no-ledger">
+                  {view === "loan" ? "H2 has no ledger for loans yet." : "H2 has no ledger for this kind of account yet."}
+                </p>
               </Panel>
             </>
+          ) : selectedId && !itemsKnown ? (
+            // (WP7d) An account's route while the linked accounts load: its own
+            // view's skeleton, never a flash of every account's activity (which
+            // also asked GET /transactions with no account on a card's page). A
+            // failed read is said above; nothing is guessed below it.
+            itemsFailed ? null : <div className="span-12 min-w-0"><AccountPageSkeleton tiles={3} /></div>
           ) : (
             <CombinedActivity entries={entries} entriesKnown={itemsKnown} />
           )}

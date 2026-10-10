@@ -115,6 +115,8 @@ import { ChaseLogo } from "@/components/brand-logos";
 import { PageGrid, rise } from "@/components/next/PageGrid";
 import { Panel } from "@/components/next/Panel";
 import { identityOf } from "@/lib/accountIdentity";
+import { accountPageHref } from "@/lib/accountPage";
+import { currentRowDeepLink, rowDeepLinkStatus } from "@/lib/rowDeepLink";
 import { ChaseInsightStrip } from "@/components/chase-insight-strip";
 import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 import {
@@ -184,6 +186,12 @@ function readInitialChaseAccount(): string | null {
     const params = new URLSearchParams(window.location.search);
     const fromUrl = params.get("account");
     if (fromUrl) return fromUrl;
+    // (WP7) A link to one row (`?tx=`) that names no account opens the bank
+    // balance's account, the ledger that lists the rows such links point at
+    // (manual entries; `lib/accountRoute.ts`). The saved pick is the person's
+    // own browsing, and the row need not be on it. It is ignored here, and left
+    // in place (see `keepSavedPickRef`).
+    if (params.get("tx")) return null;
     return window.localStorage.getItem(CHASE_ACCOUNT_STORAGE_KEY);
   } catch {
     return null;
@@ -259,6 +267,18 @@ export default function TransactionsPage({
       return inst.includes("chase") || instId === "ins_56";
     });
   }, [forecastData?.plaidCheckingAccounts]);
+  // (WP7) Embedded on an account page the route names the account, at ANY bank
+  // (the ledger accepts any checking or savings account of the household). The
+  // page's account list is then every linked depository account the forecast
+  // names (`listCheckingAccounts`), so a credit union's checking account finds
+  // itself here; standalone, the Chase page keeps its Chase-only list.
+  const pickerAccounts = useMemo(
+    () => (embedded ? (forecastData?.plaidCheckingAccounts ?? []) : chaseOnlyPlaidCheckingAccounts),
+    [embedded, forecastData?.plaidCheckingAccounts, chaseOnlyPlaidCheckingAccounts],
+  );
+  // (WP7) A link to one row (`?tx=`), read once: it opens Month mode on the
+  // row's month and ignores the saved account pick (see readInitialChaseAccount).
+  const [rowLink] = useState(currentRowDeepLink);
   // #103 — multi-checking households: let the user pick which linked
   // checking account powers this page. The selected key is either
   // `"manual"` (transactions without a plaidAccountId) or the internal
@@ -319,21 +339,21 @@ export default function TransactionsPage({
       bankSnapshot,
       accountSnapshots,
       selectedAccountInternalId: effectiveAccountInternalId,
-      plaidCheckingAccounts: chaseOnlyPlaidCheckingAccounts,
+      plaidCheckingAccounts: pickerAccounts,
     });
   }, [
     bankSnapshot,
     effectiveAccountInternalId,
     accountSnapshots,
-    chaseOnlyPlaidCheckingAccounts,
+    pickerAccounts,
   ]);
   const chasePlaidAccountId = useMemo(() => {
     if (!effectiveAccountInternalId) return null;
-    const acct = chaseOnlyPlaidCheckingAccounts.find(
+    const acct = pickerAccounts.find(
       (a) => a.id === effectiveAccountInternalId,
     );
     return acct?.accountId ?? null;
-  }, [effectiveAccountInternalId, chaseOnlyPlaidCheckingAccounts]);
+  }, [effectiveAccountInternalId, pickerAccounts]);
   // (#462) Equivalent external Plaid account_ids for the selected
   // account, collapsed by (institutionName, mask). During the brief
   // mid-re-link window before `dedupePlaidAccountsForUser` collapses
@@ -345,7 +365,7 @@ export default function TransactionsPage({
   // `amexDebt` (institution, mask) collapse from #449.
   const chasePlaidAccountIds = useMemo<Set<string> | null>(() => {
     if (chasePlaidAccountId === null) return null;
-    const accounts = chaseOnlyPlaidCheckingAccounts;
+    const accounts = pickerAccounts;
     const selected = accounts.find(
       (a) => a.id === effectiveAccountInternalId,
     );
@@ -368,7 +388,7 @@ export default function TransactionsPage({
   }, [
     chasePlaidAccountId,
     effectiveAccountInternalId,
-    chaseOnlyPlaidCheckingAccounts,
+    pickerAccounts,
   ]);
   // The currently selected account row (if it's a Plaid account) — used
   // by the meta line under the header so the user always sees the
@@ -377,17 +397,27 @@ export default function TransactionsPage({
   const selectedPlaidAccount = useMemo(() => {
     if (!effectiveAccountInternalId) return null;
     return (
-      chaseOnlyPlaidCheckingAccounts.find(
+      pickerAccounts.find(
         (a) => a.id === effectiveAccountInternalId,
       ) ?? null
     );
-  }, [effectiveAccountInternalId, chaseOnlyPlaidCheckingAccounts]);
+  }, [effectiveAccountInternalId, pickerAccounts]);
 
   // Persist the picker selection so reloads / deep-links land on the
   // same account. We update both `?account=` (visible, shareable) and
   // localStorage (so it sticks even when the user clears the URL).
+  // (WP7) A row link with no `?account=` opened the default account: until the
+  // person picks one, the saved pick is left as it was (not cleared).
+  const keepSavedPickRef = useRef(!embedded && !!rowLink.tx && !rowLink.account);
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // (WP7) Embedded, the account page's route names the account: neither
+    // `?account=` nor the Chase page's saved pick is written from here.
+    if (embedded) return;
+    if (keepSavedPickRef.current) {
+      if (selectedAccountKey === null) return;
+      keepSavedPickRef.current = false;
+    }
     const params = new URLSearchParams(window.location.search);
     if (selectedAccountKey) {
       params.set("account", selectedAccountKey);
@@ -410,13 +440,17 @@ export default function TransactionsPage({
     const qs = params.toString();
     const next = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
     window.history.replaceState(null, "", next);
-  }, [selectedAccountKey]);
+  }, [selectedAccountKey, embedded]);
 
   // If the persisted selection points at an account that no longer
   // exists (linked bank removed, account closed), drop it back to the
   // default so the picker doesn't render an empty value.
   useEffect(() => {
     if (!selectedAccountKey) return;
+    // (WP7) Embedded, the route chose the account, at any bank: never swapped
+    // for the bank balance's account (that put the main Chase ledger under a
+    // credit union account's title).
+    if (embedded) return;
     if (!forecastData?.plaidCheckingAccounts) return;
     // (#797) Legacy "manual" selection self-heal. The "Manual entries"
     // picker option was removed, so a persisted `manual` selection can no
@@ -436,6 +470,7 @@ export default function TransactionsPage({
     }
   }, [
     selectedAccountKey,
+    embedded,
     forecastData?.plaidCheckingAccounts,
     chaseOnlyPlaidCheckingAccounts,
   ]);
@@ -460,8 +495,13 @@ export default function TransactionsPage({
         return monthKeyFromISO(m);
       }
     }
+    // (WP7) A row link with no month still pins the page (Month mode, this month).
+    if (rowLink.tx) monthPinnedFromUrlRef.current = true;
     return currentMonth;
   });
+  // (WP7) The month a row link opened, for the "Showing <Month> for the row you
+  // opened" line; null when the page was not opened on a row.
+  const rowLinkMonthRef = useRef<MonthKey | null>(rowLink.tx ? selectedMonth : null);
   // Weekly-first: the summary + balance trend lead with THIS week. Mo/Yr opt-in.
   // (PR14) The list follows the range too, so a `?month=` deep-link (the Budget
   // page) opens in Month mode on the month it names.
@@ -565,16 +605,21 @@ export default function TransactionsPage({
   // (PR14 review H1) An account other than the bank balance's: rows, totals and
   // review counts, and no balance (the server computes none for it).
   const balanceUnavailable = registerPage?.balanceUnavailableReason === "not_snapshot_account";
-  // (PR14 review H1) A saved account the ledger refuses (not a Chase account of this
-  // household, or gone) falls back to the default account, clearing `?account=` and
-  // the saved choice, instead of failing on every visit.
+  // (PR14 review H1) A saved account the ledger refuses (not a checking or savings
+  // account of this household, or gone) falls back to the default account, clearing
+  // `?account=` and the saved choice, instead of failing on every visit.
+  // (WP7) Embedded, the route named the account: a refusal is said where the rows
+  // would be (`chase-no-ledger`), never answered with another account's ledger.
+  const refusedAccount =
+    register.errorCode === "account_not_ledger" || register.errorCode === "invalid_account";
   useEffect(() => {
+    if (embedded) return;
     if (!selectedAccountKey || selectedAccountKey === "manual") return;
     if (register.errorCode !== "account_not_ledger" && register.errorCode !== "invalid_account") return;
     setSelectedAccountKey(null);
     toast({ title: "That account has no ledger. Showing the bank balance account." });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [register.errorCode, selectedAccountKey]);
+  }, [register.errorCode, selectedAccountKey, embedded]);
 
   // Every row on screen, once. The bulk actions and the selection read this.
   const filtered = useMemo<Transaction[]>(() => {
@@ -2173,8 +2218,10 @@ export default function TransactionsPage({
     // Wait until the row is mounted (the right month / filters might still
     // be settling). requestAnimationFrame defers past the current commit.
     const tryScroll = () => {
+      // An attribute value in double quotes needs only `"` and `\` escaped
+      // (as `useTxDeepLink` does); `CSS.escape` is missing from some DOMs.
       const el = document.querySelector(
-        `[data-testid="row-tx-${CSS.escape(focusTxId)}"]`,
+        `[data-testid="row-tx-${focusTxId.replace(/["\\]/g, "\\$&")}"]`,
       );
       if (!el) return false;
       (el as HTMLElement).scrollIntoView({
@@ -2416,25 +2463,35 @@ export default function TransactionsPage({
     </div>
   );
 
-  // (#797) Show the picker only when there are 2+ *Chase* checking accounts to
-  // switch between. When there are no Chase accounts the picker hides
-  // entirely and the page falls through to the existing source-based fallback
-  // (`isChaseFallbackSource`), which still renders Chase + manual rows. The
-  // dead "Manual entries" pseudo-account option was removed — it was leaking
-  // a non-Chase view onto the Chase page.
+  // (#797) Standalone, show the picker only when there are 2+ *Chase* checking
+  // accounts to switch between. With fewer the picker hides and the ledger is
+  // the bank balance's own account, which the server resolves (PR13; the old
+  // browser-side source fallback, `lib/chaseScope.ts`, is gone). The dead
+  // "Manual entries" pseudo-account option was removed — it was leaking a
+  // non-Chase view onto the Chase page.
+  // (WP7) Embedded, the list is every linked checking/savings account
+  // (`pickerAccounts`) and a pick opens that account's own page, so the page
+  // title and the ledger always name the same account.
   const accountPicker =
-    chaseOnlyPlaidCheckingAccounts.length > 1 ? (
+    pickerAccounts.length > 1 ? (
       <div className="flex items-center gap-2" data-testid="chase-account-picker">
         <span className={fieldLabel}>Account</span>
         <Select
           value={effectiveAccountKey}
-          onValueChange={(v) => setSelectedAccountKey(v)}
+          onValueChange={(v) => {
+            if (!embedded) {
+              setSelectedAccountKey(v);
+              return;
+            }
+            const a = pickerAccounts.find((x) => x.id === v);
+            if (a && v !== effectiveAccountKey) navigate(accountPageHref({ plaidAccountId: a.accountId, rowId: a.id }));
+          }}
         >
           <SelectTrigger aria-label="View account" className="h-8 text-xs w-64" data-testid="select-chase-account">
             <SelectValue />
           </SelectTrigger>
           <SelectContent data-testid="chase-account-options">
-            {chaseOnlyPlaidCheckingAccounts.map((a) => {
+            {pickerAccounts.map((a) => {
               const name = a.institutionName ?? a.name ?? "Checking";
               const mask = a.mask ?? null;
               const isSnapshot = bankSnapshot?.accountId === a.id;
@@ -2510,6 +2567,13 @@ export default function TransactionsPage({
             {rangeMode === "mo" && (
               <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
             )}
+            {rangeMode === "mo" &&
+            rowLinkMonthRef.current &&
+            compareMonth(selectedMonth, rowLinkMonthRef.current) === 0 ? (
+              <span role="status" className="text-label text-neutral-600" data-testid="chase-row-link-status">
+                {rowDeepLinkStatus(selectedMonth)}
+              </span>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {embedded ? manualMeta : null}
@@ -2590,7 +2654,7 @@ export default function TransactionsPage({
 
             {/* Checking balance trend across the range */}
             <Panel
-              title="Checking balance"
+              title={selectedPlaidAccount?.subtype === "savings" ? "Savings balance" : "Checking balance"}
               span={lead ? 4 : 6}
               variant="static"
               accent="checking"
@@ -2669,11 +2733,13 @@ export default function TransactionsPage({
             {/* "No checking account linked" is a claim: only once the forecast
                 bundle, which names the linked accounts, has answered. */}
             <div className={emptyNote}>
-              {forecastData === undefined
-                ? forecastDataError
-                  ? "Couldn't load checking account."
-                  : "Loading checking account…"
-                : "No checking account linked."}
+              {embedded && refusedAccount
+                ? "No ledger for this account."
+                : forecastData === undefined
+                  ? forecastDataError
+                    ? "Couldn't load checking account."
+                    : "Loading checking account…"
+                  : "No checking account linked."}
             </div>
           </Panel>
         )}
@@ -2717,6 +2783,14 @@ export default function TransactionsPage({
             />
           }
         >
+          {embedded && refusedAccount ? (
+            <div className="px-4 py-6" role="status" data-testid="chase-no-ledger">
+              <p className="text-body font-medium text-brand-ink">H2 has no ledger for this account.</p>
+              <p className="mt-1 text-label text-neutral-600">
+                The ledger lists this household's checking and savings accounts, and this one is not among them now. It may have been unlinked.
+              </p>
+            </div>
+          ) : null}
           {register.isLoadingError &&
             register.errorCode !== "account_not_ledger" &&
             register.errorCode !== "invalid_account" && (
