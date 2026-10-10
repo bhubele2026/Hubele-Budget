@@ -2,6 +2,7 @@
 // identity, one row per term, to the cent. Synthetic rows only.
 import { describe, it, expect } from "vitest";
 import { classifyOutflow, PFC_CARD_PAYMENT, type SpendContext } from "./spendingFilter";
+import type { ReplacedPending } from "./supersededPending";
 import { explainedByTerms, reconcileMonthSpend, type ReconcileRow } from "./spendingReconcile";
 
 const TODAY = "2026-10-10";
@@ -75,7 +76,9 @@ const ROWS = [
 ];
 const supersede = {
   replacedIds: new Set([pendingHalf.id]),
-  replacedBy: new Map([[postedHalf.id, { description: pendingHalf.description, filing: pendingHalf }]]),
+  replacedBy: new Map<string, ReplacedPending>([
+    [postedHalf.id, { id: pendingHalf.id, occurredOn: pendingHalf.occurredOn, description: pendingHalf.description, filing: pendingHalf }],
+  ]),
 };
 // $50 of the split purchase is Groceries; $30 parked in Uncategorized (no line).
 const splitParts = new Map([
@@ -125,7 +128,7 @@ describe("reconcileMonthSpend — Budget actual vs household spending to date", 
   it("a refund never takes an account below zero: only what was spent there is netted", () => {
     const bigRefund = row({ description: "SOFA STORE REFUND", amount: "900.00", plaidAccountId: "acct-other", occurredOn: "2026-10-09" });
     const smallBuy = row({ description: "SOFA STORE", amount: "-100.00", plaidAccountId: "acct-other" });
-    const x = reconcileMonthSpend([bigRefund, smallBuy], { replacedIds: new Set(), replacedBy: new Map() }, filingCtx, spendCtx, new Map(), {
+    const x = reconcileMonthSpend([bigRefund, smallBuy], { replacedIds: new Set<string>(), replacedBy: new Map<string, ReplacedPending>() }, filingCtx, spendCtx, new Map(), {
       today: TODAY,
       expenseLineIds,
     });

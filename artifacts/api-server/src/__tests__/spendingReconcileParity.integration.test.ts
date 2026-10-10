@@ -174,8 +174,14 @@ beforeAll(async () => {
     weeklyAllowance: false, monthlyAllowance: false, unplannedAllowance: false, weeklyBucket: null, reimbursable: false,
     debtId: null as string | null, isTransfer: false, isTransferUserOverridden: false, isExternalCardPayment: false, pfcDetailed: null as string | null,
   };
-  const one = (o: Partial<typeof transactionsTable.$inferInsert>) => ({ ...plain, id: randomUUID(), createdAt: createdAtStartOfHouseholdDay(MONTH.start), ...o });
-  const fixed = [
+  type Insert = typeof transactionsTable.$inferInsert;
+  const one = (o: Partial<Insert> & { description: string; amount: string }): Insert => ({
+    ...plain,
+    id: randomUUID(),
+    createdAt: createdAtStartOfHouseholdDay(MONTH.start),
+    ...o,
+  });
+  const fixed: Insert[] = [
     one({ description: "CORNER BISTRO", amount: "-41.10", categoryId: groceries }),
     one({ description: "AMEX EPAYMENT ACH PMT", amount: "-1200.00", categoryId: misc }),
     one({ description: "TEST LOAN PAYMENT", amount: "-245.00", categoryId: loan, debtId: debt!.id }),
