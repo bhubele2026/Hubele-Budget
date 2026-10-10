@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   categorize,
+  directionGuard,
   findMatchedRuleId,
   findMatchingRules,
   matchRule,
   type RuleRow,
 } from "./autoCategorize";
+import { spendContextOf } from "./spendContext";
 
 const rules: RuleRow[] = [
   { id: "r1", pattern: "STARBUCKS", matchType: "contains", categoryId: "cat-coffee", priority: 50 },
@@ -218,5 +220,92 @@ describe("categorize", () => {
   it("does NOT flag a plain merchant charge that happens to contain 'pay'", () => {
     const out = categorize({ description: "PAYLESS SHOES #4521" }, []);
     expect(out.isTransfer).toBe(false);
+  });
+});
+
+// ── (WP5d) the insert-time fill never files money against its direction ────
+describe("(WP5d) categorize with a direction guard", () => {
+  const ctx = {
+    spendCtx: spendContextOf([
+      { id: "cat-dining", name: "Dining & Coffee", debtId: null, kind: "expense" },
+      { id: "cat-paycheck", name: "Paycheck", debtId: null, kind: "income" },
+      { id: "cat-uncat", name: "Uncategorized", debtId: null, kind: "expense" },
+    ]),
+    uncategorizedIds: new Set(["cat-uncat"]),
+  };
+  // One broad employer rule, the way a seed payroll rule gets re-pointed.
+  const broad: RuleRow[] = [{ id: "r-bigco", pattern: "BIGCO", matchType: "contains", categoryId: "cat-dining", priority: 50 }];
+  const toPay: RuleRow[] = [{ id: "r-pay", pattern: "BIGCO", matchType: "contains", categoryId: "cat-paycheck", priority: 50 }];
+
+  it("money in that a rule would file under an expense category files nothing, and names the rule", () => {
+    const out = categorize(
+      { description: "BIGCO PAYROLL PPD ID 4455" },
+      broad,
+      directionGuard(ctx, { amount: "2500.00", source: "plaid:chase", accountType: "depository" }),
+    );
+    expect(out).toEqual({
+      categoryId: null,
+      isTransfer: false,
+      matchedRuleId: null,
+      matchedRulePattern: null,
+      directionConflict: { kind: "inflow_into_expense", ruleId: "r-bigco", pattern: "BIGCO" },
+    });
+  });
+
+  it("money out that a rule would file under an income category files nothing either", () => {
+    const out = categorize(
+      { description: "BIGCO CAFE 0042" },
+      toPay,
+      directionGuard(ctx, { amount: "-8.50", source: "plaid:chase", accountType: "depository" }),
+    );
+    expect(out.categoryId).toBeNull();
+    expect(out.directionConflict).toEqual({ kind: "outflow_into_income", ruleId: "r-pay", pattern: "BIGCO" });
+  });
+
+  it("the right direction files as before, with the rule attributed", () => {
+    const cafe = categorize(
+      { description: "BIGCO CAFE 0042" },
+      broad,
+      directionGuard(ctx, { amount: "-8.50", source: "plaid:chase", accountType: "depository" }),
+    );
+    expect(cafe).toMatchObject({ categoryId: "cat-dining", matchedRuleId: "r-bigco", directionConflict: null });
+    const pay = categorize(
+      { description: "BIGCO PAYROLL" },
+      toPay,
+      directionGuard(ctx, { amount: "2500.00", source: "plaid:chase", accountType: "depository" }),
+    );
+    expect(pay).toMatchObject({ categoryId: "cat-paycheck", matchedRuleId: "r-pay", directionConflict: null });
+  });
+
+  it("must not change: a card's credit (any bank), a transfer, a debt payment, a reimbursable credit, a checking refund", () => {
+    const credit = (o: Parameters<typeof directionGuard>[1]) =>
+      categorize({ description: "BIGCO STORE" }, broad, directionGuard(ctx, o)).categoryId;
+    expect(credit({ amount: "20.00", source: "plaid:chase", accountType: "credit" })).toBe("cat-dining");
+    expect(credit({ amount: "20.00", source: "plaid:amex", accountType: null })).toBe("cat-dining");
+    expect(credit({ amount: "-20.00", source: "amex", accountType: null })).toBe("cat-dining");
+    expect(credit({ amount: "20.00", source: "plaid:chase", accountType: "depository", isTransfer: true })).toBe("cat-dining");
+    expect(credit({ amount: "20.00", source: "plaid:chase", accountType: "depository", debtId: "d1" })).toBe("cat-dining");
+    expect(credit({ amount: "20.00", source: "plaid:chase", accountType: "depository", reimbursable: true })).toBe("cat-dining");
+    expect(
+      categorize({ description: "BIGCO REFUND" }, broad, directionGuard(ctx, { amount: "5.00", source: "plaid:chase", accountType: "depository" }))
+        .categoryId,
+    ).toBe("cat-dining");
+  });
+
+  it("without a guard nothing changes (callers that do not pass one keep today's behaviour)", () => {
+    expect(categorize({ description: "BIGCO PAYROLL" }, broad)).toEqual({
+      categoryId: "cat-dining",
+      isTransfer: false,
+      matchedRuleId: "r-bigco",
+      matchedRulePattern: "BIGCO",
+      directionConflict: null,
+    });
+  });
+
+  it("directionGuard: card-ness from the account type or a card ledger source", () => {
+    expect(directionGuard(ctx, { amount: 1, source: "plaid:chase", accountType: "credit" }).isCardAccount).toBe(true);
+    expect(directionGuard(ctx, { amount: 1, source: "plaid:amex" }).isCardAccount).toBe(true);
+    expect(directionGuard(ctx, { amount: 1, source: "plaid:chase", accountType: "depository" }).isCardAccount).toBe(false);
+    expect(directionGuard(ctx, { amount: 1, source: "manual" }).isCardAccount).toBe(false);
   });
 });

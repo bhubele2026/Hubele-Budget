@@ -1,10 +1,18 @@
 import { eq } from "drizzle-orm";
-import { db, mappingRulesTable } from "@workspace/db";
+import { db, budgetCategoriesTable, mappingRulesTable } from "@workspace/db";
+import {
+  categoryDirectionConflict,
+  isCardLedgerRow,
+  type DirectionConflict,
+  type SpendContext,
+} from "@workspace/avalanche-core";
 import {
   TRANSFER_DESC_PATTERNS as SHARED_TRANSFER_DESC_PATTERNS,
   TRANSFER_PFC_PRIMARY as SHARED_TRANSFER_PFC_PRIMARY,
   isHeuristicTransfer as sharedIsHeuristicTransfer,
 } from "@workspace/api-zod";
+import { uncategorizedCategoryIds } from "./pendingFiling";
+import { spendContextOf } from "./spendContext";
 
 export type RuleRow = {
   id: string;
@@ -171,16 +179,51 @@ export type CategorizeResult = {
   // breakdown ("Auto-categorized 12 new transactions: 5 via 'STARBUCKS', …").
   matchedRuleId: string | null;
   matchedRulePattern: string | null;
+  /**
+   * (WP5d) Set when the winning rule would file the row against the money's
+   * direction (`categoryDirectionConflict`: money in under an expense
+   * category, money out under an income one). `categoryId` is then null and
+   * the rule is NOT reported as `matchedRuleId` (it filed nothing): the row is
+   * stored uncategorized, and the engine's queue decision names the rule.
+   */
+  directionConflict: { kind: DirectionConflict; ruleId: string; pattern: string } | null;
 };
+
+/**
+ * (WP5d) What the insert-time direction guard needs: the household's
+ * categories (`loadRuleContext`) and the row as it will be stored. Omit the
+ * guard and `categorize` behaves exactly as before (no direction check).
+ */
+export interface CategorizeGuard {
+  spendCtx: SpendContext;
+  uncategorizedIds: ReadonlySet<string>;
+  /** Signed as stored: bank/Plaid money out is negative; an Amex-workbook charge positive. */
+  amount: string | number;
+  source: string;
+  /** The row's Plaid account is a credit account (see `isCardLedgerRow`). */
+  isCardAccount: boolean;
+  /** The row's final transfer flag, when the caller decides it (else the heuristic's). */
+  isTransfer?: boolean;
+  debtId?: string | null;
+  isExternalCardPayment?: boolean;
+  reimbursable?: boolean;
+}
 
 /**
  * Canonical mapping of a transaction to a budget category, plus a transfer
  * flag. Description rules win over Plaid PFC fallbacks so user-defined
  * mapping_rules always take precedence.
+ *
+ * ⭐ (WP5d) With a `guard`, a rule that would file money in under an expense
+ * category (a paycheck under Dining) or money out under an income one (a
+ * cafeteria charge under the paycheck) files NOTHING: the result carries
+ * `categoryId: null` and `directionConflict`, so the row inserts uncategorized
+ * and the categorizer queues it, naming the rule (WP5c, `decide.ts`).
  */
 export function categorize(
   input: CategorizeInput,
   rules: RuleRow[],
+  guard?: CategorizeGuard,
 ): CategorizeResult {
   const desc = input.description ?? "";
   const haystack = desc.toLowerCase();
@@ -193,11 +236,39 @@ export function categorize(
   // Description rules.
   const matched = matchRuleEntry(desc, rules);
   if (matched && matched.categoryId) {
+    const conflict = guard
+      ? categoryDirectionConflict(
+          {
+            amount: guard.amount,
+            source: guard.source,
+            isTransfer: guard.isTransfer ?? isTransfer,
+            categoryId: matched.categoryId,
+            description: desc,
+            debtId: guard.debtId ?? null,
+            isExternalCardPayment: guard.isExternalCardPayment ?? false,
+            reimbursable: guard.reimbursable ?? false,
+            pfcDetailed: input.pfcDetailed ?? null,
+          },
+          matched.categoryId,
+          guard.spendCtx,
+          { isCardAccount: guard.isCardAccount, uncategorizedIds: guard.uncategorizedIds },
+        )
+      : null;
+    if (conflict) {
+      return {
+        categoryId: null,
+        isTransfer,
+        matchedRuleId: null,
+        matchedRulePattern: null,
+        directionConflict: { kind: conflict, ruleId: matched.id, pattern: matched.pattern },
+      };
+    }
     return {
       categoryId: matched.categoryId,
       isTransfer,
       matchedRuleId: matched.id,
       matchedRulePattern: matched.pattern,
+      directionConflict: null,
     };
   }
 
@@ -206,5 +277,65 @@ export function categorize(
     isTransfer,
     matchedRuleId: null,
     matchedRulePattern: null,
+    directionConflict: null,
+  };
+}
+
+/** (WP5d) The rules and the categories an insert-time fill needs. */
+export interface RuleContext {
+  /** Deterministic order (`compareRules`), as `loadUserRules` returns them. */
+  rules: RuleRow[];
+  spendCtx: SpendContext;
+  /** The household's system "Uncategorized" category ids. */
+  uncategorizedIds: ReadonlySet<string>;
+}
+
+/**
+ * (WP5d) Load once per sync / import / request: the household's mapping rules
+ * plus its categories as the direction guard reads them (kinds, debt links,
+ * the system Uncategorized ids).
+ */
+export async function loadRuleContext(householdId: string): Promise<RuleContext> {
+  const [rules, cats] = await Promise.all([
+    loadUserRules(householdId),
+    db
+      .select({
+        id: budgetCategoriesTable.id,
+        name: budgetCategoriesTable.name,
+        debtId: budgetCategoriesTable.debtId,
+        kind: budgetCategoriesTable.kind,
+      })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.householdId, householdId)),
+  ]);
+  return { rules, spendCtx: spendContextOf(cats), uncategorizedIds: uncategorizedCategoryIds(cats) };
+}
+
+/**
+ * (WP5d) The guard for one row, from a loaded context. `accountType` is the
+ * row's Plaid account type (`plaid_accounts.type`), when it has one.
+ */
+export function directionGuard(
+  rc: Pick<RuleContext, "spendCtx" | "uncategorizedIds">,
+  row: {
+    amount: string | number;
+    source: string;
+    accountType?: string | null;
+    isTransfer?: boolean;
+    debtId?: string | null;
+    isExternalCardPayment?: boolean;
+    reimbursable?: boolean;
+  },
+): CategorizeGuard {
+  return {
+    spendCtx: rc.spendCtx,
+    uncategorizedIds: rc.uncategorizedIds,
+    amount: row.amount,
+    source: row.source,
+    isCardAccount: isCardLedgerRow(row.source, row.accountType ?? null),
+    ...(row.isTransfer !== undefined ? { isTransfer: row.isTransfer } : {}),
+    debtId: row.debtId ?? null,
+    isExternalCardPayment: row.isExternalCardPayment ?? false,
+    reimbursable: row.reimbursable ?? false,
   };
 }

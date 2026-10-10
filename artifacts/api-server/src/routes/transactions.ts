@@ -12,10 +12,13 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   categorize,
+  directionGuard,
   findMatchedRuleId,
   isHeuristicTransfer,
+  loadRuleContext,
   loadUserRules,
 } from "../lib/autoCategorize";
+import { runCategorizationBatch } from "../lib/categorizer";
 import { selectPatternCandidates } from "../lib/patternCandidates";
 import { expandSplits, loadSplitsForTxns } from "../lib/categorizer/splits";
 import { recordHandFiling, recordUserDecisions } from "../lib/categorizer/userDecisions";
@@ -237,8 +240,15 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // Undo affordance that clears the auto-picked category from the new
   // row without deleting the row itself.
   let autoCategorizedRuleId: string | null = null;
+  // (WP5d) Set when a rule would have filed this row against its direction.
+  let directionConflict = false;
   if (!bodyHasCategoryId || !bodyHasIsTransfer) {
-    const rules = await loadUserRules(req.householdId!);
+    const ruleCtx = await loadRuleContext(req.householdId!);
+    const rules = ruleCtx.rules;
+    // ⭐ (WP5d) The rule fill never files money in under an expense category,
+    // nor money out under an income one: the row is stored uncategorized and
+    // queued below, naming the rule. The row's own flags (a transfer, a debt,
+    // reimbursable, the card-payment flag) are judged as the client sent them.
     const result = categorize(
       {
         description: parsed.data.description,
@@ -246,7 +256,17 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         pfcDetailed: null,
       },
       rules,
+      directionGuard(ruleCtx, {
+        amount: parsed.data.amount,
+        source: parsed.data.source ?? "manual",
+        accountType: null,
+        ...(bodyHasIsTransfer ? { isTransfer: parsed.data.isTransfer ?? false } : {}),
+        debtId: parsed.data.debtId ?? null,
+        isExternalCardPayment: parsed.data.isExternalCardPayment ?? false,
+        reimbursable: parsed.data.reimbursable ?? false,
+      }),
     );
+    directionConflict = !bodyHasCategoryId && result.directionConflict !== null;
     if (!bodyHasCategoryId && result.categoryId) {
       insertValues.categoryId = result.categoryId;
       autoCategorizedRuleId = findMatchedRuleId(
@@ -308,7 +328,31 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       { transactionId: row.id, previousCategoryId: null, categoryId: row.categoryId },
     ]);
   }
-  res.status(201).json({ ...row, autoCategorizedRuleId });
+  // (WP5d) A rule left this row uncategorized because of its direction: run the
+  // deterministic engine over it now, as a sync would, so the question is in
+  // the review queue at once ("Money in, but this would file it under an
+  // expense category", naming the rule). Non-fatal: the next categorize job
+  // sweeps uncategorized rows anyway.
+  let created = row;
+  if (row && directionConflict) {
+    try {
+      await runCategorizationBatch(req.householdId!, {
+        txnIds: [row.id],
+        trigger: "manual",
+        freshIds: new Set([row.id]),
+      });
+      // The engine may have filed it another way (a merchant memory): answer
+      // with the row as it now stands.
+      const [now] = await db
+        .select()
+        .from(transactionsTable)
+        .where(and(eq(transactionsTable.id, row.id), eq(transactionsTable.householdId, req.householdId!)));
+      if (now) created = now;
+    } catch (e) {
+      req.log?.warn?.({ err: e, txnId: row.id }, "[transactions] direction-conflict queue failed (non-fatal)");
+    }
+  }
+  res.status(201).json({ ...created, autoCategorizedRuleId });
 });
 
 router.patch(
