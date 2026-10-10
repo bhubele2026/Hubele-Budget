@@ -31,6 +31,8 @@ import {
   householdMembersTable,
   mappingRulesTable,
   merchantMemoryTable,
+  plaidAccountsTable,
+  recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
 import transactionsRouter from "../routes/transactions";
@@ -121,6 +123,8 @@ beforeAll(async () => {
     .onConflictDoNothing();
   who.householdId = HH;
   for (const n of ["Groceries", "Dining", "Coffee", "Shopping", "Utilities"]) cats[n] = await makeCat(HH, OWNER, n);
+  // (WP5c) An income category, for the direction guard.
+  cats.Paycheck = await makeCat(HH, OWNER, "Paycheck", "income");
   // System Transfer category, created by the OWNER (member-session test).
   const [t] = await db
     .insert(budgetCategoriesTable)
@@ -541,5 +545,102 @@ describe("households and members", () => {
     expect((await row(id)).isTransfer).toBe(true);
     // System categories teach no memory.
     expect(await db.select().from(merchantMemoryTable).where(eq(merchantMemoryTable.householdId, HH))).toHaveLength(0);
+  });
+});
+
+// ── (WP5c) direction guard ─────────────────────────────────────────────────
+// A memory, rule or recurring pick that would file money in under an expense
+// category, or money out under an income one, is a QUEUE decision that still
+// names the category and the rule / memory / item. Card credits, checking
+// refunds, reimbursables, transfers and card payments are unchanged.
+describe("(WP5c) the direction guard", () => {
+  const CARD = `acct-wp5c-card-${randomUUID().slice(0, 8)}`;
+  const MONEY_IN = "Money in, but this would file it under an expense category.";
+  const MONEY_OUT = "Money out, but this would file it under an income category.";
+
+  async function memory(signature: string, categoryId: string, count = 3): Promise<string> {
+    const [m] = await db
+      .insert(merchantMemoryTable)
+      .values({ householdId: HH, signature, scope: "merchant", categoryId, count, createdAt: new Date("2026-01-01T00:00:00Z") })
+      .returning({ id: merchantMemoryTable.id });
+    return m!.id;
+  }
+
+  beforeAll(async () => {
+    await db
+      .insert(plaidAccountsTable)
+      .values({ userId: OWNER, householdId: HH, itemId: randomUUID(), accountId: CARD, type: "credit", subtype: "credit card" })
+      .onConflictDoNothing();
+  });
+  beforeEach(async () => {
+    await db.delete(recurringItemsTable).where(eq(recurringItemsTable.householdId, HH));
+  });
+
+  it("a rule that would file a paycheck under Dining queues it: nothing written, the rule named, the model may still be asked", async () => {
+    const ruleId = await rule("BIGCO", cats.Dining!);
+    const pay = await txn({ description: "BIGCO PAYROLL PPD ID 4455", amount: "2500.00" });
+    const cafe = await txn({ description: "BIGCO CAFE 0042", amount: "-8.50" });
+    const out = await run();
+
+    expect((await row(pay)).categoryId).toBeNull();
+    const [d] = await decisionsOf(pay);
+    expect(d).toMatchObject({ source: "rule", band: "queue", categoryId: cats.Dining, ruleId, explanation: MONEY_IN });
+    expect(Number(d!.confidence)).toBeCloseTo(0.5, 3);
+    expect(out.ambiguous).toContain(pay);
+    // The same rule still files the cafeteria charge: money out, an expense category.
+    expect((await row(cafe)).categoryId).toBe(cats.Dining);
+    expect((await decisionsOf(cafe))[0]).toMatchObject({ source: "rule", band: "provisional", explanation: "Matched one of your rules." });
+    // It waits in the review queue with the rule's category as the suggestion.
+    const review = await request("GET", "/categorization/review?limit=20");
+    const items = (review.json as { items: { transactionId: string; suggestedCategoryId: string | null; explanation: string }[] }).items;
+    expect(items.find((i) => i.transactionId === pay)).toMatchObject({ suggestedCategoryId: cats.Dining, explanation: MONEY_IN });
+    // A second run records nothing new.
+    expect((await run()).decisions).toHaveLength(0);
+  });
+
+  it("a memory that would file a cafeteria charge under the paycheck queues it, naming the memory", async () => {
+    const memoryId = await memory(merchantSignature("BIGCO CAFE 0042"), cats.Paycheck!);
+    const cafe = await txn({ description: "BIGCO CAFE 0042", amount: "-8.50" });
+    await run();
+    expect((await row(cafe)).categoryId).toBeNull();
+    expect((await decisionsOf(cafe))[0]).toMatchObject({ source: "memory", band: "queue", categoryId: cats.Paycheck, memoryId, explanation: MONEY_OUT });
+  });
+
+  it("a recurring income item that would file money out under income queues it, naming the item", async () => {
+    const [item] = await db
+      .insert(recurringItemsTable)
+      .values({ userId: OWNER, householdId: HH, name: "Bigco Payroll", kind: "income", amount: "2500.00", categoryId: cats.Paycheck, active: "true" })
+      .returning({ id: recurringItemsTable.id });
+    const reversal = await txn({ description: "BIGCO PAYROLL REVERSAL", amount: "-2500.00" });
+    const deposit = await txn({ description: "BIGCO PAYROLL", amount: "2500.00" });
+    await run();
+    expect((await row(reversal)).categoryId).toBeNull();
+    expect((await decisionsOf(reversal))[0]).toMatchObject({ source: "recurring", band: "queue", categoryId: cats.Paycheck, recurringItemId: item!.id, explanation: MONEY_OUT });
+    // The deposit itself goes where the item says: money in, an income category.
+    expect((await row(deposit)).categoryId).toBe(cats.Paycheck);
+  });
+
+  it("must not change: a credit on ANY card (not only Amex) filed by memory stays filed; the same credit on checking is queued", async () => {
+    await memory(merchantSignature("BIGCO STORE 77"), cats.Shopping!);
+    const onCard = await txn({ description: "BIGCO STORE 77", amount: "20.00", source: "plaid:chase", plaidAccountId: CARD });
+    const onChecking = await txn({ description: "BIGCO STORE 77", amount: "20.00" });
+    await run();
+    expect((await row(onCard)).categoryId).toBe(cats.Shopping);
+    expect((await decisionsOf(onCard))[0]).toMatchObject({ source: "memory", band: "auto" });
+    expect((await row(onChecking)).categoryId).toBeNull();
+    expect((await decisionsOf(onChecking))[0]).toMatchObject({ source: "memory", band: "queue", explanation: MONEY_IN });
+  });
+
+  it("must not change: a checking refund, a reimbursable credit, a transfer and a card payment are filed as before", async () => {
+    await rule("BIGCO", cats.Dining!);
+    const refund = await txn({ description: "BIGCO REFUND", amount: "5.00" });
+    const reimbursed = await txn({ description: "BIGCO PAYROLL PPD ID 1", amount: "40.00", reimbursable: true });
+    const transfer = await txn({ description: "BIGCO PAYROLL PPD ID 2", amount: "60.00", isTransfer: true });
+    const cardPayment = await txn({ description: "BIGCO PAYROLL PPD ID 3", amount: "70.00", isExternalCardPayment: true });
+    await run();
+    for (const id of [refund, reimbursed, transfer, cardPayment]) {
+      expect((await row(id)).categoryId, id).toBe(cats.Dining);
+      expect((await decisionsOf(id))[0]!.explanation, id).toBe("Matched one of your rules.");
+    }
   });
 });

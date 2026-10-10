@@ -6,7 +6,7 @@ import { FindingsList } from "@/components/agent/FindingsList";
 import { useOpenFindings } from "@/components/agent/agentHooks";
 import { attentionItems } from "@/lib/attention";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
-import { categoriesByIdOf, isInflowFiledAsExpense } from "@/lib/categoryDirection";
+import { accountTypesOf, categoriesByIdOf, isCardTxn, isInflowFiledAsExpense } from "@/lib/categoryDirection";
 import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
 import { useSpine } from "@/hooks/useSpine";
@@ -122,14 +122,19 @@ export default function AttentionPanel() {
   // keeping the category filter; a row no ledger lists says so instead.
   // Where a row opens needs the linked accounts too: without them every row
   // would read "no longer linked", so the check waits for them as well.
+  // (WP5c) The rule also needs to know which rows sit on a card (a card's
+  // credits are refunds and payments, whatever the issuer) — from the same items.
   const misfiled = useMemo(() => {
     if (recent.data === undefined || cats.data === undefined || items.data === undefined) return null;
     const byId = categoriesByIdOf(cats.data);
     const entries = buildEntries(items.data);
-    return recent.data.filter((t) => isInflowFiledAsExpense(t, byId)).map((t) => {
-      const category = byId.get(t.categoryId ?? "")?.name ?? null;
-      return { id: t.id, description: t.description, category, route: txnRoute(t, entries, { extra: { category } }) };
-    });
+    const types = accountTypesOf(items.data);
+    return recent.data
+      .filter((t) => isInflowFiledAsExpense(t, byId, { isCardAccount: isCardTxn(t, types) }))
+      .map((t) => {
+        const category = byId.get(t.categoryId ?? "")?.name ?? null;
+        return { id: t.id, description: t.description, category, route: txnRoute(t, entries, { extra: { category } }) };
+      });
   }, [recent.data, cats.data, items.data]);
   // The window is the newest RECENT_LIMIT rows: when it is full, older rows of
   // the 30 days were not checked, and the panel says so whatever it found.

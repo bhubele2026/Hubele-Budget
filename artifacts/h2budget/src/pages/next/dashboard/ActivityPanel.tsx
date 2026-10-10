@@ -7,7 +7,7 @@ import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { usePlaidItemsQ } from "./queries";
-import { categoriesByIdOf, isInflowFiledAsExpense } from "@/lib/categoryDirection";
+import { accountTypesOf, categoriesByIdOf, isCardTxn, isInflowFiledAsExpense } from "@/lib/categoryDirection";
 import { RECENT_WINDOW_DAYS, useCategoriesQ, useRecentTxnsQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
@@ -36,6 +36,9 @@ export default function ActivityPanel() {
     const byExt = new Map(buildEntries(items.data).map((e) => [e.plaidAccountId, e]));
     const catName = new Map((cats.data ?? []).map((c) => [c.id, c.name]));
     const catsById = categoriesByIdOf(cats.data);
+    // (WP5c) A card's credit is never "income": the flag waits for the bank
+    // items, which say which accounts are cards.
+    const types = items.data === undefined ? null : accountTypesOf(items.data);
     return (txns.data ?? []).slice(0, ACTIVITY_ROWS).map((t) => {
       // (WP7) The one route rule: a row opens the ledger that lists it, on its
       // month, or says why none does — never the checking ledger by default.
@@ -49,7 +52,10 @@ export default function ActivityPanel() {
         identity,
         pending: t.pending,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
-        flag: isInflowFiledAsExpense(t, catsById) ? "Income in an expense category" : null,
+        flag:
+          types && isInflowFiledAsExpense(t, catsById, { isCardAccount: isCardTxn(t, types) })
+            ? "Income in an expense category"
+            : null,
         href: route.href ?? undefined,
         note: route.note,
       };
