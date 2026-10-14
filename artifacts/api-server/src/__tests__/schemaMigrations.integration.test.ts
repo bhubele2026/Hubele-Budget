@@ -49,6 +49,8 @@ const ADDED_COLUMNS: Record<string, string[]> = {
   ],
   // WP5b (0170): the last direct edit of a rule.
   mapping_rules: ["updated_at"],
+  // S4 (0190): the last bank-balance tie a manual Sync checked.
+  forecast_settings: ["last_bank_reconciliation"],
 };
 
 type ColumnShape = {

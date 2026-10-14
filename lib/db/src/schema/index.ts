@@ -893,6 +893,19 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
     >
   >(),
   autoDedupeRanAt: timestamp("auto_dedupe_ran_at", { withTimezone: true }),
+  /**
+   * (S4, 0190) The last bank-balance tie a manual Sync checked: written by
+   * `plaidSync` where it reconciles the bank's balance with the ledger; read by
+   * the banking review. Null until a manual Sync checks it.
+   */
+  lastBankReconciliation: jsonb("last_bank_reconciliation").$type<{
+    checkedAt: string;
+    /** The Plaid account id (`plaid_accounts.account_id`) that was checked. */
+    accountId: string;
+    /** bank − ledger, two decimals. */
+    unexplained: string;
+    status: "ties" | "drift";
+  }>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
