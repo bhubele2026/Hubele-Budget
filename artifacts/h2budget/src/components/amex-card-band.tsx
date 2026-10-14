@@ -26,16 +26,27 @@ export interface BandPeriod {
 }
 
 /**
- * One card's (or all cards') `owed` and period purchases — the SERVER's
- * `/amex/summary` figures, the same ones the Summary panel prints, so the band
- * and the Summary can never disagree. Unknown is "—", loading is a pulse.
+ * Every tile's `owed` and period purchases from ONE call: the `accountId=all`
+ * summary (P4). Its `scope.cards[]` carries each card's own owed + purchases
+ * (the same rule as that card's own summary, parity-tested on the server), so
+ * the band makes no per-card summary calls. Unknown is "—", loading is a pulse.
  */
-function useBandFigures(accountId: string, period: BandPeriod | null | undefined) {
-  const params = { accountId, from: period?.from ?? "", to: period?.to ?? "" };
-  const q = useGetAmexSummary(params, {
+function useBandFigures(period: BandPeriod | null | undefined) {
+  const params = { accountId: "all", from: period?.from ?? "", to: period?.to ?? "" };
+  return useGetAmexSummary(params, {
     query: { queryKey: getGetAmexSummaryQueryKey(params), enabled: period != null },
   });
-  return q;
+}
+
+type TileFiguresData = { owed: string | null; purchases: string | null };
+function figuresOf(
+  data: ReturnType<typeof useBandFigures>["data"],
+  accountId: string,
+): TileFiguresData {
+  if (!data) return { owed: null, purchases: null };
+  if (accountId === "all") return { owed: data.owed.current, purchases: data.purchases.amount };
+  const card = data.scope.cards.find((c) => c.accountId === accountId);
+  return { owed: card?.owed ?? null, purchases: card?.purchases?.amount ?? null };
 }
 
 function FigureLine({
@@ -66,7 +77,8 @@ function TileFigures({
   head: ReactNode;
   aside?: ReactNode;
 }) {
-  const q = useBandFigures(accountId, period);
+  const q = useBandFigures(period);
+  const figures = figuresOf(q.data, accountId);
   const loading = period != null && q.data === undefined && !q.isError;
   return (
     <>
@@ -74,7 +86,7 @@ function TileFigures({
         <div className="min-w-0">
           {head}
           <div className="mt-2 font-mono text-title font-semibold leading-none tabular-nums text-brand-navy" data-testid={`amex-owed-${accountId}`}>
-            {loading ? <span className="inline-block h-5 w-24 animate-pulse rounded bg-platinum-2 align-middle" aria-busy="true" /> : moneyFace(q.data?.owed.current ?? null)}
+            {loading ? <span className="inline-block h-5 w-24 animate-pulse rounded bg-platinum-2 align-middle" aria-busy="true" /> : moneyFace(figures.owed)}
           </div>
           <div className="mt-1 text-micro text-neutral-500">Owed</div>
         </div>
@@ -84,7 +96,7 @@ function TileFigures({
         <FigureLine
           testId={`amex-purchases-${accountId}`}
           label={periodLabel ? `Purchases · ${periodLabel}` : "Purchases"}
-          amount={q.data?.purchases.amount}
+          amount={figures.purchases}
           loading={loading}
         />
       </div>

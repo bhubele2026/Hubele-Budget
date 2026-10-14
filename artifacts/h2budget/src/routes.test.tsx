@@ -43,6 +43,7 @@ vi.mock("@clerk/themes", () => ({ shadcn: {} }));
 
 vi.mock("@workspace/api-client-react", () => ({
   useListCategorizationReview: () => ({ data: undefined, isLoading: true }),
+  useGetCategorizationReviewCount: () => ({ data: undefined, isLoading: true }),
   getListCategorizationReviewQueryKey: () => ["/api/categorization/review"],
   getSpine: vi.fn(() => new Promise(() => {})),
   getGetSpineQueryKey: () => ["/api/spine"],
