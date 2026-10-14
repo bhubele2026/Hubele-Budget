@@ -1,6 +1,7 @@
 import { Router, type IRouter, type RequestHandler } from "express";
 import { and, eq } from "drizzle-orm";
 import {
+  CreateAllowancePlanBody,
   CreateWeekAdjustmentBody,
   DeleteWeekAdjustmentParams,
   EvaluateAffordBody,
@@ -15,10 +16,16 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { buildMoneyPosition } from "../lib/moneyPosition";
 import {
   loadAllowancePlans,
+  planPrefills,
+  plansInEffect,
   suggestWeeklyCap,
   toAllowancePlanView,
 } from "../lib/allowancePlans";
-import { writeOwnerAllowancePlan } from "../lib/allowancePlanWriter";
+import {
+  createOwnerAllowancePlan,
+  writeOwnerAllowancePlan,
+  type AllowancePlanWriteResult,
+} from "../lib/allowancePlanWriter";
 import { buildAffordBaseline } from "../lib/afford";
 import { evaluateWishlist } from "../jobs/handlers/wishlistEvaluate";
 import { buildWaysBack, deleteCarryOver, upsertCarryOver, WeekAdjustmentError } from "../lib/weekAdjustments";
@@ -253,12 +260,48 @@ router.delete(
   },
 );
 
+/** (S2) The plan rows in effect now (this week's, this month's), as the API serves them. */
+function inEffectView(plans: Parameters<typeof plansInEffect>[0], todayISO: string) {
+  const now = plansInEffect(plans, todayISO);
+  return {
+    weekly: now.weekly ? toAllowancePlanView(now.weekly) : null,
+    monthly: now.monthly ? toAllowancePlanView(now.monthly) : null,
+  };
+}
+
+/** (S2) A refused write, in the API's words. */
+const PLAN_WRITE_REFUSAL: Record<Exclude<AllowancePlanWriteResult, { ok: true }>["reason"], { status: number; error: string }> = {
+  not_found: { status: 404, error: "Not found" },
+  conflict: { status: 409, error: "Another plan for this member and period already starts on that date" },
+  amount_not_positive: { status: 400, error: "amount must be more than 0" },
+  start_not_a_sunday: { status: 400, error: "effectiveFrom is not a Sunday" },
+  start_not_first_of_month: { status: 400, error: "effectiveFrom is not the 1st of a month" },
+  start_in_past: { status: 400, error: "effectiveFrom is in a past week or month" },
+};
+
+/** (S2) Answer a plan write: the row written, `created`, and the plans in effect after it. */
+async function sendPlanWrite(res: Parameters<RequestHandler>[1], householdId: string, todayISO: string, result: AllowancePlanWriteResult) {
+  if (!result.ok) {
+    const refusal = PLAN_WRITE_REFUSAL[result.reason];
+    res.status(refusal.status).json({ error: refusal.error });
+    return;
+  }
+  res.json({
+    ...toAllowancePlanView(result.plan),
+    created: result.created,
+    inEffect: inEffectView(await loadAllowancePlans(householdId), todayISO),
+  });
+}
+
 /**
  * (PR-B1) The household's allowance plans, and the suggested weekly cap with
  * its working (`deriveWeeklyLimit`). The suggestion is never written: only the
- * owner sets a cap, below. Read-only.
+ * owner sets a cap, below. (S2) Also the plan row in effect this week and this
+ * month (`plansInEffect`: a $0 row is no plan), and the amounts a plan may start
+ * from (`planPrefills` — options only). Read-only.
  */
 router.get("/allowance-plans", requireAuth, async (req, res): Promise<void> => {
+  const todayISO = householdTodayISO();
   const [plans, suggested] = await Promise.all([
     loadAllowancePlans(req.householdId!),
     suggestWeeklyCap(req.householdId!, req.householdOwnerId!),
@@ -266,7 +309,37 @@ router.get("/allowance-plans", requireAuth, async (req, res): Promise<void> => {
   res.json({
     plans: plans.map(toAllowancePlanView),
     suggested: { weekly: suggested.suggestedWeekly, derivation: suggested.derivation },
+    inEffect: inEffectView(plans, todayISO),
+    prefills: await planPrefills(req.householdId!, req.householdOwnerId!, suggested.suggestedWeekly),
   });
+});
+
+/**
+ * ⭐ (S2) The owner sets the household's weekly or monthly plan from this period
+ * on — the confirmed "Use $450 as the weekly plan from this week". The
+ * household's OWNER only. A weekly plan starts on a Sunday, a monthly one on the
+ * 1st, this period or later; the amount is more than $0. Written through the one
+ * writer (`createOwnerAllowancePlan`), which no job or agent may import. Past
+ * weeks keep their own rows.
+ */
+router.post("/allowance-plans", requireAuth, async (req, res): Promise<void> => {
+  if (!req.actualUserId || req.actualUserId !== req.householdOwnerId) {
+    res.status(403).json({ error: "Only the household owner sets a plan" });
+    return;
+  }
+  // Strict: an unknown key is a mistake, never silently ignored.
+  const parsed = CreateAllowancePlanBody.strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { period, amount, effectiveFrom } = parsed.data;
+  if (!isCalendarDate(effectiveFrom)) {
+    res.status(400).json({ error: "effectiveFrom is not a calendar date" });
+    return;
+  }
+  const todayISO = householdTodayISO();
+  await sendPlanWrite(res, req.householdId!, todayISO, await createOwnerAllowancePlan(req.householdId!, { period, amount, effectiveFrom }, todayISO));
 });
 
 /**
@@ -274,6 +347,8 @@ router.get("/allowance-plans", requireAuth, async (req, res): Promise<void> => {
  * household's OWNER only — the signed-in user must be the household's owner,
  * not merely a member of it. Writes `source = 'owner'` through the one writer
  * (`allowancePlanWriter.ts`), which no job or agent may import.
+ * ⭐ (S2) A row a past week was judged against is never rewritten: the edit
+ * becomes a new row from this week (or month) on (`created: true`).
  */
 router.put("/allowance-plans/:id", requireAuth, async (req, res): Promise<void> => {
   if (!req.actualUserId || req.actualUserId !== req.householdOwnerId) {
@@ -301,16 +376,13 @@ router.put("/allowance-plans/:id", requireAuth, async (req, res): Promise<void> 
     res.status(404).json({ error: "Not found" });
     return;
   }
-  const result = await writeOwnerAllowancePlan(req.householdId!, params.data.id, { amount, effectiveFrom });
-  if (!result.ok) {
-    if (result.reason === "conflict") {
-      res.status(409).json({ error: "Another plan for this member and period already starts on that date" });
-    } else {
-      res.status(404).json({ error: "Not found" });
-    }
-    return;
-  }
-  res.json(toAllowancePlanView(result.plan));
+  const todayISO = householdTodayISO();
+  await sendPlanWrite(
+    res,
+    req.householdId!,
+    todayISO,
+    await writeOwnerAllowancePlan(req.householdId!, params.data.id, { amount, effectiveFrom }, todayISO),
+  );
 });
 
 export default router;

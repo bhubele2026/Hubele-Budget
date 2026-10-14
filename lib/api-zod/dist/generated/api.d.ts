@@ -7909,6 +7909,31 @@ export declare const GetForecastResponse: zod.ZodObject<{
             cadence: "weekly" | "monthly";
             storedAmount: string;
         }>, "many">>;
+        hookReserves: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            hook: zod.ZodEnum<["weekly", "monthly"]>;
+            recurringItemId: zod.ZodString;
+            planKey: zod.ZodString;
+            occurrenceDate: zod.ZodString;
+            label: zod.ZodString;
+            amount: zod.ZodString;
+            basis: zod.ZodEnum<["plan", "stored_amount"]>;
+        }, "strip", zod.ZodTypeAny, {
+            amount: string;
+            label: string;
+            recurringItemId: string;
+            occurrenceDate: string;
+            hook: "weekly" | "monthly";
+            planKey: string;
+            basis: "plan" | "stored_amount";
+        }, {
+            amount: string;
+            label: string;
+            recurringItemId: string;
+            occurrenceDate: string;
+            hook: "weekly" | "monthly";
+            planKey: string;
+            basis: "plan" | "stored_amount";
+        }>, "many">>;
         overdueOutsideForecast: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
             planKey: zod.ZodString;
             itemId: zod.ZodString;
@@ -8099,6 +8124,15 @@ export declare const GetForecastResponse: zod.ZodObject<{
             cadence: "weekly" | "monthly";
             storedAmount: string;
         }[] | undefined;
+        hookReserves?: {
+            amount: string;
+            label: string;
+            recurringItemId: string;
+            occurrenceDate: string;
+            hook: "weekly" | "monthly";
+            planKey: string;
+            basis: "plan" | "stored_amount";
+        }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
             dueDate: string;
@@ -8189,6 +8223,15 @@ export declare const GetForecastResponse: zod.ZodObject<{
             itemId: string;
             cadence: "weekly" | "monthly";
             storedAmount: string;
+        }[] | undefined;
+        hookReserves?: {
+            amount: string;
+            label: string;
+            recurringItemId: string;
+            occurrenceDate: string;
+            hook: "weekly" | "monthly";
+            planKey: string;
+            basis: "plan" | "stored_amount";
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
@@ -8438,6 +8481,15 @@ export declare const GetForecastResponse: zod.ZodObject<{
             cadence: "weekly" | "monthly";
             storedAmount: string;
         }[] | undefined;
+        hookReserves?: {
+            amount: string;
+            label: string;
+            recurringItemId: string;
+            occurrenceDate: string;
+            hook: "weekly" | "monthly";
+            planKey: string;
+            basis: "plan" | "stored_amount";
+        }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
             dueDate: string;
@@ -8632,6 +8684,15 @@ export declare const GetForecastResponse: zod.ZodObject<{
             itemId: string;
             cadence: "weekly" | "monthly";
             storedAmount: string;
+        }[] | undefined;
+        hookReserves?: {
+            amount: string;
+            label: string;
+            recurringItemId: string;
+            occurrenceDate: string;
+            hook: "weekly" | "monthly";
+            planKey: string;
+            basis: "plan" | "stored_amount";
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
@@ -8978,6 +9039,31 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         cadence: "weekly" | "monthly";
         storedAmount: string;
     }>, "many">>;
+    hookReserves: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        hook: zod.ZodEnum<["weekly", "monthly"]>;
+        recurringItemId: zod.ZodString;
+        planKey: zod.ZodString;
+        occurrenceDate: zod.ZodString;
+        label: zod.ZodString;
+        amount: zod.ZodString;
+        basis: zod.ZodEnum<["plan", "stored_amount"]>;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string;
+        label: string;
+        recurringItemId: string;
+        occurrenceDate: string;
+        hook: "weekly" | "monthly";
+        planKey: string;
+        basis: "plan" | "stored_amount";
+    }, {
+        amount: string;
+        label: string;
+        recurringItemId: string;
+        occurrenceDate: string;
+        hook: "weekly" | "monthly";
+        planKey: string;
+        basis: "plan" | "stored_amount";
+    }>, "many">>;
     overdueOutsideForecast: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
         planKey: zod.ZodString;
         itemId: zod.ZodString;
@@ -9168,6 +9254,15 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         cadence: "weekly" | "monthly";
         storedAmount: string;
     }[] | undefined;
+    hookReserves?: {
+        amount: string;
+        label: string;
+        recurringItemId: string;
+        occurrenceDate: string;
+        hook: "weekly" | "monthly";
+        planKey: string;
+        basis: "plan" | "stored_amount";
+    }[] | undefined;
     overdueOutsideForecast?: {
         amount: string;
         dueDate: string;
@@ -9258,6 +9353,15 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         itemId: string;
         cadence: "weekly" | "monthly";
         storedAmount: string;
+    }[] | undefined;
+    hookReserves?: {
+        amount: string;
+        label: string;
+        recurringItemId: string;
+        occurrenceDate: string;
+        hook: "weekly" | "monthly";
+        planKey: string;
+        basis: "plan" | "stored_amount";
     }[] | undefined;
     overdueOutsideForecast?: {
         amount: string;
@@ -15974,7 +16078,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
     verdict: "tight" | "fits" | "breaks_buffer" | "breaks_zero";
 }>;
 /**
- * @summary The household's allowance plans and the suggested weekly cap with its working
+ * @summary The household's allowance plans, the plan in effect now, the suggested weekly cap with its working, and amounts a plan may start from
  */
 export declare const ListAllowancePlansResponse: zod.ZodObject<{
     plans: zod.ZodArray<zod.ZodObject<{
@@ -16050,6 +16154,122 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
             discretionaryMonthly: string;
         };
     }>;
+    inEffect: zod.ZodObject<{
+        weekly: zod.ZodUnion<[zod.ZodObject<{
+            id: zod.ZodString;
+            memberUserId: zod.ZodNullable<zod.ZodString>;
+            period: zod.ZodEnum<["weekly", "monthly"]>;
+            amount: zod.ZodString;
+            effectiveFrom: zod.ZodString;
+            source: zod.ZodEnum<["owner", "derived"]>;
+            derivation: zod.ZodUnknown;
+            createdAt: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }>, zod.ZodNull]>;
+        monthly: zod.ZodUnion<[zod.ZodObject<{
+            id: zod.ZodString;
+            memberUserId: zod.ZodNullable<zod.ZodString>;
+            period: zod.ZodEnum<["weekly", "monthly"]>;
+            amount: zod.ZodString;
+            effectiveFrom: zod.ZodString;
+            source: zod.ZodEnum<["owner", "derived"]>;
+            derivation: zod.ZodUnknown;
+            createdAt: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    }, {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    }>;
+    prefills: zod.ZodArray<zod.ZodObject<{
+        period: zod.ZodEnum<["weekly", "monthly"]>;
+        amount: zod.ZodString;
+        source: zod.ZodEnum<["hook_stored", "suggested", "settings"]>;
+        label: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        source: "settings" | "suggested" | "hook_stored";
+        amount: string;
+        label: string;
+        period: "weekly" | "monthly";
+    }, {
+        source: "settings" | "suggested" | "hook_stored";
+        amount: string;
+        label: string;
+        period: "weekly" | "monthly";
+    }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     plans: {
         id: string;
@@ -16072,6 +16292,34 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
             discretionaryMonthly: string;
         };
     };
+    inEffect: {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    };
+    prefills: {
+        source: "settings" | "suggested" | "hook_stored";
+        amount: string;
+        label: string;
+        period: "weekly" | "monthly";
+    }[];
 }, {
     plans: {
         id: string;
@@ -16094,30 +16342,55 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
             discretionaryMonthly: string;
         };
     };
+    inEffect: {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    };
+    prefills: {
+        source: "settings" | "suggested" | "hook_stored";
+        amount: string;
+        label: string;
+        period: "weekly" | "monthly";
+    }[];
 }>;
 /**
- * @summary Set a plan's amount (household owner only; writes source "owner")
+ * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import.
+ * @summary Set the household's weekly or monthly plan from this period on (household owner only)
  */
-export declare const UpdateAllowancePlanParams: zod.ZodObject<{
-    id: zod.ZodString;
-}, "strip", zod.ZodTypeAny, {
-    id: string;
-}, {
-    id: string;
-}>;
-export declare const updateAllowancePlanBodyAmountRegExp: RegExp;
-export declare const updateAllowancePlanBodyEffectiveFromRegExp: RegExp;
-export declare const UpdateAllowancePlanBody: zod.ZodObject<{
+export declare const createAllowancePlanBodyAmountRegExp: RegExp;
+export declare const createAllowancePlanBodyEffectiveFromRegExp: RegExp;
+export declare const CreateAllowancePlanBody: zod.ZodObject<{
+    period: zod.ZodEnum<["weekly", "monthly"]>;
     amount: zod.ZodString;
-    effectiveFrom: zod.ZodOptional<zod.ZodString>;
+    effectiveFrom: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     amount: string;
-    effectiveFrom?: string | undefined;
+    period: "weekly" | "monthly";
+    effectiveFrom: string;
 }, {
     amount: string;
-    effectiveFrom?: string | undefined;
+    period: "weekly" | "monthly";
+    effectiveFrom: string;
 }>;
-export declare const UpdateAllowancePlanResponse: zod.ZodObject<{
+export declare const CreateAllowancePlanResponse: zod.ZodIntersection<zod.ZodObject<{
     id: zod.ZodString;
     memberUserId: zod.ZodNullable<zod.ZodString>;
     period: zod.ZodEnum<["weekly", "monthly"]>;
@@ -16144,7 +16417,358 @@ export declare const UpdateAllowancePlanResponse: zod.ZodObject<{
     period: "weekly" | "monthly";
     effectiveFrom: string;
     derivation?: unknown;
+}>, zod.ZodObject<{
+    created: zod.ZodBoolean;
+    inEffect: zod.ZodObject<{
+        weekly: zod.ZodUnion<[zod.ZodObject<{
+            id: zod.ZodString;
+            memberUserId: zod.ZodNullable<zod.ZodString>;
+            period: zod.ZodEnum<["weekly", "monthly"]>;
+            amount: zod.ZodString;
+            effectiveFrom: zod.ZodString;
+            source: zod.ZodEnum<["owner", "derived"]>;
+            derivation: zod.ZodUnknown;
+            createdAt: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }>, zod.ZodNull]>;
+        monthly: zod.ZodUnion<[zod.ZodObject<{
+            id: zod.ZodString;
+            memberUserId: zod.ZodNullable<zod.ZodString>;
+            period: zod.ZodEnum<["weekly", "monthly"]>;
+            amount: zod.ZodString;
+            effectiveFrom: zod.ZodString;
+            source: zod.ZodEnum<["owner", "derived"]>;
+            derivation: zod.ZodUnknown;
+            createdAt: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    }, {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    created: boolean;
+    inEffect: {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    };
+}, {
+    created: boolean;
+    inEffect: {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    };
+}>>;
+/**
+ * (S2) Never rewrites history. A row that started before the current period (this week's Sunday, or this month's 1st) is left as it is — past weeks keep the cap they were judged against — and the edit is written as the plan from the current period (or `effectiveFrom`) on: that day's row is updated or a new one inserted (`created: true`). A row starting in the current period or later is edited in place. A new `effectiveFrom` must be a period start (Sunday / the 1st), this period or later.
+ * @summary Set a plan's amount (household owner only; writes source "owner"); a plan a past week used is kept and a new one starts now
+ */
+export declare const UpdateAllowancePlanParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
 }>;
+export declare const updateAllowancePlanBodyAmountRegExp: RegExp;
+export declare const updateAllowancePlanBodyEffectiveFromRegExp: RegExp;
+export declare const UpdateAllowancePlanBody: zod.ZodObject<{
+    amount: zod.ZodString;
+    effectiveFrom: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    amount: string;
+    effectiveFrom?: string | undefined;
+}, {
+    amount: string;
+    effectiveFrom?: string | undefined;
+}>;
+export declare const UpdateAllowancePlanResponse: zod.ZodIntersection<zod.ZodObject<{
+    id: zod.ZodString;
+    memberUserId: zod.ZodNullable<zod.ZodString>;
+    period: zod.ZodEnum<["weekly", "monthly"]>;
+    amount: zod.ZodString;
+    effectiveFrom: zod.ZodString;
+    source: zod.ZodEnum<["owner", "derived"]>;
+    derivation: zod.ZodUnknown;
+    createdAt: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    createdAt: string;
+    source: "derived" | "owner";
+    amount: string;
+    memberUserId: string | null;
+    period: "weekly" | "monthly";
+    effectiveFrom: string;
+    derivation?: unknown;
+}, {
+    id: string;
+    createdAt: string;
+    source: "derived" | "owner";
+    amount: string;
+    memberUserId: string | null;
+    period: "weekly" | "monthly";
+    effectiveFrom: string;
+    derivation?: unknown;
+}>, zod.ZodObject<{
+    created: zod.ZodBoolean;
+    inEffect: zod.ZodObject<{
+        weekly: zod.ZodUnion<[zod.ZodObject<{
+            id: zod.ZodString;
+            memberUserId: zod.ZodNullable<zod.ZodString>;
+            period: zod.ZodEnum<["weekly", "monthly"]>;
+            amount: zod.ZodString;
+            effectiveFrom: zod.ZodString;
+            source: zod.ZodEnum<["owner", "derived"]>;
+            derivation: zod.ZodUnknown;
+            createdAt: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }>, zod.ZodNull]>;
+        monthly: zod.ZodUnion<[zod.ZodObject<{
+            id: zod.ZodString;
+            memberUserId: zod.ZodNullable<zod.ZodString>;
+            period: zod.ZodEnum<["weekly", "monthly"]>;
+            amount: zod.ZodString;
+            effectiveFrom: zod.ZodString;
+            source: zod.ZodEnum<["owner", "derived"]>;
+            derivation: zod.ZodUnknown;
+            createdAt: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }, {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    }, {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    created: boolean;
+    inEffect: {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    };
+}, {
+    created: boolean;
+    inEffect: {
+        weekly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+        monthly: {
+            id: string;
+            createdAt: string;
+            source: "derived" | "owner";
+            amount: string;
+            memberUserId: string | null;
+            period: "weekly" | "monthly";
+            effectiveFrom: string;
+            derivation?: unknown;
+        } | null;
+    };
+}>>;
 /**
  * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
  * @summary A way back when the week is over — how far over, what is left per day, what to trim, next week carried
@@ -16745,10 +17369,7 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     timezone: "America/Chicago";
     actual: string;
-    start: string;
-    end: string;
-    over: string | null;
-    withinPlan: boolean | null;
+    basis: "weekly_allowance" | "monthly_allowance";
     plan: {
         status: "set" | "not_set";
         source: "none" | "plan" | "override";
@@ -16756,9 +17377,12 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
         effectiveFrom: string | null;
         planId: string | null;
     };
+    start: string;
+    end: string;
+    over: string | null;
+    withinPlan: boolean | null;
     period: "month" | "week";
     carryOver: string | null;
-    basis: "weekly_allowance" | "monthly_allowance";
     isCurrent: boolean;
     scope: {
         id: string | null;
@@ -16852,10 +17476,7 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
 }, {
     timezone: "America/Chicago";
     actual: string;
-    start: string;
-    end: string;
-    over: string | null;
-    withinPlan: boolean | null;
+    basis: "weekly_allowance" | "monthly_allowance";
     plan: {
         status: "set" | "not_set";
         source: "none" | "plan" | "override";
@@ -16863,9 +17484,12 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
         effectiveFrom: string | null;
         planId: string | null;
     };
+    start: string;
+    end: string;
+    over: string | null;
+    withinPlan: boolean | null;
     period: "month" | "week";
     carryOver: string | null;
-    basis: "weekly_allowance" | "monthly_allowance";
     isCurrent: boolean;
     scope: {
         id: string | null;

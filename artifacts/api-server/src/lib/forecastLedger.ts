@@ -1100,7 +1100,7 @@ export async function buildForecastLedger(
     hookDatesByItem.set(ev.itemId, list);
     if ((rescheduledByKey.get(key) ?? ev.date) < dragFloorISO) continue;
     const storedCents = Math.round(Math.abs(Number(recurringById.get(ev.itemId)?.amount ?? 0)) * 100) || 0;
-    hookOccurrences.push({ key, cadence, occurrenceDate: ev.date, storedCents });
+    hookOccurrences.push({ key, cadence, occurrenceDate: ev.date, storedCents, label: ev.label });
   }
   for (const list of hookDatesByItem.values()) list.sort();
   const hookPayoffs = await loadHookPayoffs({

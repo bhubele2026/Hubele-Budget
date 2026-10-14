@@ -31,7 +31,7 @@ import type {
   AiConversationDetail,
   AiConversationList,
   AiUsageSummary,
-  AllowancePlan,
+  AllowancePlanSaved,
   AllowancePlanUpdate,
   AllowancePlans,
   AmexAnchor,
@@ -71,6 +71,7 @@ import type {
   CleanupNonProdPlaidItems200,
   CloseForecastMonthBody,
   CorrectDecisionInput,
+  CreateAllowancePlanBody,
   CreateDebtFromPlaidAccount409,
   CreateDebtFromPlaidResult,
   CreateInvitationInput,
@@ -11151,7 +11152,7 @@ export const useEvaluateAfford = <
 };
 
 /**
- * @summary The household's allowance plans and the suggested weekly cap with its working
+ * @summary The household's allowance plans, the plan in effect now, the suggested weekly cap with its working, and amounts a plan may start from
  */
 export const getListAllowancePlansUrl = () => {
   return `/api/allowance-plans`;
@@ -11202,7 +11203,7 @@ export type ListAllowancePlansQueryResult = NonNullable<
 export type ListAllowancePlansQueryError = ErrorType<unknown>;
 
 /**
- * @summary The household's allowance plans and the suggested weekly cap with its working
+ * @summary The household's allowance plans, the plan in effect now, the suggested weekly cap with its working, and amounts a plan may start from
  */
 
 export function useListAllowancePlans<
@@ -11226,7 +11227,95 @@ export function useListAllowancePlans<
 }
 
 /**
- * @summary Set a plan's amount (household owner only; writes source "owner")
+ * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import.
+ * @summary Set the household's weekly or monthly plan from this period on (household owner only)
+ */
+export const getCreateAllowancePlanUrl = () => {
+  return `/api/allowance-plans`;
+};
+
+export const createAllowancePlan = async (
+  createAllowancePlanBody: CreateAllowancePlanBody,
+  options?: RequestInit,
+): Promise<AllowancePlanSaved> => {
+  return customFetch<AllowancePlanSaved>(getCreateAllowancePlanUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createAllowancePlanBody),
+  });
+};
+
+export const getCreateAllowancePlanMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAllowancePlan>>,
+    TError,
+    { data: BodyType<CreateAllowancePlanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createAllowancePlan>>,
+  TError,
+  { data: BodyType<CreateAllowancePlanBody> },
+  TContext
+> => {
+  const mutationKey = ["createAllowancePlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createAllowancePlan>>,
+    { data: BodyType<CreateAllowancePlanBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createAllowancePlan(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateAllowancePlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createAllowancePlan>>
+>;
+export type CreateAllowancePlanMutationBody = BodyType<CreateAllowancePlanBody>;
+export type CreateAllowancePlanMutationError = ErrorType<void>;
+
+/**
+ * @summary Set the household's weekly or monthly plan from this period on (household owner only)
+ */
+export const useCreateAllowancePlan = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAllowancePlan>>,
+    TError,
+    { data: BodyType<CreateAllowancePlanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createAllowancePlan>>,
+  TError,
+  { data: BodyType<CreateAllowancePlanBody> },
+  TContext
+> => {
+  return useMutation(getCreateAllowancePlanMutationOptions(options));
+};
+
+/**
+ * (S2) Never rewrites history. A row that started before the current period (this week's Sunday, or this month's 1st) is left as it is — past weeks keep the cap they were judged against — and the edit is written as the plan from the current period (or `effectiveFrom`) on: that day's row is updated or a new one inserted (`created: true`). A row starting in the current period or later is edited in place. A new `effectiveFrom` must be a period start (Sunday / the 1st), this period or later.
+ * @summary Set a plan's amount (household owner only; writes source "owner"); a plan a past week used is kept and a new one starts now
  */
 export const getUpdateAllowancePlanUrl = (id: string) => {
   return `/api/allowance-plans/${id}`;
@@ -11236,8 +11325,8 @@ export const updateAllowancePlan = async (
   id: string,
   allowancePlanUpdate: AllowancePlanUpdate,
   options?: RequestInit,
-): Promise<AllowancePlan> => {
-  return customFetch<AllowancePlan>(getUpdateAllowancePlanUrl(id), {
+): Promise<AllowancePlanSaved> => {
+  return customFetch<AllowancePlanSaved>(getUpdateAllowancePlanUrl(id), {
     ...options,
     method: "PUT",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -11290,7 +11379,7 @@ export type UpdateAllowancePlanMutationBody = BodyType<AllowancePlanUpdate>;
 export type UpdateAllowancePlanMutationError = ErrorType<void>;
 
 /**
- * @summary Set a plan's amount (household owner only; writes source "owner")
+ * @summary Set a plan's amount (household owner only; writes source "owner"); a plan a past week used is kept and a new one starts now
  */
 export const useUpdateAllowancePlan = <
   TError = ErrorType<void>,

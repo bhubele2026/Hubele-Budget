@@ -167,6 +167,15 @@ describe("(PR-B2, decision 7) a hook occurrence is its card payoff", () => {
       "1380.00",
     ]);
     expect(sig.hookAmountIgnored).toEqual([{ itemId: weeklySpendId, cadence: "weekly", storedAmount: "300.00" }]);
+    // (S2) Each occurrence's reserve and what it was sized from: the plan.
+    expect(sig.hookReserves?.map((r) => [r.occurrenceDate, r.amount, r.basis])).toEqual([
+      ["2026-09-26", "0.00", "plan"],
+      ["2026-10-03", "120.00", "plan"],
+      ["2026-10-10", "250.00", "plan"],
+      ["2026-10-17", "250.00", "plan"],
+      ["2026-10-24", "250.00", "plan"],
+      ["2026-10-31", "250.00", "plan"],
+    ]);
     // A hook never enters the bill matcher.
     expect((sig.matches ?? []).filter((m) => m.planItemId === weeklySpendId)).toEqual([]);
   });
@@ -256,15 +265,40 @@ describe("(PR-B2, decision 7) a hook occurrence is its card payoff", () => {
     expect(hookEvents(sig)[0]).toEqual(["2026-10-10", "-250.00", "2026-10-10", null]);
   });
 
-  it("T9 hooks but no allowance plan: the owner's settings.weekly_allowance_amount ($200) is the cap — 40 + 160", async () => {
+  it("T9 (S2, one 'no plan' rule) hooks, no allowance plan, a settings amount ($200): settings is NOT a plan — each occurrence keeps the stored $300, as with no allowance at all (before S2: the $200 was the cap — 120 / 200 / 200)", async () => {
     await db.delete(allowancePlansTable).where(eq(allowancePlansTable.householdId, HH));
     await setHooks({ weekly: { recurringItemId: weeklySpendId }, monthly: null }, { weeklyAllowanceAmount: "200" });
     const sig = await signal();
-    expect(hookEvents(sig).slice(0, 3)).toEqual([
-      ["2026-10-08", "-120.00", "2026-10-03", "overdue_assumed_unpaid"],
-      ["2026-10-10", "-200.00", "2026-10-10", null],
-      ["2026-10-17", "-200.00", "2026-10-17", null],
+    expect(hookEvents(sig).slice(0, 4)).toEqual([
+      ["2026-10-08", "-300.00", "2026-09-26", "overdue_assumed_unpaid"],
+      ["2026-10-08", "-300.00", "2026-10-03", "overdue_assumed_unpaid"],
+      ["2026-10-10", "-300.00", "2026-10-10", null],
+      ["2026-10-17", "-300.00", "2026-10-17", null],
     ]);
+    expect(sig.hookAmountIgnored).toBeUndefined();
+    // The money position says the same: no cap.
+    expect((await buildMoneyPosition(HH, TEST_USER)).weekCap).toBeNull();
+    // ...and the reserve says what it is: the stored amount, no plan set.
+    expect(sig.hookReserves?.find((r) => r.occurrenceDate === "2026-10-10")).toEqual({
+      hook: "weekly",
+      recurringItemId: weeklySpendId,
+      planKey: `${weeklySpendId}|2026-10-10`,
+      occurrenceDate: "2026-10-10",
+      label: "Weekly Spend",
+      amount: "300.00",
+      basis: "stored_amount",
+    });
+  });
+
+  it("T9c (S2) a $0 override for this week is no plan too — the position reads no cap, and the hook keeps the stored $300 (before S2: a $0 cap, payoff = charges 40)", async () => {
+    await setHooks({ weekly: { recurringItemId: weeklySpendId }, monthly: null }, { preferences: { everydayHooks: { weekly: { recurringItemId: weeklySpendId }, monthly: null }, weeklyAllowanceOverrides: { "2026-10-04": "0" } } });
+    const sig = await signal();
+    expect(hookEvents(sig)[1]).toEqual(["2026-10-10", "-300.00", "2026-10-10", null]);
+    expect(sig.hookReserves?.find((r) => r.occurrenceDate === "2026-10-10")).toMatchObject({ amount: "300.00", basis: "stored_amount" });
+    // Next week has the $250 plan again.
+    expect(hookEvents(sig)[2]).toEqual(["2026-10-17", "-250.00", "2026-10-17", null]);
+    expect(sig.hookReserves?.find((r) => r.occurrenceDate === "2026-10-17")).toMatchObject({ amount: "250.00", basis: "plan" });
+    expect((await buildMoneyPosition(HH, TEST_USER)).weekCap).toBeNull();
   });
 
   it("T9b (round 2) hooks with NO allowance at all (no plan, settings $0): each occurrence keeps the stored $300 — never $0 — and no banner", async () => {

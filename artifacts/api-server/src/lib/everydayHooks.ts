@@ -14,11 +14,15 @@
 //                 period, the monthly cards' for a monthly one. Read only for a
 //                 period that has started; a future period has no charges yet.
 //   the cap       `allowance_plans` through `everydayPlanFromRows` (the week's
-//                 override honoured), falling back to the owner's
+//                 override honoured) and `weeklyCapCents` / `monthlyCapCents` —
+//                 (S2) the money position's and the period breakdown's own
+//                 "no plan" rule: no plan row in effect, a $0 row or a $0
+//                 override is NO PLAN, never a $0 cap. (S2) The old fallback to
 //                 `settings.weekly_allowance_amount` / `monthly_allowance_amount`
-//                 when no plan row is in effect. (Round 2) With neither, the
-//                 period has no allowance at all and the occurrence keeps the
-//                 item's stored amount — never $0, which would read high.
+//                 is gone: one "no plan" everywhere. (Round 2) With no plan the
+//                 occurrence keeps the item's stored amount — never $0, which
+//                 would read high — and says so (`fromStoredAmount`, served as
+//                 the cash signal's `hookReserves[].basis = stored_amount`).
 //   spent         the open period's rows, classified by `classifyMovement` with
 //                 the ledger's own tier-2 pairs — exactly as the money position
 //                 sizes `remainingWeek` (weekly: allowance_weekly + unfiled;
@@ -34,8 +38,10 @@ import {
   allowanceSpentCents,
   everydayPlanFromRows,
   hookPeriodOf,
+  monthlyCapCents,
   payoffFor,
   readEverydayHooks,
+  weeklyCapCents,
   type EverydayHooks,
   type HookCadence,
   type Payoff,
@@ -43,27 +49,19 @@ import {
 
 export interface HookSettings {
   hooks: EverydayHooks;
-  weeklyAllowanceAmount: string | null;
-  monthlyAllowanceAmount: string | null;
   weeklyAllowanceOverrides: Record<string, string | number> | null;
 }
 
-/** The owner's hooks and allowance settings, read once. */
+/** The owner's hooks and per-week overrides, read once. (S2) The settings amounts are no cap: not read. */
 export async function readHookSettings(ownerUserId: string): Promise<HookSettings> {
   const [s] = await db
-    .select({
-      weekly: settingsTable.weeklyAllowanceAmount,
-      monthly: settingsTable.monthlyAllowanceAmount,
-      preferences: settingsTable.preferences,
-    })
+    .select({ preferences: settingsTable.preferences })
     .from(settingsTable)
     .where(eq(settingsTable.userId, ownerUserId));
   const prefs = (s?.preferences as Record<string, unknown> | null | undefined) ?? null;
   const overrides = prefs?.weeklyAllowanceOverrides;
   return {
     hooks: readEverydayHooks(prefs),
-    weeklyAllowanceAmount: s?.weekly ?? null,
-    monthlyAllowanceAmount: s?.monthly ?? null,
     weeklyAllowanceOverrides:
       overrides && typeof overrides === "object" && !Array.isArray(overrides)
         ? (overrides as Record<string, string | number>)
@@ -75,17 +73,25 @@ export interface HookOccurrence {
   key: string;
   cadence: HookCadence;
   occurrenceDate: string;
-  /** The hook item's own stored amount, in cents (≥ 0) — used only when the period has no allowance at all. */
+  /** The hook item's own stored amount, in cents (≥ 0) — used only when the period has no plan. */
   storedCents: number;
+  /** (S2) The hook item's name ("Weekly Spend"), for the reserve's label. */
+  label?: string;
 }
 
 export interface HookPayoff extends Payoff {
+  /** (S2) The occurrence's hook, item, date and item name — what `hookReserves` serves. */
+  cadence: HookCadence;
+  itemId: string;
+  occurrenceDate: string;
+  label: string;
   periodStart: string;
   periodEnd: string;
   /**
-   * (Round 2, lead's ruling) The period has NO allowance at all — no plan row in
-   * effect and no settings amount — so the occurrence keeps the item's stored
-   * amount (the bill as it was), never $0: a $0 payoff would read higher than before.
+   * (Round 2, lead's ruling) The period has NO plan — (S2) by the money
+   * position's rule: no plan row in effect, a $0 row or a $0 override — so the
+   * occurrence keeps the item's stored amount (the bill as it was), never $0: a
+   * $0 payoff would read higher than before.
    */
   fromStoredAmount: boolean;
   /**
@@ -134,19 +140,13 @@ export async function loadHookPayoffs(args: {
     const p = hookPeriodOf(o.cadence, o.occurrenceDate);
     periods.set(`${o.cadence}|${p.start}`, { cadence: o.cadence, ...p });
   }
-  // The cap of each period: the plan in effect (the week's override honoured), else
-  // the owner's settings amount. Null = no allowance at all (round 2): the stored amount.
+  // ⭐ (S2) The cap of each period: the plan in effect (the week's override
+  // honoured), by the money position's own rule (`weeklyCapCents` /
+  // `monthlyCapCents`). Null = no plan: the occurrence keeps its stored amount.
   const planRows = planRowsOf(await loadAllowancePlans(householdId));
   const capOf = (p: Period): number | null => {
     const plan = everydayPlanFromRows(p.start, planRows, settings.weeklyAllowanceOverrides);
-    if (p.cadence === "weekly") {
-      if (plan.weeklySource !== "none") return plan.weeklyCents;
-      const s = toCents(settings.weeklyAllowanceAmount);
-      return s > 0 ? s : null;
-    }
-    if (plan.monthlySource !== "none") return plan.monthlyCents;
-    const s = toCents(settings.monthlyAllowanceAmount);
-    return s > 0 ? s : null;
+    return p.cadence === "weekly" ? weeklyCapCents(plan) : monthlyCapCents(plan);
   };
   const caps = new Map<string, number | null>();
   for (const [id, p] of periods) caps.set(id, capOf(p));
@@ -198,9 +198,16 @@ export async function loadHookPayoffs(args: {
     const p = hookPeriodOf(o.cadence, o.occurrenceDate);
     const id = `${o.cadence}|${p.start}`;
     const cap = caps.get(id) ?? null;
+    const who = {
+      cadence: o.cadence,
+      itemId: o.key.slice(0, o.key.lastIndexOf("|")),
+      occurrenceDate: o.occurrenceDate,
+      label: o.label ?? "",
+    };
     if (cap == null) {
       const stored = Math.max(0, Math.round(o.storedCents));
       out.set(o.key, {
+        ...who,
         amountCents: stored,
         chargesCents: 0,
         remainingCents: 0,
@@ -219,7 +226,7 @@ export async function loadHookPayoffs(args: {
       periodEnd: p.end,
       todayISO,
     });
-    out.set(o.key, { ...payoff, periodStart: p.start, periodEnd: p.end, fromStoredAmount: false, spentCents: spent.get(id) ?? null });
+    out.set(o.key, { ...who, ...payoff, periodStart: p.start, periodEnd: p.end, fromStoredAmount: false, spentCents: spent.get(id) ?? null });
   }
   return out;
 }

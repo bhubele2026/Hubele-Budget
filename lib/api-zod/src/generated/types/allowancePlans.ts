@@ -6,10 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AllowancePlan } from "./allowancePlan";
+import type { AllowancePlanPrefill } from "./allowancePlanPrefill";
+import type { AllowancePlansInEffect } from "./allowancePlansInEffect";
 import type { AllowancePlansSuggested } from "./allowancePlansSuggested";
 
 export interface AllowancePlans {
   plans: AllowancePlan[];
   /** A suggestion only — nothing writes it; the owner sets the cap. */
   suggested: AllowancePlansSuggested;
+  inEffect: AllowancePlansInEffect;
+  /** (S2) Amounts a plan may start from — options only, nothing writes them: the everyday hook's stored amount (`hook_stored`, e.g. "Weekly Spend reserve"), the suggested weekly cap, and the allowance saved on the classic Allowances page. Only amounts above $0. */
+  prefills: AllowancePlanPrefill[];
 }

@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlan, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateAllowancePlanBody, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -447,7 +447,7 @@ export declare const useEvaluateAfford: <TError = ErrorType<void>, TContext = un
     data: BodyType<EvaluateAffordBody>;
 }, TContext>;
 /**
- * @summary The household's allowance plans and the suggested weekly cap with its working
+ * @summary The household's allowance plans, the plan in effect now, the suggested weekly cap with its working, and amounts a plan may start from
  */
 export declare const getListAllowancePlansUrl: () => string;
 export declare const listAllowancePlans: (options?: RequestInit) => Promise<AllowancePlans>;
@@ -461,7 +461,7 @@ export declare const getListAllowancePlansQueryOptions: <TData = Awaited<ReturnT
 export type ListAllowancePlansQueryResult = NonNullable<Awaited<ReturnType<typeof listAllowancePlans>>>;
 export type ListAllowancePlansQueryError = ErrorType<unknown>;
 /**
- * @summary The household's allowance plans and the suggested weekly cap with its working
+ * @summary The household's allowance plans, the plan in effect now, the suggested weekly cap with its working, and amounts a plan may start from
  */
 export declare function useListAllowancePlans<TData = Awaited<ReturnType<typeof listAllowancePlans>>, TError = ErrorType<unknown>>(options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof listAllowancePlans>>, TError, TData>;
@@ -470,10 +470,39 @@ export declare function useListAllowancePlans<TData = Awaited<ReturnType<typeof 
     queryKey: QueryKey;
 };
 /**
- * @summary Set a plan's amount (household owner only; writes source "owner")
+ * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import.
+ * @summary Set the household's weekly or monthly plan from this period on (household owner only)
+ */
+export declare const getCreateAllowancePlanUrl: () => string;
+export declare const createAllowancePlan: (createAllowancePlanBody: CreateAllowancePlanBody, options?: RequestInit) => Promise<AllowancePlanSaved>;
+export declare const getCreateAllowancePlanMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createAllowancePlan>>, TError, {
+        data: BodyType<CreateAllowancePlanBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof createAllowancePlan>>, TError, {
+    data: BodyType<CreateAllowancePlanBody>;
+}, TContext>;
+export type CreateAllowancePlanMutationResult = NonNullable<Awaited<ReturnType<typeof createAllowancePlan>>>;
+export type CreateAllowancePlanMutationBody = BodyType<CreateAllowancePlanBody>;
+export type CreateAllowancePlanMutationError = ErrorType<void>;
+/**
+ * @summary Set the household's weekly or monthly plan from this period on (household owner only)
+ */
+export declare const useCreateAllowancePlan: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createAllowancePlan>>, TError, {
+        data: BodyType<CreateAllowancePlanBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof createAllowancePlan>>, TError, {
+    data: BodyType<CreateAllowancePlanBody>;
+}, TContext>;
+/**
+ * (S2) Never rewrites history. A row that started before the current period (this week's Sunday, or this month's 1st) is left as it is — past weeks keep the cap they were judged against — and the edit is written as the plan from the current period (or `effectiveFrom`) on: that day's row is updated or a new one inserted (`created: true`). A row starting in the current period or later is edited in place. A new `effectiveFrom` must be a period start (Sunday / the 1st), this period or later.
+ * @summary Set a plan's amount (household owner only; writes source "owner"); a plan a past week used is kept and a new one starts now
  */
 export declare const getUpdateAllowancePlanUrl: (id: string) => string;
-export declare const updateAllowancePlan: (id: string, allowancePlanUpdate: AllowancePlanUpdate, options?: RequestInit) => Promise<AllowancePlan>;
+export declare const updateAllowancePlan: (id: string, allowancePlanUpdate: AllowancePlanUpdate, options?: RequestInit) => Promise<AllowancePlanSaved>;
 export declare const getUpdateAllowancePlanMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateAllowancePlan>>, TError, {
         id: string;
@@ -488,7 +517,7 @@ export type UpdateAllowancePlanMutationResult = NonNullable<Awaited<ReturnType<t
 export type UpdateAllowancePlanMutationBody = BodyType<AllowancePlanUpdate>;
 export type UpdateAllowancePlanMutationError = ErrorType<void>;
 /**
- * @summary Set a plan's amount (household owner only; writes source "owner")
+ * @summary Set a plan's amount (household owner only; writes source "owner"); a plan a past week used is kept and a new one starts now
  */
 export declare const useUpdateAllowancePlan: <TError = ErrorType<void>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateAllowancePlan>>, TError, {

@@ -4450,6 +4450,26 @@ export const GetForecastResponse = zod.object({
           .describe(
             "(PR-B2, decision 7) The everyday hooks in force: the Weekly \/ Monthly\nSpend items whose occurrences the forecast replaces with the card\npayoff (the period's card charges plus what is left of the\nallowance while the period is open). `storedAmount` is the item's\nown amount, which the forecast ignores — banner data for the UI.\nPresent only when the household has a hook.\n",
           ),
+        hookReserves: zod
+          .array(
+            zod.object({
+              hook: zod.enum(["weekly", "monthly"]),
+              recurringItemId: zod.string(),
+              planKey: zod
+                .string()
+                .describe(
+                  "`<itemId>|<occurrenceDate>` — joins events[].occurrenceKey",
+                ),
+              occurrenceDate: zod.string(),
+              label: zod.string().describe("The hook item's name"),
+              amount: zod.string(),
+              basis: zod.enum(["plan", "stored_amount"]),
+            }),
+          )
+          .optional()
+          .describe(
+            "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n",
+          ),
         overdueOutsideForecast: zod
           .array(
             zod
@@ -4842,6 +4862,26 @@ export const GetForecastCashSignalResponse = zod.object({
     .optional()
     .describe(
       "(PR-B2, decision 7) The everyday hooks in force: the Weekly \/ Monthly\nSpend items whose occurrences the forecast replaces with the card\npayoff (the period's card charges plus what is left of the\nallowance while the period is open). `storedAmount` is the item's\nown amount, which the forecast ignores — banner data for the UI.\nPresent only when the household has a hook.\n",
+    ),
+  hookReserves: zod
+    .array(
+      zod.object({
+        hook: zod.enum(["weekly", "monthly"]),
+        recurringItemId: zod.string(),
+        planKey: zod
+          .string()
+          .describe(
+            "`<itemId>|<occurrenceDate>` — joins events[].occurrenceKey",
+          ),
+        occurrenceDate: zod.string(),
+        label: zod.string().describe("The hook item's name"),
+        amount: zod.string(),
+        basis: zod.enum(["plan", "stored_amount"]),
+      }),
+    )
+    .optional()
+    .describe(
+      "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n",
     ),
   overdueOutsideForecast: zod
     .array(
@@ -7447,7 +7487,7 @@ export const EvaluateAffordResponse = zod.object({
 });
 
 /**
- * @summary The household's allowance plans and the suggested weekly cap with its working
+ * @summary The household's allowance plans, the plan in effect now, the suggested weekly cap with its working, and amounts a plan may start from
  */
 export const ListAllowancePlansResponse = zod.object({
   plans: zod.array(
@@ -7488,10 +7528,166 @@ export const ListAllowancePlansResponse = zod.object({
       }),
     })
     .describe("A suggestion only — nothing writes it; the owner sets the cap."),
+  inEffect: zod
+    .object({
+      weekly: zod.union([
+        zod.object({
+          id: zod.string(),
+          memberUserId: zod
+            .string()
+            .nullable()
+            .describe("Null for the household's shared pool"),
+          period: zod.enum(["weekly", "monthly"]),
+          amount: zod.string(),
+          effectiveFrom: zod.string(),
+          source: zod.enum(["owner", "derived"]),
+          derivation: zod
+            .unknown()
+            .describe(
+              "The suggestion's working when the owner accepted it; null for a typed amount",
+            ),
+          createdAt: zod.string(),
+        }),
+        zod.null(),
+      ]),
+      monthly: zod.union([
+        zod.object({
+          id: zod.string(),
+          memberUserId: zod
+            .string()
+            .nullable()
+            .describe("Null for the household's shared pool"),
+          period: zod.enum(["weekly", "monthly"]),
+          amount: zod.string(),
+          effectiveFrom: zod.string(),
+          source: zod.enum(["owner", "derived"]),
+          derivation: zod
+            .unknown()
+            .describe(
+              "The suggestion's working when the owner accepted it; null for a typed amount",
+            ),
+          createdAt: zod.string(),
+        }),
+        zod.null(),
+      ]),
+    })
+    .describe(
+      "(S2) The household-pool plan row in effect for this week and for this month, by the money position's own rule: a $0 row is no plan (null), never a $0 cap. A week's per-week override is not a plan row (the money position and the period breakdown report it as `source: override`).",
+    ),
+  prefills: zod
+    .array(
+      zod.object({
+        period: zod.enum(["weekly", "monthly"]),
+        amount: zod.string().describe("Dollars, two decimals, more than 0"),
+        source: zod.enum(["hook_stored", "suggested", "settings"]),
+        label: zod.string(),
+      }),
+    )
+    .describe(
+      '(S2) Amounts a plan may start from — options only, nothing writes them: the everyday hook\'s stored amount (`hook_stored`, e.g. \"Weekly Spend reserve\"), the suggested weekly cap, and the allowance saved on the classic Allowances page. Only amounts above $0.',
+    ),
 });
 
 /**
- * @summary Set a plan's amount (household owner only; writes source "owner")
+ * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import.
+ * @summary Set the household's weekly or monthly plan from this period on (household owner only)
+ */
+export const createAllowancePlanBodyAmountRegExp = new RegExp(
+  "^\\d{1,8}(\\.\\d{1,2})?$",
+);
+export const createAllowancePlanBodyEffectiveFromRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const CreateAllowancePlanBody = zod.object({
+  period: zod.enum(["weekly", "monthly"]),
+  amount: zod
+    .string()
+    .regex(createAllowancePlanBodyAmountRegExp)
+    .describe("Dollars, at most two decimals, more than 0"),
+  effectiveFrom: zod
+    .string()
+    .regex(createAllowancePlanBodyEffectiveFromRegExp)
+    .describe("A Sunday (weekly) or the 1st (monthly), this period or later"),
+});
+
+export const CreateAllowancePlanResponse = zod
+  .object({
+    id: zod.string(),
+    memberUserId: zod
+      .string()
+      .nullable()
+      .describe("Null for the household's shared pool"),
+    period: zod.enum(["weekly", "monthly"]),
+    amount: zod.string(),
+    effectiveFrom: zod.string(),
+    source: zod.enum(["owner", "derived"]),
+    derivation: zod
+      .unknown()
+      .describe(
+        "The suggestion's working when the owner accepted it; null for a typed amount",
+      ),
+    createdAt: zod.string(),
+  })
+  .and(
+    zod.object({
+      created: zod
+        .boolean()
+        .describe(
+          "True when a new row was written; false when a row of this period or later was updated in place",
+        ),
+      inEffect: zod
+        .object({
+          weekly: zod.union([
+            zod.object({
+              id: zod.string(),
+              memberUserId: zod
+                .string()
+                .nullable()
+                .describe("Null for the household's shared pool"),
+              period: zod.enum(["weekly", "monthly"]),
+              amount: zod.string(),
+              effectiveFrom: zod.string(),
+              source: zod.enum(["owner", "derived"]),
+              derivation: zod
+                .unknown()
+                .describe(
+                  "The suggestion's working when the owner accepted it; null for a typed amount",
+                ),
+              createdAt: zod.string(),
+            }),
+            zod.null(),
+          ]),
+          monthly: zod.union([
+            zod.object({
+              id: zod.string(),
+              memberUserId: zod
+                .string()
+                .nullable()
+                .describe("Null for the household's shared pool"),
+              period: zod.enum(["weekly", "monthly"]),
+              amount: zod.string(),
+              effectiveFrom: zod.string(),
+              source: zod.enum(["owner", "derived"]),
+              derivation: zod
+                .unknown()
+                .describe(
+                  "The suggestion's working when the owner accepted it; null for a typed amount",
+                ),
+              createdAt: zod.string(),
+            }),
+            zod.null(),
+          ]),
+        })
+        .describe(
+          "(S2) The household-pool plan row in effect for this week and for this month, by the money position's own rule: a $0 row is no plan (null), never a $0 cap. A week's per-week override is not a plan row (the money position and the period breakdown report it as `source: override`).",
+        ),
+    }),
+  );
+
+/**
+ * (S2) Never rewrites history. A row that started before the current period (this week's Sunday, or this month's 1st) is left as it is — past weeks keep the cap they were judged against — and the edit is written as the plan from the current period (or `effectiveFrom`) on: that day's row is updated or a new one inserted (`created: true`). A row starting in the current period or later is edited in place. A new `effectiveFrom` must be a period start (Sunday / the 1st), this period or later.
+ * @summary Set a plan's amount (household owner only; writes source "owner"); a plan a past week used is kept and a new one starts now
  */
 export const UpdateAllowancePlanParams = zod.object({
   id: zod.coerce.string(),
@@ -7515,23 +7711,79 @@ export const UpdateAllowancePlanBody = zod.object({
     .optional(),
 });
 
-export const UpdateAllowancePlanResponse = zod.object({
-  id: zod.string(),
-  memberUserId: zod
-    .string()
-    .nullable()
-    .describe("Null for the household's shared pool"),
-  period: zod.enum(["weekly", "monthly"]),
-  amount: zod.string(),
-  effectiveFrom: zod.string(),
-  source: zod.enum(["owner", "derived"]),
-  derivation: zod
-    .unknown()
-    .describe(
-      "The suggestion's working when the owner accepted it; null for a typed amount",
-    ),
-  createdAt: zod.string(),
-});
+export const UpdateAllowancePlanResponse = zod
+  .object({
+    id: zod.string(),
+    memberUserId: zod
+      .string()
+      .nullable()
+      .describe("Null for the household's shared pool"),
+    period: zod.enum(["weekly", "monthly"]),
+    amount: zod.string(),
+    effectiveFrom: zod.string(),
+    source: zod.enum(["owner", "derived"]),
+    derivation: zod
+      .unknown()
+      .describe(
+        "The suggestion's working when the owner accepted it; null for a typed amount",
+      ),
+    createdAt: zod.string(),
+  })
+  .and(
+    zod.object({
+      created: zod
+        .boolean()
+        .describe(
+          "True when a new row was written; false when a row of this period or later was updated in place",
+        ),
+      inEffect: zod
+        .object({
+          weekly: zod.union([
+            zod.object({
+              id: zod.string(),
+              memberUserId: zod
+                .string()
+                .nullable()
+                .describe("Null for the household's shared pool"),
+              period: zod.enum(["weekly", "monthly"]),
+              amount: zod.string(),
+              effectiveFrom: zod.string(),
+              source: zod.enum(["owner", "derived"]),
+              derivation: zod
+                .unknown()
+                .describe(
+                  "The suggestion's working when the owner accepted it; null for a typed amount",
+                ),
+              createdAt: zod.string(),
+            }),
+            zod.null(),
+          ]),
+          monthly: zod.union([
+            zod.object({
+              id: zod.string(),
+              memberUserId: zod
+                .string()
+                .nullable()
+                .describe("Null for the household's shared pool"),
+              period: zod.enum(["weekly", "monthly"]),
+              amount: zod.string(),
+              effectiveFrom: zod.string(),
+              source: zod.enum(["owner", "derived"]),
+              derivation: zod
+                .unknown()
+                .describe(
+                  "The suggestion's working when the owner accepted it; null for a typed amount",
+                ),
+              createdAt: zod.string(),
+            }),
+            zod.null(),
+          ]),
+        })
+        .describe(
+          "(S2) The household-pool plan row in effect for this week and for this month, by the money position's own rule: a $0 row is no plan (null), never a $0 cap. A week's per-week override is not a plan row (the money position and the period breakdown report it as `source: override`).",
+        ),
+    }),
+  );
 
 /**
  * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.

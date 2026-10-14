@@ -51,7 +51,7 @@ import { makeTools } from "../ai/tools";
 import { queueFakeChat, resetFake } from "../ai/fake";
 import { undoDecision } from "../lib/categorizer/review";
 import { upsertAgentMemory } from "../lib/agentMemory";
-import { addDaysISO, householdToday } from "@workspace/avalanche-core";
+import { addDaysISO, householdToday, weekBounds } from "@workspace/avalanche-core";
 import { createTestApp } from "./_helpers/createTestApp";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { newRun, seedAskHousehold, type AskHousehold } from "./_helpers/askFixtures";
@@ -237,7 +237,14 @@ describe("proposals", () => {
     expect((await status(pid)).status).toBe("proposed");
     const ok = await call("POST", `/agent/proposals/${pid}/approve`, A_OWNER);
     expect(ok.status).toBe(200);
-    const [plan] = await db.select().from(allowancePlansTable).where(eq(allowancePlansTable.id, A.planId));
+    // (S2) The row past weeks were judged against is kept as it was; the approved
+    // limit is the plan from this week's Sunday on.
+    const [past] = await db.select().from(allowancePlansTable).where(eq(allowancePlansTable.id, A.planId));
+    expect(past).toMatchObject({ amount: "200.00", effectiveFrom: "2026-05-01" });
+    const [plan] = await db
+      .select()
+      .from(allowancePlansTable)
+      .where(and(eq(allowancePlansTable.householdId, A.householdId), eq(allowancePlansTable.period, "weekly"), eq(allowancePlansTable.effectiveFrom, weekBounds(householdToday()).start)));
     expect(plan).toMatchObject({ amount: "150.00", source: "owner", createdByKind: "user" });
     const [act] = await db.select().from(agentActionsTable).where(eq(agentActionsTable.id, ok.json.appliedActionId));
     expect(act).toMatchObject({ type: "propose", outcome: "applied", targetKind: "weekly_limit", before: { amount: 200 }, after: { amount: 150 } });
