@@ -3,7 +3,7 @@
 import { and, asc, count, eq, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { db, categoryDecisionsTable, merchantMemoryTable, transactionsTable } from "@workspace/db";
 import { merchantSignature } from "../merchantNameExtract";
-import { rowsWithSignature, type RetroactiveCandidates } from "./memory";
+import { rowsWithSignatures, type RetroactiveCandidates } from "./memory";
 import { categoryBelongs, recordHandFiling, setCategoryByHand } from "./userDecisions";
 
 const OPEN = and(
@@ -135,11 +135,17 @@ export function amountAnomaly(amount: number, priors: readonly number[]): boolea
   return false;
 }
 
+/**
+ * The open decisions, oldest first, each with its flags; `total` is
+ * `openReviewCount`. (P3) The flags' history (each item's merchant's earlier
+ * rows) is ONE read for the page (`rowsWithSignatures`), grouped here, where it
+ * used to be one whole-history read per item, in sequence.
+ */
 export async function listReviewQueue(
   householdId: string,
   limit: number,
 ): Promise<{ items: ReviewItem[]; total: number }> {
-  const rows = await db
+  const listRead = db
     .select({
       decisionId: categoryDecisionsTable.id,
       transactionId: categoryDecisionsTable.transactionId,
@@ -162,12 +168,14 @@ export async function listReviewQueue(
     .where(and(eq(categoryDecisionsTable.householdId, householdId), OPEN))
     .orderBy(asc(categoryDecisionsTable.createdAt), asc(categoryDecisionsTable.id))
     .limit(limit);
-  const total = await openReviewCount(householdId);
+  const [rows, total] = await Promise.all([listRead, openReviewCount(householdId)]);
+  const sigOf = rows.map((r) => merchantSignature(r.description));
+  const history = await rowsWithSignatures(db, householdId, sigOf);
   const items: ReviewItem[] = [];
-  for (const r of rows) {
-    const sig = merchantSignature(r.description);
+  for (const [i, r] of rows.entries()) {
+    const sig = sigOf[i]!;
     const priors = sig
-      ? (await rowsWithSignature(db, householdId, sig)).filter(
+      ? (history.get(sig) ?? []).filter(
           (p) =>
             p.id !== r.transactionId &&
             (p.occurredOn < r.occurredOn ||
