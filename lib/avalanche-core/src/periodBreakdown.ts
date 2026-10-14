@@ -116,7 +116,7 @@ export interface BreakdownRowInput<T> {
   /** Household date. */
   date: string;
   /** `allowanceRowOf(row, m)`: the coverage it counts in (a refund carries what it nets), its signed spend, its account. */
-  allowance: { coverage: MovementCoverage | string; spend: number | string; account: string };
+  allowance: { coverage: MovementCoverage; spend: number; account: string };
   /** The row's own category (effective filing). */
   categoryId: string | null;
   /** Valid split parts (`expandSplits`: they add up to the row), or null. */

@@ -1125,6 +1125,28 @@ export interface SpinePosition {
   weekAdjustment: PositionWeekAdjustment | null;
 }
 
+export type SpineMonthAllowanceStatus =
+  (typeof SpineMonthAllowanceStatus)[keyof typeof SpineMonthAllowanceStatus];
+
+export const SpineMonthAllowanceStatus = {
+  not_set: "not_set",
+  within: "within",
+  over: "over",
+} as const;
+
+/**
+ * (S3) This month's monthly allowance — the same function GET /money/period-breakdown?period=month answers with (plan.amount, actual). Never a debt balance, credit or a limit.
+ */
+export interface SpineMonthAllowance {
+  /**
+   * The monthly plan; null when not set (never "0.00")
+   * @nullable
+   */
+  plan: string | null;
+  actual: string;
+  status: SpineMonthAllowanceStatus;
+}
+
 export interface Spine {
   /** ISO timestamp the snapshot was read */
   asOf: string;
@@ -1142,6 +1164,7 @@ export interface Spine {
   /** computeReviewCount() — unmatched forecast-flagged bank txns this month */
   reviewCount: number;
   position: SpinePosition;
+  monthAllowance: SpineMonthAllowance;
 }
 
 export interface MoneyPositionEstimate {
@@ -1411,6 +1434,325 @@ export interface MoneyPosition {
   degraded: boolean;
   /** @nullable */
   degradedReason: MoneyPositionDegradedReason;
+}
+
+export type PeriodBreakdownPeriod =
+  (typeof PeriodBreakdownPeriod)[keyof typeof PeriodBreakdownPeriod];
+
+export const PeriodBreakdownPeriod = {
+  week: "week",
+  month: "month",
+} as const;
+
+export type PeriodBreakdownBasis =
+  (typeof PeriodBreakdownBasis)[keyof typeof PeriodBreakdownBasis];
+
+export const PeriodBreakdownBasis = {
+  weekly_allowance: "weekly_allowance",
+  monthly_allowance: "monthly_allowance",
+} as const;
+
+export type PeriodBreakdownTimezone =
+  (typeof PeriodBreakdownTimezone)[keyof typeof PeriodBreakdownTimezone];
+
+export const PeriodBreakdownTimezone = {
+  "America/Chicago": "America/Chicago",
+} as const;
+
+/**
+ * The plan is always the household's
+ */
+export type PeriodBreakdownPlanScope =
+  (typeof PeriodBreakdownPlanScope)[keyof typeof PeriodBreakdownPlanScope];
+
+export const PeriodBreakdownPlanScope = {
+  household: "household",
+} as const;
+
+export type PeriodBreakdownScopeKind =
+  (typeof PeriodBreakdownScopeKind)[keyof typeof PeriodBreakdownScopeKind];
+
+export const PeriodBreakdownScopeKind = {
+  household: "household",
+  account: "account",
+} as const;
+
+/**
+ * Household, or one account (its identity). The plan is the household's either way.
+ */
+export interface PeriodBreakdownScope {
+  kind: PeriodBreakdownScopeKind;
+  /**
+   * plaid_accounts.id; null for the household
+   * @nullable
+   */
+  id: string | null;
+  /** @nullable */
+  institution: string | null;
+  /** @nullable */
+  name: string | null;
+  /** @nullable */
+  mask: string | null;
+}
+
+/**
+ * not_set: no plan in effect, or a $0 one — never a $0 cap
+ */
+export type PeriodBreakdownPlanStatus =
+  (typeof PeriodBreakdownPlanStatus)[keyof typeof PeriodBreakdownPlanStatus];
+
+export const PeriodBreakdownPlanStatus = {
+  set: "set",
+  not_set: "not_set",
+} as const;
+
+/**
+ * The week's own override, an allowance_plans row, or nothing
+ */
+export type PeriodBreakdownPlanSource =
+  (typeof PeriodBreakdownPlanSource)[keyof typeof PeriodBreakdownPlanSource];
+
+export const PeriodBreakdownPlanSource = {
+  override: "override",
+  plan: "plan",
+  none: "none",
+} as const;
+
+export interface PeriodBreakdownPlan {
+  /** not_set: no plan in effect, or a $0 one — never a $0 cap */
+  status: PeriodBreakdownPlanStatus;
+  /**
+   * The cap; null when not set
+   * @nullable
+   */
+  amount: string | null;
+  /** The week's own override, an allowance_plans row, or nothing */
+  source: PeriodBreakdownPlanSource;
+  /**
+   * The allowance_plans row in effect when source is plan
+   * @nullable
+   */
+  planId: string | null;
+  /**
+   * That row's start when source is plan
+   * @nullable
+   */
+  effectiveFrom: string | null;
+}
+
+/**
+ * The account the row is on (a split part keeps its parent's); all null for a row with no linked account
+ */
+export interface PeriodBreakdownAccount {
+  /**
+   * plaid_accounts.id
+   * @nullable
+   */
+  id: string | null;
+  /** @nullable */
+  institution: string | null;
+  /** @nullable */
+  name: string | null;
+  /** @nullable */
+  mask: string | null;
+}
+
+export interface PeriodBreakdownRowCategory {
+  id: string;
+  name: string;
+}
+
+export type PeriodBreakdownReasonCoverage =
+  (typeof PeriodBreakdownReasonCoverage)[keyof typeof PeriodBreakdownReasonCoverage];
+
+export const PeriodBreakdownReasonCoverage = {
+  transfer: "transfer",
+  debt_payment: "debt_payment",
+  card_payment: "card_payment",
+  bill_matched: "bill_matched",
+  unplanned: "unplanned",
+  allowance_monthly: "allowance_monthly",
+  allowance_weekly: "allowance_weekly",
+  reimbursable: "reimbursable",
+  needs_classification: "needs_classification",
+  income: "income",
+  excluded: "excluded",
+  refund: "refund",
+} as const;
+
+export type PeriodBreakdownReasonRule =
+  (typeof PeriodBreakdownReasonRule)[keyof typeof PeriodBreakdownReasonRule];
+
+export const PeriodBreakdownReasonRule = {
+  transfer: "transfer",
+  bank_noise: "bank_noise",
+  debt_payment: "debt_payment",
+  card_payment: "card_payment",
+  excluded_category: "excluded_category",
+  income_category: "income_category",
+  income: "income",
+  inflow_other: "inflow_other",
+  bill_match_confirmed: "bill_match_confirmed",
+  bill_match_tier2: "bill_match_tier2",
+  reimbursable: "reimbursable",
+  unplanned_flag: "unplanned_flag",
+  monthly_flag: "monthly_flag",
+  weekly_flag: "weekly_flag",
+  unfiled: "unfiled",
+} as const;
+
+/**
+ * Why the row counts where it does — classifyMovement's own answer
+ */
+export interface PeriodBreakdownReason {
+  coverage: PeriodBreakdownReasonCoverage;
+  /**
+   * For a refund, the coverage it takes money off; null otherwise
+   * @nullable
+   */
+  nets: string | null;
+  rule: PeriodBreakdownReasonRule;
+}
+
+export interface PeriodBreakdownSplitPart {
+  /** 0-based */
+  index: number;
+  count: number;
+  /** What the whole row adds; the parts add up to it */
+  parentAmount: string;
+}
+
+export interface PeriodBreakdownRow {
+  /** The transaction id (a split part keeps its parent's) */
+  id: string;
+  date: string;
+  /** The household's merchant alias */
+  displayName: string;
+  /** What the row adds to its group: + a purchase, − a refund */
+  amount: string;
+  account: PeriodBreakdownAccount;
+  pending: boolean;
+  category: PeriodBreakdownRowCategory | null;
+  reason: PeriodBreakdownReason;
+  splitPart: PeriodBreakdownSplitPart | null;
+}
+
+export interface PeriodBreakdownCategory {
+  /**
+   * Null for rows with no category (or one that is no longer the household's)
+   * @nullable
+   */
+  categoryId: string | null;
+  /** @nullable */
+  name: string | null;
+  /** Signed: purchases less refunds filed here (can be negative) */
+  amount: string;
+  /**
+   * amount ÷ actual in basis points (rounded); null when actual is 0
+   * @nullable
+   */
+  shareBp: number | null;
+  /** Rows (split parts count one each) */
+  count: number;
+  /**
+   * Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left
+   * @nullable
+   */
+  usual: string | null;
+  /**
+   * max(0, amount − usual); null when usual is null
+   * @nullable
+   */
+  aboveUsual: string | null;
+  /** Largest first, at most rowsPerGroup */
+  rows: PeriodBreakdownRow[];
+  /** More rows than listed */
+  truncated: boolean;
+}
+
+/**
+ * Spending not filed to any allowance yet. It counts against the WEEKLY cap until it is filed (countsAgainstPlan true for a week); it never counts against the monthly plan, so for a month the group is empty.
+ */
+export interface PeriodBreakdownGroup {
+  amount: string;
+  count: number;
+  rows: PeriodBreakdownRow[];
+  truncated: boolean;
+  countsAgainstPlan: boolean;
+}
+
+/**
+ * The period's other spending, netted the same way, in the same scope — it does not count against this plan.
+ */
+export interface PeriodBreakdownBeside {
+  unplanned: string;
+  /**
+   * The weekly pool (weekly-flagged + unfiled); null for a week (it is `actual`)
+   * @nullable
+   */
+  weekly: string | null;
+  /**
+   * Monthly-flagged; null for a month (it is `actual`)
+   * @nullable
+   */
+  monthly: string | null;
+  /** Rows paired to a bill already in the plan */
+  billMatched: string;
+  reimbursable: string;
+  /**
+   * Every purchase on any account over the period (buildSpendingFacts — for the current week, the spine's spentWeek); null for one account
+   * @nullable
+   */
+  householdSpend: string | null;
+}
+
+/**
+ * (S3) One period's allowance, broken down. Money is a two-decimal string. actual: week → weekly-flagged + unfiled spending (the weekly cap's pool), month → monthly-flagged spending; refunds netted per account, never below zero. remaining = plan + carryOver − actual (negative when over); over = max(0, −remaining); both null with no plan. Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, exactly.
+ */
+export interface PeriodBreakdown {
+  period: PeriodBreakdownPeriod;
+  basis: PeriodBreakdownBasis;
+  /** First day (YYYY-MM-DD) */
+  start: string;
+  /** Last day (YYYY-MM-DD), inclusive */
+  end: string;
+  /** The household's current week / month */
+  isCurrent: boolean;
+  timezone: PeriodBreakdownTimezone;
+  scope: PeriodBreakdownScope;
+  /** The plan is always the household's */
+  planScope: PeriodBreakdownPlanScope;
+  plan: PeriodBreakdownPlan;
+  /**
+   * (week) The household's carry-over for the week, signed (never positive); null when none (and always for a month)
+   * @nullable
+   */
+  carryOver: string | null;
+  /** What counts against the plan (see the schema description); "0.00" for a quiet period */
+  actual: string;
+  /**
+   * plan + carryOver − actual; negative when over; null when the plan is not set
+   * @nullable
+   */
+  remaining: string | null;
+  /**
+   * max(0, −remaining); null when the plan is not set
+   * @nullable
+   */
+  over: string | null;
+  /**
+   * remaining ≥ 0; null when the plan is not set
+   * @nullable
+   */
+  withinPlan: boolean | null;
+  /** The rows filed to this plan (weekly / monthly flag), by category, largest first */
+  categories: PeriodBreakdownCategory[];
+  needsClassification: PeriodBreakdownGroup;
+  /** actual − Σ groups (≥ 0): non-zero only where an account's refunds outran its purchases and its pool floored at 0 */
+  refundFloorAdjustment: string;
+  beside: PeriodBreakdownBeside;
+  /** What the answer cannot see, as codes: "tier2_pairs_only_since:<date>" (a past period: bill pairs the forecast suggests are known only from that day, so an unfiled bill payment before it reads as unfiled); "tracking_start:<date>" (the period began before tracking did; rows before that day are not read); "usual_periods:<n>" (usual reads n prior periods, fewer than the full 8 weeks / 3 months). */
+  limitations: string[];
 }
 
 export interface WaysBackAdjustment {

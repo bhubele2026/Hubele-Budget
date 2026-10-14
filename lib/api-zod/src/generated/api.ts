@@ -6953,7 +6953,7 @@ export const RecomputeMetricsResponse = zod.object({
 });
 
 /**
- * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readPeriodAllowance (as GET /money/period-breakdown?period=month) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
 export const GetSpineResponse = zod.object({
@@ -7215,6 +7215,18 @@ export const GetSpineResponse = zod.object({
     })
     .describe(
       "(PR-B1) The headline of the money position — the same buildMoneyPosition call GET \/money\/position makes, field for field. Never credit, a limit, a debt balance or an amount owed.",
+    ),
+  monthAllowance: zod
+    .object({
+      plan: zod
+        .string()
+        .nullable()
+        .describe('The monthly plan; null when not set (never \"0.00\")'),
+      actual: zod.string(),
+      status: zod.enum(["not_set", "within", "over"]),
+    })
+    .describe(
+      "(S3) This month's monthly allowance — the same function GET \/money\/period-breakdown?period=month answers with (plan.amount, actual). Never a debt balance, credit or a limit.",
     ),
 });
 
@@ -7581,6 +7593,382 @@ export const GetWaysBackResponse = zod
   })
   .describe(
     "(V5) A way back when the week is over. Every amount is WHOLE CENTS. overBy = max(0, −remainingWeek). hold.perDay = floor(max(0, remainingWeek) ÷ daysLeft), null with no cap; hold.leavesUntilPayday = availableUntilPayday (null with no bank data). trims = the three categories that spent most this week among the rows counting against the cap. carryOver.nextWeekCap = max(0, next week's cap + the applied adjustment, or − overBy when none is applied); null with no cap.",
+  );
+
+/**
+ * week = the weekly allowance (the cap's pool: weekly-flagged + unfiled spending — exactly GET /money/position's spentWeekDiscretionary, and for the current week built from the very rows the position counted). month = the monthly allowance (monthly-flagged spending over the calendar month — exactly what the Monthly Spend hook counts). Refunds net per account and never below zero; `refundFloorAdjustment` is what that floor added, so Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, to the cent. With no plan in effect (or a $0 one) the plan is "not_set" and remaining, over and withinPlan are null — never $0. Household America/Chicago dates. Read-only.
+ * @summary Why over? One week's or month's allowance — plan, spent, left or over, and the rows behind it by category
+ */
+export const getPeriodBreakdownQueryStartRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+export const getPeriodBreakdownQueryAccountMax = 64;
+
+export const getPeriodBreakdownQueryRowsPerGroupDefault = 10;
+export const getPeriodBreakdownQueryRowsPerGroupMax = 50;
+
+export const GetPeriodBreakdownQueryParams = zod.object({
+  period: zod.enum(["week", "month"]),
+  start: zod.coerce
+    .string()
+    .regex(getPeriodBreakdownQueryStartRegExp)
+    .describe(
+      "The period's first day (YYYY-MM-DD) — a Sunday for a week, the 1st for a month. Not a future period.",
+    ),
+  account: zod.coerce
+    .string()
+    .max(getPeriodBreakdownQueryAccountMax)
+    .optional()
+    .describe(
+      "`plaid_accounts.id` — that account's contribution only (exact: the figures net per account). The plan stays the household's (`planScope`).",
+    ),
+  rowsPerGroup: zod.coerce
+    .number()
+    .min(1)
+    .max(getPeriodBreakdownQueryRowsPerGroupMax)
+    .default(getPeriodBreakdownQueryRowsPerGroupDefault)
+    .describe(
+      "Rows listed per group, largest first (each group's amount and count still cover every row).",
+    ),
+});
+
+export const GetPeriodBreakdownResponse = zod
+  .object({
+    period: zod.enum(["week", "month"]),
+    basis: zod.enum(["weekly_allowance", "monthly_allowance"]),
+    start: zod.string().describe("First day (YYYY-MM-DD)"),
+    end: zod.string().describe("Last day (YYYY-MM-DD), inclusive"),
+    isCurrent: zod.boolean().describe("The household's current week \/ month"),
+    timezone: zod.enum(["America/Chicago"]),
+    scope: zod
+      .object({
+        kind: zod.enum(["household", "account"]),
+        id: zod
+          .string()
+          .nullable()
+          .describe("plaid_accounts.id; null for the household"),
+        institution: zod.string().nullable(),
+        name: zod.string().nullable(),
+        mask: zod.string().nullable(),
+      })
+      .describe(
+        "Household, or one account (its identity). The plan is the household's either way.",
+      ),
+    planScope: zod
+      .enum(["household"])
+      .describe("The plan is always the household's"),
+    plan: zod.object({
+      status: zod
+        .enum(["set", "not_set"])
+        .describe("not_set: no plan in effect, or a $0 one — never a $0 cap"),
+      amount: zod.string().nullable().describe("The cap; null when not set"),
+      source: zod
+        .enum(["override", "plan", "none"])
+        .describe(
+          "The week's own override, an allowance_plans row, or nothing",
+        ),
+      planId: zod
+        .string()
+        .nullable()
+        .describe("The allowance_plans row in effect when source is plan"),
+      effectiveFrom: zod
+        .string()
+        .nullable()
+        .describe("That row's start when source is plan"),
+    }),
+    carryOver: zod
+      .string()
+      .nullable()
+      .describe(
+        "(week) The household's carry-over for the week, signed (never positive); null when none (and always for a month)",
+      ),
+    actual: zod
+      .string()
+      .describe(
+        'What counts against the plan (see the schema description); \"0.00\" for a quiet period',
+      ),
+    remaining: zod
+      .string()
+      .nullable()
+      .describe(
+        "plan + carryOver − actual; negative when over; null when the plan is not set",
+      ),
+    over: zod
+      .string()
+      .nullable()
+      .describe("max(0, −remaining); null when the plan is not set"),
+    withinPlan: zod
+      .boolean()
+      .nullable()
+      .describe("remaining ≥ 0; null when the plan is not set"),
+    categories: zod
+      .array(
+        zod.object({
+          categoryId: zod
+            .string()
+            .nullable()
+            .describe(
+              "Null for rows with no category (or one that is no longer the household's)",
+            ),
+          name: zod.string().nullable(),
+          amount: zod
+            .string()
+            .describe(
+              "Signed: purchases less refunds filed here (can be negative)",
+            ),
+          shareBp: zod
+            .number()
+            .nullable()
+            .describe(
+              "amount ÷ actual in basis points (rounded); null when actual is 0",
+            ),
+          count: zod.number().describe("Rows (split parts count one each)"),
+          usual: zod
+            .string()
+            .nullable()
+            .describe(
+              "Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left",
+            ),
+          aboveUsual: zod
+            .string()
+            .nullable()
+            .describe("max(0, amount − usual); null when usual is null"),
+          rows: zod
+            .array(
+              zod.object({
+                id: zod
+                  .string()
+                  .describe(
+                    "The transaction id (a split part keeps its parent's)",
+                  ),
+                date: zod.string(),
+                displayName: zod
+                  .string()
+                  .describe("The household's merchant alias"),
+                amount: zod
+                  .string()
+                  .describe(
+                    "What the row adds to its group: + a purchase, − a refund",
+                  ),
+                account: zod
+                  .object({
+                    id: zod.string().nullable().describe("plaid_accounts.id"),
+                    institution: zod.string().nullable(),
+                    name: zod.string().nullable(),
+                    mask: zod.string().nullable(),
+                  })
+                  .describe(
+                    "The account the row is on (a split part keeps its parent's); all null for a row with no linked account",
+                  ),
+                pending: zod.boolean(),
+                category: zod.union([
+                  zod.object({
+                    id: zod.string(),
+                    name: zod.string(),
+                  }),
+                  zod.null(),
+                ]),
+                reason: zod
+                  .object({
+                    coverage: zod.enum([
+                      "transfer",
+                      "debt_payment",
+                      "card_payment",
+                      "bill_matched",
+                      "unplanned",
+                      "allowance_monthly",
+                      "allowance_weekly",
+                      "reimbursable",
+                      "needs_classification",
+                      "income",
+                      "excluded",
+                      "refund",
+                    ]),
+                    nets: zod
+                      .string()
+                      .nullable()
+                      .describe(
+                        "For a refund, the coverage it takes money off; null otherwise",
+                      ),
+                    rule: zod.enum([
+                      "transfer",
+                      "bank_noise",
+                      "debt_payment",
+                      "card_payment",
+                      "excluded_category",
+                      "income_category",
+                      "income",
+                      "inflow_other",
+                      "bill_match_confirmed",
+                      "bill_match_tier2",
+                      "reimbursable",
+                      "unplanned_flag",
+                      "monthly_flag",
+                      "weekly_flag",
+                      "unfiled",
+                    ]),
+                  })
+                  .describe(
+                    "Why the row counts where it does — classifyMovement's own answer",
+                  ),
+                splitPart: zod.union([
+                  zod.object({
+                    index: zod.number().describe("0-based"),
+                    count: zod.number(),
+                    parentAmount: zod
+                      .string()
+                      .describe(
+                        "What the whole row adds; the parts add up to it",
+                      ),
+                  }),
+                  zod.null(),
+                ]),
+              }),
+            )
+            .describe("Largest first, at most rowsPerGroup"),
+          truncated: zod.boolean().describe("More rows than listed"),
+        }),
+      )
+      .describe(
+        "The rows filed to this plan (weekly \/ monthly flag), by category, largest first",
+      ),
+    needsClassification: zod
+      .object({
+        amount: zod.string(),
+        count: zod.number(),
+        rows: zod.array(
+          zod.object({
+            id: zod
+              .string()
+              .describe("The transaction id (a split part keeps its parent's)"),
+            date: zod.string(),
+            displayName: zod
+              .string()
+              .describe("The household's merchant alias"),
+            amount: zod
+              .string()
+              .describe(
+                "What the row adds to its group: + a purchase, − a refund",
+              ),
+            account: zod
+              .object({
+                id: zod.string().nullable().describe("plaid_accounts.id"),
+                institution: zod.string().nullable(),
+                name: zod.string().nullable(),
+                mask: zod.string().nullable(),
+              })
+              .describe(
+                "The account the row is on (a split part keeps its parent's); all null for a row with no linked account",
+              ),
+            pending: zod.boolean(),
+            category: zod.union([
+              zod.object({
+                id: zod.string(),
+                name: zod.string(),
+              }),
+              zod.null(),
+            ]),
+            reason: zod
+              .object({
+                coverage: zod.enum([
+                  "transfer",
+                  "debt_payment",
+                  "card_payment",
+                  "bill_matched",
+                  "unplanned",
+                  "allowance_monthly",
+                  "allowance_weekly",
+                  "reimbursable",
+                  "needs_classification",
+                  "income",
+                  "excluded",
+                  "refund",
+                ]),
+                nets: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "For a refund, the coverage it takes money off; null otherwise",
+                  ),
+                rule: zod.enum([
+                  "transfer",
+                  "bank_noise",
+                  "debt_payment",
+                  "card_payment",
+                  "excluded_category",
+                  "income_category",
+                  "income",
+                  "inflow_other",
+                  "bill_match_confirmed",
+                  "bill_match_tier2",
+                  "reimbursable",
+                  "unplanned_flag",
+                  "monthly_flag",
+                  "weekly_flag",
+                  "unfiled",
+                ]),
+              })
+              .describe(
+                "Why the row counts where it does — classifyMovement's own answer",
+              ),
+            splitPart: zod.union([
+              zod.object({
+                index: zod.number().describe("0-based"),
+                count: zod.number(),
+                parentAmount: zod
+                  .string()
+                  .describe("What the whole row adds; the parts add up to it"),
+              }),
+              zod.null(),
+            ]),
+          }),
+        ),
+        truncated: zod.boolean(),
+        countsAgainstPlan: zod.boolean(),
+      })
+      .describe(
+        "Spending not filed to any allowance yet. It counts against the WEEKLY cap until it is filed (countsAgainstPlan true for a week); it never counts against the monthly plan, so for a month the group is empty.",
+      ),
+    refundFloorAdjustment: zod
+      .string()
+      .describe(
+        "actual − Σ groups (≥ 0): non-zero only where an account's refunds outran its purchases and its pool floored at 0",
+      ),
+    beside: zod
+      .object({
+        unplanned: zod.string(),
+        weekly: zod
+          .string()
+          .nullable()
+          .describe(
+            "The weekly pool (weekly-flagged + unfiled); null for a week (it is `actual`)",
+          ),
+        monthly: zod
+          .string()
+          .nullable()
+          .describe("Monthly-flagged; null for a month (it is `actual`)"),
+        billMatched: zod
+          .string()
+          .describe("Rows paired to a bill already in the plan"),
+        reimbursable: zod.string(),
+        householdSpend: zod
+          .string()
+          .nullable()
+          .describe(
+            "Every purchase on any account over the period (buildSpendingFacts — for the current week, the spine's spentWeek); null for one account",
+          ),
+      })
+      .describe(
+        "The period's other spending, netted the same way, in the same scope — it does not count against this plan.",
+      ),
+    limitations: zod
+      .array(zod.string())
+      .describe(
+        'What the answer cannot see, as codes: \"tier2_pairs_only_since:<date>\" (a past period: bill pairs the forecast suggests are known only from that day, so an unfiled bill payment before it reads as unfiled); \"tracking_start:<date>\" (the period began before tracking did; rows before that day are not read); \"usual_periods:<n>\" (usual reads n prior periods, fewer than the full 8 weeks \/ 3 months).',
+      ),
+  })
+  .describe(
+    "(S3) One period's allowance, broken down. Money is a two-decimal string. actual: week → weekly-flagged + unfiled spending (the weekly cap's pool), month → monthly-flagged spending; refunds netted per account, never below zero. remaining = plan + carryOver − actual (negative when over); over = max(0, −remaining); both null with no plan. Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, exactly.",
   );
 
 /**
