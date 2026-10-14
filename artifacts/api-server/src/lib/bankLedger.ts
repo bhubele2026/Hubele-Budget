@@ -407,7 +407,7 @@ export async function resolveLedgerAccounts(
 }
 
 /** The anchor of an account with no register: today, and no balance. */
-export function noBalanceAnchor(): LedgerAnchor {
+function noBalanceAnchor(): LedgerAnchor {
   return { today: householdTodayISO(), todayBalance: null, snapshotBalance: null, snapshotAt: null, snapshotDay: null };
 }
 

@@ -289,6 +289,9 @@ async function placementsOf(qs: string): Promise<Map<RowKey, string>> {
 /** The parity every range owes: ledger totals and balances, and nothing unexplained. */
 async function expectTiesToLedger(qs: string, ledgerQs: string): Promise<Json> {
   const [r, ledger] = await Promise.all([review(qs), get(`/transactions/ledger?${ledgerQs}&limit=1`)]);
+  // The ledger page's own shape is unchanged by the shared totals read.
+  expect(Object.keys(ledger.totals).sort()).toEqual(["count", "moneyIn", "moneyOut", "net"]);
+  expect(Object.keys(ledger.review).sort()).toEqual(["reviewed", "unreviewed"]);
   expect(r.cashFlow.moneyIn, `${qs} moneyIn`).toBe(ledger.totals.moneyIn);
   expect(r.cashFlow.moneyOut, `${qs} moneyOut`).toBe(ledger.totals.moneyOut);
   expect(r.cashFlow.net, `${qs} net`).toBe(ledger.totals.net);
