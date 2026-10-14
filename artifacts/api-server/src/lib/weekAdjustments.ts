@@ -3,7 +3,9 @@
 //   buildWaysBack       `GET /money/ways-back`: the money position (the SAME
 //                       `loadPositionInputs` → `computePosition` read as
 //                       `GET /money/position`), the rows of this week and the
-//                       8 before it classified by `classifyMovement`, and the
+//                       8 before it classified by `classifyMovement` and read
+//                       as the allowance figures read them (`allowanceRowOf`:
+//                       S6, a refund nets the coverage it belongs to), and the
 //                       category names — then avalanche-core's
 //                       `computeWaysBack` does every sum. Read-only.
 //   upsertCarryOver     THE ONE WRITER of `plan_adjustments` (with
@@ -23,10 +25,10 @@ import {
   WAYS_BACK_TRIM_COVERAGES,
   WAYS_BACK_USUAL_WEEKS,
   addDaysISO,
+  allowanceRowOf,
   classifyMovement,
   computePosition,
   computeWaysBack,
-  spendAmount,
   type WaysBack,
   type WaysBackRow,
 } from "@workspace/avalanche-core";
@@ -133,12 +135,13 @@ export async function buildWaysBack(householdId: string, ownerUserId: string): P
     { tier2PairedTxnIds: tier2PairedTxnIdsOf(read.cash.ledger) },
   );
   const movement = await loadMovementRows(householdId, from, position.weekEnd, money);
-  const rows: WaysBackRow[] = movement.map((r) => ({
-    date: r.occurredOn,
-    categoryId: r.categoryId ?? null,
-    coverage: classifyMovement(r, money).coverage,
-    spendCents: Math.round(spendAmount(r) * 100),
-  }));
+  // (S6) `allowanceRowOf`, the read every allowance figure nets refunds with: a
+  // refund lands in the coverage it nets, its credit negative — so a trim's
+  // amount is the category's purchases less its refunds, as the week's figure.
+  const rows: WaysBackRow[] = movement.map((r) => {
+    const a = allowanceRowOf(r, classifyMovement(r, money));
+    return { date: r.occurredOn, categoryId: r.categoryId ?? null, coverage: a.coverage, spendCents: Math.round(a.spend * 100) };
+  });
 
   const ids = [
     ...new Set(

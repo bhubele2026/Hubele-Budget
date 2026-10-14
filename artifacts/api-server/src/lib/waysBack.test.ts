@@ -254,6 +254,33 @@ describe("computeWaysBack (V5)", () => {
     expect(wb({ remainingWeek: "12.00" }).carryOver.nextWeekCap).toBe(30000);
   });
 
+  it("(S6) a refund nets its category, as the week's spent figure nets it: Dining 150.00 − 50.00 = 100.00; a fully refunded category is no trim", () => {
+    // A refund row is `allowanceRowOf`'s: the coverage it nets, its credit negative.
+    const w = wb({
+      rows: [
+        r("2026-10-05", "dining", 15000),
+        r("2026-10-06", "dining", -5000),
+        r("2026-10-06", "groceries", 12000, "needs_classification"),
+        r("2026-10-07", "fun", 4000),
+        r("2026-10-07", "fun", -4000, "needs_classification"), // Fun fully refunded (the cap's pool is one pool)
+        r("2026-10-07", "gas", 3000),
+        // Dining's 8 weeks before: 9/27 100.00 − 60.00 = 40.00 · 9/20 80.00 · 9/13 120.00 · 9/6 90.00 · 8/30 70.00.
+        r("2026-09-29", "dining", 10000),
+        r("2026-09-30", "dining", -6000),
+        r("2026-09-22", "dining", 8000),
+        r("2026-09-15", "dining", 12000),
+        r("2026-09-08", "dining", 9000),
+        r("2026-09-01", "dining", 7000),
+      ],
+    });
+    expect(w.trims).toEqual([
+      { categoryId: "groceries", name: "Groceries", spentWeek: 12000, usualWeek: 0 },
+      // [0, 0, 0, 40.00, 70.00, 80.00, 90.00, 120.00] → floor((4,000 + 7,000) / 2) = 5,500.
+      { categoryId: "dining", name: "Dining", spentWeek: 10000, usualWeek: 5500 },
+      { categoryId: "gas", name: "Gas", spentWeek: 3000, usualWeek: 0 },
+    ]);
+  });
+
   it("medianCents", () => {
     expect(medianCents([])).toBeNull();
     expect(medianCents([5])).toBe(5);

@@ -31,6 +31,7 @@ import { db, merchantAliasesTable, plaidAccountsTable, plaidItemsTable, type All
 import {
   HOUSEHOLD_TZ,
   addDaysISO,
+  allowancePeriodFigures,
   allowancePlanInEffect,
   allowanceRowOf,
   allowanceSpentCents,
@@ -222,22 +223,35 @@ async function readPeriod(
  * ⭐ (S3) THE SPINE'S `monthAllowance` — this month's monthly allowance: the
  * same read (`readPeriod`) and the same helper (`allowanceSpentCents`) the
  * endpoint's `plan.amount` / `actual` come from. Never a debt balance.
+ * (S6) `remaining` / `over` are the endpoint's too (`allowancePeriodFigures`,
+ * the call `periodBreakdown` makes), so the dashboard tile never subtracts
+ * plan − actual in the browser. Null when no plan is set (never "0.00").
  */
 export async function readMonthAllowance(
   householdId: string,
   ownerUserId: string,
   opts: ReadPeriodOptions = {},
-): Promise<{ plan: string | null; actual: string; status: "not_set" | "within" | "over" }> {
+): Promise<{
+  plan: string | null;
+  actual: string;
+  status: "not_set" | "within" | "over";
+  remaining: string | null;
+  over: string | null;
+}> {
   const start = monthBounds(householdTodayISO()).start;
   const read = await readPeriod(householdId, ownerUserId, "month", start, opts);
   const actualCents = allowanceSpentCents(
     read.movement.map(({ row, m }) => allowanceRowOf(row, m)),
     "monthly",
   );
+  const figures = allowancePeriodFigures(read.planCents, read.carryOverCents, actualCents);
   return {
     plan: moneyOrNull(read.planCents),
     actual: money(actualCents),
-    status: read.planCents == null ? "not_set" : actualCents > read.planCents ? "over" : "within",
+    // (S6) From the same figures: identical to `actual > plan` while a month carries no carry-over.
+    status: figures.withinPlan == null ? "not_set" : figures.withinPlan ? "within" : "over",
+    remaining: moneyOrNull(figures.remainingCents),
+    over: moneyOrNull(figures.overCents),
   };
 }
 

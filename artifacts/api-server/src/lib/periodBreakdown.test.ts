@@ -15,6 +15,7 @@ import {
   BREAKDOWN_ROWS_MAX,
   MOVEMENT_RULES,
   PFC_CARD_PAYMENT,
+  allowancePeriodFigures,
   allowanceRowOf,
   classifyMovement,
   computePosition,
@@ -43,6 +44,7 @@ function ctx(overrides: Partial<MovementContext> = {}): MovementContext {
     debtCategoryIds: new Set(["cat-debt"]),
     checkingAccountExternalId: CHECKING,
     matchedTxnIds: new Set(),
+    cardAccountIds: new Set(),
     ...overrides,
   };
 }
@@ -381,6 +383,19 @@ describe("periodBreakdown — the week", () => {
       expect(groupsPlusFloor(b), `week ${w}`).toBe(b.actualCents);
       expect(b.refundFloorAdjustmentCents).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+describe("(S6) allowancePeriodFigures — the left / over the spine's monthAllowance reads", () => {
+  it("no plan: every figure null, never $0", () => {
+    expect(allowancePeriodFigures(null, null, 12345)).toEqual({ remainingCents: null, overCents: null, withinPlan: null });
+    expect(allowancePeriodFigures(null, -500, 0)).toEqual({ remainingCents: null, overCents: null, withinPlan: null });
+  });
+  it("within, exactly on, and over the plan; a carry-over lowers what is left", () => {
+    expect(allowancePeriodFigures(40000, null, 39000)).toEqual({ remainingCents: 1000, overCents: 0, withinPlan: true });
+    expect(allowancePeriodFigures(40000, null, 40000)).toEqual({ remainingCents: 0, overCents: 0, withinPlan: true });
+    expect(allowancePeriodFigures(40000, null, 44000)).toEqual({ remainingCents: -4000, overCents: 4000, withinPlan: false });
+    expect(allowancePeriodFigures(30000, -4000, 25000)).toEqual({ remainingCents: 1000, overCents: 0, withinPlan: true });
   });
 });
 

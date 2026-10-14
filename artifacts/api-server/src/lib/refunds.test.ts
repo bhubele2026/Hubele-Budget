@@ -19,6 +19,7 @@ import {
   discretionaryCents,
   hasRefundMarker,
   netAccountOf,
+  onCardAccount,
   payoffFor,
   PFC_CARD_PAYMENT,
   type AllowanceRow,
@@ -43,7 +44,7 @@ const cats: SpendContext["categoriesById"] = new Map([
 const spendCtx: SpendContext = { categoriesById: cats, debtCategoryIds: new Set(["card-payoff"]) };
 
 function ctx(over: Partial<MovementContext> = {}): MovementContext {
-  return { ...spendCtx, checkingAccountExternalId: CHECKING, matchedTxnIds: new Set(), ...over };
+  return { ...spendCtx, checkingAccountExternalId: CHECKING, matchedTxnIds: new Set(), cardAccountIds: new Set(), ...over };
 }
 
 /** An Amex (Plaid) credit by default: +20.00 is money back on the card. */
@@ -128,6 +129,70 @@ describe("classifyRefund — which credits are refunds", () => {
     expect(chk("AMAZON.COM REFUND", { categoryId: "paycheck" })).toBeNull();
     expect(hasRefundMarker("kroger #442 refund")).toBe(true);
     expect(hasRefundMarker("REFUNDABLE DEPOSIT")).toBe(false); // whole words only
+  });
+});
+
+describe("(S6) classifyRefund — a credit on ANY issuer's credit card", () => {
+  const CARD = "chase-freedom-ext";
+  const onChaseCard = (over: Partial<MovementRow> = {}) =>
+    tx({ source: "plaid:chase", plaidAccountId: CARD, description: "TARGET T-1234", pfcDetailed: "GENERAL_MERCHANDISE_SUPERSTORES", ...over });
+
+  it("a return on a Chase card with no REFUND word is money back on the card — only when the caller says the account is a card", () => {
+    // Before S6 this was null whatever the account: only an Amex source was a card.
+    expect(classifyRefund(onChaseCard(), spendCtx)).toBeNull();
+    expect(classifyRefund(onChaseCard(), spendCtx, { isCardAccount: false })).toBeNull();
+    expect(classifyRefund(onChaseCard(), spendCtx, { isCardAccount: true })).toEqual({ rule: "card-credit", categorized: false });
+    expect(classifyRefund(onChaseCard({ categoryId: "groceries" }), spendCtx, { isCardAccount: true })).toEqual({ rule: "card-credit", categorized: true });
+    // A charge on the card is still never a refund.
+    expect(classifyRefund(onChaseCard({ amount: "-80.00" }), spendCtx, { isCardAccount: true })).toBeNull();
+    // An Amex source is a card whatever the flag says.
+    expect(classifyRefund(tx(), spendCtx, { isCardAccount: false })?.rule).toBe("card-credit");
+  });
+
+  it("a payment to the card is never a refund, on any issuer (payment words, issuer phrases, Plaid's categories, the flag)", () => {
+    const payments: Array<[string, Partial<MovementRow>]> = [
+      ["Chase's own", { description: "Payment Thank You-Mobile", pfcDetailed: null }],
+      ["Chase autopay", { description: "AUTOMATIC PAYMENT - THANK", pfcDetailed: null }],
+      ["Capital One", { description: "CAPITAL ONE MOBILE PYMT", pfcDetailed: null }],
+      ["Discover", { description: "INTERNET PAYMENT - THANK YOU", pfcDetailed: null }],
+      ["autopay", { description: "AUTOPAY 000000000 AUTO-PMT", pfcDetailed: null }],
+      ["Plaid card payment", { description: "ACH DEPOSIT INTERNET TRANSFER", pfcDetailed: PFC_CARD_PAYMENT }],
+      ["Plaid transfer in", { description: "ACH DEPOSIT INTERNET TRANSFER", pfcDetailed: "TRANSFER_IN_ACCOUNT_TRANSFER" }],
+      ["the card-payment flag", { isExternalCardPayment: true }],
+      ["a debt tag", { debtId: "debt-9" }],
+      ["a transfer", { isTransfer: true }],
+      ["income", { categoryId: "paycheck" }],
+      ["reimbursable (spending)", { reimbursable: true }],
+    ];
+    for (const [why, over] of payments) expect(classifyRefund(onChaseCard(over), spendCtx, { isCardAccount: true }), why).toBeNull();
+  });
+
+  it("checking is unchanged: a credit there still needs a REFUND word", () => {
+    const chk = tx({ source: "plaid:chase", plaidAccountId: CHECKING, description: "KROGER #442", pfcDetailed: null });
+    expect(classifyRefund(chk, spendCtx, { isCardAccount: false })).toBeNull();
+    expect(classifyRefund({ ...chk, description: "KROGER #442 REFUND" }, spendCtx, { isCardAccount: false })?.rule).toBe("refund-marker");
+  });
+
+  it("onCardAccount: the row's Plaid account is one of the household's credit accounts; no account, never", () => {
+    const cards = new Set([CARD]);
+    expect(onCardAccount({ plaidAccountId: CARD }, cards)).toBe(true);
+    expect(onCardAccount({ plaidAccountId: CHECKING }, cards)).toBe(false);
+    expect(onCardAccount({ plaidAccountId: null }, cards)).toBe(false);
+    expect(onCardAccount({ plaidAccountId: CARD }, new Set())).toBe(false);
+  });
+
+  it("classifyMovement: the context's card accounts decide — the return nets the coverage a purchase would have; unlisted, it is excluded", () => {
+    const ret = row({ source: "plaid:chase", plaidAccountId: CARD, description: "TARGET T-1234", weeklyAllowance: true });
+    expect(classifyMovement(ret, ctx({ cardAccountIds: new Set([CARD]) }))).toMatchObject({ coverage: "refund", nets: "allowance_weekly" });
+    expect(classifyMovement(ret, ctx()).coverage).toBe("excluded");
+    const pay = row({ source: "plaid:chase", plaidAccountId: CARD, description: "Payment Thank You-Mobile", pfcDetailed: null, amount: "200.00" });
+    expect(classifyMovement(pay, ctx({ cardAccountIds: new Set([CARD]) })).coverage).toBe("excluded");
+    // The cap's pool on that card: 80.00 − 30.00, netted on the card's own account.
+    const buy = row({ id: "b", source: "plaid:chase", plaidAccountId: CARD, description: "TARGET T-1234", amount: "-80.00", weeklyAllowance: true });
+    const back = row({ id: "f", source: "plaid:chase", plaidAccountId: CARD, description: "TARGET T-1234", amount: "30.00", weeklyAllowance: true });
+    const c = ctx({ cardAccountIds: new Set([CARD]) });
+    expect(allowanceTotals([buy, back].map((x) => allowanceRowOf(x, classifyMovement(x, c)))).discretionaryCents).toBe(5000);
+    expect(allowanceTotals([buy, back].map((x) => allowanceRowOf(x, classifyMovement(x, ctx())))).discretionaryCents).toBe(8000);
   });
 });
 

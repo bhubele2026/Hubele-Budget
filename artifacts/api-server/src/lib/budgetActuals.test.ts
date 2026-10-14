@@ -53,6 +53,7 @@ function movementCtx(
     checkingAccountExternalId: "chase-ext",
     matchedTxnIds,
     tier2PairedTxnIds,
+    cardAccountIds: new Set(),
   };
 }
 

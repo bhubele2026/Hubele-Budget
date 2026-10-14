@@ -29,6 +29,7 @@ export {
   matchesTransferPattern,
   netAccountOf,
   normalizeDescription,
+  onCardAccount,
   spendAmount,
   type AllowanceAmountSettings,
   type ClassifyOptions,

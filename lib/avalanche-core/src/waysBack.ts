@@ -22,6 +22,12 @@
 //                 even count is the lower-rounded mean of the middle two).
 //                 Biggest spend first; ties by name, then id. Rows with no
 //                 category are never a trim (there is nothing to name).
+//                 ⭐ (S6) REFUNDS NET, as the week's figure nets them: a row is
+//                 `allowanceRowOf`'s (a refund in the coverage it nets, its
+//                 credit negative), so a category's spend is purchases less
+//                 refunds — signed, exactly as the period breakdown's category
+//                 amounts and `usual` sum them. A category that nets to 0 or
+//                 less this week is not a trim (there is nothing to cut).
 //   carryOver     next week, if the household takes the overage out of it:
 //                 nextWeekCap = max(0, next week's cap + adjustment), where the
 //                 adjustment is the one already applied (`plan_adjustments`),
@@ -49,8 +55,12 @@ export interface WaysBackRow {
   /** `YYYY-MM-DD`. */
   date: string;
   categoryId: string | null;
+  /** (S6) `allowanceRowOf(row, m).coverage`: for a refund, the coverage it nets. */
   coverage: MovementCoverage;
-  /** `spendAmount(row)` in whole cents: positive for an outflow, 0 otherwise. */
+  /**
+   * (S6) `allowanceRowOf(row, m).spend` in whole cents: + a purchase, − a
+   * refund, 0 for anything else.
+   */
   spendCents: number;
 }
 
@@ -121,8 +131,9 @@ export function computeWaysBack(inputs: WaysBackInputs): WaysBack {
   const perDay = remainingCents == null ? null : Math.floor(Math.max(0, remainingCents) / daysLeft);
 
   // ── Trims: this week's biggest categories among the rows that count against the cap.
+  // (S6) Signed: a refund (negative) nets its category, as the week's figure nets it.
   const counts = (r: WaysBackRow): r is WaysBackRow & { categoryId: string } =>
-    r.categoryId != null && r.spendCents > 0 && WAYS_BACK_TRIM_COVERAGES.includes(r.coverage);
+    r.categoryId != null && r.spendCents !== 0 && WAYS_BACK_TRIM_COVERAGES.includes(r.coverage);
   const thisWeek = new Map<string, number>();
   for (const r of inputs.rows) {
     if (!counts(r) || r.date < position.weekStart || r.date > position.weekEnd) continue;
@@ -130,6 +141,7 @@ export function computeWaysBack(inputs: WaysBackInputs): WaysBack {
   }
   const nameOf = (id: string) => inputs.categoryNames.get(id) ?? "";
   const top = [...thisWeek.entries()]
+    .filter(([, spentWeek]) => spentWeek > 0) // (S6) fully refunded: nothing to trim
     .map(([categoryId, spentWeek]) => ({ categoryId, spentWeek, name: nameOf(categoryId) }))
     .sort((a, b) => b.spentWeek - a.spentWeek || a.name.localeCompare(b.name) || a.categoryId.localeCompare(b.categoryId))
     .slice(0, WAYS_BACK_TRIMS);

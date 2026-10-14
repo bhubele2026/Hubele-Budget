@@ -3100,7 +3100,7 @@ export declare const useRecomputeMetrics: <TError = ErrorType<unknown>, TContext
     params?: RecomputeMetricsParams;
 }, TContext>;
 /**
- * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readPeriodAllowance (as GET /money/period-breakdown?period=month) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readMonthAllowance (as GET /money/period-breakdown?period=month: plan, actual, remaining, over) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
 export declare const getGetSpineUrl: () => string;
@@ -3259,7 +3259,7 @@ export declare const useUpdateAllowancePlan: <TError = ErrorType<void>, TContext
     data: BodyType<AllowancePlanUpdate>;
 }, TContext>;
 /**
- * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
+ * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement and read through allowanceRowOf (S6: a refund nets its category, as every allowance figure nets it). Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
  * @summary A way back when the week is over — how far over, what is left per day, what to trim, next week carried
  */
 export declare const getGetWaysBackUrl: () => string;

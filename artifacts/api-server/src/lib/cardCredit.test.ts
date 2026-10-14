@@ -100,9 +100,15 @@ describe("classifyCardCredit — one bucket per card row", () => {
     expect(credit({ pfcDetailed: "TRANSFER_IN_ACCOUNT_TRANSFER" })).toBe("other_credit");
   });
 
-  it("⚠️ a credit on another bank's card with no REFUND word stays other_credit (the card-ledger rule is Amex-only; S6 owns it)", () => {
+  it("(S6) a credit on another bank's card is a refund when the caller says the account is a card; a payment there stays a payment", () => {
+    // Not said (every caller today reads Amex rows only): only a REFUND word makes it one.
     expect(classifyCardCredit(tx({ source: "plaid:chase", amount: "15.00" }), ctx, OWED)).toBe("other_credit");
     expect(classifyCardCredit(tx({ source: "plaid:chase", amount: "15.00", description: "TARGET REFUND" }), ctx, OWED)).toBe("refund");
+    // Said: the card-ledger rule, as on an Amex source.
+    const onCard = { ...OWED, isCardAccount: true };
+    expect(classifyCardCredit(tx({ source: "plaid:chase", amount: "15.00" }), ctx, onCard)).toBe("refund");
+    expect(classifyCardCredit(tx({ source: "plaid:chase", amount: "200.00", description: "Payment Thank You-Mobile" }), ctx, onCard)).toBe("payment");
+    expect(classifyCardCredit(tx({ source: "plaid:chase", amount: "-40.00" }), ctx, onCard)).toBe("purchase");
   });
 
   it("a $0.00 row is nothing", () => {

@@ -59,6 +59,7 @@ export {
   bankLineStatusOf,
   isNeedsReviewResolution,
   resolutionResolvesRow,
+  rowAnswersResolve,
   type BankLineStatus,
 } from "./reviewStatus";
 export {
@@ -121,6 +122,7 @@ export {
   matchesCardPaymentPattern,
   matchesTransferPattern,
   normalizeDescription,
+  onCardAccount,
   spendAmount,
   type CardRowKind,
   type ClassifyOptions,
@@ -130,6 +132,7 @@ export {
   type OutflowKind,
   type OutflowRule,
   type RefundClassification,
+  type RefundOptions,
   type SpendContext,
   type SpendTxn,
 } from "./spendingRule";
@@ -208,6 +211,7 @@ export {
   BREAKDOWN_ROWS_DEFAULT,
   BREAKDOWN_ROWS_MAX,
   BREAKDOWN_USUAL_PERIODS,
+  allowancePeriodFigures,
   breakdownBasisOf,
   breakdownCountedCoverages,
   breakdownEntriesOf,
@@ -222,6 +226,7 @@ export {
   type BreakdownPeriod,
   type BreakdownRowInput,
   type BreakdownSplitPart,
+  type AllowancePeriodFigures,
   type PeriodBreakdownCore,
   type PeriodBreakdownInputs,
 } from "./periodBreakdown";

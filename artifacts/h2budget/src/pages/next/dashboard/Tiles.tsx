@@ -220,8 +220,6 @@ function AmexTile({ weekCharges }: AmexTileProps) {
 }
 
 // ── This week / This month ─────────────────────────────────────────────────
-const toCents = (v: string | number) => Math.round(Number(v) * 100);
-
 /** left/over as one phrase: the server's remaining figure, said by sign. */
 function leftOver(remaining: number): { text: string; over: boolean } {
   return remaining < 0 ? { text: `Over ${money(-remaining)}`, over: true } : { text: `${money(remaining)} left`, over: false };
@@ -262,9 +260,10 @@ function MonthTile({ s }: { s: Spine | undefined }) {
   if (!s) return <Tile testid="month" title="This month" href="/spending/month" accent="checking" index={4}><Skel /></Tile>;
   const m = s.monthAllowance;
   const planSet = m.plan != null;
-  // The server's verdict (status) picks the word; the figure is only the gap
-  // between the server's two numbers, in whole cents.
-  const lo = planSet ? leftOver((toCents(m.plan!) - toCents(m.actual)) / 100) : null;
+  // The server's verdict (status) picks the word; (S6) the line is the server's
+  // own `remaining`, said by sign exactly as the week tile says its own — no
+  // money is computed here (`over` is −remaining when over, by construction).
+  const lo = planSet && m.remaining != null ? leftOver(Number(m.remaining)) : null;
   const status: TileStatus = !planSet
     ? { word: "Plan not set", tone: "neutral" }
     : m.status === "over" ? { word: "Over", tone: "bad" } : { word: "Within", tone: "ok" };

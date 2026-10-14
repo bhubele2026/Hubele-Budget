@@ -398,6 +398,7 @@ describe("(Round 2, Q6 → PR-B2) a reimbursable charge flagged weekly — the o
       debtCategoryIds: new Set(),
       checkingAccountExternalId: "acct-chase",
       matchedTxnIds: new Set(),
+      cardAccountIds: new Set(),
     };
     const coverage = classifyMovement(row, ctx).coverage;
     expect(coverage).toBe("reimbursable");

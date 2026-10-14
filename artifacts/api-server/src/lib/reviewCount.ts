@@ -6,11 +6,12 @@ import {
   recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
-import { resolutionResolvesRow } from "@workspace/avalanche-core";
+import { rowAnswersResolve } from "@workspace/avalanche-core";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdTodayISO, monthBounds } from "./householdClock";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { readPausedReview } from "./oneTimeBillMove";
+import { findSupersededPendingForRange } from "./supersededPending";
 
 /**
  * The Review-inbox count: unresolved BANK txns in the current calendar month
@@ -34,6 +35,15 @@ import { readPausedReview } from "./oneTimeBillMove";
  * the badge while the curve keeps moving. "Today" and "this month" are the
  * household's (America/Chicago), so the badge doesn't jump to next month on
  * the last evening of a month on a UTC server.
+ *
+ * ⭐ (S6) A CHARGE IS ONE ROW TO REVIEW, even when the sync never linked its
+ * pending row to its posted row. The pairs are spending's own
+ * (`findSupersededPendingForRange`, as `buildSpendingFacts` and the bank
+ * register read them): the pending half a posted row replaced is not counted,
+ * and the posted row carries the answers on that pending row when it has none
+ * of its own (`rowAnswersResolve`, the banking review's rule). Before S6 an
+ * unanswered pair counted twice, and a charge answered while pending was asked
+ * about again once it posted.
  */
 export async function computeReviewCount(
   householdId: string,
@@ -55,21 +65,25 @@ export async function computeReviewCount(
   const today = householdTodayISO();
   const { start: monthStart, end: monthEnd } = monthBounds(today);
 
-  const txns = await db
-    .select({
-      id: transactionsTable.id,
-      source: transactionsTable.source,
-      plaidAccountId: transactionsTable.plaidAccountId,
-    })
-    .from(transactionsTable)
-    .where(
-      and(
-        eq(transactionsTable.householdId, householdId),
-        inForecastWhere(today),
-        gte(transactionsTable.occurredOn, monthStart),
-        lte(transactionsTable.occurredOn, monthEnd),
+  const [txns, supersede] = await Promise.all([
+    db
+      .select({
+        id: transactionsTable.id,
+        source: transactionsTable.source,
+        plaidAccountId: transactionsTable.plaidAccountId,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          inForecastWhere(today),
+          gte(transactionsTable.occurredOn, monthStart),
+          lte(transactionsTable.occurredOn, monthEnd),
+        ),
       ),
-    );
+    // (S6) Which pending rows a posted row replaced — exact for every row of the month.
+    findSupersededPendingForRange(householdId, monthStart, monthEnd),
+  ]);
 
   const stored = await db
     .select({
@@ -94,12 +108,19 @@ export async function computeReviewCount(
   // (`needs_review`, `needs_review_partial`): the row waits for the user's answer.
   // (S4) The rule is avalanche-core's `resolutionResolvesRow`, moved verbatim,
   // so the banking review's "unresolved" count reads the same answer.
-  const resolvedTxnIds = new Set(
-    resolutions
-      .filter((r) => resolutionResolvesRow(r.status))
-      .map((r) => r.matchedTxnId)
-      .filter(Boolean),
-  );
+  // (S6) Through `rowAnswersResolve`: a posted row with no answer of its own
+  // carries the answers on the pending row it replaced.
+  const answersByTxn = new Map<string, string[]>();
+  for (const r of resolutions) {
+    if (!r.matchedTxnId) continue;
+    const list = answersByTxn.get(r.matchedTxnId);
+    if (list) list.push(r.status);
+    else answersByTxn.set(r.matchedTxnId, [r.status]);
+  }
+  const resolved = (id: string): boolean => {
+    const replaced = supersede.replacedBy.get(id);
+    return rowAnswersResolve(answersByTxn.get(id) ?? [], replaced ? (answersByTxn.get(replaced.id) ?? []) : []);
+  };
 
   // isBankTxn semantics: account metadata wins; amex/plaid:* without a
   // checking match are card-side; manual rows default to bank.
@@ -112,7 +133,9 @@ export async function computeReviewCount(
       const s = (t.source ?? "manual").toLowerCase();
       if (s === "amex" || s.startsWith("plaid:")) continue;
     }
-    if (resolvedTxnIds.has(t.id)) continue;
+    // (S6) The pending half of a pair counts once, on its posted row.
+    if (supersede.replacedIds.has(t.id)) continue;
+    if (resolved(t.id)) continue;
     count++;
   }
   return count;

@@ -554,7 +554,7 @@ export declare const useUpdateAllowancePlan: <TError = ErrorType<void>, TContext
     data: BodyType<AllowancePlanUpdate>;
 }, TContext>;
 /**
- * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
+ * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement and read through allowanceRowOf (S6: a refund nets its category, as every allowance figure nets it). Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
  * @summary A way back when the week is over — how far over, what is left per day, what to trim, next week carried
  */
 export declare const getGetWaysBackUrl: () => string;

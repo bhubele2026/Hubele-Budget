@@ -13,6 +13,7 @@ import {
   pairDifference,
   placeBankReviewRow,
   resolutionResolvesRow,
+  rowAnswersResolve,
   summarizeBankReview,
   withinStrictTolerance,
   type BankReviewPlanRef,
@@ -168,6 +169,25 @@ describe("the review-status rules (moved verbatim)", () => {
     for (const s of ["not_match", "needs_review", "needs_review_partial"]) expect(resolutionResolvesRow(s), s).toBe(false);
     expect(isNeedsReviewResolution("needs_review_partial")).toBe(true);
     expect(isNeedsReviewResolution("matched")).toBe(false);
+  });
+
+  it("(S6) rowAnswersResolve: the row's own answers decide; with none, the replaced pending row's carry", () => {
+    expect(rowAnswersResolve([])).toBe(false);
+    expect(rowAnswersResolve(["matched"])).toBe(true);
+    // No answer of its own: the pending row's answer carries.
+    expect(rowAnswersResolve([], ["ignored_unforecasted"])).toBe(true);
+    expect(rowAnswersResolve([], ["needs_review"])).toBe(false);
+    // Its own answer wins, whatever the pending row said.
+    expect(rowAnswersResolve(["needs_review"], ["matched"])).toBe(false);
+    expect(rowAnswersResolve(["matched"], ["needs_review"])).toBe(true);
+    // "Not this" is not an answer about the row: it neither decides nor blocks the carry.
+    expect(rowAnswersResolve(["not_match"])).toBe(false);
+    expect(rowAnswersResolve(["not_match"], ["matched"])).toBe(true);
+    expect(rowAnswersResolve([], ["not_match"])).toBe(false);
+    // Without a replaced pending row it is exactly "any answer resolves" (the badge before S6).
+    for (const s of ["matched", "partial", "ignored_unforecasted", "missed", "not_match", "needs_review", "needs_review_partial"]) {
+      expect(rowAnswersResolve([s]), s).toBe(resolutionResolvesRow(s));
+    }
   });
 
   it("bankLineStatusOf: matched / partial → matched; ignored / unplanned → ignored; else pending", () => {

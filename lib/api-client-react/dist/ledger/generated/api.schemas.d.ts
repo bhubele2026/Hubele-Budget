@@ -959,7 +959,7 @@ export declare const SpineMonthAllowanceStatus: {
     readonly over: "over";
 };
 /**
- * (S3) This month's monthly allowance — the same function GET /money/period-breakdown?period=month answers with (plan.amount, actual). Never a debt balance, credit or a limit.
+ * (S3) This month's monthly allowance — the same function GET /money/period-breakdown?period=month answers with (plan.amount, actual, and S6: remaining, over — allowancePeriodFigures, the breakdown's own call). A screen quotes remaining / over; it never subtracts plan − actual itself. Never a debt balance, credit or a limit.
  */
 export interface SpineMonthAllowance {
     /**
@@ -969,6 +969,16 @@ export interface SpineMonthAllowance {
     plan: string | null;
     actual: string;
     status: SpineMonthAllowanceStatus;
+    /**
+     * (S6) plan − actual (negative when over), two decimals — the breakdown's `remaining`. Null when no plan is set (never "0.00").
+     * @nullable
+     */
+    remaining: string | null;
+    /**
+     * (S6) max(0, −remaining), two decimals — the breakdown's `over`. Null when no plan is set.
+     * @nullable
+     */
+    over: string | null;
 }
 export interface Spine {
     /** ISO timestamp the snapshot was read */
@@ -1965,10 +1975,10 @@ export interface WaysBackAdjustment {
 export interface WaysBackTrim {
     categoryId: string;
     name: string;
-    /** This week's spend in the category, whole cents */
+    /** This week's spend in the category, whole cents: (S6) purchases less refunds, as the week's spent figure and the period breakdown's category amount net them. Always > 0 (a fully refunded category is not a trim). */
     spentWeek: number;
     /**
-     * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents; null when no week counts.
+     * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts.
      * @nullable
      */
     usualWeek: number | null;
