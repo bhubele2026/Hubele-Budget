@@ -504,6 +504,7 @@ export default function TransactionsPage({
   const [rangeMode, setRangeMode] = useUrlState<RangeMode>("mode", modeParam, () =>
     monthPinnedFromUrlRef.current ? "mo" : "wk",
   );
+  const [householdOpen, setHouseholdOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const categoryUrlApplied = useRef(false);
   useEffect(() => {
@@ -1265,7 +1266,7 @@ export default function TransactionsPage({
         : r?.status === "partial"
           ? { attr: "partial", label: "Partly paid", icon: Check, tone: "ok" }
         : r?.status === "ignored_unforecasted" || r?.status === "unplanned"
-          ? { attr: "unplanned", label: "Not planned", icon: Inbox, tone: "gray" }
+          ? { attr: "unplanned", label: "Marked not in plan", icon: Inbox, tone: "gray" }
           : { attr: "in-review-bucket", label: "In Review", icon: Inbox, tone: "info" };
     const StateIcon = state.icon;
     // What the "×" does. A future row leaves the forecast. A posted row still
@@ -2433,7 +2434,7 @@ export default function TransactionsPage({
   const bucketSummary = (
     <div className="flex items-center gap-2 flex-wrap" data-testid="chase-bucket-summary">
       {/* An unknown count (the spine is loading or failed) shows nothing:
-          "All reconciled" is a claim, and a null count cannot make it. */}
+          "Review inbox clear" is a claim, and a null count cannot make it. */}
       {awaitingMatchCount != null && awaitingMatchCount > 0 ? (
         <Link
           href="/review"
@@ -2452,9 +2453,22 @@ export default function TransactionsPage({
           <ArrowRight className="h-3 w-3" />
         </Link>
       ) : awaitingMatchCount === 0 ? (
-        <span className="chip gray" data-testid="text-bucket-empty">
-          All reconciled
+        <span
+          className="chip gray"
+          data-testid="text-bucket-empty"
+          title="This month, forecast account"
+        >
+          Review inbox clear
         </span>
+      ) : null}
+      {effectiveAccountInternalId ? (
+        <Link
+          href={`/banking?account=${encodeURIComponent(effectiveAccountInternalId)}&from=${range.from}&to=${range.to}`}
+          data-testid="link-banking-review"
+          className="press text-label font-semibold text-brand-navy hover:underline"
+        >
+          Review this account against the plan →
+        </Link>
       ) : null}
     </div>
   );
@@ -2739,12 +2753,6 @@ export default function TransactionsPage({
             </div>
           </Panel>
         )}
-
-        {/* Week-over-week spend + category mix — the HOUSEHOLD's, every
-            account (CH-15), so it carries no account accent. */}
-        <div className={cn("span-12", rise(2))}>
-          <ChaseInsightStrip range={range} />
-        </div>
 
         {balanceTrend && (
           <BalanceTrendChart
@@ -3141,6 +3149,22 @@ export default function TransactionsPage({
             </div>
           )}
         </LedgerPanel>
+
+        {/* (W3) The HOUSEHOLD's week, every account (CH-15): it is not this
+            account, so it comes after the Chase-only panels, closed, and says
+            so in its title. Its reads start only once it is opened. */}
+        <details
+          className="span-12"
+          data-testid="chase-household"
+          onToggle={(e) => {
+            if ((e.currentTarget as HTMLDetailsElement).open) setHouseholdOpen(true);
+          }}
+        >
+          <summary className="press surface cursor-pointer rounded-card px-4 py-3 text-title font-semibold text-brand-navy ring-1 ring-brand-line">
+            Household · all accounts
+          </summary>
+          <div className="mt-3">{householdOpen ? <ChaseInsightStrip range={range} /> : null}</div>
+        </details>
       </PageGrid>
 
       <TransactionEditDialog

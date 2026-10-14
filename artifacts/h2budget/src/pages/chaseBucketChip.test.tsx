@@ -9,7 +9,7 @@ import {
 } from "./__test-helpers__/fakeLedgerServer";
 
 /**
- * The Chase page's Review chip. "All reconciled" is a claim, so it may only be
+ * The Chase page's Review chip. "Review inbox clear" is a claim, so it may only be
  * made on a real zero. While the review count is unknown (the spine is loading
  * or failed, so `useReviewInboxCount` returns null) the chip claims nothing.
  *
@@ -140,17 +140,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("says All reconciled when the review count is a real zero", async () => {
+it("says Review inbox clear when the review count is a real zero", async () => {
   state.reviewCount = 0;
   show();
-  expect((await screen.findByTestId("text-bucket-empty")).textContent).toContain("All reconciled");
+  expect((await screen.findByTestId("text-bucket-empty")).textContent).toContain("Review inbox clear");
   // The chip never leans on the old 1,000-row list.
   expect(state.listTransactions).not.toHaveBeenCalled();
   expect(server.calls.some((c) => c.path === "/api/transactions")).toBe(false);
 });
 
 it("claims nothing while the review count is unknown", async () => {
-  // (PR3b1) The hook used to return 0 here, so the page said "All reconciled"
+  // (PR3b1) The hook used to return 0 here, so the page said "Review inbox clear"
   // while the spine was still loading or had failed.
   state.reviewCount = null;
   show();

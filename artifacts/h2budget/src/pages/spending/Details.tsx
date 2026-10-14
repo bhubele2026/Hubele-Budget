@@ -1,6 +1,8 @@
+import { useState } from "react";
 import type { PeriodBreakdown } from "@workspace/api-client-react";
 import { formatCurrency } from "@/lib/utils";
-import type { PeriodView } from "./periodDates";
+import { BiggestCharges } from "@/components/spending/BiggestCharges";
+import { monthWords, type PeriodView } from "./periodDates";
 
 const isZero = (v: string | null | undefined): boolean => Math.round(Number(v ?? 0) * 100) === 0;
 
@@ -20,8 +22,16 @@ export function Details({ data, view }: { data: PeriodBreakdown; view: PeriodVie
     ["Reimbursable", b.reimbursable, "reimbursable"],
     ["All household purchases (all accounts)", b.householdSpend, "household"],
   ];
+  // (W3) The charges list reads transactions, so it mounts only once Details is opened.
+  const [opened, setOpened] = useState(false);
   return (
-    <details className="surface rounded-card ring-1 ring-brand-line" data-testid="sp-details">
+    <details
+      className="surface rounded-card ring-1 ring-brand-line"
+      data-testid="sp-details"
+      onToggle={(e) => {
+        if ((e.currentTarget as HTMLDetailsElement).open) setOpened(true);
+      }}
+    >
       <summary className="press cursor-pointer px-4 py-3 text-body font-semibold text-brand-navy">Details</summary>
       <div className="space-y-3 border-t border-brand-line px-4 py-3">
         <dl className="space-y-1 text-body">
@@ -60,6 +70,9 @@ export function Details({ data, view }: { data: PeriodBreakdown; view: PeriodVie
             )}
           </dl>
         </div>
+        {view === "month" && opened ? (
+          <BiggestCharges monthStart={data.start} monthLabel={monthWords(data.start)} />
+        ) : null}
       </div>
     </details>
   );
