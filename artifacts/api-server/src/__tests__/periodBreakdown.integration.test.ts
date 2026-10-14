@@ -40,6 +40,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
+import { writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import express from "express";
 import { eq, inArray } from "drizzle-orm";
@@ -390,6 +391,10 @@ const MONTH = "/money/period-breakdown?period=month&start=2026-10-01";
 describe("this week — household A, worked by hand", () => {
   it("plan, actual, over, and every group to the cent; the response matches the spec", async () => {
     const b = await get<Breakdown>(WEEK);
+    // For the review note: S3_PRINT_SAMPLE=<file> writes this response (and the month's) there.
+    if (process.env.S3_PRINT_SAMPLE) {
+      writeFileSync(process.env.S3_PRINT_SAMPLE, JSON.stringify({ week: b, month: await get<Breakdown>(MONTH) }, null, 2));
+    }
     expect(() => GetPeriodBreakdownResponse.parse(b)).not.toThrow();
     expect(b).toMatchObject({
       period: "week",

@@ -287,12 +287,10 @@ async function breakdownRowsOf(
   const scoped = movement
     .filter(({ row }) => inScope(row))
     .map(({ row, m }) => ({ row, m, allowance: allowanceRowOf(row, m) }));
-  // Split parts only for the rows that count (one query, valid parents only).
-  const splitIds = scoped.filter((r) => counted.has(r.allowance.coverage)).map((r) => r.row.id);
-  const parts = expandSplits(
-    scoped.filter((r) => counted.has(r.allowance.coverage)).map((r) => ({ id: r.row.id, amount: String(r.row.amount) })),
-    await loadSplitsForTxns(householdId, splitIds),
-  );
+  // Split parts only for the rows that count (one query, valid parents only;
+  // `expandSplits` drops any whose parts do not add up to the row).
+  const counting = scoped.filter((r) => counted.has(r.allowance.coverage)).map((r) => ({ id: r.row.id, amount: String(r.row.amount) }));
+  const parts = expandSplits(counting, await loadSplitsForTxns(householdId, counting.map((r) => r.id)));
   return scoped.map(({ row, m, allowance }) => ({
     id: row.id,
     date: row.occurredOn,
