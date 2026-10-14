@@ -71,7 +71,8 @@ export function AmexSummaryPanel({
   onFigure: (f: AmexFigure | null) => void;
 }) {
   const toggle = (f: AmexFigure) => onFigure(figure === f ? null : f);
-  const plan = summary ? amexPlanLine(summary.planLink) : null;
+  // One card's plan line belongs to that card: on All cards there is no single plan to quote.
+  const plan = summary && summary.scope.kind === "card" ? amexPlanLine(summary.planLink) : null;
   return (
     <Panel title="Summary" sub={periodLabel} span={12} accent="amex" variant="static" data-testid="amex-summary">
       {failed && !summary ? (
