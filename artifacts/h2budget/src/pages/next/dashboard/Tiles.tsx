@@ -213,11 +213,6 @@ function leftOver(remaining: number): { text: string; over: boolean } {
   return remaining < 0 ? { text: `Over ${money(-remaining)}`, over: true } : { text: `${money(remaining)} left`, over: false };
 }
 
-/** (S6) left/over as the server says it: its verdict picks the phrase, its `over` / `remaining` fill it. */
-function leftOverOf(m: Pick<Spine["monthAllowance"], "status" | "remaining" | "over">): { text: string; over: boolean } {
-  return m.status === "over" ? { text: `Over ${money(m.over)}`, over: true } : { text: `${money(m.remaining)} left`, over: false };
-}
-
 function WeekTile({ s }: { s: Spine | undefined }) {
   const pos = useMoneyPositionQ();
   if (!s) return <Tile testid="week" title="This week" href="/spending/week" accent="checking" index={3}><Skel /></Tile>;
@@ -255,10 +250,10 @@ function MonthTile({ s }: { s: Spine | undefined }) {
   if (!s) return <Tile testid="month" title="This month" href="/spending/month" accent="checking" index={4}><Skel /></Tile>;
   const m = s.monthAllowance;
   const planSet = m.plan != null;
-  // The server's verdict (status) picks the word, and (S6) the server's own
-  // left / over figures (`remaining`, `over`) are what the line says — no
-  // money is computed here.
-  const lo = planSet && m.remaining != null ? leftOverOf(m) : null;
+  // The server's verdict (status) picks the word; (S6) the line is the server's
+  // own `remaining`, said by sign exactly as the week tile says its own — no
+  // money is computed here (`over` is −remaining when over, by construction).
+  const lo = planSet && m.remaining != null ? leftOver(Number(m.remaining)) : null;
   const status: TileStatus = !planSet
     ? { word: "Plan not set", tone: "neutral" }
     : m.status === "over" ? { word: "Over", tone: "bad" } : { word: "Within", tone: "ok" };
