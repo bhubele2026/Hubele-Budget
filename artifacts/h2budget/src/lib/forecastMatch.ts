@@ -1,4 +1,4 @@
-import { inForecast } from "@workspace/avalanche-core";
+import { bankLineStatusOf, inForecast, type BankLineStatus as CoreBankLineStatus } from "@workspace/avalanche-core";
 import type { CashEvent } from "./forecast";
 
 export type Transaction = {
@@ -161,7 +161,8 @@ export type PlanLineStatus =
   | "future"
   /** (PR5) Partly paid: `amount` is the unpaid remainder. */
   | "partial";
-export type BankLineStatus = "pending_bank" | "matched" | "ignored_unforecasted";
+/** (S4) The rule lives in avalanche-core (`bankLineStatusOf`), shared with the banking review. */
+export type BankLineStatus = CoreBankLineStatus;
 
 export type PlanLine = {
   kind: "plan";
@@ -365,12 +366,9 @@ export function buildLineRegister(opts: {
 
   const allBank: BankLine[] = txns.map((t) => {
     const stored = byTxn.get(t.id);
-    let status: BankLineStatus;
     // A `partial` row paid (part of) a plan: it is decided, like a match.
-    if (stored?.status === "matched" || stored?.status === "partial") status = "matched";
-    else if (stored?.status === "ignored_unforecasted" || stored?.status === "unplanned")
-      status = "ignored_unforecasted";
-    else status = "pending_bank";
+    // (S4) The rule is avalanche-core's `bankLineStatusOf`, moved verbatim.
+    const status: BankLineStatus = bankLineStatusOf(stored?.status);
     return {
       kind: "bank" as const,
       date: t.occurredOn,

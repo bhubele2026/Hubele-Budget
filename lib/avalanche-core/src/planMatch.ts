@@ -258,6 +258,32 @@ export function rowPaysPlanInFull(planAmount: number, rowAmount: number): boolea
 }
 
 /**
+ * ⭐ (S4) WHAT A PAIR'S `difference` AND `dayDelta` ARE — the matcher's own
+ * arithmetic, exported so the banking review compares a confirmed (or evidence)
+ * row with its plan exactly as `matchPlansToRows` compares a pair:
+ *   - `pairDifference`: |row| − |plan|, in dollars, from whole cents — positive
+ *     means more was paid than planned (`PlanRowMatch.difference`; the matcher
+ *     calls this);
+ *   - `pairDayDelta`: row date − plan date, in days — negative means paid early
+ *     (`PlanRowMatch.dayDelta`; the matcher keeps its precomputed day numbers,
+ *     `planMatch.test.ts` pins the two equal);
+ *   - `withinStrictTolerance`: |row| within max($1, 1% of the plan) of |plan| —
+ *     the strict tolerance a nameless pair must meet.
+ */
+export function pairDifference(planAmount: number, rowAmount: number): number {
+  return (cents(rowAmount) - cents(planAmount)) / 100;
+}
+
+export function pairDayDelta(planISO: string, rowISO: string): number {
+  return dayNumber(rowISO) - dayNumber(planISO);
+}
+
+export function withinStrictTolerance(planAmount: number, rowAmount: number): boolean {
+  const p = cents(planAmount);
+  return Math.abs(cents(rowAmount) - p) <= strictCents(p);
+}
+
+/**
  * Words that appear in plan labels or bank descriptions without identifying a
  * payee. Every debt minimum's label ends in "minimum"; the avalanche plan is
  * "Avalanche extra payment"; bank rows say "ACH PMT", "AUTOPAY", "ONLINE"; and
@@ -663,7 +689,7 @@ export function matchPlansToRows(
       txnId: c.row.txnId,
       planAmount: c.plan.amount,
       txnAmount: c.row.amount,
-      difference: (cents(c.row.amount) - p) / 100,
+      difference: pairDifference(c.plan.amount, c.row.amount),
       dayDelta: c.dayDelta,
       confidence,
       ambiguous,

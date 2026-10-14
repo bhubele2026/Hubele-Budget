@@ -53,6 +53,33 @@ export {
   type PlanRowMatch,
 } from "./planMatch";
 export { plansPaidInFullByName, type PaidInFull } from "./planMatch";
+export { pairDayDelta, pairDifference, withinStrictTolerance } from "./planMatch";
+export {
+  bankLineStatusOf,
+  isNeedsReviewResolution,
+  resolutionResolvesRow,
+  type BankLineStatus,
+} from "./reviewStatus";
+export {
+  addToBankReviewTotals,
+  BANK_REVIEW_BUCKETS,
+  BANK_REVIEW_KINDS,
+  bankReviewKindOf,
+  emptyBankReviewTotals,
+  placeBankReviewRow,
+  summarizeBankReview,
+  type BankReviewBucket,
+  type BankReviewKind,
+  type BankReviewPlacement,
+  type BankReviewPlanComparison,
+  type BankReviewPlanRef,
+  type BankReviewReason,
+  type BankReviewRowInput,
+  type BankReviewRowPlacement,
+  type BankReviewSummary,
+  type BankReviewSummaryRow,
+  type BankReviewTotalsCents,
+} from "./bankReview";
 export {
   canSupersede,
   pairPendingWithPosted,
