@@ -29,7 +29,7 @@ export function LedgerColumns({
   gridClass?: string;
 }) {
   const th =
-    "text-micro font-semibold uppercase tracking-wide text-neutral-400";
+    "text-micro font-semibold uppercase tracking-wide text-neutral-600";
   return (
     <div
       className={cn(
