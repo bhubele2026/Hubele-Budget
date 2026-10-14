@@ -21,6 +21,7 @@ import { runCategorizationBacklog, runCategorizationBatch } from "../lib/categor
 import {
   backlogOf,
   listReviewQueue,
+  openReviewCount,
   resolveDecision,
   settleSilentAcceptances,
   undoDecision,
@@ -92,6 +93,12 @@ router.get("/categorization/review", requireAuth, async (req, res): Promise<void
     return;
   }
   res.json(await listReviewQueue(req.householdId!, parsed.data.limit ?? 20));
+});
+
+// (P3) The nav badge's number alone: the same `total` GET /categorization/review
+// returns (`openReviewCount`), without listing or flagging a single item.
+router.get("/categorization/review/count", requireAuth, async (req, res): Promise<void> => {
+  res.json({ total: await openReviewCount(req.householdId!) });
 });
 
 router.post(

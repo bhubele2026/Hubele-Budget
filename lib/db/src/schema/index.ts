@@ -459,6 +459,18 @@ export const transactionsTable = pgTable(
     // table. Composite (plaid_account_id, pending) lets the planner
     // narrow to a single account before applying the boolean filter.
     pendingIdx: index("transactions_pending_idx").on(t.plaidAccountId, t.pending),
+    // (PERF-3) lib/db/migrations/0200_transactions_read_indexes.sql builds
+    // these three (keep them equal): the pending pairing's pending side, a
+    // card's or account's day window, and card discovery's DISTINCT read.
+    householdAccountPendingIdx: index("transactions_household_account_pending_idx")
+      .on(t.householdId, t.plaidAccountId, t.occurredOn)
+      .where(sql`${t.pending}`),
+    accountOccurredIdx: index("transactions_account_occurred_idx").on(t.plaidAccountId, t.occurredOn),
+    householdSourceAccountIdx: index("transactions_household_source_account_idx").on(
+      t.householdId,
+      t.source,
+      t.plaidAccountId,
+    ),
   }),
 );
 

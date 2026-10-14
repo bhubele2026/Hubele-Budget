@@ -5417,6 +5417,11 @@ export declare const AmexSummaryCardCadence: {
     readonly weekly: "weekly";
     readonly monthly: "monthly";
 };
+export interface AmexSummaryTotal {
+    /** Positive dollars (notMine is charges less credits) */
+    amount: string;
+    count: number;
+}
 export interface AmexSummaryCard {
     /** The card's Plaid account_id */
     accountId: string;
@@ -5437,6 +5442,8 @@ export interface AmexSummaryCard {
      * @nullable
      */
     owed: string | null;
+    /** (P3) This card's purchases over the period: the same rows and rule as the top-level `purchases` of this card's own summary (?accountId=<this card>), so the card band needs one "all" call. With "all", the cards' purchases add up to the top-level `purchases`. */
+    purchases: AmexSummaryTotal;
 }
 /**
  * kind "card": one card, named here and as the only entry of `cards`. kind "all": every Amex card, debt-linked or not; the top-level identity fields are null.
@@ -5484,11 +5491,6 @@ export interface AmexSummaryOwed {
      */
     asOf: string | null;
     source: AmexSummaryOwedSource;
-}
-export interface AmexSummaryTotal {
-    /** Positive dollars (notMine is charges less credits) */
-    amount: string;
-    count: number;
 }
 export interface AmexSummaryPurchases {
     amount: string;
@@ -6193,6 +6195,10 @@ export interface ReviewItem {
 }
 export interface ReviewQueue {
     items: ReviewItem[];
+    total: number;
+}
+export interface ReviewQueueCount {
+    /** Open decisions (provisional or queued, unresolved, not undone): GET /categorization/review's total */
     total: number;
 }
 export interface CorrectDecisionInput {

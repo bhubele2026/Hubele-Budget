@@ -68,6 +68,7 @@ of the reinvention owns a range so parallel branches never collide:
 | 0080s | PR-C | 0170s | FIN-5 (rule audit) |
 | | | 0180s | FIN-2 (pending payments) |
 | | | 0190s | NAV-S4 (banking review) |
+| | | 0200s | PERF-3 (read indexes) |
 
 Packages may merge out of numeric order. The runner applies any file it has not
 recorded, whatever its number, so a lower-numbered file that lands later still

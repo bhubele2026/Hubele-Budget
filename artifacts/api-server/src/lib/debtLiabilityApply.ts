@@ -5,7 +5,8 @@ import { householdTodayISO } from "./householdClock";
 /**
  * (WP2) Writing a Plaid liability balance onto a linked debt — moved verbatim
  * from `routes/debts.ts` so the post-Sync liabilities fetch (`routes/plaid.ts`)
- * applies what it cached with the same function `GET /debts` uses. Before, a
+ * applies what it cached with the same function a debt's own Refresh uses
+ * (and `GET /debts` used, until P3 stopped it refreshing on read). Before, a
  * Sync fetched liabilities and stamped the fetch time without touching the
  * debts, so the pending rule's as-of could move past a balance that was not
  * yet on the debt row.
@@ -155,7 +156,8 @@ export async function applyLiabilityToDebt(
  * (WP2) After a liabilities fetch for one Plaid item: apply each linked debt's
  * cached balance — only debts whose balance Plaid owns (`balanceSource =
  * 'plaid'`), in `refresh` mode, stamping the sync time (the fetch succeeded).
- * A debt whose cached APR is malformed is skipped, as `GET /debts` skips it.
+ * A debt whose cached APR is malformed is skipped (as `GET /debts` skipped it
+ * when it still refreshed on read).
  * Returns how many debts were applied.
  */
 export async function applyCachedLiabilitiesToPlaidDebts(

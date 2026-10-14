@@ -200,6 +200,7 @@ import type {
   ReorderMappingRulesInput,
   ReplaceTransactionSplitsInput,
   ReviewQueue,
+  ReviewQueueCount,
   ReviewResolution,
   RunCategorizationInput,
   SeedDefaultBudgetResult,
@@ -12950,6 +12951,84 @@ export function useListCategorizationReview<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListCategorizationReviewQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * (P3) The same `total` GET /categorization/review returns, without listing or flagging any item. Read-only.
+ * @summary How many open decisions wait in the review queue (the nav badge).
+ */
+export const getGetCategorizationReviewCountUrl = () => {
+  return `/api/categorization/review/count`;
+};
+
+export const getCategorizationReviewCount = async (
+  options?: RequestInit,
+): Promise<ReviewQueueCount> => {
+  return customFetch<ReviewQueueCount>(getGetCategorizationReviewCountUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCategorizationReviewCountQueryKey = () => {
+  return [`/api/categorization/review/count`] as const;
+};
+
+export const getGetCategorizationReviewCountQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCategorizationReviewCount>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCategorizationReviewCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCategorizationReviewCountQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCategorizationReviewCount>>
+  > = ({ signal }) =>
+    getCategorizationReviewCount({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCategorizationReviewCount>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCategorizationReviewCountQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCategorizationReviewCount>>
+>;
+export type GetCategorizationReviewCountQueryError = ErrorType<unknown>;
+
+/**
+ * @summary How many open decisions wait in the review queue (the nav badge).
+ */
+
+export function useGetCategorizationReviewCount<
+  TData = Awaited<ReturnType<typeof getCategorizationReviewCount>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCategorizationReviewCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCategorizationReviewCountQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

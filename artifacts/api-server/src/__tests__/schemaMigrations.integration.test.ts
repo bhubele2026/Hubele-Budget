@@ -249,6 +249,41 @@ describe("migration runner — replayed on a pre-migration copy", () => {
     }
   });
 
+  it("(PERF-3) 0200's read indexes replay, and match what drizzle builds name for name", async () => {
+    const NAMES = [
+      "transactions_household_account_pending_idx",
+      "transactions_account_occurred_idx",
+      "transactions_household_source_account_idx",
+    ];
+    const defs = async (schemaName: string) =>
+      new Map(
+        (
+          await pool.query<{ indexname: string; indexdef: string }>(
+            `SELECT indexname, indexdef FROM pg_indexes
+              WHERE schemaname = $1 AND tablename = 'transactions' AND indexname = ANY($2)`,
+            [schemaName, NAMES],
+          )
+        ).rows.map((r) => [r.indexname, r.indexdef.replace(` ON ${schemaName}.transactions `, " ON transactions ")]),
+      );
+    const s = await makeScratch();
+    await runMigrations({ databaseUrl: s.url, dir: MIGRATIONS_DIR });
+    const replayed = await defs(s.name);
+    expect([...replayed.keys()].sort()).toEqual([...NAMES].sort());
+    expect(replayed.get("transactions_household_account_pending_idx")).toBe(
+      "CREATE INDEX transactions_household_account_pending_idx ON transactions USING btree (household_id, plaid_account_id, occurred_on) WHERE pending",
+    );
+    expect(replayed.get("transactions_account_occurred_idx")).toBe(
+      "CREATE INDEX transactions_account_occurred_idx ON transactions USING btree (plaid_account_id, occurred_on)",
+    );
+    expect(replayed.get("transactions_household_source_account_idx")).toBe(
+      "CREATE INDEX transactions_household_source_account_idx ON transactions USING btree (household_id, source, plaid_account_id)",
+    );
+    // The drizzle schema declares the same three (drizzle-kit push built `public`).
+    expect(await defs("public")).toEqual(replayed);
+    // Idempotent on a database that already has them.
+    expect(await runMigrations({ databaseUrl: s.url, dir: MIGRATIONS_DIR })).toMatchObject({ applied: [] });
+  });
+
   it("an edited, already-applied file stops the run before ANY pending file applies", async () => {
     const s = await makeScratch();
     await runMigrations({ databaseUrl: s.url, dir: MIGRATIONS_DIR });

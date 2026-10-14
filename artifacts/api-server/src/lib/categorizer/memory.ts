@@ -2,7 +2,7 @@
 // engine. Retroactive application happens ONLY through
 // `applyMemoryRetroactively` (an explicit request); a correction returns the
 // candidates and touches nothing else.
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db, merchantMemoryTable, transactionsTable } from "@workspace/db";
 import { isExcludedCategory } from "../excludedCategory";
 import { merchantSignature } from "../merchantNameExtract";
@@ -26,6 +26,24 @@ export interface SigRow {
 
 const likeEscape = (s: string): string => s.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
 
+/** The one word a signature's read narrows on in SQL: its longest (the first, on a tie). */
+const signatureToken = (signature: string): string =>
+  signature.split(" ").sort((a, b) => b.length - a.length)[0]!;
+
+/** The ILIKE that narrows a read to rows whose description holds `token`. */
+const tokenMatch = (token: string) => ilike(transactionsTable.description, `%${likeEscape(token)}%`);
+
+const SIG_ROW = {
+  id: transactionsTable.id,
+  description: transactionsTable.description,
+  amount: transactionsTable.amount,
+  occurredOn: transactionsTable.occurredOn,
+  categoryId: transactionsTable.categoryId,
+  plaidAccountId: transactionsTable.plaidAccountId,
+  categoryLockedByUser: transactionsTable.categoryLockedByUser,
+  createdAt: transactionsTable.createdAt,
+};
+
 /** Household rows whose description has this merchant signature (newest first). */
 export async function rowsWithSignature(
   exec: Exec,
@@ -34,29 +52,52 @@ export async function rowsWithSignature(
   opts: { unlockedOnly?: boolean; lockedOnly?: boolean } = {},
 ): Promise<SigRow[]> {
   if (!signature) return [];
-  const token = signature.split(" ").sort((a, b) => b.length - a.length)[0]!;
   const rows = await exec
-    .select({
-      id: transactionsTable.id,
-      description: transactionsTable.description,
-      amount: transactionsTable.amount,
-      occurredOn: transactionsTable.occurredOn,
-      categoryId: transactionsTable.categoryId,
-      plaidAccountId: transactionsTable.plaidAccountId,
-      categoryLockedByUser: transactionsTable.categoryLockedByUser,
-      createdAt: transactionsTable.createdAt,
-    })
+    .select(SIG_ROW)
     .from(transactionsTable)
     .where(
       and(
         eq(transactionsTable.householdId, householdId),
-        ilike(transactionsTable.description, `%${likeEscape(token)}%`),
+        tokenMatch(signatureToken(signature)),
         opts.unlockedOnly ? eq(transactionsTable.categoryLockedByUser, false) : undefined,
         opts.lockedOnly ? eq(transactionsTable.categoryLockedByUser, true) : undefined,
       ),
     )
     .orderBy(desc(transactionsTable.occurredOn), transactionsTable.id);
   return rows.filter((r) => merchantSignature(r.description) === signature);
+}
+
+/**
+ * (P3) `rowsWithSignature` for many signatures in ONE read — the same rows, in
+ * the same order, for each signature. The read narrows on every signature's
+ * token at once; SQL also says which tokens each row matched (the very ILIKE
+ * the single read runs), so a row is kept for a signature only when it matched
+ * THAT signature's token and carries that signature, exactly as the single read
+ * keeps it. Empty signatures read nothing (as the single read). The review
+ * queue used to run one read per item, each over the household's whole history.
+ */
+export async function rowsWithSignatures(
+  exec: Exec,
+  householdId: string,
+  signatures: readonly string[],
+): Promise<Map<string, SigRow[]>> {
+  const sigs = [...new Set(signatures.filter((s) => !!s))];
+  const out = new Map<string, SigRow[]>(sigs.map((s) => [s, []]));
+  if (sigs.length === 0) return out;
+  const tokens = [...new Set(sigs.map(signatureToken))];
+  const tokenIndex = new Map(tokens.map((t, i) => [t, i]));
+  const matches = tokens.map(tokenMatch);
+  const rows = await exec
+    .select({ ...SIG_ROW, matched: sql<boolean[]>`ARRAY[${sql.join(matches, sql`, `)}]` })
+    .from(transactionsTable)
+    .where(and(eq(transactionsTable.householdId, householdId), or(...matches)))
+    .orderBy(desc(transactionsTable.occurredOn), transactionsTable.id);
+  for (const { matched, ...row } of rows) {
+    const sig = merchantSignature(row.description);
+    const list = out.get(sig);
+    if (list && matched[tokenIndex.get(signatureToken(sig))!] === true) list.push(row);
+  }
+  return out;
 }
 
 export interface RetroactiveCandidates {

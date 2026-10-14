@@ -290,8 +290,13 @@ describe("S5 · GET /amex/summary — one card's week", () => {
     const e = S5_EXPECTED.plat;
     expect(s.scope).toMatchObject({ kind: "card", accountId: ext.plat, name: "Everyday Plat", mask: "1001", institution: "American Express" });
     expect(s.scope.cards).toEqual([
-      { accountId: ext.plat, name: "Everyday Plat", mask: "1001", institution: "American Express", brand: "silver", cadence: "weekly", debtLinked: false, debtId: null, owed: e.owed },
+      {
+        accountId: ext.plat, name: "Everyday Plat", mask: "1001", institution: "American Express", brand: "silver", cadence: "weekly", debtLinked: false, debtId: null, owed: e.owed,
+        // (P3) The card's own purchases: one card in scope, so the top-level figure.
+        purchases: { amount: s.purchases.amount, count: s.purchases.count },
+      },
     ]);
+    expect(ac(s.scope.cards[0].purchases)).toBe(e.purchases);
     expect(s.period).toEqual({ from: S5_WEEK.from, to: S5_WEEK.to, timezone: "America/Chicago" });
     expect(s.owed).toEqual({ current: e.owed, statement: null, asOf: LIABILITY_AT.toISOString(), source: "plaid" });
     expect({
@@ -438,6 +443,35 @@ describe("S5 · the debt-linked card and every card", () => {
     expect(ac(s.needsAttention.unfiled)).toBe(e.unfiled);
     // The hook that bills the band's cards (weekly first): the Saturday payoff.
     expect([s.planLink.kind, s.planLink.payoff].join(" ")).toBe("weekly_hook 600.00");
+  });
+
+  it("⭐ (P3) \"all\" carries each card's purchases = that card's own summary, to the cent; Σ cards = all (week and month)", async () => {
+    for (const [from, to] of [[S5_WEEK.from, S5_WEEK.to], ["2026-10-01", "2026-10-31"]] as const) {
+      const all = await summary("all", from, to);
+      expect(GetAmexSummaryResponse.safeParse(all).success).toBe(true);
+      expect(all.scope.cards).toHaveLength(3);
+      let sumCents = 0;
+      let sumCount = 0;
+      for (const c of all.scope.cards as any[]) {
+        const own = await summary(c.accountId, from, to);
+        // The band's number for this card, both ways: the same amount and count.
+        expect(c.purchases, `${c.name} ${from}`).toEqual({ amount: own.purchases.amount, count: own.purchases.count });
+        expect(own.scope.cards[0].purchases).toEqual(c.purchases);
+        sumCents += cents(c.purchases.amount);
+        sumCount += c.purchases.count;
+      }
+      expect([sumCents, sumCount]).toEqual([cents(all.purchases.amount), all.purchases.count]);
+    }
+    // The fixture's own figures, worked by hand, so the parity above is not 0 = 0.
+    const week = await summary("all");
+    expect(Object.fromEntries((week.scope.cards as any[]).map((c) => [c.accountId, ac(c.purchases)]))).toEqual({
+      [ext.blue!]: "0.00/0",
+      [ext.gold!]: S5_EXPECTED.gold.purchases,
+      [ext.plat!]: S5_EXPECTED.plat.purchases,
+    });
+    expect(ac(week.purchases)).toBe(S5_EXPECTED.all.purchases);
+    const month = await summary("all", "2026-10-01", "2026-10-31");
+    expect(ac(month.scope.cards.find((c: any) => c.accountId === ext.blue).purchases)).toBe(S5_EXPECTED.blueMonth.purchases);
   });
 
   it("⭐ GET /amex/weekly-payoff: cards and combinedWeekCharges as before; the debt card is in debtLinkedCards", async () => {

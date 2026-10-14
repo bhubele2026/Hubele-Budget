@@ -374,6 +374,9 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
   const otherCharges = tally();
   const notMine = tally();
   const purchaseRows: CardTxn[] = [];
+  // (P3) Each card's own purchases, from the same rows and rule: a card's entry
+  // IS the top-level `purchases` of that card's own summary (?accountId=<card>).
+  const purchasesByCard = new Map<string, Tally>(scopeIds.map((id) => [id, tally()]));
   for (const t of txns) {
     if (!t.plaidAccountId || !inScope.has(t.plaidAccountId)) continue;
     // (PR7b) A pending charge its posted row replaced is the same charge: counted once, on the posted row.
@@ -386,6 +389,7 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
     const kind = classifyCardCredit(t, ctx, CARD_OWED);
     if (kind === "purchase") {
       add(purchases, toCents(spendAmount(t)));
+      add(purchasesByCard.get(t.plaidAccountId)!, toCents(spendAmount(t)));
       if (t.reimbursable) add(reimbursable, toCents(spendAmount(t)));
       purchaseRows.push(t);
     } else if (kind === "other_charge") add(otherCharges, toCents(spendAmount(t)));
@@ -503,6 +507,7 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
   }
 
   const limitations = [...period.limitations];
+  const scopeCards = cards.map((c) => ({ ...c, purchases: amountCount(purchasesByCard.get(c.accountId)!) }));
 
   return {
     scope: one
@@ -512,9 +517,9 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
           name: one.name,
           mask: one.mask,
           institution: one.institution,
-          cards,
+          cards: scopeCards,
         }
-      : { kind: "all" as const, accountId: null, name: null, mask: null, institution: null, cards },
+      : { kind: "all" as const, accountId: null, name: null, mask: null, institution: null, cards: scopeCards },
     period: { from, to, timezone: HOUSEHOLD_TZ },
     owed,
     purchases: { ...amountCount(purchases), reimbursable: amountCount(reimbursable) },
