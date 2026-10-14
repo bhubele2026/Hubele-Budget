@@ -151,7 +151,7 @@ export function ChaseInsightStrip({
           not fit one 390px row, and a squeezed label is as good as hidden. */}
       <div className={`${cardHead} flex-wrap gap-y-1.5`}>
         <h2 className="text-title font-semibold text-brand-navy">
-          Household spending this {period}
+          Spending this {period}
         </h2>
         <Help>
           Every purchase on any account, categorized or not. Transfers, card
@@ -231,9 +231,9 @@ export function ChaseInsightStrip({
       </div>
       <div className="grid gap-3 px-4 pb-4 sm:grid-cols-2">
         <Stat
-          label="Unplanned spending"
+          label="Unplanned allowance (UN)"
           value={cur?.unplanned ? formatCurrency(cur.unplanned.total) : "—"}
-          hint="Purchases marked UN in this period"
+          hint="Purchases marked UN. Not a plan comparison."
           tone={cur?.unplanned?.total ? "bad" : "navy"}
         />
         <Stat
@@ -249,7 +249,7 @@ export function ChaseInsightStrip({
         data-testid="unplanned-spending-details"
       >
         <summary className="cursor-pointer text-label font-semibold text-brand-navy">
-          What was unplanned?
+          Purchases marked UN
           {cur?.unplanned ? ` (${cur.unplanned.transactionCount})` : ""}
         </summary>
         <p className="mt-2 text-micro text-neutral-500">

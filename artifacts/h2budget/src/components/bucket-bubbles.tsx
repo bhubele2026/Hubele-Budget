@@ -29,11 +29,27 @@ export type BucketFlags = {
   reimbursable: boolean;
 };
 
-const LABELS: Record<BucketKey, string> = {
-  weekly: "WK",
-  monthly: "MO",
-  unplanned: "UN",
-  reimbursable: "RE",
+/** (W3) The short form is for a phone; from `sm` up the word is spelled out. */
+const LABELS: Record<BucketKey, { short: string; full: string }> = {
+  weekly: { short: "WK", full: "Weekly" },
+  monthly: { short: "MO", full: "Monthly" },
+  unplanned: { short: "UN", full: "Unplanned" },
+  reimbursable: { short: "RE", full: "Reimbursable" },
+};
+
+/** The accessible name stays what it was ("Weekly bucket"…); the tooltip says what the mark does. */
+const NAMES: Record<BucketKey, string> = {
+  weekly: "Weekly bucket",
+  monthly: "Monthly bucket",
+  unplanned: "Unplanned bucket",
+  reimbursable: "Reimbursable",
+};
+
+const MEANINGS: Record<BucketKey, string> = {
+  weekly: "Weekly: counts toward the weekly allowance",
+  monthly: "Monthly: counts toward the monthly allowance",
+  unplanned: "Unplanned: counts toward the unplanned allowance",
+  reimbursable: "Reimbursable: someone will pay this back",
 };
 
 const ORDER: BucketKey[] = ["weekly", "monthly", "unplanned", "reimbursable"];
@@ -42,13 +58,15 @@ function Bubble({
   label,
   on,
   onClick,
+  name,
   title,
   disabled,
 }: {
-  label: string;
+  label: { short: string; full: string };
   on: boolean;
   onClick: () => void;
-  title?: string;
+  name: string;
+  title: string;
   disabled?: boolean;
 }) {
   return (
@@ -60,7 +78,7 @@ function Bubble({
       }}
       title={title}
       aria-pressed={on}
-      aria-label={title ?? label}
+      aria-label={name}
       disabled={disabled}
       className="press group flex flex-col items-center gap-0.5 rounded-control focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:opacity-50"
     >
@@ -74,12 +92,11 @@ function Bubble({
       >
         <Check className="h-3 w-3" strokeWidth={3} />
       </span>
-      {/* 9px matches `Help` in the kit — the one size below the scale, kept
-          for a two-letter glyph. Promoting it to `text-micro` would widen
-          every bucket column on the Amex and transaction rows, which this PR
-          does not own. */}
-      <span className="text-[9px] font-semibold uppercase tracking-widest text-neutral-400">
-        {label}
+      {/* (W3) Readable text, 11px, never the old 9px glyph: two letters on a
+          phone, the word from `sm` up. The tooltip carries the one-line meaning. */}
+      <span className="text-[11px] font-semibold leading-none text-neutral-500" aria-hidden="true">
+        <span className="sm:hidden">{label.short}</span>
+        <span className="hidden sm:inline">{label.full}</span>
       </span>
     </button>
   );
@@ -99,22 +116,15 @@ export function BucketBubbles({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start gap-2", className)}>
+    <div className={cn("flex items-start gap-2 sm:gap-3", className)}>
       {buckets.map((b) => (
         <Bubble
           key={b}
           label={LABELS[b]}
           on={flags[b]}
           onClick={() => onToggle(b, !flags[b])}
-          title={
-            b === "reimbursable"
-              ? "Reimbursable"
-              : b === "weekly"
-              ? "Weekly bucket"
-              : b === "monthly"
-              ? "Monthly bucket"
-              : "Unplanned bucket"
-          }
+          name={NAMES[b]}
+          title={MEANINGS[b]}
           disabled={disabled}
         />
       ))}

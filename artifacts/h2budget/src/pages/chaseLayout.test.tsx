@@ -63,7 +63,7 @@ vi.mock("@workspace/api-client-react", async (original) => {
   };
 });
 vi.mock("wouter", () => ({
-  Link: ({ children, ...rest }: any) => <a data-testid={rest["data-testid"]}>{children}</a>,
+  Link: ({ children, href, ...rest }: any) => <a href={href} data-testid={rest["data-testid"]}>{children}</a>,
   useLocation: () => ["/transactions", vi.fn()],
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
@@ -162,7 +162,7 @@ describe("Chase page — the panel grid (C9)", () => {
     expect(screen.queryByTestId("chase-embedded-actions")).toBeNull();
   });
 
-  it("figures: two checking-accent panels side by side, then the household strip with no account accent", async () => {
+  it("figures: two checking-accent panels side by side; the household strip is NOT among them", async () => {
     show();
     await ready();
     for (const id of ["chase-stats-in-out", "chase-stats-balance"]) {
@@ -170,13 +170,41 @@ describe("Chase page — the panel grid (C9)", () => {
       expect(p.tagName).toBe("SECTION");
       for (const c of ["panel", "span-6", "panel-accent-checking"]) expect(p.className).toContain(c);
     }
-    const strip = screen.getByTestId("chase-insight-strip").parentElement!;
-    expect(strip.className).toContain("span-12");
-    expect(strip.className).not.toContain("panel-accent");
     // The controls row carries the Review drilldown (CH-14).
     expect(within(screen.getByTestId("chase-controls")).getByTestId("link-bucket-pending-count").textContent).toMatch(
       /Match\s*3\s*items in Review/,
     );
+  });
+
+  it("(W3) the household strip: titled 'Household · all accounts', closed, and after the ledger", async () => {
+    show();
+    await ready();
+    const box = screen.getByTestId("chase-household") as HTMLDetailsElement;
+    expect(box.tagName).toBe("DETAILS");
+    expect(box.open).toBe(false);
+    expect(box.className).toContain("span-12");
+    expect(box.className).not.toContain("panel-accent");
+    expect(within(box).getByText("Household · all accounts")).toBeTruthy();
+    // Closed, it reads nothing: the strip is not mounted.
+    expect(screen.queryByTestId("chase-insight-strip")).toBeNull();
+    // It comes after the Chase-only panels, the ledger included.
+    const ledger = screen.getByTestId("chase-ledger");
+    expect(ledger.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    box.open = true;
+    fireEvent(box, new Event("toggle"));
+    expect(await screen.findByTestId("chase-insight-strip")).toBeTruthy();
+  });
+
+  it("(W3) links this account to its plan review, with the register's range", async () => {
+    show();
+    await ready();
+    const link = screen.getByTestId("link-banking-review") as HTMLAnchorElement;
+    expect(link.textContent).toContain("Review this account against the plan");
+    const u = new URL(link.getAttribute("href")!, "http://x");
+    expect(u.pathname).toBe("/banking");
+    expect(u.searchParams.get("account")).toBe("acct-chk");
+    expect(u.searchParams.get("from")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(u.searchParams.get("to")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("ledger: one sticky-safe panel; its pinned pane holds the review controls; day groups are flush sections", async () => {
