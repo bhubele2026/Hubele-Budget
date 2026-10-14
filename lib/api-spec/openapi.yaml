@@ -2597,19 +2597,56 @@ paths:
     get:
       operationId: listAllowancePlans
       tags: [money, features]
-      summary: The household's allowance plans and the suggested weekly cap with its working
+      summary: The household's allowance plans, the plan in effect now, the suggested weekly cap with its working, and amounts a plan may start from
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AllowancePlans" }
+    post:
+      operationId: createAllowancePlan
+      tags: [money, features]
+      summary: Set the household's weekly or monthly plan from this period on (household owner only)
+      description: >-
+        (S2) The owner's confirmed "Use $X as the weekly plan from this week".
+        A weekly plan starts on a household week start (Sunday, America/Chicago),
+        a monthly one on the 1st, this period or later; the amount is more than
+        $0, dollars and cents. A household-pool row already starting that day is
+        updated (`created: false`); otherwise one is inserted. Rows of past
+        periods are never touched. Written only through allowancePlanWriter.ts,
+        which no job or agent may import.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAllowancePlanBody" }
+      responses:
+        "200":
+          description: OK — the plan written, and the plans in effect after it
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AllowancePlanSaved" }
+        "400":
+          description: Invalid amount, not a period start, or a past period
+        "403":
+          description: Only the household owner sets a plan
+        "409":
+          description: Another save for the same start won the race
 
   /allowance-plans/{id}:
     put:
       operationId: updateAllowancePlan
       tags: [money, features]
-      summary: Set a plan's amount (household owner only; writes source "owner")
+      summary: Set a plan's amount (household owner only; writes source "owner"); a plan a past week used is kept and a new one starts now
+      description: >-
+        (S2) Never rewrites history. A row that started before the current period
+        (this week's Sunday, or this month's 1st) is left as it is — past weeks
+        keep the cap they were judged against — and the edit is written as the
+        plan from the current period (or `effectiveFrom`) on: that day's row is
+        updated or a new one inserted (`created: true`). A row starting in the
+        current period or later is edited in place. A new `effectiveFrom` must be
+        a period start (Sunday / the 1st), this period or later.
       parameters:
         - in: path
           name: id
@@ -2622,12 +2659,12 @@ paths:
             schema: { $ref: "#/components/schemas/AllowancePlanUpdate" }
       responses:
         "200":
-          description: OK
+          description: OK — the row written (the edited one, or the new one from this period) and the plans in effect after it
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AllowancePlan" }
+              schema: { $ref: "#/components/schemas/AllowancePlanSaved" }
         "400":
-          description: Invalid amount or date
+          description: Invalid amount or date, a start that is not a period start, or a start in a past period
         "403":
           description: Only the household owner sets a plan
         "404":
@@ -4822,7 +4859,7 @@ components:
 
     AllowancePlans:
       type: object
-      required: [plans, suggested]
+      required: [plans, suggested, inEffect, prefills]
       properties:
         plans:
           type: array
@@ -4834,6 +4871,65 @@ components:
           properties:
             weekly: { type: string, description: "Discretionary per week, rounded down to whole $5" }
             derivation: { $ref: "#/components/schemas/WeeklyLimitDerivation" }
+        inEffect: { $ref: "#/components/schemas/AllowancePlansInEffect" }
+        prefills:
+          type: array
+          description: >-
+            (S2) Amounts a plan may start from — options only, nothing writes
+            them: the everyday hook's stored amount (`hook_stored`, e.g. "Weekly
+            Spend reserve"), the suggested weekly cap, and the allowance saved on
+            the classic Allowances page. Only amounts above $0.
+          items: { $ref: "#/components/schemas/AllowancePlanPrefill" }
+
+    AllowancePlansInEffect:
+      type: object
+      required: [weekly, monthly]
+      description: >-
+        (S2) The household-pool plan row in effect for this week and for this
+        month, by the money position's own rule: a $0 row is no plan (null),
+        never a $0 cap. A week's per-week override is not a plan row (the money
+        position and the period breakdown report it as `source: override`).
+      properties:
+        weekly:
+          oneOf:
+            - $ref: "#/components/schemas/AllowancePlan"
+            - type: "null"
+        monthly:
+          oneOf:
+            - $ref: "#/components/schemas/AllowancePlan"
+            - type: "null"
+
+    AllowancePlanPrefill:
+      type: object
+      required: [period, amount, source, label]
+      properties:
+        period: { type: string, enum: [weekly, monthly] }
+        amount: { type: string, description: "Dollars, two decimals, more than 0" }
+        source: { type: string, enum: [hook_stored, suggested, settings] }
+        label: { type: string }
+
+    CreateAllowancePlanBody:
+      type: object
+      required: [period, amount, effectiveFrom]
+      additionalProperties: false
+      properties:
+        period: { type: string, enum: [weekly, monthly] }
+        amount: { type: string, pattern: '^\d{1,8}(\.\d{1,2})?$', description: "Dollars, at most two decimals, more than 0" }
+        effectiveFrom:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: A Sunday (weekly) or the 1st (monthly), this period or later
+
+    AllowancePlanSaved:
+      allOf:
+        - $ref: "#/components/schemas/AllowancePlan"
+        - type: object
+          required: [created, inEffect]
+          properties:
+            created:
+              type: boolean
+              description: True when a new row was written; false when a row of this period or later was updated in place
+            inEffect: { $ref: "#/components/schemas/AllowancePlansInEffect" }
 
     VersionInfo:
       type: object
@@ -7264,6 +7360,28 @@ components:
               itemId: { type: string }
               cadence: { type: string, enum: [weekly, monthly] }
               storedAmount: { type: string }
+        hookReserves:
+          type: array
+          description: |
+            (S2) What each everyday-hook occurrence on the forecast reserves, and
+            what it was sized from. `basis: plan` — the period has an allowance
+            plan: the card's charges plus what is left of the plan while the
+            period is open. `basis: stored_amount` — no plan is set for the
+            period, so the item's own stored amount is kept (e.g. "Weekly Spend
+            reserve $380 · no weekly plan set"); it is not a spending cap.
+            `amount` is the occurrence's reserve before any review answer.
+            Present only when the household has a hook occurrence.
+          items:
+            type: object
+            required: [hook, recurringItemId, planKey, occurrenceDate, label, amount, basis]
+            properties:
+              hook: { type: string, enum: [weekly, monthly] }
+              recurringItemId: { type: string }
+              planKey: { type: string, description: "`<itemId>|<occurrenceDate>` — joins events[].occurrenceKey" }
+              occurrenceDate: { type: string }
+              label: { type: string, description: The hook item's name }
+              amount: { type: string }
+              basis: { type: string, enum: [plan, stored_amount] }
         overdueOutsideForecast:
           type: array
           description: |

@@ -1909,11 +1909,75 @@ export type AllowancePlansSuggested = {
   derivation: WeeklyLimitDerivation;
 };
 
+/**
+ * (S2) The household-pool plan row in effect for this week and for this month, by the money position's own rule: a $0 row is no plan (null), never a $0 cap. A week's per-week override is not a plan row (the money position and the period breakdown report it as `source: override`).
+ */
+export interface AllowancePlansInEffect {
+  weekly: AllowancePlan | null;
+  monthly: AllowancePlan | null;
+}
+
+export type AllowancePlanPrefillPeriod =
+  (typeof AllowancePlanPrefillPeriod)[keyof typeof AllowancePlanPrefillPeriod];
+
+export const AllowancePlanPrefillPeriod = {
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
+export type AllowancePlanPrefillSource =
+  (typeof AllowancePlanPrefillSource)[keyof typeof AllowancePlanPrefillSource];
+
+export const AllowancePlanPrefillSource = {
+  hook_stored: "hook_stored",
+  suggested: "suggested",
+  settings: "settings",
+} as const;
+
+export interface AllowancePlanPrefill {
+  period: AllowancePlanPrefillPeriod;
+  /** Dollars, two decimals, more than 0 */
+  amount: string;
+  source: AllowancePlanPrefillSource;
+  label: string;
+}
+
 export interface AllowancePlans {
   plans: AllowancePlan[];
   /** A suggestion only — nothing writes it; the owner sets the cap. */
   suggested: AllowancePlansSuggested;
+  inEffect: AllowancePlansInEffect;
+  /** (S2) Amounts a plan may start from — options only, nothing writes them: the everyday hook's stored amount (`hook_stored`, e.g. "Weekly Spend reserve"), the suggested weekly cap, and the allowance saved on the classic Allowances page. Only amounts above $0. */
+  prefills: AllowancePlanPrefill[];
 }
+
+export type CreateAllowancePlanBodyPeriod =
+  (typeof CreateAllowancePlanBodyPeriod)[keyof typeof CreateAllowancePlanBodyPeriod];
+
+export const CreateAllowancePlanBodyPeriod = {
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
+export interface CreateAllowancePlanBody {
+  period: CreateAllowancePlanBodyPeriod;
+  /**
+   * Dollars, at most two decimals, more than 0
+   * @pattern ^\d{1,8}(\.\d{1,2})?$
+   */
+  amount: string;
+  /**
+   * A Sunday (weekly) or the 1st (monthly), this period or later
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  effectiveFrom: string;
+}
+
+export type AllowancePlanSaved = AllowancePlan & {
+  /** True when a new row was written; false when a row of this period or later was updated in place */
+  created: boolean;
+  inEffect: AllowancePlansInEffect;
+};
 
 export interface VersionInfo {
   /** Per-deploy build identifier (APP_BUILD_ID env, falling back
@@ -4659,6 +4723,34 @@ export type CashSignalHookAmountIgnoredItem = {
   storedAmount: string;
 };
 
+export type CashSignalHookReservesItemHook =
+  (typeof CashSignalHookReservesItemHook)[keyof typeof CashSignalHookReservesItemHook];
+
+export const CashSignalHookReservesItemHook = {
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
+export type CashSignalHookReservesItemBasis =
+  (typeof CashSignalHookReservesItemBasis)[keyof typeof CashSignalHookReservesItemBasis];
+
+export const CashSignalHookReservesItemBasis = {
+  plan: "plan",
+  stored_amount: "stored_amount",
+} as const;
+
+export type CashSignalHookReservesItem = {
+  hook: CashSignalHookReservesItemHook;
+  recurringItemId: string;
+  /** `<itemId>|<occurrenceDate>` — joins events[].occurrenceKey */
+  planKey: string;
+  occurrenceDate: string;
+  /** The hook item's name */
+  label: string;
+  amount: string;
+  basis: CashSignalHookReservesItemBasis;
+};
+
 export type CashSignalMatchesItemTier =
   (typeof CashSignalMatchesItemTier)[keyof typeof CashSignalMatchesItemTier];
 
@@ -4772,6 +4864,16 @@ own amount, which the forecast ignores — banner data for the UI.
 Present only when the household has a hook.
  */
   hookAmountIgnored?: CashSignalHookAmountIgnoredItem[];
+  /** (S2) What each everyday-hook occurrence on the forecast reserves, and
+what it was sized from. `basis: plan` — the period has an allowance
+plan: the card's charges plus what is left of the plan while the
+period is open. `basis: stored_amount` — no plan is set for the
+period, so the item's own stored amount is kept (e.g. "Weekly Spend
+reserve $380 · no weekly plan set"); it is not a spending cap.
+`amount` is the occurrence's reserve before any review answer.
+Present only when the household has a hook occurrence.
+ */
+  hookReserves?: CashSignalHookReservesItem[];
   /** (PR6) Unresolved expenses due more than 14 days ago that no bank
 row confidently paid. Not on the curve, and never dropped
 silently. Bounded by the forecast's expansion (the first of last

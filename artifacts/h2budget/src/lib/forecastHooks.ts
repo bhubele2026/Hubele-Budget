@@ -26,9 +26,18 @@ export interface HookPayoffLine {
   payoff: number | null;
   /** The bank row that paid it, when the forecast counts it paid on that evidence (and leaves it off the curve). */
   paidOnEvidence: { txnId: string; amount: number; description: string | null } | null;
+  /**
+   * (S2) What the server sized the occurrence from (`hookReserves[].basis`):
+   * `plan` — the card's charges plus what is left of the allowance plan;
+   * `stored_amount` — no plan is set for the period, so the item's own amount
+   * is kept as a reserve (never a spending cap). Null when the signal does not say.
+   */
+  basis: "plan" | "stored_amount" | null;
+  /** (S2) The hook item's name ("Weekly Spend"), when the signal names it. */
+  label: string | null;
 }
 
-type HookSignal = Pick<CashSignal, "events" | "hookAmountIgnored" | "overdueAssumedPaid">;
+type HookSignal = Pick<CashSignal, "events" | "hookAmountIgnored" | "overdueAssumedPaid" | "hookReserves">;
 
 const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 /** "$450" for a round plan, "$451.20" otherwise — the dashboard's plan money. */
@@ -40,13 +49,30 @@ export function hookPayoffsOf(
   describe?: (txnId: string) => string | null | undefined,
 ): Map<string, HookPayoffLine> {
   const out = new Map<string, HookPayoffLine>();
-  const hooks = new Map((signal?.hookAmountIgnored ?? []).map((h) => [h.itemId, h]));
+  // (S2) Each occurrence's reserve, by plan key. A hook whose every occurrence
+  // kept its stored amount (no plan set) is named only here, never in
+  // `hookAmountIgnored` (its stored amount is not ignored).
+  const reserves = new Map((signal?.hookReserves ?? []).map((r) => [r.planKey, r]));
+  const hooks = new Map<string, { cadence: "weekly" | "monthly"; storedAmount: string }>();
+  for (const r of signal?.hookReserves ?? []) {
+    if (r.basis === "stored_amount" && !hooks.has(r.recurringItemId)) hooks.set(r.recurringItemId, { cadence: r.hook, storedAmount: r.amount });
+  }
+  for (const h of signal?.hookAmountIgnored ?? []) hooks.set(h.itemId, h);
   if (hooks.size === 0) return out;
   const lineFor = (itemId: string, planKey: string): HookPayoffLine => {
     let line = out.get(planKey);
     if (!line) {
       const h = hooks.get(itemId)!;
-      line = { planKey, cadence: h.cadence, plan: Math.abs(Number(h.storedAmount) || 0), payoff: null, paidOnEvidence: null };
+      const r = reserves.get(planKey);
+      line = {
+        planKey,
+        cadence: h.cadence,
+        plan: Math.abs(Number(h.storedAmount) || 0),
+        payoff: null,
+        paidOnEvidence: null,
+        basis: r?.basis ?? null,
+        label: r?.label || null,
+      };
       out.set(planKey, line);
     }
     return line;
@@ -71,11 +97,19 @@ export function hookPayoffsOf(
   return out;
 }
 
-/** "card payoff $477.57 · plan $450" — or, off the curve, "paid on evidence by <row>". */
+/**
+ * "card payoff $477.57 · plan $450" — or, off the curve, "paid on evidence by <row>".
+ * (S2) With no plan set for the period the occurrence is the item's stored
+ * amount, a reserve and never a cap: "Weekly Spend reserve $380 · no weekly plan set".
+ */
 export function hookPayoffWords(line: HookPayoffLine): string {
+  const noPlan = `no ${line.cadence} plan set`;
   if (line.paidOnEvidence) {
     const by = line.paidOnEvidence.description ?? `a ${money(line.paidOnEvidence.amount)} card payment`;
-    return `paid on evidence by ${by} · plan ${planMoney(line.plan)}`;
+    return line.basis === "stored_amount" ? `paid on evidence by ${by} · ${noPlan}` : `paid on evidence by ${by} · plan ${planMoney(line.plan)}`;
+  }
+  if (line.basis === "stored_amount") {
+    return `${line.label ?? "Spend"} reserve ${planMoney(line.plan)} · ${noPlan}`;
   }
   return line.payoff === null
     ? `card payoff · plan ${planMoney(line.plan)}`

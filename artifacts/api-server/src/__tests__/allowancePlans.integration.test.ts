@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 
 const H1_OWNER = `allow-h1-${process.pid}-${randomUUID().slice(0, 8)}`;
 const H1_MEMBER = `allow-h1m-${process.pid}-${randomUUID().slice(0, 8)}`;
@@ -242,6 +242,13 @@ describe("GET /allowance-plans", () => {
         discretionaryMonthly: "1872.34",
       },
     });
+    // (S2) The rows in effect now, and the amounts a plan may start from (options only).
+    expect([r.body.inEffect.weekly.amount, r.body.inEffect.monthly.amount]).toEqual(["300.00", "400.00"]);
+    expect(r.body.prefills).toEqual([
+      { period: "weekly", amount: "430.00", source: "suggested", label: "Suggested" },
+      { period: "weekly", amount: "300.00", source: "settings", label: "Saved allowance" },
+      { period: "monthly", amount: "400.00", source: "settings", label: "Saved allowance" },
+    ]);
     // Reading wrote nothing.
     expect((await plansOf(H1_OWNER)).length).toBe(2);
   });
@@ -249,58 +256,92 @@ describe("GET /allowance-plans", () => {
   it("another household sees only its own plans", async () => {
     const r = await call("GET", "/allowance-plans", H3_OWNER);
     expect(r.body.plans.map((p: { amount: string }) => p.amount)).toEqual(["125.50"]);
+    expect([r.body.inEffect.weekly?.amount, r.body.inEffect.monthly]).toEqual(["125.50", null]);
+  });
+
+  it("(S2) a household with nothing set: nothing in effect, and no $0 option", async () => {
+    const r = await call("GET", "/allowance-plans", H2_OWNER);
+    expect(r.body.plans).toEqual([]);
+    expect(r.body.inEffect).toEqual({ weekly: null, monthly: null });
+    expect(r.body.prefills).toEqual([]);
   });
 });
 
 describe("PUT /allowance-plans/:id — the owner only", () => {
-  const weeklyOf = async (o: string) => (await plansOf(o)).find((p) => p.period === "weekly")!;
+  // (S2) This file runs on the real clock: "this week" is the household's own.
+  const thisSunday = () => weekBounds(householdTodayISO()).start;
+  const weeklyFrom = async (o: string, from: string) =>
+    (await plansOf(o)).find((p) => p.period === "weekly" && p.effectiveFrom === from);
+  const backfilledWeekly = async (o: string) => (await weeklyFrom(o, "2026-05-01"))!;
 
   it("a member of the household is refused, and nothing changes", async () => {
-    const plan = await weeklyOf(H1_OWNER);
+    const plan = await backfilledWeekly(H1_OWNER);
     const r = await call("PUT", `/allowance-plans/${plan.id}`, H1_MEMBER, { amount: "999.00" });
     expect(r.status).toBe(403);
-    expect((await weeklyOf(H1_OWNER)).amount).toBe("300.00");
+    expect((await backfilledWeekly(H1_OWNER)).amount).toBe("300.00");
+    expect((await plansOf(H1_OWNER)).length).toBe(2);
   });
 
-  it("the owner sets the amount: source 'owner', a person wrote it, and the backfill never overwrites it", async () => {
-    const plan = await weeklyOf(H1_OWNER);
+  it("⭐ (S2) the owner sets the amount of a row past weeks used: it stays as it was, and a NEW owner row starts this Sunday; the backfill never overwrites either", async () => {
+    const plan = await backfilledWeekly(H1_OWNER);
     await db.update(allowancePlansTable).set({ source: "derived", derivation: { suggestedWeekly: "430.00" } }).where(eq(allowancePlansTable.id, plan.id));
     const r = await call("PUT", `/allowance-plans/${plan.id}`, H1_OWNER, { amount: "320.5" });
     expect(r.status).toBe(200);
-    expect(r.body).toMatchObject({ id: plan.id, period: "weekly", amount: "320.50", source: "owner", derivation: null, effectiveFrom: "2026-05-01" });
-    const stored = await weeklyOf(H1_OWNER);
+    expect(r.body).toMatchObject({ period: "weekly", amount: "320.50", source: "owner", derivation: null, effectiveFrom: thisSunday(), created: true });
+    expect(r.body.id).not.toBe(plan.id);
+    expect(r.body.inEffect.weekly.id).toBe(r.body.id);
+    const stored = (await weeklyFrom(H1_OWNER, thisSunday()))!;
     expect([stored.amount, stored.source, stored.createdByKind, stored.derivation]).toEqual(["320.50", "owner", "user", null]);
+    // The row past weeks were judged against: untouched, word for word.
+    const past = await backfilledWeekly(H1_OWNER);
+    expect([past.amount, past.source, past.derivation]).toEqual(["300.00", "derived", { suggestedWeekly: "430.00" }]);
     await runSql("0040_allowance_plans.sql");
-    expect((await plansOf(H1_OWNER)).length).toBe(2);
-    expect((await weeklyOf(H1_OWNER)).amount).toBe("320.50");
+    expect((await plansOf(H1_OWNER)).length).toBe(3);
+    expect((await weeklyFrom(H1_OWNER, thisSunday()))!.amount).toBe("320.50");
   });
 
   it("another household's plan is not found — not even to its own owner", async () => {
-    const plan = await weeklyOf(H1_OWNER);
+    const plan = await backfilledWeekly(H1_OWNER);
     const r = await call("PUT", `/allowance-plans/${plan.id}`, H3_OWNER, { amount: "1.00" });
     expect(r.status).toBe(404);
-    expect((await weeklyOf(H1_OWNER)).amount).toBe("320.50");
+    expect((await weeklyFrom(H1_OWNER, thisSunday()))!.amount).toBe("320.50");
     expect((await call("PUT", `/allowance-plans/not-a-uuid`, H1_OWNER, { amount: "1.00" })).status).toBe(404);
   });
 
-  it("refuses an amount that is not dollars and cents, and a date that is not on the calendar", async () => {
-    const plan = await weeklyOf(H1_OWNER);
-    for (const body of [{ amount: "12.345" }, { amount: "-5" }, { amount: "abc" }, {}, { amount: "10", effectiveFrom: "2026-02-30" }, { amount: "10", effectiveFrom: "10/04/2026" }]) {
-      expect((await call("PUT", `/allowance-plans/${plan.id}`, H1_OWNER, body)).status, JSON.stringify(body)).toBe(400);
+  it("refuses an amount that is not dollars and cents, a date that is not on the calendar, a start off a Sunday or in a past week", async () => {
+    const plan = await backfilledWeekly(H1_OWNER);
+    const current = (await weeklyFrom(H1_OWNER, thisSunday()))!;
+    const weekday = addDaysISO(thisSunday(), 3);
+    const lastSunday = addDaysISO(thisSunday(), -7);
+    for (const [id, body] of [
+      [plan.id, { amount: "12.345" }],
+      [plan.id, { amount: "-5" }],
+      [plan.id, { amount: "abc" }],
+      [plan.id, {}],
+      [plan.id, { amount: "10", effectiveFrom: "2026-02-30" }],
+      [plan.id, { amount: "10", effectiveFrom: "10/04/2026" }],
+      [plan.id, { amount: "10", effectiveFrom: weekday }],
+      [plan.id, { amount: "10", effectiveFrom: lastSunday }],
+      [current.id, { amount: "10", effectiveFrom: lastSunday }],
+      [current.id, { amount: "10", effectiveFrom: "2026-05-01" }],
+    ] as const) {
+      expect((await call("PUT", `/allowance-plans/${id}`, H1_OWNER, body)).status, JSON.stringify(body)).toBe(400);
     }
-    expect((await weeklyOf(H1_OWNER)).amount).toBe("320.50");
+    expect((await backfilledWeekly(H1_OWNER)).amount).toBe("300.00");
+    expect((await weeklyFrom(H1_OWNER, thisSunday()))!.amount).toBe("320.50");
+    expect((await plansOf(H1_OWNER)).length).toBe(3);
   });
 
-  it("a start date another plan of the same period already has is a conflict", async () => {
+  it("a later row moved onto a start another plan already has is a conflict; moved to a later Sunday it moves in place", async () => {
     const [later] = await db
       .insert(allowancePlansTable)
-      .values({ householdId: HH[H1_OWNER]!.householdId, period: "weekly", amount: "350", effectiveFrom: "2026-11-01", source: "owner" })
+      .values({ householdId: HH[H1_OWNER]!.householdId, period: "weekly", amount: "350", effectiveFrom: addDaysISO(thisSunday(), 21), source: "owner" })
       .returning();
-    const r = await call("PUT", `/allowance-plans/${later!.id}`, H1_OWNER, { amount: "350", effectiveFrom: "2026-05-01" });
+    const r = await call("PUT", `/allowance-plans/${later!.id}`, H1_OWNER, { amount: "350", effectiveFrom: thisSunday() });
     expect(r.status).toBe(409);
-    const moved = await call("PUT", `/allowance-plans/${later!.id}`, H1_OWNER, { amount: "360", effectiveFrom: "2026-12-06" });
+    const moved = await call("PUT", `/allowance-plans/${later!.id}`, H1_OWNER, { amount: "360", effectiveFrom: addDaysISO(thisSunday(), 56) });
     expect(moved.status).toBe(200);
-    expect(moved.body.effectiveFrom).toBe("2026-12-06");
+    expect(moved.body).toMatchObject({ id: later!.id, amount: "360.00", effectiveFrom: addDaysISO(thisSunday(), 56), created: false });
     await db.delete(allowancePlansTable).where(and(eq(allowancePlansTable.id, later!.id)));
   });
 });
@@ -311,10 +352,14 @@ describe("(Round 2, Q4) the classic Allowances page's save is mirrored into the 
     // plan in effect, not an override, is what the week reads.
     await db.update(settingsTable).set({ preferences: {} }).where(eq(settingsTable.userId, H1_OWNER));
     const thisSunday = weekBounds(householdTodayISO()).start;
+    // (S2) Start from the backfilled rows alone: the PUT tests above planned this week.
+    await db
+      .delete(allowancePlansTable)
+      .where(and(eq(allowancePlansTable.householdId, HH[H1_OWNER]!.householdId), gte(allowancePlansTable.effectiveFrom, thisSunday)));
     const capNow = async () => (await call("GET", "/money/position", H1_MEMBER)).body.weekCap as string | null;
     const weeklyRows = async () =>
       (await plansOf(H1_OWNER)).filter((p) => p.period === "weekly").sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
-    expect(await capNow()).toBe("320.50");
+    expect(await capNow()).toBe("300.00");
     const before = await weeklyRows();
 
     // A household member saves a new weekly allowance on the classic page.
@@ -331,7 +376,7 @@ describe("(Round 2, Q4) the classic Allowances page's save is mirrored into the 
     ]);
     expect(await capNow()).toBe("410.00");
     // Past weeks keep the cap they had.
-    expect(after.find((p) => p.effectiveFrom === "2026-05-01")!.amount).toBe("320.50");
+    expect(after.find((p) => p.effectiveFrom === "2026-05-01")!.amount).toBe("300.00");
 
     // A second save in the same week updates that row; saving the same value, or another field, writes nothing.
     await call("PUT", "/settings", H1_MEMBER, { weeklyAllowanceAmount: "425" });
@@ -382,6 +427,8 @@ describe("⚠️ nothing automatic writes a plan", () => {
 
   it("the scan is live: it finds the two user-initiated routes that do write, and no other", () => {
     expect(writesPlans(join(SRC, "routes", "money.ts"))).toBe(true);
+    // (S2) The owner's POST writes through the one writer, like the PUT.
+    expect(readFileSync(join(SRC, "routes", "money.ts"), "utf8")).toMatch(/router\.post\("\/allowance-plans"[\s\S]*createOwnerAllowancePlan\(/);
     expect(
       sourcesUnder(join(SRC, "routes"))
         .filter(writesPlans)

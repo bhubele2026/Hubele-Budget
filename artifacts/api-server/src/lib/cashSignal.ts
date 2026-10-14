@@ -1,6 +1,7 @@
 import { recurringItemsTable } from "@workspace/db";
 import { rollForwardBalance, walkLedger } from "@workspace/avalanche-core";
 import { buildForecastLedger, type ForecastLedger } from "./forecastLedger";
+import type { HookPayoff } from "./everydayHooks";
 import type { SnapshotAccountResolution } from "./resolveSnapshotAccount";
 
 type Cadence =
@@ -274,6 +275,15 @@ export type CashSignal = {
    */
   hookAmountIgnored?: Array<{ itemId: string; cadence: "weekly" | "monthly"; storedAmount: string }>;
   /**
+   * ⭐ (S2) What each everyday-hook occurrence reserves and what it was sized
+   * from: `plan` — the card's charges plus what is left of the period's
+   * allowance plan; `stored_amount` — no plan is set for the period, so the
+   * item's own stored amount is kept (a reserve, not a spending cap). Straight
+   * from the ledger's `hookPayoffs` (`fromStoredAmount`); nothing recomputed.
+   * Present only when the household has a hook occurrence.
+   */
+  hookReserves?: CashSignalHookReserve[];
+  /**
    * (PR5) Plans a bank row probably paid: each one is off the curve until the
    * user confirms ("matched"/"partial") or rejects ("not_match") it. Amounts are
    * signed like the ledger; `difference` is |txn| − |plan| (positive = paid more).
@@ -523,8 +533,38 @@ export async function computeCashSignalDetailed(
       unpaidRemainder: r2(p.unpaidRemainder),
     })),
     ...(ledger.hookAmountIgnored.length > 0 ? { hookAmountIgnored: ledger.hookAmountIgnored.map((h) => ({ ...h })) } : {}),
+    ...(ledger.hookPayoffs.size > 0 ? { hookReserves: hookReservesOf(ledger.hookPayoffs) } : {}),
   };
   return { signal, ledger };
+}
+
+/** (S2) One everyday-hook occurrence's reserve, as the cash signal serves it. */
+export interface CashSignalHookReserve {
+  hook: "weekly" | "monthly";
+  recurringItemId: string;
+  /** `<itemId>|<occurrenceDate>` — joins `events[].occurrenceKey`. */
+  planKey: string;
+  occurrenceDate: string;
+  /** The hook item's name. */
+  label: string;
+  /** What the occurrence reserves (before any review answer), dollars. */
+  amount: string;
+  basis: "plan" | "stored_amount";
+}
+
+/** ⭐ (S2) The ledger's hook payoffs as `hookReserves`, by date then hook. Reads only. */
+export function hookReservesOf(payoffs: ReadonlyMap<string, HookPayoff>): CashSignalHookReserve[] {
+  return [...payoffs.entries()]
+    .map(([planKey, p]) => ({
+      hook: p.cadence,
+      recurringItemId: p.itemId,
+      planKey,
+      occurrenceDate: p.occurrenceDate,
+      label: p.label,
+      amount: (p.amountCents / 100).toFixed(2),
+      basis: p.fromStoredAmount ? ("stored_amount" as const) : ("plan" as const),
+    }))
+    .sort((a, b) => (a.occurrenceDate === b.occurrenceDate ? a.hook.localeCompare(b.hook) : a.occurrenceDate < b.occurrenceDate ? -1 : 1));
 }
 
 /** (WP1) The bank snapshot `bankToday` rolls forward from, as it was read. */

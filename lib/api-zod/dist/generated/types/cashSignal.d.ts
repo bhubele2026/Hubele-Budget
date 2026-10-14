@@ -10,6 +10,7 @@ import type { CashSignalAssumedPaidPlan } from "./cashSignalAssumedPaidPlan";
 import type { CashSignalDailyItem } from "./cashSignalDailyItem";
 import type { CashSignalEventsItem } from "./cashSignalEventsItem";
 import type { CashSignalHookAmountIgnoredItem } from "./cashSignalHookAmountIgnoredItem";
+import type { CashSignalHookReservesItem } from "./cashSignalHookReservesItem";
 import type { CashSignalListedPlan } from "./cashSignalListedPlan";
 import type { CashSignalMatchesItem } from "./cashSignalMatchesItem";
 import type { CashSignalStatus } from "./cashSignalStatus";
@@ -54,6 +55,16 @@ export interface CashSignal {
   Present only when the household has a hook.
    */
     hookAmountIgnored?: CashSignalHookAmountIgnoredItem[];
+    /** (S2) What each everyday-hook occurrence on the forecast reserves, and
+  what it was sized from. `basis: plan` — the period has an allowance
+  plan: the card's charges plus what is left of the plan while the
+  period is open. `basis: stored_amount` — no plan is set for the
+  period, so the item's own stored amount is kept (e.g. "Weekly Spend
+  reserve $380 · no weekly plan set"); it is not a spending cap.
+  `amount` is the occurrence's reserve before any review answer.
+  Present only when the household has a hook occurrence.
+   */
+    hookReserves?: CashSignalHookReservesItem[];
     /** (PR6) Unresolved expenses due more than 14 days ago that no bank
   row confidently paid. Not on the curve, and never dropped
   silently. Bounded by the forecast's expansion (the first of last

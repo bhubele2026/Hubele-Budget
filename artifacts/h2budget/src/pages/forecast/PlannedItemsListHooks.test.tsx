@@ -32,11 +32,14 @@ const SIGNAL = {
   ],
 };
 
-function show(hookPayoffs?: ReturnType<typeof hookPayoffsOf>) {
+function show(
+  hookPayoffs?: ReturnType<typeof hookPayoffsOf>,
+  items: PlannedItem[] = [plan("ws", "2026-10-03", "Weekly Spend", -450), plan("ws", "2026-10-10", "Weekly Spend", -450), plan("mort", "2026-10-12", "Mortgage", -1650)],
+) {
   const noop = () => {};
   render(
     <PlannedItemsList
-      items={[plan("ws", "2026-10-03", "Weekly Spend", -450), plan("ws", "2026-10-10", "Weekly Spend", -450), plan("mort", "2026-10-12", "Mortgage", -1650)]}
+      items={items}
       payoffsByItem={new Map()}
       bestSuggestionPlanKey={null}
       highlightedPlanKey={null}
@@ -58,6 +61,19 @@ describe("PlannedItemsList — everyday hook words (WP8)", () => {
     // Display only: the row's own amount is still the stored plan.
     expect(screen.getByTestId("plan-row-ws-2026-10-10").textContent).toContain("-$450.00");
     expect(screen.getByTestId("plan-row-ws-2026-10-10").textContent).not.toContain("-$477.57");
+  });
+
+  it("(S2) no weekly plan set: the hook row says it is the Weekly Spend reserve, not a plan", () => {
+    const noPlan = {
+      hookReserves: [
+        { hook: "weekly", recurringItemId: "ws", planKey: "ws|2026-10-10", occurrenceDate: "2026-10-10", label: "Weekly Spend", amount: "380.00", basis: "stored_amount" },
+      ],
+      events: [{ date: "2026-10-10", label: "Weekly Spend", amount: "-380.00", itemId: "ws", occurrenceKey: "ws|2026-10-10" }],
+      overdueAssumedPaid: [],
+    };
+    show(hookPayoffsOf(noPlan as never), [plan("ws", "2026-10-10", "Weekly Spend", -380), plan("mort", "2026-10-12", "Mortgage", -1650)]);
+    expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe("Weekly Spend reserve $380 · no weekly plan set");
+    expect(screen.queryByTestId("plan-hook-mort-2026-10-12")).toBeNull();
   });
 
   it("without hook payoffs the rows are unchanged", () => {
