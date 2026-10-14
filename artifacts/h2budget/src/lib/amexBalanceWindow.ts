@@ -1,11 +1,11 @@
 // (#809 / #821 / #822) Pure construction of the Amex page's
-// forward-looking ending-balance window. Extracted from the
+// balance-history window (the 12 months ending this month, up to today). Extracted from the
 // `balanceWindow` useMemo in `src/pages/amex.tsx` so the weekly
 // bucketing — and specifically the rule that the rightmost data point
 // and the "Today" reference line both land on today — can be unit
 // tested without mounting the page.
 //
-// The window is a fixed 12-month span that rolls forward by month.
+// (W4) The window is the 12 months ending this month and rolls forward.
 // Credit-card spending isn't forecastable, so we plot only real history
 // as it accumulates: one point per Sun–Sat week (anchored on the
 // Saturday that closes it) from the window start through today. Weeks
@@ -32,10 +32,7 @@ import type {
   WindowPoint,
 } from "@/components/account-page/balance-trend-chart";
 
-// Earliest month the forward-looking balance window may start on. The
-// window is `max(MAY_2026, start of current month)` so it never reaches
-// back before the product's data horizon, yet rolls forward by a month
-// every time "today" crosses into a new month.
+// The product's data horizon (kept for callers; the window no longer floors on it).
 export const MAY_2026: MonthKey = { year: 2026, month: 4 };
 
 export type BalanceWindowTxn = {
@@ -73,15 +70,14 @@ export function buildBalanceWindow(
 
   if (!anchorPresent) return null;
 
-  // Window start = the data horizon (May 2026), so the chart shows the full
-  // accumulated history (May → today) instead of starting at the current month
-  // and hiding earlier months. (Guard: in the impossible case that "today" is
-  // before May 2026, start at today's month so the window isn't all-future.)
-  const startMk =
-    compareMonth(currentMonth, MAY_2026) < 0 ? currentMonth : MAY_2026;
-  const windowStart = startOfMonth(new Date(startMk.year, startMk.month, 1));
-  // 12-month span: window start through (start + 12 months − 1 day).
-  const windowEnd = addDays(addMonths(windowStart, 12), -1);
+  // (W4) The 12 months ENDING THIS MONTH: it rolls forward with the clock (the
+  // old window was pinned to May 2026 and ran out in April 2027, leaving the
+  // chart with no "today"). It ends at today — no empty future area. Months
+  // before the data horizon have no balance and simply have no points.
+  const windowStart = startOfMonth(
+    new Date(currentMonth.year, currentMonth.month - 11, 1),
+  );
+  const windowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const monthTicks: number[] = [];
   for (let i = 0; i < 12; i++) {
@@ -108,7 +104,7 @@ export function buildBalanceWindow(
 
   while (sat.getTime() <= windowEnd.getTime()) {
     const satDay = dayStr(sat);
-    // Omit weeks ending after today — keep the right side blank.
+    // Omit weeks ending after today.
     if (satDay > todayDay) break;
     const satMk: MonthKey = {
       year: sat.getFullYear(),
@@ -118,7 +114,10 @@ export function buildBalanceWindow(
     // anchored month-end helper) + this month's card-scoped
     // transactions through the Saturday.
     const prevMonthEnd = balanceAtEndOf(shiftMonth(satMk, -1));
-    if (prevMonthEnd === null) break;
+    if (prevMonthEnd === null) {
+      sat = addDays(sat, 7);
+      continue;
+    }
     let intraMonth = 0;
     for (const t of transactions) {
       if (
@@ -154,7 +153,6 @@ export function buildBalanceWindow(
   const todayMidMs = todayMid.getTime();
   if (
     todayMidMs >= windowStart.getTime() &&
-    todayMidMs <= windowEnd.getTime() &&
     (series.length === 0 || series[series.length - 1].x !== todayMidMs)
   ) {
     const todayMk: MonthKey = {

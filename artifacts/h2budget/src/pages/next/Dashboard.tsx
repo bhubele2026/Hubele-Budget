@@ -23,6 +23,8 @@ const loadBelowFold = () =>
     belowFold = null; // a failed fetch may be retried by the next ask
     throw e;
   }));
+// (W4) The Amex tile's "Purchases this week": its own chunk, after first paint.
+const AmexWeekCharges = lazy(() => import("./dashboard/AmexWeekCharges"));
 const ForecastRow = lazy(() => loadBelowFold().then((m) => ({ default: m.ForecastRow })));
 
 /** Start the chunk when the browser is idle after first paint, then show it. */
@@ -82,7 +84,15 @@ export default function DashboardPage() {
       <PageGrid>
         <DashboardHeader />
         <DashboardRefreshBanner />
-        <Tiles />
+        <Tiles
+          weekCharges={
+            below ? (
+              <Suspense fallback={null}>
+                <AmexWeekCharges />
+              </Suspense>
+            ) : undefined
+          }
+        />
         {below ? (
           <Suspense fallback={<BelowFoldSkeleton slot="forecast" />}>
             <ForecastRow />
