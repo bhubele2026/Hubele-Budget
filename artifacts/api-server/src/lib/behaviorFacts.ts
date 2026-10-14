@@ -32,7 +32,7 @@ import {
   type SpendTxn,
 } from "./spendingFilter";
 import { TRACKING_START } from "./spendingFacts";
-import { loadSupersededPendingIds } from "./supersededPending";
+import { findSupersededPendingForRange } from "./supersededPending";
 import { expandItem } from "./cashSignal";
 import { addDaysISO, householdTodayDate, householdTodayISO } from "./householdClock";
 
@@ -504,7 +504,14 @@ export async function buildBehaviorFacts(
 
   // (PR7b) Pending rows a posted row replaced: one charge, counted on its
   // posted row, so it is never a second visit, a second splurge or a streak day.
-  const replacedPendingIds = await loadSupersededPendingIds(householdId);
+  // ⭐ (P2) Only two sets of rows are checked against it: the range's
+  // [start, end] (start is floored at TRACKING_START) and the streak rows'
+  // [TRACKING_START, today]. Both lie in [TRACKING_START, max(end, today)], and
+  // `findSupersededPendingForRange` is the whole-ledger answer for every row in
+  // its range — without the full-history pairing `loadSupersededPendingIds` ran.
+  const replacedPendingIds = (
+    await findSupersededPendingForRange(householdId, TRACKING_START, end > todayIso ? end : todayIso)
+  ).replacedIds;
 
   // --- Range transactions (for range-bound facts) ------------------------
   const rangeTxnsAll = (await db
