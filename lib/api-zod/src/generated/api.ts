@@ -8114,7 +8114,7 @@ export const UpdateAllowancePlanResponse = zod
   );
 
 /**
- * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
+ * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement and read through allowanceRowOf (S6: a refund nets its category, as every allowance figure nets it). Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
  * @summary A way back when the week is over — how far over, what is left per day, what to trim, next week carried
  */
 export const getWaysBackResponseOverByMin = 0;
@@ -8146,12 +8146,14 @@ export const GetWaysBackResponse = zod
         name: zod.string(),
         spentWeek: zod
           .number()
-          .describe("This week's spend in the category, whole cents"),
+          .describe(
+            "This week's spend in the category, whole cents: (S6) purchases less refunds, as the week's spent figure and the period breakdown's category amount net them. Always > 0 (a fully refunded category is not a trim).",
+          ),
         usualWeek: zod
           .number()
           .nullable()
           .describe(
-            "Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents; null when no week counts.",
+            "Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts.",
           ),
       }),
     ),

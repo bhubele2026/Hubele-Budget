@@ -9,10 +9,10 @@
 export interface WaysBackTrim {
   categoryId: string;
   name: string;
-  /** This week's spend in the category, whole cents */
+  /** This week's spend in the category, whole cents: (S6) purchases less refunds, as the week's spent figure and the period breakdown's category amount net them. Always > 0 (a fully refunded category is not a trim). */
   spentWeek: number;
   /**
-   * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents; null when no week counts.
+   * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts.
    * @nullable
    */
   usualWeek: number | null;
