@@ -1,5 +1,5 @@
 import { runMigrations } from "@workspace/db/migrate";
-import { pool } from "@workspace/db";
+import { pool, watchPoolWaiting } from "@workspace/db";
 import app from "./app";
 import { registerCategorizationReviewCount } from "./recap/facts";
 import { listReviewQueue } from "./lib/categorizer/review";
@@ -94,6 +94,9 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+// (P2) Say so when queries queue for a database connection (at most every 30 s).
+watchPoolWaiting((pressure) => logger.warn(pressure, "Database pool: queries waiting for a connection"));
 
 // (AI-4a) The recap facts count the categorizer's open review items.
 registerCategorizationReviewCount(async (householdId) => (await listReviewQueue(householdId, 1)).total);

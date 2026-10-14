@@ -307,6 +307,16 @@ export type ForecastLedger = {
 /** (PR6) How far back an overdue expense still drags onto the curve (#803's floor). */
 export const DRAG_LOOKBACK_DAYS = 14;
 
+let ledgerBuilds = 0;
+/**
+ * (P2) How many ledgers this process has built. Tests and the timing harness
+ * read it to prove one page load builds one ledger (`ledgerShare.ts`); no
+ * figure reads it.
+ */
+export function forecastLedgerBuildCount(): number {
+  return ledgerBuilds;
+}
+
 /** Resolution statuses that close a plan occurrence for the curve. */
 const CLOSING_STATUSES: ReadonlySet<string> = new Set(["matched", "skipped", "missed", "dismissed"]);
 
@@ -382,10 +392,30 @@ export async function buildForecastLedger(
     fromDate?: string;
   } = {},
 ): Promise<ForecastLedger> {
-  const [settings] = await db
-    .select()
-    .from(forecastSettingsTable)
-    .where(eq(forecastSettingsTable.userId, ownerUserId));
+  ledgerBuilds += 1;
+  // ⭐ (P2) THE INDEPENDENT READS, AT ONCE. None of these depends on another
+  // (each is keyed on the household or the owner alone), and the ledger never
+  // writes, so reading them together changes nothing but the wait: they used
+  // to run one after the other (settings, recurring, debts, the hooks, the
+  // Avalanche settings, the resolutions). Each result is used exactly where
+  // its read used to be.
+  const [
+    [settings],
+    recurring,
+    debtsList,
+    hookSettings,
+    [avaSettingsRow],
+    resolutionsStored,
+    { expandDebtMin, expandAvalancheExtra, resolutionScheduleLookup, AVALANCHE_EXTRA_EVENT_ITEM_ID },
+  ] = await Promise.all([
+    db.select().from(forecastSettingsTable).where(eq(forecastSettingsTable.userId, ownerUserId)),
+    db.select().from(recurringItemsTable).where(eq(recurringItemsTable.householdId, householdId)),
+    db.select().from(debtsTable).where(eq(debtsTable.householdId, householdId)),
+    readHookSettings(ownerUserId),
+    db.select().from(avalancheSettingsTable).where(eq(avalancheSettingsTable.userId, ownerUserId)),
+    db.select().from(forecastResolutionsTable).where(eq(forecastResolutionsTable.householdId, householdId)),
+    import("./debtMinSchedule"),
+  ]);
   const cashBuffer = Number(settings?.cashBuffer ?? 500) || 0;
   const daysAhead = opts.horizonDays ?? settings?.daysAhead ?? 90;
 
@@ -469,14 +499,7 @@ export async function buildForecastLedger(
   // to list back to January).
   const listFromISO = fmtISO(priorMonthStart);
 
-  const recurring = await db
-    .select()
-    .from(recurringItemsTable)
-    .where(eq(recurringItemsTable.householdId, householdId));
-  const debtsList = await db
-    .select()
-    .from(debtsTable)
-    .where(eq(debtsTable.householdId, householdId));
+  // (P2) `recurring` and `debtsList` are read above, with the settings.
   const linkedRecurringByDebt = new Map<string, RecurringRow>();
   for (const r of recurring) {
     // (PR6) A one-time bill dated before today no longer links its debt: before
@@ -486,7 +509,7 @@ export async function buildForecastLedger(
     }
   }
   // ⭐ (PR-B2, decision 7) The everyday hooks: active, non-income items only.
-  const hookSettings = await readHookSettings(ownerUserId);
+  // (P2) `hookSettings` is read above, with the settings.
   const hookCadenceByItem = new Map<string, HookCadence>();
   const hookAmountIgnored: ForecastLedger["hookAmountIgnored"] = [];
   for (const [cadence, hook] of [
@@ -522,8 +545,7 @@ export async function buildForecastLedger(
   // recurring item — same series the Bills page renders for "Debt
   // minimums", so the projection never double-counts and never misses an
   // obligation that was synced via Plaid liabilities.
-  const { expandDebtMin, expandAvalancheExtra, resolutionScheduleLookup, AVALANCHE_EXTRA_EVENT_ITEM_ID } =
-    await import("./debtMinSchedule");
+  // (P2) `expandDebtMin`, `expandAvalancheExtra` … come from the import above.
   for (const d of debtsList) {
     events.push(
       ...expandDebtMin(
@@ -538,10 +560,7 @@ export async function buildForecastLedger(
   // signal projection accounts for the same end-of-month outflow that
   // the Forecast register shows. Capped server-side at the avalanche
   // payoff horizon so the projection stops once all debts are paid.
-  const [avaSettingsRow] = await db
-    .select()
-    .from(avalancheSettingsTable)
-    .where(eq(avalancheSettingsTable.userId, ownerUserId));
+  // (P2) `avaSettingsRow` is read above, with the settings.
   const manualExtra = Number(avaSettingsRow?.manualExtra ?? 0) || 0;
   events.push(
     ...expandAvalancheExtra(debtsList, manualExtra, syntheticExpandStart, to, todayDateOnly),
@@ -578,101 +597,6 @@ export async function buildForecastLedger(
   const amountKindOf = (itemId: string): "fixed" | "estimate" =>
     recurringById.get(itemId)?.amountKind === "estimate" ? "estimate" : "fixed";
 
-  // Resolve the configured Chase checking account's external Plaid
-  // account_id. Forecast is bank-only and scoped to this single account —
-  // legacy `forecastFlag = true` rows on Amex / other depository accounts must
-  // be filtered out at read time.
-  //
-  // ⚠️ The pointer this reads can be null or dangling, which used to freeze the
-  // balance on every screen at once. `resolveSnapshotAccount` recovers the
-  // account from what the snapshot remembers; see the file header for why a
-  // wrong guess would be worse than a stale number.
-  const snapshotAccount = await resolveSnapshotAccount({
-    householdId,
-    bankSnapshotAccountId: settings?.bankSnapshotAccountId ?? null,
-    bankSnapshotMask: settings?.bankSnapshotMask ?? null,
-  });
-  const configuredCheckingExternalId = snapshotAccount.externalId;
-
-  // ⭐ ONE SET OF ACTUAL ROWS FOR BOTH `bankToday` AND THE CURVE (PR4a).
-  //
-  // These used to be two queries over two row sets that happened to agree:
-  //   - "Bank today" = snapshot rolled forward through the real ledger, the
-  //     same derivation the Chase page uses (anchor + every checking-scoped
-  //     txn dated strictly after the anchor day through today — pending
-  //     included, no forecast_flag filter). The raw snapshot only advances on
-  //     a manual Sync/Refresh, so without this roll-forward the tile drifts
-  //     from the bank as webhook-synced transactions keep landing.
-  //   - The curve: actual checking activity through today belongs in the
-  //     opening balance regardless of review flags, and only future
-  //     transactions require forecastFlag — one rule for the curve, the Review
-  //     bundle and the badge: `inForecast`.
-  // `inForecast` keeps every row dated on or before today, so the rows the roll
-  // needed were always a subset of the curve's. ⚠️ The upper bound is the LATER
-  // of the window's end and today: `bankToday` rolls through today even when
-  // the chart's window ends before it (golden case "a window that ends before
-  // today").
-  //
-  // Without a snapshot there is no roll: `bankToday` is the starting balance,
-  // and the curve takes only forecast-flagged rows after today.
-  //
-  // ⭐ WHICH ROWS THE SNAPSHOT ALREADY HOLDS — ONE RULE, APPLIED HERE ONLY (PR4b).
-  // A calendar day is not enough: the balance is read at an INSTANT. A
-  // snapshot-day row can have happened after the read, and a Plaid charge dated
-  // a few days ahead can already be inside it (a posted row re-keyed from its
-  // pending row keeps the pending row's `created_at`). With a snapshot the
-  // query therefore reads the snapshot day too, and `isInSnapshot` decides each
-  // row — see there for why `created_at` never decides the snapshot day.
-  // Because `bankToday` and the curve take their rows from this one loop, they
-  // cannot disagree about it.
-  const actualUpperISO = toISO > todayISO ? toISO : todayISO;
-  // (PR4c) With a snapshot the query reaches SUPERSEDE_MAX_DAYS before the
-  // anchor, where the pending half of a pair can sit. See `ledgerActualRowsWhere`.
-  const actualRowsAll = await db
-    .select()
-    .from(transactionsTable)
-    .where(
-      ledgerActualRowsWhere({
-        householdId,
-        snapshotDay: snapshotISO,
-        todayISO,
-        upperISO: actualUpperISO,
-      }),
-    );
-  let bankToday = startBalanceAtAnchor;
-  const actuals: LedgerActual[] = [];
-  // ⭐ WHAT EACH ROW ADDS — `classifyCashRows` (PR4e), the one rule shared with
-  // "Why this number?" and the Sync's reconciliation. Moved verbatim from here:
-  //   - held by the snapshot (PR4b, `isInSnapshot`) → 0;
-  //   - not on the snapshot's account (`isBankRow`) → 0;
-  //   - ⭐ A PENDING ROW ITS POSTED ROW REPLACED COUNTS ONCE (PR4c). Normally the
-  //     sync re-keys the pending row onto its posted row, so they are one row.
-  //     When that link is missing both rows sit here and the charge would count
-  //     twice. `pairPendingWithPosted` pairs them (heuristic; see there). The
-  //     pending half never counts. What the posted half adds (PR4c review):
-  //       posted and pending both held by the snapshot       → 0 (the balance has it)
-  //       pending CHARGE with evidence it was in the balance → posted − pending (the tip)
-  //       otherwise                                          → posted, in full
-  //     A held posted row whose pending half is NOT held still counts: it reached
-  //     the ledger after that pending half and is dated on or after it, so it
-  //     cannot be inside a balance the pending half was not. Pending deposits
-  //     never leave only a difference — `available` does not hold them.
-  //   - a repeated plaid transaction id → 0 (defensive only: the id is unique).
-  // Rows that count are summed into `bankToday` and become actuals in the order
-  // the query returned them, as before the move.
-  const cash = classifyCashRows(actualRowsAll.map(toCashRow), {
-    anchor: snapshotISO && snapshotAt ? { at: snapshotAt, day: snapshotISO } : null,
-    accountExternalId: configuredCheckingExternalId,
-    todayISO,
-  });
-  for (const r of cash.rows) {
-    if (!r.counts) continue;
-    if (snapshotISO && r.occurredOn <= todayISO) bankToday += r.contribution;
-    if (r.occurredOn <= toISO) {
-      actuals.push({ kind: "actual", date: r.occurredOn, amount: r.contribution, matched: false, txnId: r.id });
-    }
-  }
-
   // Get matched-resolutions to suppress double-count of plan items already paid for by a txn.
   //
   // (#687) PLAN-KEY suppression is account-agnostic. A `matched`
@@ -689,10 +613,9 @@ export async function buildForecastLedger(
   // `matchedTxnIds` is consulted when iterating Chase bank
   // transactions, and a non-Chase txn id never appears there anyway.
   // Keep the `matchedTxnBankSet` lookup for that narrower purpose.
-  const resolutionsStored = await db
-    .select()
-    .from(forecastResolutionsTable)
-    .where(eq(forecastResolutionsTable.householdId, householdId));
+  // (P2) `resolutionsStored` is read above, with the settings; this block runs
+  // before the account and row reads below so the matched rows (`matchedIds`)
+  // are read together with them. It reads none of what they return.
   // (One-time bill move, round 4) A pending review on a paused bill reads as the
   // user's last answer: it holds its row exactly as that answer did, and the
   // paused bill is off the curve. Resuming the bill brings the question back.
@@ -729,31 +652,135 @@ export async function buildForecastLedger(
         .filter((x): x is string => !!x),
     ),
   );
+  // Resolve the configured Chase checking account's external Plaid
+  // account_id. Forecast is bank-only and scoped to this single account —
+  // legacy `forecastFlag = true` rows on Amex / other depository accounts must
+  // be filtered out at read time.
+  //
+  // ⚠️ The pointer this reads can be null or dangling, which used to freeze the
+  // balance on every screen at once. `resolveSnapshotAccount` recovers the
+  // account from what the snapshot remembers; see the file header for why a
+  // wrong guess would be worse than a stale number.
+  // (P2) Read below, at once with the actual rows and the matched rows.
+  const snapshotAccountRead = resolveSnapshotAccount({
+    householdId,
+    bankSnapshotAccountId: settings?.bankSnapshotAccountId ?? null,
+    bankSnapshotMask: settings?.bankSnapshotMask ?? null,
+  });
+
+  // ⭐ ONE SET OF ACTUAL ROWS FOR BOTH `bankToday` AND THE CURVE (PR4a).
+  //
+  // These used to be two queries over two row sets that happened to agree:
+  //   - "Bank today" = snapshot rolled forward through the real ledger, the
+  //     same derivation the Chase page uses (anchor + every checking-scoped
+  //     txn dated strictly after the anchor day through today — pending
+  //     included, no forecast_flag filter). The raw snapshot only advances on
+  //     a manual Sync/Refresh, so without this roll-forward the tile drifts
+  //     from the bank as webhook-synced transactions keep landing.
+  //   - The curve: actual checking activity through today belongs in the
+  //     opening balance regardless of review flags, and only future
+  //     transactions require forecastFlag — one rule for the curve, the Review
+  //     bundle and the badge: `inForecast`.
+  // `inForecast` keeps every row dated on or before today, so the rows the roll
+  // needed were always a subset of the curve's. ⚠️ The upper bound is the LATER
+  // of the window's end and today: `bankToday` rolls through today even when
+  // the chart's window ends before it (golden case "a window that ends before
+  // today").
+  //
+  // Without a snapshot there is no roll: `bankToday` is the starting balance,
+  // and the curve takes only forecast-flagged rows after today.
+  //
+  // ⭐ WHICH ROWS THE SNAPSHOT ALREADY HOLDS — ONE RULE, APPLIED HERE ONLY (PR4b).
+  // A calendar day is not enough: the balance is read at an INSTANT. A
+  // snapshot-day row can have happened after the read, and a Plaid charge dated
+  // a few days ahead can already be inside it (a posted row re-keyed from its
+  // pending row keeps the pending row's `created_at`). With a snapshot the
+  // query therefore reads the snapshot day too, and `isInSnapshot` decides each
+  // row — see there for why `created_at` never decides the snapshot day.
+  // Because `bankToday` and the curve take their rows from this one loop, they
+  // cannot disagree about it.
+  const actualUpperISO = toISO > todayISO ? toISO : todayISO;
+  // (PR4c) With a snapshot the query reaches SUPERSEDE_MAX_DAYS before the
+  // anchor, where the pending half of a pair can sit. See `ledgerActualRowsWhere`.
+  // ⭐ (P2) Three independent reads at once: the account the ledger runs on, the
+  // actual rows (their bounds come from the settings and today only), and the
+  // rows the resolutions name (`matchedIds`, above). Each result is used
+  // exactly where its read used to be.
+  const [snapshotAccount, actualRowsAll, matchedTxns] = await Promise.all([
+    snapshotAccountRead,
+    db
+      .select()
+      .from(transactionsTable)
+      .where(
+        ledgerActualRowsWhere({
+          householdId,
+          snapshotDay: snapshotISO,
+          todayISO,
+          upperISO: actualUpperISO,
+        }),
+      ),
+    matchedIds.length > 0
+      ? db
+          .select({
+            id: transactionsTable.id,
+            source: transactionsTable.source,
+            plaidAccountId: transactionsTable.plaidAccountId,
+            amount: transactionsTable.amount,
+            description: transactionsTable.description,
+          })
+          .from(transactionsTable)
+          .where(
+            and(
+              eq(transactionsTable.householdId, householdId),
+              inArray(transactionsTable.id, matchedIds),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
+  const configuredCheckingExternalId = snapshotAccount.externalId;
+  let bankToday = startBalanceAtAnchor;
+  const actuals: LedgerActual[] = [];
+  // ⭐ WHAT EACH ROW ADDS — `classifyCashRows` (PR4e), the one rule shared with
+  // "Why this number?" and the Sync's reconciliation. Moved verbatim from here:
+  //   - held by the snapshot (PR4b, `isInSnapshot`) → 0;
+  //   - not on the snapshot's account (`isBankRow`) → 0;
+  //   - ⭐ A PENDING ROW ITS POSTED ROW REPLACED COUNTS ONCE (PR4c). Normally the
+  //     sync re-keys the pending row onto its posted row, so they are one row.
+  //     When that link is missing both rows sit here and the charge would count
+  //     twice. `pairPendingWithPosted` pairs them (heuristic; see there). The
+  //     pending half never counts. What the posted half adds (PR4c review):
+  //       posted and pending both held by the snapshot       → 0 (the balance has it)
+  //       pending CHARGE with evidence it was in the balance → posted − pending (the tip)
+  //       otherwise                                          → posted, in full
+  //     A held posted row whose pending half is NOT held still counts: it reached
+  //     the ledger after that pending half and is dated on or after it, so it
+  //     cannot be inside a balance the pending half was not. Pending deposits
+  //     never leave only a difference — `available` does not hold them.
+  //   - a repeated plaid transaction id → 0 (defensive only: the id is unique).
+  // Rows that count are summed into `bankToday` and become actuals in the order
+  // the query returned them, as before the move.
+  const cash = classifyCashRows(actualRowsAll.map(toCashRow), {
+    anchor: snapshotISO && snapshotAt ? { at: snapshotAt, day: snapshotISO } : null,
+    accountExternalId: configuredCheckingExternalId,
+    todayISO,
+  });
+  for (const r of cash.rows) {
+    if (!r.counts) continue;
+    if (snapshotISO && r.occurredOn <= todayISO) bankToday += r.contribution;
+    if (r.occurredOn <= toISO) {
+      actuals.push({ kind: "actual", date: r.occurredOn, amount: r.contribution, matched: false, txnId: r.id });
+    }
+  }
+
   const matchedTxnBankSet = new Set<string>();
   const resolvedTxnAmount = new Map<string, number>();
   const resolvedTxnDescription = new Map<string, string | null>();
-  if (matchedIds.length > 0) {
-    const matchedTxns = await db
-      .select({
-        id: transactionsTable.id,
-        source: transactionsTable.source,
-        plaidAccountId: transactionsTable.plaidAccountId,
-        amount: transactionsTable.amount,
-        description: transactionsTable.description,
-      })
-      .from(transactionsTable)
-      .where(
-        and(
-          eq(transactionsTable.householdId, householdId),
-          inArray(transactionsTable.id, matchedIds),
-        ),
-      );
-    for (const t of matchedTxns) {
-      resolvedTxnAmount.set(t.id, Number(t.amount) || 0);
-      resolvedTxnDescription.set(t.id, t.description ?? null);
-      if (isBankRow(t.source, t.plaidAccountId ?? null, configuredCheckingExternalId)) {
-        matchedTxnBankSet.add(t.id);
-      }
+  // (P2) `matchedTxns` is read above (empty when no resolution names a row).
+  for (const t of matchedTxns) {
+    resolvedTxnAmount.set(t.id, Number(t.amount) || 0);
+    resolvedTxnDescription.set(t.id, t.description ?? null);
+    if (isBankRow(t.source, t.plaidAccountId ?? null, configuredCheckingExternalId)) {
+      matchedTxnBankSet.add(t.id);
     }
   }
   // ⭐ (Decision 13, d) CONFIRMED ROWS — a reliable payment reference. The rows

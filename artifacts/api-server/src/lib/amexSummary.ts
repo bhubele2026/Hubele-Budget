@@ -11,7 +11,8 @@
 //                  Unknown is null, never 0.
 //   purchases …    every row on the card(s) dated in the period, once
 //                  (a pending row its posted row replaced is out —
-//                  `loadSupersededPendingIds`, the payoff's own read), each put
+//                  `findSupersededPendingForRange` over the period, the
+//                  payoff's own read, P2), each put
 //                  in ONE bucket by `classifyCardCredit` with `CARD_OWED` — the
 //                  very rule `computeWeeklyPayoff` bills with. So for a card's
 //                  billing window, purchases − refunds IS its `weekCharges`
@@ -66,7 +67,7 @@ import { loadAllowanceWindow, type MovementRowRead } from "./moneyContext";
 import { POSITION_HORIZON_DAYS, tier2PairedTxnIdsOf } from "./moneyPosition";
 import { displayNameOf, loadMerchantAliases } from "./periodBreakdown";
 import { TRACKING_START } from "./spendingFacts";
-import { loadSupersededPendingIds } from "./supersededPending";
+import { findSupersededPendingForRange } from "./supersededPending";
 
 /** A row on a card, as this summary reads it: the spending rule's fields, identity and `pending`. */
 interface CardTxn {
@@ -312,7 +313,12 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
             ),
           )
       : Promise.resolve([] as CardTxn[]),
-    scopeIds.length > 0 ? loadSupersededPendingIds(householdId) : Promise.resolve(new Set<string>()),
+    // ⭐ (P2) The whole-ledger answer for the period's rows — every row read
+    // above is dated in [from, to] — without reading the whole ledger
+    // (`findSupersededPendingForRange`, exact for every row in its range).
+    scopeIds.length > 0
+      ? findSupersededPendingForRange(householdId, from, to).then((r) => r.replacedIds)
+      : Promise.resolve(new Set<string>()),
     loadMerchantAliases(householdId),
     cashRead,
   ]);

@@ -12,7 +12,7 @@ import {
   spendAmount,
   type SpendContext,
 } from "./spendingFilter";
-import { loadSupersededPendingIds } from "./supersededPending";
+import { findSupersededPendingForRange } from "./supersededPending";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
@@ -384,32 +384,24 @@ export async function computeWeeklyPayoff(
   const externalIds = cardRows.map((c) => c.accountId).filter((v): v is string => !!v);
   const internalIds = cardRows.map((c) => c.internalId);
 
-  // --- SpendContext (categories + debt linkage), same shape as the reports
-  //     pipeline so isRealSpend behaves identically. ---------------------
-  const cats = await db
-    .select({
-      id: budgetCategoriesTable.id,
-      name: budgetCategoriesTable.name,
-      debtId: budgetCategoriesTable.debtId,
-      kind: budgetCategoriesTable.kind,
-    })
-    .from(budgetCategoriesTable)
-    .where(eq(budgetCategoriesTable.householdId, householdId));
-  const categoriesById = new Map<
-    string,
-    { name: string; debtId: string | null; kind: string }
-  >();
-  const debtCategoryIds = new Set<string>();
-  for (const c of cats) {
-    categoriesById.set(c.id, { name: c.name, debtId: c.debtId, kind: c.kind });
-    if (c.debtId) debtCategoryIds.add(c.id);
-  }
-  const ctx: SpendContext = { categoriesById, debtCategoryIds };
-
-  // --- Per-card debt rows (for statement fallback + debtId) -----------------
-  const debtRows =
+  // ⭐ (P2) The four reads below depend only on the cards found above, never
+  // on each other: they run at once (they used to run one after the other).
+  // Each result is used exactly where its read used to be.
+  const [cats, debtRows, txns, replacedPendingIds] = await Promise.all([
+    // --- SpendContext (categories + debt linkage), same shape as the reports
+    //     pipeline so isRealSpend behaves identically. ---------------------
+    db
+      .select({
+        id: budgetCategoriesTable.id,
+        name: budgetCategoriesTable.name,
+        debtId: budgetCategoriesTable.debtId,
+        kind: budgetCategoriesTable.kind,
+      })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.householdId, householdId)),
+    // --- Per-card debt rows (for statement fallback + debtId) ---------------
     internalIds.length > 0
-      ? await db
+      ? db
           .select({
             id: debtsTable.id,
             balance: debtsTable.balance,
@@ -422,18 +414,12 @@ export async function computeWeeklyPayoff(
               inArray(debtsTable.plaidAccountId, internalIds),
             ),
           )
-      : [];
-  const debtByInternalId = new Map<string, { id: string; balance: string }>();
-  for (const d of debtRows) {
-    if (d.plaidAccountId) debtByInternalId.set(d.plaidAccountId, { id: d.id, balance: d.balance });
-  }
-
-  // --- This week's transactions on these cards -----------------------------
-  // `transactions.plaid_account_id` stores the EXTERNAL Plaid account_id
-  // string (see routes/amex.ts #748), so we key on the external ids.
-  const txns =
+      : Promise.resolve([]),
+    // --- This week's transactions on these cards -----------------------------
+    // `transactions.plaid_account_id` stores the EXTERNAL Plaid account_id
+    // string (see routes/amex.ts #748), so we key on the external ids.
     externalIds.length > 0
-      ? await db
+      ? db
           .select({
             id: transactionsTable.id,
             plaidAccountId: transactionsTable.plaidAccountId,
@@ -457,12 +443,35 @@ export async function computeWeeklyPayoff(
               lte(transactionsTable.occurredOn, queryEnd),
             ),
           )
-      : [];
+      : Promise.resolve([]),
+    // (PR7b) A pending charge its posted row replaced is owed once, not twice.
+    // ⭐ (P2) The whole-ledger answer for the rows read above — every one is
+    // dated in [queryStart, queryEnd] — without reading the whole ledger
+    // (`findSupersededPendingForRange`, exact for every row in its range; it
+    // replaces `loadSupersededPendingIds`, the full-history pairing, which this
+    // ran once per hook period on every forecast build).
+    externalIds.length > 0
+      ? findSupersededPendingForRange(householdId, queryStart, queryEnd).then((r) => r.replacedIds)
+      : Promise.resolve(new Set<string>()),
+  ]);
+  const categoriesById = new Map<
+    string,
+    { name: string; debtId: string | null; kind: string }
+  >();
+  const debtCategoryIds = new Set<string>();
+  for (const c of cats) {
+    categoriesById.set(c.id, { name: c.name, debtId: c.debtId, kind: c.kind });
+    if (c.debtId) debtCategoryIds.add(c.id);
+  }
+  const ctx: SpendContext = { categoriesById, debtCategoryIds };
 
-  // (PR7b) A pending charge its posted row replaced is owed once, not twice.
-  const replacedPendingIds =
-    externalIds.length > 0 ? await loadSupersededPendingIds(householdId) : new Set<string>();
+  // (P2) `debtRows` is read above.
+  const debtByInternalId = new Map<string, { id: string; balance: string }>();
+  for (const d of debtRows) {
+    if (d.plaidAccountId) debtByInternalId.set(d.plaidAccountId, { id: d.id, balance: d.balance });
+  }
 
+  // (P2) `txns` and `replacedPendingIds` are read above.
   type Agg = { charges: number; refunds: number; count: number; top: { name: string; amount: number } | null };
   const byCard = new Map<string, Agg>();
   for (const ext of externalIds) byCard.set(ext, { charges: 0, refunds: 0, count: 0, top: null });

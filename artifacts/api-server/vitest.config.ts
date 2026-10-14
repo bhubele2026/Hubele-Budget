@@ -19,5 +19,9 @@ export default defineConfig({
     // write.
     fileParallelism: false,
     setupFiles: ["src/__tests__/_setup/forceSandboxPlaidEnv.ts"],
+    // (P2) Every forecast ledger result is deep-frozen in the API suite: a
+    // consumer that mutates a result other requests may share throws here
+    // (lib/ledgerShare.ts).
+    env: { LEDGER_SHARING_FREEZE: "1" },
   },
 });

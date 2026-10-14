@@ -35,9 +35,13 @@ import learnedRulesRouter from "./learnedRules";
 import aiRouter from "./ai";
 import goalsRouter from "./goals";
 import bankingRouter from "./banking";
+import { ledgerWriteFence } from "../middlewares/ledgerWriteFence";
 
 const router: IRouter = Router();
 
+// (P2) A write moves the forecast ledger's write generation, so no read that
+// starts after it joins a build from before it (lib/ledgerShare.ts).
+router.use(ledgerWriteFence);
 router.use(healthRouter);
 router.use(dashboardRouter);
 router.use(transactionsRouter);

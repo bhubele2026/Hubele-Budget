@@ -3,6 +3,8 @@ import { rollForwardBalance, walkLedger } from "@workspace/avalanche-core";
 import { buildForecastLedger, type ForecastLedger } from "./forecastLedger";
 import type { HookPayoff } from "./everydayHooks";
 import type { SnapshotAccountResolution } from "./resolveSnapshotAccount";
+import { householdTodayISO } from "./householdClock";
+import { deepFreeze, ledgerFreezeEnabled, ledgerSharingEnabled, shareInFlight } from "./ledgerShare";
 
 type Cadence =
   | "weekly"
@@ -412,6 +414,33 @@ export async function computeCashSignal(
  */
 export type DetailedCashSignal = { signal: CashSignal; ledger: ForecastLedger };
 
+/**
+ * ⭐ (P2) EVERY INPUT THAT CAN CHANGE `computeCashSignalDetailed`'S RESULT,
+ * besides the database (the write generation in `ledgerShare.ts` stands for
+ * that): the household, the owner whose settings it reads, the two options
+ * (`buildForecastLedger` reads no other), and the household's today — the
+ * only clock the build reads (`householdTodayDate`; every later date is
+ * derived from it, the snapshot's own instant, or the options).
+ */
+export function cashSignalShareKey(
+  householdId: string,
+  ownerUserId: string,
+  opts: { horizonDays?: number; fromDate?: string },
+  todayISO: string = householdTodayISO(),
+): string {
+  return JSON.stringify([householdId, ownerUserId, String(opts.horizonDays), String(opts.fromDate), todayISO]);
+}
+
+/**
+ * The cash signal and the ledger it walked.
+ *
+ * ⭐ (P2) BUILT ONCE PER MOMENT. Concurrent callers with the same inputs
+ * (`cashSignalShareKey`) await the same build — the spine, the money position,
+ * the cash signal, the Amex summaries, the period breakdowns and the banking
+ * review of one page load build ONE ledger instead of one each. Nothing is kept
+ * once the build settles (`ledgerShare.ts`). ⚠️ The result may be shared:
+ * never mutate it. `LEDGER_SHARING=off` builds every call on its own.
+ */
 export async function computeCashSignalDetailed(
   householdId: string,
   ownerUserId: string,
@@ -419,6 +448,22 @@ export async function computeCashSignalDetailed(
     horizonDays?: number;
     fromDate?: string;
   } = {},
+): Promise<DetailedCashSignal> {
+  const build = (): Promise<DetailedCashSignal> => {
+    const built = buildCashSignalDetailed(householdId, ownerUserId, opts);
+    return ledgerFreezeEnabled() ? built.then((r) => deepFreeze(r)) : built;
+  };
+  if (!ledgerSharingEnabled()) return build();
+  return shareInFlight(cashSignalShareKey(householdId, ownerUserId, opts), build);
+}
+
+async function buildCashSignalDetailed(
+  householdId: string,
+  ownerUserId: string,
+  opts: {
+    horizonDays?: number;
+    fromDate?: string;
+  },
 ): Promise<DetailedCashSignal> {
   const ledger = await buildForecastLedger(householdId, ownerUserId, opts);
   const { items, fromISO, toISO, cashBuffer } = ledger;
