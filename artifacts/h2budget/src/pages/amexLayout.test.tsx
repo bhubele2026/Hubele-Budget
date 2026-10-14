@@ -221,7 +221,8 @@ describe("Amex page — the panel grid (C10)", () => {
     expect(plat.className).toContain("panel-accent-amex");
     expect(all.className).not.toContain("panel-accent");
     expect(plat.textContent).toContain("••1005");
-    expect(plat.textContent).toContain("$2,000.00");
+    // (W7) Owed and purchases are the server's Summary figures (components/amexCardBand.test.tsx).
+    expect(plat.textContent).toContain("Owed");
     expect(plat.textContent).toContain("cleared");
     // Add to Avalanche rides on every card panel (AX-27), not on "All cards".
     expect(within(plat).getByText("add")).toBeTruthy();

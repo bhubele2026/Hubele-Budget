@@ -67,10 +67,19 @@ export function useUrlState<T>(
   }, [key, useUrl]);
   const [value, setValue] = useState<T>(read);
 
+  // The param text this hook last saw in the address: a link that pushes a new
+  // one (a section tab, a row link) re-reads it; a push that leaves it alone
+  // (the same page's own history entry) does not disturb the state.
+  const seenRaw = useRef<string | null>(
+    !useUrl || typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get(key),
+  );
   const set = useCallback(
     (next: T) => {
       setValue(next);
-      if (useUrl) replaceUrlParam(key, codecRef.current.write(next));
+      if (useUrl) {
+        replaceUrlParam(key, codecRef.current.write(next));
+        seenRaw.current = new URLSearchParams(window.location.search).get(key);
+      }
     },
     [key, useUrl],
   );
@@ -78,10 +87,25 @@ export function useUrlState<T>(
   // Back/Forward (and any other address change) re-reads the param.
   useEffect(() => {
     if (!useUrl) return;
-    const onPop = () => setValue(read());
+    const onPop = () => {
+      seenRaw.current = new URLSearchParams(window.location.search).get(key);
+      setValue(read());
+    };
+    // A link inside the app (wouter's `pushState` event) that lands on this
+    // page with a different param — the Amex card tabs — re-reads it too.
+    const onPush = () => {
+      const raw = new URLSearchParams(window.location.search).get(key);
+      if (raw === seenRaw.current) return;
+      seenRaw.current = raw;
+      setValue(read());
+    };
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, [read, useUrl]);
+    window.addEventListener("pushState", onPush);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("pushState", onPush);
+    };
+  }, [read, useUrl, key]);
 
   return [value, set];
 }

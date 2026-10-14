@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BUCKET_LABELS, BUCKET_LABEL_ORDER } from "@/lib/bucketLabels";
 
 /**
  * The four allowance-bucket toggles that ride on a transaction row.
@@ -29,13 +30,7 @@ export type BucketFlags = {
   reimbursable: boolean;
 };
 
-/** (W3) The short form is for a phone; from `sm` up the word is spelled out. */
-const LABELS: Record<BucketKey, { short: string; full: string }> = {
-  weekly: { short: "WK", full: "Weekly" },
-  monthly: { short: "MO", full: "Monthly" },
-  unplanned: { short: "UN", full: "Unplanned" },
-  reimbursable: { short: "RE", full: "Reimbursable" },
-};
+const LABELS = BUCKET_LABELS;
 
 /** The accessible name stays what it was ("Weekly bucket"…); the tooltip says what the mark does. */
 const NAMES: Record<BucketKey, string> = {
@@ -52,7 +47,7 @@ const MEANINGS: Record<BucketKey, string> = {
   reimbursable: "Reimbursable: someone will pay this back",
 };
 
-const ORDER: BucketKey[] = ["weekly", "monthly", "unplanned", "reimbursable"];
+const ORDER: BucketKey[] = BUCKET_LABEL_ORDER;
 
 function Bubble({
   label,
@@ -95,8 +90,8 @@ function Bubble({
       {/* (W3) Readable text, 11px, never the old 9px glyph: two letters on a
           phone, the word from `sm` up. The tooltip carries the one-line meaning. */}
       <span className="text-[11px] font-semibold leading-none text-neutral-500" aria-hidden="true">
-        <span className="sm:hidden">{label.short}</span>
-        <span className="hidden sm:inline">{label.full}</span>
+        <span className="sm:hidden @6xl:inline">{label.short}</span>
+        <span className="hidden sm:inline @6xl:hidden">{label.full}</span>
       </span>
     </button>
   );

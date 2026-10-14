@@ -153,4 +153,22 @@ describe("useUrlState — a page embedded in another route (url: false)", () => 
     expect(screen.getByTestId("card").textContent).toBe("acct-2");
     expect(window.location.search).toBe("?card=other");
   });
+
+  it("(W7) a link inside the app that pushes a new ?card= (the Amex section tabs) re-reads it; All cards clears it", () => {
+    window.history.replaceState(null, "", "/amex");
+    mount();
+    expect(state()).toBe("2026-10|wk|all");
+    act(() => window.history.pushState(null, "", "/amex?card=hs-amex-blue-2002"));
+    expect(state()).toBe("2026-10|wk|hs-amex-blue-2002");
+    act(() => window.history.pushState(null, "", "/amex"));
+    expect(state()).toBe("2026-10|wk|all");
+  });
+
+  it("(W7) a push that leaves this param alone does not disturb a state the page set", () => {
+    window.history.replaceState(null, "", "/amex");
+    mount();
+    fireEvent.click(screen.getByText("year"));
+    act(() => window.history.pushState(null, "", "/amex?mode=year&tx=r1"));
+    expect(state()).toBe("2026-10|yr|all");
+  });
 });
