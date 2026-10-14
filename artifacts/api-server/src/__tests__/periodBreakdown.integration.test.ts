@@ -184,7 +184,7 @@ type Position = {
 type Spine = {
   spentWeek: number;
   position: { remainingWeek: string | null; withinPlan: string | null };
-  monthAllowance: { plan: string | null; actual: string; status: string };
+  monthAllowance: { plan: string | null; actual: string; status: string; remaining: string | null; over: string | null };
 };
 
 const cents = (v: string | null): number => Math.round(Number(v) * 100);
@@ -607,10 +607,10 @@ describe("this month — the monthly allowance", () => {
     expect(hook.remainingCents).toBe(0); // over the plan: nothing left to reserve
   });
 
-  it("⭐ spine.monthAllowance === the endpoint's plan and actual, with its status", async () => {
+  it("⭐ spine.monthAllowance === the endpoint's plan, actual, remaining and over, with its status", async () => {
     const [b, spine] = await Promise.all([get<Breakdown>(MONTH), get<Spine>("/spine")]);
-    expect(spine.monthAllowance).toEqual({ plan: b.plan.amount, actual: b.actual, status: "over" });
-    expect(spine.monthAllowance).toEqual({ plan: "400.00", actual: "440.00", status: "over" });
+    expect(spine.monthAllowance).toEqual({ plan: b.plan.amount, actual: b.actual, status: "over", remaining: b.remaining, over: b.over });
+    expect(spine.monthAllowance).toEqual({ plan: "400.00", actual: "440.00", status: "over", remaining: "-40.00", over: "40.00" });
   });
 });
 
@@ -629,7 +629,7 @@ describe("not set is never $0", () => {
       expect(JSON.stringify(b)).not.toMatch(/324\.50|440\.00|Amex Platinum|H-E-B/);
     }
     const spine = await get<Spine>("/spine", B);
-    expect(spine.monthAllowance).toEqual({ plan: null, actual: "0.00", status: "not_set" });
+    expect(spine.monthAllowance).toEqual({ plan: null, actual: "0.00", status: "not_set", remaining: null, over: null });
   });
 
   it("a plan and a quiet week: actual 0.00, the whole plan left", async () => {
@@ -678,7 +678,7 @@ describe("the clock — household D (America/Chicago)", () => {
       const pos = await get<Position>("/money/position", D);
       expect(newWeek.actual).toBe(pos.spentWeekDiscretionary);
       const spine = await get<Spine>("/spine", D);
-      expect(spine.monthAllowance).toEqual({ plan: "200.00", actual: "30.00", status: "within" });
+      expect(spine.monthAllowance).toEqual({ plan: "200.00", actual: "30.00", status: "within", remaining: "170.00", over: "0.00" });
     } finally {
       vi.setSystemTime(NOW);
     }

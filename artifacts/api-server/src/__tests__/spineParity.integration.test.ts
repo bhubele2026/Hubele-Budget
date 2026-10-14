@@ -590,7 +590,13 @@ type Spine = {
     degraded: boolean;
     weekAdjustment: { amount: string; reason: string | null; weekStart: string } | null;
   };
-  monthAllowance: { plan: string | null; actual: string; status: "not_set" | "within" | "over" };
+  monthAllowance: {
+    plan: string | null;
+    actual: string;
+    status: "not_set" | "within" | "over";
+    remaining: string | null;
+    over: string | null;
+  };
 };
 
 type MoneyPosition = {
@@ -1200,7 +1206,7 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
 
   it("⭐ (S3) monthAllowance matches GET /money/period-breakdown?period=month for this month, to the cent", async () => {
     const spine = await get<Spine>("/spine");
-    const b = await get<{ plan: { amount: string | null }; actual: string; over: string | null; isCurrent: boolean }>(
+    const b = await get<{ plan: { amount: string | null }; actual: string; remaining: string | null; over: string | null; isCurrent: boolean }>(
       `/money/period-breakdown?period=month&start=${MONTH_START_ISO}`,
     );
     expect(b.isCurrent).toBe(true);
@@ -1208,9 +1214,15 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(spine.monthAllowance.actual).toBe(b.actual);
     expect(cents(spine.monthAllowance.actual)).toBe(cents(b.actual));
     expect(spine.monthAllowance.status).toBe(b.plan.amount == null ? "not_set" : cents(b.over ?? "0") > 0 ? "over" : "within");
-    // The three fields and nothing else; not vacuous: the fixture has a $400 monthly plan.
-    expect(Object.keys(spine.monthAllowance).sort()).toEqual(["actual", "plan", "status"]);
+    // (S6) left / over: the breakdown's own figures, so no screen subtracts.
+    expect(spine.monthAllowance.remaining).toBe(b.remaining);
+    expect(spine.monthAllowance.over).toBe(b.over);
+    // The five fields and nothing else; not vacuous: the fixture has a $400 monthly plan.
+    expect(Object.keys(spine.monthAllowance).sort()).toEqual(["actual", "over", "plan", "remaining", "status"]);
     expect(spine.monthAllowance.plan).toBe("400.00");
+    expect(spine.monthAllowance.remaining).not.toBeNull();
+    expect(cents(spine.monthAllowance.remaining!)).toBe(cents(spine.monthAllowance.plan!) - cents(spine.monthAllowance.actual));
+    expect(spine.monthAllowance.over).toBe(cents(spine.monthAllowance.remaining!) < 0 ? (-cents(spine.monthAllowance.remaining!) / 100).toFixed(2) : "0.00");
   });
 
   it("⭐ (S3) the week's breakdown is the position's week: actual = spentWeekDiscretionary, remaining = spine.position.remainingWeek", async () => {

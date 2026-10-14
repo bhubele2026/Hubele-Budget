@@ -39,7 +39,7 @@ const spine = (o: Record<string, unknown> = {}) => ({
   debt: { payoffPct: 41.6, nextMilestone: null, paidDownMtd: 300, confirmedPaymentsMtd: 320, newChargesMtd: 80 },
   reviewCount: 3,
   position: { safeToSpendNow: "210.00", remainingWeek: "60.00", availableUntilPayday: "400.00", paydayDate: "2026-10-16", horizonKind: "payday", withinPlan: "yes", confidence: "firm", degraded: false, weekAdjustment: null },
-  monthAllowance: { plan: "1000.00", actual: "900.00", status: "within" },
+  monthAllowance: { plan: "1000.00", actual: "900.00", status: "within", remaining: "100.00", over: "0.00" },
   ...o,
 });
 const acct = (id: string, o: Record<string, unknown>) => ({ id, accountId: `p-${id}`, name: null, mask: null, type: "depository", subtype: "checking", ...o });
@@ -139,14 +139,31 @@ describe("this week and this month", () => {
     expect(screen.getByTestId("tile-month-left").textContent).toBe("$100.00 left");
     expect(screen.getByTestId("tile-month-status").textContent).toBe("Within");
     cleanup();
-    setup({ monthAllowance: { plan: "1000.00", actual: "1125.50", status: "over" } });
+    setup({ monthAllowance: { plan: "1000.00", actual: "1125.50", status: "over", remaining: "-125.50", over: "125.50" } });
     expect(screen.getByTestId("tile-month-left").textContent).toBe("Over $125.50");
     expect(screen.getByTestId("tile-month-status").textContent).toBe("Over");
     cleanup();
-    setup({ monthAllowance: { plan: null, actual: "300.00", status: "not_set" } });
+    setup({ monthAllowance: { plan: null, actual: "300.00", status: "not_set", remaining: null, over: null } });
     const t = screen.getByTestId("tile-month");
     expect(within(t).getByTestId("tile-month-status").textContent).toBe("Plan not set");
     expect(t.textContent).not.toMatch(/Over|\$0\.00/);
+  });
+});
+
+describe("(S6) this month reads left / over from the server, never plan − actual", () => {
+  it("quotes the server's remaining and over, even when they are not plan − actual", () => {
+    // A server answer the browser could not have computed: remaining is not 1000 − 900.
+    setup({ monthAllowance: { plan: "1000.00", actual: "900.00", status: "within", remaining: "75.25", over: "0.00" } });
+    expect(screen.getByTestId("tile-month-left").textContent).toBe("$75.25 left");
+    cleanup();
+    setup({ monthAllowance: { plan: "1000.00", actual: "990.00", status: "over", remaining: "-12.34", over: "12.34" } });
+    expect(screen.getByTestId("tile-month-left").textContent).toBe("Over $12.34");
+    expect(screen.getByTestId("tile-month-status").textContent).toBe("Over");
+  });
+  it("exactly on plan: $0.00 left, within", () => {
+    setup({ monthAllowance: { plan: "1000.00", actual: "1000.00", status: "within", remaining: "0.00", over: "0.00" } });
+    expect(screen.getByTestId("tile-month-left").textContent).toBe("$0.00 left");
+    expect(screen.getByTestId("tile-month-status").textContent).toBe("Within");
   });
 });
 
