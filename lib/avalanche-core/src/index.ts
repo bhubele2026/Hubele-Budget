@@ -19,6 +19,7 @@
 // suggested weekly cap (`deriveWeeklyLimit`).
 
 export { inForecast } from "./forecastInclusion";
+export { AMEX_TIER_LABEL, amexCardLabel, amexEffectiveTier, type AmexTier } from "./amexCard";
 export {
   isInSnapshot,
   pendingChargeWasInBalance,
@@ -105,6 +106,7 @@ export {
   REFUND_MARKER_WORDS,
   categoryDirectionConflict,
   classifyOutflow,
+  classifyCardCredit,
   classifyRefund,
   creditAmount,
   hasRefundMarker,
@@ -120,6 +122,7 @@ export {
   matchesTransferPattern,
   normalizeDescription,
   spendAmount,
+  type CardRowKind,
   type ClassifyOptions,
   type DirectionConflict,
   type DirectionOptions,
