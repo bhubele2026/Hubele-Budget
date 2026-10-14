@@ -35,18 +35,35 @@ const txn = (o: Partial<TxnRouteRef> & { id?: string }): TxnRouteRef => ({
 
 describe("txnRoute — where a transaction opens", () => {
   it.each([
-    ["checking", "ext-chk", "plaid:chase", "Chase Total Checking ••5526"],
-    ["savings", "ext-sav", "plaid:chase", "Chase Savings ••8801"],
-    ["a non-Amex card", "ext-freedom", "plaid:chase", "Chase Freedom ••4433"],
-    ["the Amex card", "ext-blue", "plaid:amex", "American Express Blue Cash Preferred ••1001"],
-    ["a loan", "ext-loan", "plaid:upstart", "Upstart Personal Loan ••9009"],
-  ])("a row on a linked %s opens that account's page, on the row and its month", (_kind, ext, source, label) => {
+    ["savings", "ext-sav", "plaid:chase", "Chase Savings ••8801", "/next/accounts/ext-sav?tx=t1&month=2026-09-01"],
+    ["a non-Amex card", "ext-freedom", "plaid:chase", "Chase Freedom ••4433", "/next/accounts/ext-freedom?tx=t1&month=2026-09-01"],
+    ["a loan", "ext-loan", "plaid:upstart", "Upstart Personal Loan ••9009", "/next/accounts/ext-loan?tx=t1&month=2026-09-01"],
+    // (W1) Not a Chase account: its own page, which opens the bank ledger for it.
+    ["a credit union's checking", "ext/cu 1", "plaid:summit-cu", "Summit Credit Union Share Checking ••7007", "/next/accounts/ext%2Fcu%201?tx=t1&month=2026-09-01"],
+  ])("a row on a linked %s opens that account's page, on the row and its month", (_kind, ext, source, label, href) => {
     const r = txnRoute(txn({ plaidAccountId: ext, source }), ENTRIES);
     expect(r.kind).toBe("account");
-    expect(r.href).toBe(`/next/accounts/${ext}?tx=t1&month=2026-09-01`);
+    expect(r.href).toBe(href);
     expect(r.label).toBe(label);
     expect(r.note).toBeNull();
     expect(r.identity.known).toBe(true);
+  });
+
+  // (W1) A card row opens the Amex page at that card; a Chase checking row the Chase register at that account.
+  it("a row on a linked Amex card opens /amex at that card, on its month and the row", () => {
+    const r = txnRoute(txn({ plaidAccountId: "ext-blue", source: "plaid:amex" }), ENTRIES);
+    expect(r).toMatchObject({ kind: "account", href: "/amex?card=ext-blue&month=2026-09-01&tx=t1", label: "American Express Blue Cash Preferred ••1001", note: null });
+  });
+
+  it("a row on a linked Chase checking account opens /transactions at that account (its row id)", () => {
+    const r = txnRoute(txn({ plaidAccountId: "ext-chk", source: "plaid:chase" }), ENTRIES);
+    expect(r).toMatchObject({ kind: "account", href: "/transactions?account=r-chk&month=2026-09-01&tx=t1", label: "Chase Total Checking ••5526" });
+  });
+
+  it("a checking row whose entry has no row id falls back to the account page", () => {
+    const bare = ENTRIES.map(({ rowId: _rowId, ...e }) => e);
+    const r = txnRoute(txn({ plaidAccountId: "ext-chk", source: "plaid:chase" }), bare);
+    expect(r.href).toBe("/next/accounts/ext-chk?tx=t1&month=2026-09-01");
   });
 
   it("encodes the account id and the row id in the href", () => {
@@ -128,7 +145,7 @@ describe("txnRoute — where a transaction opens", () => {
     const r = txnRoute(txn({ plaidAccountId: "ext-chk", source: "plaid:chase" }), ENTRIES, {
       extra: { category: "Dining & Coffee", empty: "", missing: null },
     });
-    expect(r.href).toBe("/next/accounts/ext-chk?tx=t1&month=2026-09-01&category=Dining%20%26%20Coffee");
+    expect(r.href).toBe("/transactions?account=r-chk&month=2026-09-01&tx=t1&category=Dining%20%26%20Coffee");
   });
 
   it("(review) while the linked accounts are unknown, a Plaid row opens nowhere, says nothing and never 'no longer linked'", () => {

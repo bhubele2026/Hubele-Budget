@@ -82,6 +82,8 @@ import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
 import { AMEX_SOURCES } from "@/lib/amexSources";
 import { accountPageHref } from "@/lib/accountPage";
 import { currentRowDeepLink, rowDeepLinkStatus } from "@/lib/rowDeepLink";
+import { useUrlState } from "@/hooks/useUrlState";
+import { modeParam, monthParam, pickParam, urlHasMonth } from "@/lib/ledgerUrl";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
 import { AMEX_BALANCE_DISTINCTION } from "@/lib/reportsBalances";
 import {
@@ -260,19 +262,27 @@ export default function AmexPage({
   // an inherently forward-12-month projection, so the toggle scopes the
   // ledger, not that chart.) (WP7) A row link opens Month mode: Week mode hid a
   // row from earlier in the month.
-  const [rangeMode, setRangeMode] = useState<RangeMode>(() => (rowLink.tx ? "mo" : "wk"));
-  // Honor `?accountId=<external Plaid account_id>` deep-links (per-card
-  // drills land here pre-filtered to one card).
-  const [cardFilter, setCardFilter] = useState<string>(() => {
+  // (W1) Month, mode and card live in the address (`useUrlState`): a refresh,
+  // a shared link and Back/Forward land on the same view. A month, a mode or a
+  // row link chose it: the first-load jump below leaves it alone.
+  const [rangeMode, setRangeMode] = useUrlState<RangeMode>("mode", modeParam, () =>
+    rowLink.tx ? "mo" : "wk",
+  );
+  // `?card=<external Plaid account_id>` (the section tabs' and the band's link);
+  // the older `?accountId=` still opens the same card. Embedded, the route
+  // chose the card and the address is left alone.
+  const [cardFilter, setCardFilterUrl] = useUrlState<string>("card", pickParam, () => {
     if (accountId) return accountId;
     if (typeof window !== "undefined") {
       const a = new URLSearchParams(window.location.search).get("accountId");
       if (a) return a;
     }
     return "all";
-  });
+  }, { url: !embedded });
+  const setCardFilter = setCardFilterUrl;
   useEffect(() => {
     if (embedded) setCardFilter(accountId ?? "all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embedded, accountId]);
   // (#495) "Hide reviewed" filter — once a row is marked reviewed via the
   // RV bubble it's just clutter, so let users collapse the list down to
@@ -351,18 +361,8 @@ export default function AmexPage({
   // so the user lands on the same month they were viewing on Budget.
   // (WP7) A month a link chose (`?month=`, or a row link's) is never moved by
   // the first-load jump below.
-  const monthPinnedFromUrlRef = useRef(!!rowLink.tx);
-  const [selectedMonth, setSelectedMonth] = useState<MonthKey>(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const m = params.get("month");
-      if (m && /^\d{4}-\d{2}-01$/.test(m)) {
-        monthPinnedFromUrlRef.current = true;
-        return monthKeyFromISO(m);
-      }
-    }
-    return currentMonth;
-  });
+  const monthPinnedFromUrlRef = useRef(!!rowLink.tx || urlHasMonth());
+  const [selectedMonth, setSelectedMonth] = useUrlState<MonthKey>("month", monthParam, currentMonth);
   // (WP7) The month a row link opened, for "Showing <Month> for the row you opened".
   const rowLinkMonthRef = useRef<MonthKey | null>(rowLink.tx ? selectedMonth : null);
 

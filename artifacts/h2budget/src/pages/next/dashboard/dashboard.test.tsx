@@ -1003,7 +1003,7 @@ describe("needs attention", () => {
     expect(r.textContent).toContain("ACME PAYROLL DIRECT DEP · Dining & Coffee");
     expect(r.textContent).not.toContain("more"); // the reimbursable credit is not flagged
     // (WP7) It opens the ledger that lists the row — its checking account's page — on its month, filtered to its category.
-    expect(r.getAttribute("href")).toBe("/next/accounts/p-c1?tx=t1&month=2026-10-01&category=Dining%20%26%20Coffee");
+    expect(r.getAttribute("href")).toBe("/transactions?account=c1&month=2026-10-01&tx=t1&category=Dining%20%26%20Coffee");
   });
   it("(WP7) the income row opens where its row is listed, per kind; a row no ledger lists says so, never a dead link", () => {
     incomeSetup();
@@ -1193,8 +1193,8 @@ describe("recent activity", () => {
     ]);
     wrap(<ActivityPanel />);
     const hrefOf = (name: string) => screen.queryByRole("link", { name })?.getAttribute("href") ?? null;
-    expect(hrefOf("CHECKING")).toBe("/next/accounts/p-c1?tx=CHECKING&month=2026-10-01");
-    expect(hrefOf("AMEX")).toBe("/next/accounts/p-x1?tx=AMEX&month=2026-09-01");
+    expect(hrefOf("CHECKING")).toBe("/transactions?account=c1&month=2026-10-01&tx=CHECKING");
+    expect(hrefOf("AMEX")).toBe("/amex?card=p-x1&month=2026-09-01&tx=AMEX");
     expect(hrefOf("CAPONE")).toBe("/next/accounts/p-k1?tx=CAPONE&month=2026-10-01");
     expect(hrefOf("WORKBOOK")).toBe("/amex?tx=WORKBOOK&month=2026-10-01");
     expect(hrefOf("MANUAL")).toBe("/transactions?tx=MANUAL&month=2026-10-01");

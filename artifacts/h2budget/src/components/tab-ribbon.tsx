@@ -49,6 +49,8 @@ export function TabRibbon({
   onPrefetch,
   trailing,
   ariaLabel = "Sections",
+  variant = "chrome",
+  testIdPrefix = "topnav",
 }: {
   tabs: RibbonTab[];
   /** Decided by the caller — see the boundary-aware match in `layout.tsx`. */
@@ -61,7 +63,14 @@ export function TabRibbon({
    */
   trailing?: ReactNode;
   ariaLabel?: string;
+  /**
+   * `chrome` = the navy global bar. `section` = the lighter row under it: same
+   * geometry and underline, drawn on the page surface (never replaces the bar).
+   */
+  variant?: "chrome" | "section";
+  testIdPrefix?: string;
 }) {
+  const light = variant === "section";
   const [, navigate] = useLocation();
   const navRef = useRef<HTMLElement>(null);
   const [edges, setEdges] = useState<{ l: boolean; r: boolean }>({ l: false, r: false });
@@ -132,7 +141,7 @@ export function TabRibbon({
           onScroll={measure}
           onKeyDown={onKey}
           aria-label={ariaLabel}
-          className="scrollbar-none flex h-12 items-stretch gap-0.5 overflow-x-auto scroll-smooth"
+          className={`scrollbar-none flex items-stretch gap-0.5 overflow-x-auto scroll-smooth ${light ? "h-10" : "h-12"}`}
         >
           {tabs.map((t) => {
             const on = t.href === activeHref;
@@ -141,12 +150,18 @@ export function TabRibbon({
                 key={t.href}
                 href={t.href}
                 data-tabhref={t.href}
-                data-testid={`topnav-${t.href.slice(1)}`}
+                data-testid={`${testIdPrefix}-${t.href.slice(1)}`}
                 aria-current={on ? "page" : undefined}
                 onMouseEnter={() => onPrefetch?.(t.href)}
                 onFocus={() => onPrefetch?.(t.href)}
                 className={`press relative flex flex-none items-center whitespace-nowrap px-3.5 text-label font-semibold ${
-                  on ? "text-chrome-ink" : "text-chrome-ink-3 hover:text-chrome-ink-hover"
+                  light
+                    ? on
+                      ? "text-brand-navy"
+                      : "text-muted-foreground hover:text-brand-navy"
+                    : on
+                      ? "text-chrome-ink"
+                      : "text-chrome-ink-3 hover:text-chrome-ink-hover"
                 }`}
               >
                 {t.label}
@@ -168,27 +183,24 @@ export function TabRibbon({
         {/* The strip says so at its edges — and ONLY when there is more to
             reach. A chevron that is always there is a decoration; one that
             appears is information. */}
-        {edges.l && (
-          <button
-            type="button"
-            onClick={() => scrollBy(-1)}
-            aria-label="Scroll sections left"
-            data-testid="ribbon-scroll-left"
-            className="absolute inset-y-0 left-0 grid w-7 place-items-center bg-gradient-to-r from-brand-navy via-brand-navy/90 to-transparent text-body text-chrome-ink-4 hover:text-chrome-ink"
-          >
-            ‹
-          </button>
-        )}
-        {edges.r && (
-          <button
-            type="button"
-            onClick={() => scrollBy(1)}
-            aria-label="Scroll sections right"
-            data-testid="ribbon-scroll-right"
-            className="absolute inset-y-0 right-0 grid w-7 place-items-center bg-gradient-to-l from-brand-navy via-brand-navy/90 to-transparent text-body text-chrome-ink-4 hover:text-chrome-ink"
-          >
-            ›
-          </button>
+        {(["l", "r"] as const).map(
+          (side) =>
+            edges[side] && (
+              <button
+                key={side}
+                type="button"
+                onClick={() => scrollBy(side === "l" ? -1 : 1)}
+                aria-label={`Scroll sections ${side === "l" ? "left" : "right"}`}
+                data-testid={`${testIdPrefix}-scroll-${side === "l" ? "left" : "right"}`}
+                className={`absolute inset-y-0 grid w-7 place-items-center ${side === "l" ? "bg-gradient-to-r left-0" : "bg-gradient-to-l right-0"} text-body ${
+                  light
+                    ? "from-card via-card/90 to-transparent text-muted-foreground hover:text-brand-navy"
+                    : "from-brand-navy via-brand-navy/90 to-transparent text-chrome-ink-4 hover:text-chrome-ink"
+                }`}
+              >
+                {side === "l" ? "‹" : "›"}
+              </button>
+            ),
         )}
       </div>
 

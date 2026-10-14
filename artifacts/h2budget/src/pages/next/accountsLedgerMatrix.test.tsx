@@ -292,8 +292,13 @@ describe("(WP7d) the route rule against the pages", () => {
   // Where each route's rows are listed, by the page the href opens.
   const listedOn = (href: string): Key[] | null => {
     const path = href.split("?")[0]!;
-    if (path === "/transactions") return BANK_SNAPSHOT_ROWS;
-    if (path === "/amex") return ["BLUE_A", "BLUE_REFUND", "WORKBOOK_A"];
+    const q = new URLSearchParams(href.split("?")[1] ?? "");
+    // (W1) A row opens the ledger at its own account/card: the Chase register
+    // with `?account=<row id>` lists that account; the Amex page with `?card=` that card.
+    const account = /^row-(.+)$/.exec(q.get("account") ?? "")?.[1];
+    if (path === "/transactions") return account ? ACCOUNT_PAGE_ROWS[account] ?? [] : BANK_SNAPSHOT_ROWS;
+    const card = /^ext-(.+)$/.exec(q.get("card") ?? "")?.[1];
+    if (path === "/amex") return card ? ACCOUNT_PAGE_ROWS[card] ?? [] : ["BLUE_A", "BLUE_REFUND", "WORKBOOK_A"];
     const m = /^\/next\/accounts\/ext-(.+)$/.exec(path);
     return m ? ACCOUNT_PAGE_ROWS[m[1]!] ?? [] : null;
   };
@@ -324,7 +329,7 @@ describe("(WP7d) the route rule against the pages", () => {
     expect(where.WORKBOOK_A).toBe("/amex?tx=tx-workbook_a&month=2026-09-01");
     expect(where.MANUAL_A).toBe("/transactions?tx=tx-manual_a&month=2026-09-01");
     expect(where.FREEDOM_A).toBe("/next/accounts/ext-freedom?tx=tx-freedom_a&month=2026-09-01");
-    expect(where.TWIN_A).toBe("/next/accounts/ext-twin?tx=tx-twin_a&month=2026-09-01");
+    expect(where.TWIN_A).toBe("/transactions?account=row-twin&month=2026-09-01&tx=tx-twin_a");
   });
 });
 
@@ -335,7 +340,7 @@ describe("(WP7d) the combined view", () => {
     const panel = await screen.findByTestId("combined-activity");
     await waitFor(() => expect(within(panel).getAllByTestId("txn-row")).toHaveLength(ROWS.length));
     const hrefOf = (name: string) => within(panel).queryByRole("link", { name })?.getAttribute("href") ?? null;
-    expect(hrefOf("CHK_A")).toBe("/next/accounts/ext-chk?tx=tx-chk_a&month=2026-09-01");
+    expect(hrefOf("CHK_A")).toBe("/transactions?account=row-chk&month=2026-09-01&tx=tx-chk_a");
     expect(hrefOf("WORKBOOK_A")).toBe("/amex?tx=tx-workbook_a&month=2026-09-01");
     expect(hrefOf("MANUAL_A")).toBe("/transactions?tx=tx-manual_a&month=2026-09-01");
     expect(hrefOf("GONE_A")).toBeNull();

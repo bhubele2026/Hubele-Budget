@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, within } from "@testing-library/react";
 import React from "react";
 
 /**
@@ -14,7 +14,7 @@ import React from "react";
  *
  *   - where you end up (the route itself, or its redirect target),
  *   - which page renders there (never the NotFound catch-all), and
- *   - which destination's ribbon the shell shows.
+ *   - which global item is lit, which section tab is lit, and the breadcrumb.
  *
  * Nothing in the table is read from `App.tsx` or `layout.tsx`. Only leaves are
  * mocked: Clerk (always signed in), the network client, and each lazy page,
@@ -46,6 +46,8 @@ vi.mock("@workspace/api-client-react", () => ({
   getListCategorizationReviewQueryKey: () => ["/api/categorization/review"],
   getSpine: vi.fn(() => new Promise(() => {})),
   getGetSpineQueryKey: () => ["/api/spine"],
+  getGetSettingsQueryKey: () => ["/api/settings"],
+  getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
   getDashboard: vi.fn(),
   getGetDashboardQueryKey: () => ["/api/dashboard"],
   getForecast: vi.fn(),
@@ -95,6 +97,7 @@ vi.mock("./lib/routePrefetch", () => {
     importBillsOverview: page("bills-overview"),
     importBudget: page("budget"),
     importAllowances: page("allowances"),
+    importSpendingPeriod: page("spending-period"),
     importWishlist: page("wishlist"),
     importMappingRules: page("mapping-rules"),
     importSettings: page("settings"),
@@ -134,71 +137,87 @@ vi.mock("@/lib/mutationInvalidation", () => ({ onWriteSuccess: () => {} }));
 
 import App from "./App";
 
-type Area = "Home" | "Forecast" | "Spending" | "Review" | "Debt" | "no area" | "no header";
+// (W1) The global bar is the SAME on every route, typed out here — not read
+// from layout.tsx. Exactly one item is lit (the route's section) and the
+// section row under it lights the route's own tab.
+const GLOBAL_BAR = [
+  ["Dashboard", "/home"],
+  ["Banking", "/banking"],
+  ["Amex", "/amex"],
+  ["Spending", "/spending/week"],
+  ["Forecast", "/forecast/overview"],
+  ["Debt", "/avalanche"],
+];
 
-// The ribbon each area shows, typed out — not imported from layout.tsx.
-const RIBBON: Record<Exclude<Area, "no header">, string[]> = {
-  Home: ["/banking", "/transactions", "/amex", "/next/accounts", "/budget", "/allowances"],
-  Forecast: ["/forecast/overview", "/forecast", "/bills"],
-  Spending: ["/reports/spending", "/budget", "/allowances", "/wishlist", "/reports"],
-  Review: ["/review", "/review/categories", "/review/suggestions", "/transactions", "/amex"],
+// The section tabs each section shows, by the label of its global item.
+const SECTION_TABS: Record<string, string[]> = {
+  Dashboard: [],
+  Banking: ["/banking", "/transactions", "/next/accounts"],
+  Amex: ["/amex"],
+  Spending: ["/spending/week", "/spending/month", "/budget", "/allowances", "/wishlist", "/reports"],
+  Forecast: ["/forecast/overview", "/forecast", "/review", "/bills"],
   Debt: ["/avalanche", "/debts", "/reports/debt"],
-  // Outside every area the ribbon is the five destinations themselves.
-  "no area": ["/banking", "/forecast/overview", "/reports/spending", "/review", "/avalanche"],
+  More: [],
 };
 
 type Row = {
-  /** The route as it existed before R0. */
+  /** The route as it existed before. */
   from: string;
   /** Where you end up: the route itself, or its redirect target. */
   lands: string;
   /** The page that renders there. */
   page: string;
-  /** The destination whose ribbon shows ("no header" = the landing / auth). */
-  area: Area;
+  /** The lit global item ("none": no section, "no header": auth). */
+  lit: string;
+  /** The lit section tab's href, or null. */
+  tab: string | null;
+  /** The breadcrumb line ("" = none). */
+  crumb: string;
 };
 
 const OLD_ROUTES: Row[] = [
-  { from: "/", lands: "/home", page: "next-dashboard", area: "no area" },
-  { from: "/home", lands: "/home", page: "next-dashboard", area: "no area" },
-  { from: "/sign-in", lands: "/sign-in", page: "sign-in", area: "no header" },
-  { from: "/sign-up", lands: "/sign-up", page: "sign-up", area: "no header" },
-  { from: "/banking", lands: "/banking", page: "command-center", area: "Home" },
-  { from: "/dashboard", lands: "/banking", page: "command-center", area: "Home" },
-  { from: "/forecast/overview", lands: "/forecast/overview", page: "forecast-overview", area: "Forecast" },
-  { from: "/forecast", lands: "/forecast", page: "forecast:overall", area: "Forecast" },
-  { from: "/bills", lands: "/bills", page: "bills-overview", area: "Forecast" },
-  { from: "/bills/all", lands: "/bills/all", page: "bills", area: "Forecast" },
-  { from: "/recurring", lands: "/bills/all", page: "bills", area: "Forecast" },
-  { from: "/reports/spending", lands: "/reports/spending", page: "reports-spending", area: "Spending" },
-  { from: "/budget", lands: "/budget", page: "budget", area: "Spending" },
-  { from: "/allowances", lands: "/allowances", page: "allowances", area: "Spending" },
-  { from: "/wishlist", lands: "/wishlist", page: "wishlist", area: "Spending" },
-  { from: "/reports", lands: "/reports", page: "reports", area: "Spending" },
-  { from: "/review", lands: "/review", page: "forecast:review", area: "Review" },
-  { from: "/review/categories", lands: "/review/categories", page: "review-categories", area: "Review" },
-  { from: "/transactions", lands: "/transactions", page: "transactions", area: "Review" },
-  { from: "/amex", lands: "/amex", page: "amex", area: "Review" },
-  { from: "/avalanche", lands: "/avalanche", page: "avalanche", area: "Debt" },
-  { from: "/debts", lands: "/debts", page: "debts", area: "Debt" },
-  { from: "/reports/debt", lands: "/reports/debt", page: "reports-debt", area: "Debt" },
-  { from: "/reports/cashflow", lands: "/reports/cashflow", page: "reports-cashflow", area: "no area" },
-  { from: "/reports/budget", lands: "/reports/budget", page: "reports-budget", area: "no area" },
-  { from: "/reports/behavior", lands: "/reports/behavior", page: "reports-behavior", area: "no area" },
-  { from: "/mapping-rules", lands: "/mapping-rules", page: "mapping-rules", area: "no area" },
-  { from: "/settings", lands: "/settings", page: "settings", area: "no area" },
-  // (F8) Ask sits outside the five areas; Suggestions is Review's own page.
-  { from: "/ask", lands: "/ask", page: "ask", area: "no area" },
-  { from: "/review/suggestions", lands: "/review/suggestions", page: "review-suggestions", area: "Review" },
+  { from: "/", lands: "/home", page: "next-dashboard", lit: "Dashboard", tab: null, crumb: "" },
+  { from: "/home", lands: "/home", page: "next-dashboard", lit: "Dashboard", tab: null, crumb: "" },
+  { from: "/sign-in", lands: "/sign-in", page: "sign-in", lit: "no header", tab: null, crumb: "" },
+  { from: "/sign-up", lands: "/sign-up", page: "sign-up", lit: "no header", tab: null, crumb: "" },
+  { from: "/banking", lands: "/banking", page: "command-center", lit: "Banking", tab: "/banking", crumb: "Dashboard › Banking › Review" },
+  { from: "/dashboard", lands: "/home", page: "next-dashboard", lit: "Dashboard", tab: null, crumb: "" },
+  { from: "/forecast/overview", lands: "/forecast/overview", page: "forecast-overview", lit: "Forecast", tab: "/forecast/overview", crumb: "Dashboard › Forecast › Overview" },
+  { from: "/forecast", lands: "/forecast", page: "forecast:overall", lit: "Forecast", tab: "/forecast", crumb: "Dashboard › Forecast › Forecast" },
+  { from: "/bills", lands: "/bills", page: "bills-overview", lit: "Forecast", tab: "/bills", crumb: "Dashboard › Forecast › Bills" },
+  { from: "/bills/all", lands: "/bills/all", page: "bills", lit: "Forecast", tab: "/bills", crumb: "Dashboard › Forecast › Bills" },
+  { from: "/recurring", lands: "/bills/all", page: "bills", lit: "Forecast", tab: "/bills", crumb: "Dashboard › Forecast › Bills" },
+  { from: "/spending/week", lands: "/spending/week", page: "spending-period", lit: "Spending", tab: "/spending/week", crumb: "Dashboard › Spending › This week" },
+  { from: "/spending/month", lands: "/spending/month", page: "spending-period", lit: "Spending", tab: "/spending/month", crumb: "Dashboard › Spending › This month" },
+  { from: "/spending", lands: "/spending/week", page: "spending-period", lit: "Spending", tab: "/spending/week", crumb: "Dashboard › Spending › This week" },
+  { from: "/reports/spending", lands: "/reports/spending", page: "reports-spending", lit: "Spending", tab: "/reports", crumb: "Dashboard › Spending › Reports" },
+  { from: "/budget", lands: "/budget", page: "budget", lit: "Spending", tab: "/budget", crumb: "Dashboard › Spending › Budget" },
+  { from: "/allowances", lands: "/allowances", page: "allowances", lit: "Spending", tab: "/allowances", crumb: "Dashboard › Spending › Allowances" },
+  { from: "/wishlist", lands: "/wishlist", page: "wishlist", lit: "Spending", tab: "/wishlist", crumb: "Dashboard › Spending › Wish list" },
+  { from: "/reports", lands: "/reports", page: "reports", lit: "Spending", tab: "/reports", crumb: "Dashboard › Spending › Reports" },
+  { from: "/review", lands: "/review", page: "forecast:review", lit: "Forecast", tab: "/review", crumb: "Dashboard › Forecast › Reconcile" },
+  { from: "/review/categories", lands: "/review/categories", page: "review-categories", lit: "More", tab: null, crumb: "Dashboard › More › Categories" },
+  { from: "/transactions", lands: "/transactions", page: "transactions", lit: "Banking", tab: "/transactions", crumb: "Dashboard › Banking › Chase register" },
+  { from: "/amex", lands: "/amex", page: "amex", lit: "Amex", tab: "/amex", crumb: "Dashboard › Amex › All cards" },
+  { from: "/avalanche", lands: "/avalanche", page: "avalanche", lit: "Debt", tab: "/avalanche", crumb: "Dashboard › Debt › Payoff plan" },
+  { from: "/debts", lands: "/debts", page: "debts", lit: "Debt", tab: "/debts", crumb: "Dashboard › Debt › Debts" },
+  { from: "/reports/debt", lands: "/reports/debt", page: "reports-debt", lit: "Debt", tab: "/reports/debt", crumb: "Dashboard › Debt › Debt report" },
+  { from: "/reports/cashflow", lands: "/reports/cashflow", page: "reports-cashflow", lit: "Spending", tab: "/reports", crumb: "Dashboard › Spending › Reports" },
+  { from: "/reports/budget", lands: "/reports/budget", page: "reports-budget", lit: "Spending", tab: "/reports", crumb: "Dashboard › Spending › Reports" },
+  { from: "/reports/behavior", lands: "/reports/behavior", page: "reports-behavior", lit: "Spending", tab: "/reports", crumb: "Dashboard › Spending › Reports" },
+  { from: "/mapping-rules", lands: "/mapping-rules", page: "mapping-rules", lit: "More", tab: null, crumb: "Dashboard › More › Mapping rules" },
+  { from: "/settings", lands: "/settings", page: "settings", lit: "More", tab: null, crumb: "Dashboard › More › Settings" },
+  // (F8) Ask is in More; Suggestions too.
+  { from: "/ask", lands: "/ask", page: "ask", lit: "More", tab: null, crumb: "Dashboard › More › Ask" },
+  { from: "/review/suggestions", lands: "/review/suggestions", page: "review-suggestions", lit: "More", tab: null, crumb: "Dashboard › More › Suggestions" },
   // The /next preview pages: reachable by URL. /next/dashboard became the
-  // landing (it redirects to /home); /next/forecast stays outside every area
-  // until the owner approves it; (C12) /next/accounts is Home's "Accounts"
-  // tab, beside Chase and Amex.
-  { from: "/next/dashboard", lands: "/home", page: "next-dashboard", area: "no area" },
-  { from: "/next/forecast", lands: "/next/forecast", page: "next-forecast", area: "no area" },
-  { from: "/next/accounts", lands: "/next/accounts", page: "next-accounts", area: "Home" },
-  { from: "/next/accounts/:plaidAccountId", lands: "/next/accounts/:plaidAccountId", page: "next-accounts", area: "Home" },
-  { from: "/plaid-oauth", lands: "/plaid-oauth", page: "plaid-oauth", area: "no area" },
+  // landing (it redirects to /home); /next/forecast is Forecast's own tab
+  // owner; /next/accounts is Banking's "Accounts" tab.
+  { from: "/next/dashboard", lands: "/home", page: "next-dashboard", lit: "Dashboard", tab: null, crumb: "" },
+  { from: "/next/forecast", lands: "/next/forecast", page: "next-forecast", lit: "Forecast", tab: "/forecast", crumb: "Dashboard › Forecast › Forecast" },
+  { from: "/next/accounts", lands: "/next/accounts", page: "next-accounts", lit: "Banking", tab: "/next/accounts", crumb: "Dashboard › Banking › Accounts" },
+  { from: "/next/accounts/:plaidAccountId", lands: "/next/accounts/:plaidAccountId", page: "next-accounts", lit: "Banking", tab: "/next/accounts", crumb: "Dashboard › Banking › Accounts" },
+  { from: "/plaid-oauth", lands: "/plaid-oauth", page: "plaid-oauth", lit: "none", tab: null, crumb: "" },
 ];
 
 function open(path: string) {
@@ -213,22 +232,48 @@ afterEach(() => {
 
 describe("every old route still works, and lands where it should", () => {
   it.each(OLD_ROUTES)(
-    "$from → $lands renders $page ($area)",
-    async ({ from, lands, page, area }) => {
+    "$from → $lands renders $page (lit: $lit, tab: $tab)",
+    async ({ from, lands, page, lit, tab, crumb }) => {
       open(from);
       expect(await screen.findByTestId(`page-${page}`)).toBeTruthy();
       expect(window.location.pathname).toBe(lands);
       expect(screen.queryByTestId("page-not-found")).toBeNull();
-      if (area === "no header") {
+      if (lit === "no header") {
         expect(screen.queryByTestId("app-header")).toBeNull();
-      } else {
-        const ribbon = Array.from(document.querySelectorAll("[data-tabhref]")).map((n) =>
-          n.getAttribute("data-tabhref"),
-        );
-        expect(ribbon).toEqual(RIBBON[area]);
+        return;
       }
+      // The ONE global bar: the same six items in the same order, then More.
+      const bar = within(screen.getByTestId("global-nav"));
+      const items = Array.from(document.querySelectorAll('[data-testid="global-nav"] [data-tabhref]'));
+      expect(items.map((n) => [n.textContent, n.getAttribute("data-tabhref")])).toEqual(GLOBAL_BAR);
+      expect(bar.getByTestId("topnav-more")).toBeTruthy();
+      // Exactly one global item is lit, and it is this route's section.
+      const litItems = Array.from(
+        document.querySelectorAll('[data-testid="global-nav"] [aria-current="page"]'),
+      ).map((n) => n.textContent);
+      expect(litItems).toEqual(lit === "none" || lit === "More" ? [] : [lit]);
+      if (lit === "More") {
+        expect(screen.getByTestId("topnav-more").querySelector(".tab-underline")).toBeTruthy();
+      }
+      // The section row under it: that section's tabs, the route's own one lit.
+      const row = Array.from(document.querySelectorAll('[data-testid="section-nav"] [data-tabhref]'));
+      expect(row.map((n) => n.getAttribute("data-tabhref"))).toEqual(SECTION_TABS[lit] ?? []);
+      const litTab = document.querySelector('[data-testid="section-nav"] [aria-current="page"]');
+      expect(litTab?.getAttribute("data-tabhref") ?? null).toBe(tab);
+      // Where am I.
+      const trail = screen.queryByTestId("breadcrumb-trail");
+      expect(trail?.textContent?.replace(/\s*›\s*/g, " › ").trim() ?? "").toBe(crumb);
+      // The word "Home" is not a label anywhere in the chrome.
+      expect(within(screen.getByTestId("app-header")).queryByText(/^home$/i)).toBeNull();
     },
   );
+
+  it("the logo and Dashboard both go to /home", async () => {
+    open("/banking");
+    await screen.findByTestId("page-command-center");
+    expect(screen.getByTestId("brand-home").getAttribute("href")).toBe("/home");
+    expect(screen.getByTestId("topnav-home").getAttribute("href")).toBe("/home");
+  });
 
   it("control: a path that was never a route falls through to NotFound", async () => {
     open("/no-such-page");

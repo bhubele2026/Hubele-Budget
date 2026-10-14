@@ -87,25 +87,35 @@ export function Page(props: { title: string; sub?: string; children: ReactNode }
  * underlined hypertext sitting on top of every page, which is exactly what made
  * the app read as a web page.
  */
-export function Crumbs(props: { trail: Array<{ label: string; href?: string }> }) {
+export function Crumbs(props: {
+  trail: Array<{ label: string; href?: string }>;
+  /** The shell's breadcrumb: darker, so it reads as a path and not as decoration. */
+  strong?: boolean;
+}) {
+  const strong = props.strong === true;
   return (
-    <nav className="mb-1 flex flex-wrap items-center gap-1 text-micro text-neutral-400">
+    <nav
+      aria-label="Breadcrumb"
+      className={`mb-1 flex flex-wrap items-center gap-1 text-micro ${strong ? "text-muted-foreground" : "text-neutral-400"}`}
+    >
       {props.trail.map((c, i) => (
         <span key={`${c.label}-${i}`} className="flex items-center gap-1">
           {i > 0 && (
-            <span aria-hidden className="text-neutral-300">
+            <span aria-hidden className={strong ? "text-muted-foreground" : "text-neutral-300"}>
               ›
             </span>
           )}
           {c.href ? (
             <Link
               href={c.href}
-              className="press rounded px-1 py-0.5 font-medium text-neutral-500 hover:bg-neutral-100 hover:text-brand-navy"
+              className={`press rounded px-1 py-0.5 font-medium hover:bg-neutral-100 hover:text-brand-navy ${strong ? "text-brand-navy" : "text-neutral-500"}`}
             >
               {c.label}
             </Link>
           ) : (
-            <span className="px-1 py-0.5 text-neutral-400">{c.label}</span>
+            <span className={strong ? "px-1 py-0.5 font-semibold text-brand-navy" : "px-1 py-0.5 text-neutral-400"}>
+              {c.label}
+            </span>
           )}
         </span>
       ))}

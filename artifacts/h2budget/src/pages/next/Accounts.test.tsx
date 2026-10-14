@@ -225,7 +225,7 @@ describe("combined view", () => {
 });
 
 describe("(WP7) combined view: where each row opens", () => {
-  it("a linked row opens its account's page on its month; a workbook row All cards; a manual row the checking ledger; a gone account says why", () => {
+  it("a linked row opens its ledger at that card or account, on its month; a workbook row All cards; a manual row the checking ledger; a gone account says why", () => {
     seed();
     h.extraTxns = [
       { id: "t3", occurredOn: "2026-09-05", description: "WORKBOOK", amount: "12.00", plaidAccountId: null, source: "amex", pending: false, categoryId: null },
@@ -235,8 +235,8 @@ describe("(WP7) combined view: where each row opens", () => {
     renderAt("/next/accounts");
     const panel = screen.getByTestId("combined-activity");
     const hrefOf = (name: string) => within(panel).queryByRole("link", { name })?.getAttribute("href") ?? null;
-    expect(hrefOf("COFFEE")).toBe("/next/accounts/ext-amex?tx=t1&month=2026-10-01");
-    expect(hrefOf("PAYROLL")).toBe("/next/accounts/ext-chk?tx=t2&month=2026-10-01");
+    expect(hrefOf("COFFEE")).toBe("/amex?card=ext-amex&month=2026-10-01&tx=t1");
+    expect(hrefOf("PAYROLL")).toBe("/transactions?account=r-chk&month=2026-10-01&tx=t2");
     expect(hrefOf("WORKBOOK")).toBe("/amex?tx=t3&month=2026-09-01");
     expect(hrefOf("CASH")).toBe("/transactions?tx=t4&month=2026-10-01");
     expect(hrefOf("OLD CARD")).toBeNull();

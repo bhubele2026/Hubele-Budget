@@ -22,7 +22,11 @@ export { accountPageHref } from "./accountPage";
  *
  * In order, a row:
  *   1. on a LINKED account (its external `plaidAccountId` matches an entry,
- *      `resolveTxnAccount`) opens that account's page: `/next/accounts/<ext>`;
+ *      `resolveTxnAccount`) opens the ledger that lists it (W1): an Amex card
+ *      → `/amex?card=<ext>&month=…&tx=…`; a Chase checking account (the entry
+ *      carries its `rowId`) → `/transactions?account=<rowId>&month=…&tx=…`;
+ *      any other linked account → its page, `/next/accounts/<ext>` (still a
+ *      route);
  *   2. otherwise, from a source the American Express page lists
  *      (`AMEX_SOURCES`: the Amex workbook import, Plaid Amex and Apple Card rows)
  *      opens `/amex`, whose "All cards" view lists every such row — the workbook
@@ -88,8 +92,35 @@ function rowQuery(txn: TxnRouteRef, extra: Record<string, string | null | undefi
   return parts.join("&");
 }
 
+/** `<card|account>=<id>&month=<YYYY-MM-01>&tx=<row id>`, then the caller's extras: the ledger's own view first. */
+function ledgerQuery(
+  txn: TxnRouteRef,
+  key: "card" | "account",
+  id: string,
+  extra: Record<string, string | null | undefined>,
+): string {
+  const parts = [`${key}=${encodeURIComponent(id)}`];
+  const day = (txn.occurredOn ?? "").slice(0, 10);
+  if (ISO_DAY.test(day)) parts.push(`month=${day.slice(0, 7)}-01`);
+  parts.push(`tx=${encodeURIComponent(txn.id)}`);
+  for (const [k, value] of Object.entries(extra)) {
+    if (value) parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(value)}`);
+  }
+  return parts.join("&");
+}
+
 function labelWithMask(identity: ResolvedTxnAccount): string {
   return identity.mask4 ? `${identity.label} ••${identity.mask4}` : identity.label;
+}
+
+const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
+
+function entryFor(
+  entries: readonly TxnAccountEntry[] | ReadonlyMap<string, TxnAccountEntry>,
+  ext: string,
+): TxnAccountEntry | undefined {
+  if (!Array.isArray(entries)) return (entries as ReadonlyMap<string, TxnAccountEntry>).get(ext);
+  return (entries as readonly TxnAccountEntry[]).find((e) => e.plaidAccountId === ext);
 }
 
 const NO_LONGER_LINKED = / \(no longer linked\)$/;
@@ -116,15 +147,20 @@ export function txnRoute(
     };
     return { kind: "unknown", href: null, label: neutral.label, note: null, identity: neutral };
   }
-  // 1. A linked account: its own page.
+  // 1. A linked account opens the ledger that lists it (W1): an Amex card on
+  //    the Amex page at that card, a Chase checking account on the Chase
+  //    register at that account; any other linked account on its own page.
   if (identity.known) {
-    return {
-      kind: "account",
-      href: `${accountPageHref({ plaidAccountId: ext })}?${query}`,
-      label: labelWithMask(identity),
-      note: null,
-      identity,
-    };
+    const entry = entryFor(entries, ext);
+    const label = labelWithMask(identity);
+    const base = { kind: "account" as const, label, note: null, identity };
+    if (identity.kind === "amex") {
+      return { ...base, href: `/amex?${ledgerQuery(txn, "card", ext, opts.extra ?? {})}` };
+    }
+    if (identity.kind === "checking" && entry?.rowId && /chase/.test(norm(entry.institutionSlug ?? entry.institutionName))) {
+      return { ...base, href: `/transactions?${ledgerQuery(txn, "account", entry.rowId, opts.extra ?? {})}` };
+    }
+    return { ...base, href: `${accountPageHref({ plaidAccountId: ext })}?${query}` };
   }
   const source = (txn.source ?? "").trim().toLowerCase();
   // 2. A row the American Express page lists: its "All cards" view.
