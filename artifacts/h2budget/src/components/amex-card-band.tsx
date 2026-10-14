@@ -1,11 +1,13 @@
+import { useGetAmexSummary, getGetAmexSummaryQueryKey } from "@workspace/api-client-react/features";
 import {
   useGetAmexWeeklyPayoff,
   useGetSettings,
   getGetAmexWeeklyPayoffQueryKey,
   getListDebtsQueryKey,
 } from "@workspace/api-client-react";
+import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { RingStat, MoneyText } from "@/components/viz";
+import { RingStat } from "@/components/viz";
 import { AddToAvalanche } from "@/components/add-card-to-avalanche";
 import {
   BRAND_LABEL,
@@ -14,8 +16,81 @@ import {
   effectiveBrand,
 } from "@/lib/amexBrand";
 import { cn } from "@/lib/utils";
-import { creditorLabel } from "@/lib/cardBalance";
+import { moneyFace } from "@/components/data-state";
 import { fieldLabel } from "@/ui";
+
+/** The period the Summary below reads; the band asks the server for the same one. */
+export interface BandPeriod {
+  from: string;
+  to: string;
+}
+
+/**
+ * One card's (or all cards') `owed` and period purchases — the SERVER's
+ * `/amex/summary` figures, the same ones the Summary panel prints, so the band
+ * and the Summary can never disagree. Unknown is "—", loading is a pulse.
+ */
+function useBandFigures(accountId: string, period: BandPeriod | null | undefined) {
+  const params = { accountId, from: period?.from ?? "", to: period?.to ?? "" };
+  const q = useGetAmexSummary(params, {
+    query: { queryKey: getGetAmexSummaryQueryKey(params), enabled: period != null },
+  });
+  return q;
+}
+
+function FigureLine({
+  label, amount, loading, testId,
+}: { label: string; amount: string | null | undefined; loading: boolean; testId: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2" data-testid={testId}>
+      <span className="text-micro text-neutral-500">{label}</span>
+      {loading ? (
+        <span className="h-3 w-14 animate-pulse rounded bg-platinum-2" aria-busy="true" />
+      ) : (
+        <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">{moneyFace(amount)}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One tile's figures: the head (its name) and owed on the left, an optional
+ * aside (the ring) on the right, and the period's purchases across the foot.
+ */
+function TileFigures({
+  accountId, period, periodLabel, head, aside,
+}: {
+  accountId: string;
+  period?: BandPeriod | null;
+  periodLabel?: string;
+  head: ReactNode;
+  aside?: ReactNode;
+}) {
+  const q = useBandFigures(accountId, period);
+  const loading = period != null && q.data === undefined && !q.isError;
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {head}
+          <div className="mt-2 font-mono text-title font-semibold leading-none tabular-nums text-brand-navy" data-testid={`amex-owed-${accountId}`}>
+            {loading ? <span className="inline-block h-5 w-24 animate-pulse rounded bg-platinum-2 align-middle" aria-busy="true" /> : moneyFace(q.data?.owed.current ?? null)}
+          </div>
+          <div className="mt-1 text-micro text-neutral-500">Owed</div>
+        </div>
+        {aside}
+      </div>
+      <div className="mt-3 border-t border-brand-line pt-2">
+        <FigureLine
+          testId={`amex-purchases-${accountId}`}
+          label={periodLabel ? `Purchases · ${periodLabel}` : "Purchases"}
+          amount={q.data?.purchases.amount}
+          loading={loading}
+        />
+      </div>
+    </>
+  );
+}
 
 /**
  * Per-card band for the Amex page (C10): one PANEL per card on the page grid,
@@ -42,6 +117,8 @@ export function AmexCardBand({
   onSelect,
   masks,
   leadCount = 0,
+  period,
+  periodLabel,
 }: {
   /** Current cardFilter: "all" or an external Plaid account_id. */
   selected: string;
@@ -50,6 +127,9 @@ export function AmexCardBand({
   masks?: ReadonlyMap<string, string>;
   /** Cells the host already placed in the band's first row. */
   leadCount?: number;
+  /** The Summary's period: owed + purchases come from the server for it. */
+  period?: BandPeriod | null;
+  periodLabel?: string;
 }) {
   const { data } = useGetAmexWeeklyPayoff();
   const { data: settings } = useGetSettings();
@@ -92,18 +172,12 @@ export function AmexCardBand({
         data-testid="amex-tile-all"
         aria-pressed={selected === "all"}
       >
-        <div className={fieldLabel}>All cards</div>
-        <div className="mt-2 font-mono text-title font-semibold leading-none tabular-nums text-brand-navy">
-          <MoneyText amount={data?.combinedStatementBalance ?? 0} />
-        </div>
-        <div className="mt-1 text-micro text-neutral-500">Combined balance</div>
-        <div className="mt-auto border-t border-brand-line pt-2 text-micro text-neutral-500">
-          <MoneyText
-            amount={data?.combinedWeekCharges ?? 0}
-            className="font-mono font-semibold tabular-nums text-brand-navy"
-          />{" "}
-          this week
-        </div>
+        <TileFigures
+          accountId="all"
+          period={period}
+          periodLabel={periodLabel}
+          head={<div className={fieldLabel}>All cards</div>}
+        />
       </button>
 
       {cards.map((c) => {
@@ -128,8 +202,11 @@ export function AmexCardBand({
               className="press w-full flex-1 p-4 text-left hover:bg-platinum-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-navy/40"
               aria-pressed={active}
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
+              <TileFigures
+                accountId={c.accountId}
+                period={period}
+                periodLabel={periodLabel}
+                head={
                   <span className={cn(fieldLabel, "flex flex-wrap items-center gap-x-1.5")}>
                     {/* The card's tier colour (identity within Amex); the
                         panel's edge is the account accent. */}
@@ -147,47 +224,29 @@ export function AmexCardBand({
                       </span>
                     ) : null}
                   </span>
-                  <div className="mt-2 font-mono text-title font-semibold leading-none tabular-nums text-brand-navy">
-                    <MoneyText amount={c.statementBalance} />
+                }
+                /* The ring is the WEEKLY PAYOFF PLAN's, not the Summary's:
+                   named so, so no two figures share a name. Navy, not the
+                   card's identity colour. ⚠️ The caption sits under the ring:
+                   at the widest tracking it is wider than a 52px ring. */
+                aside={
+                  <div className="flex shrink-0 flex-col items-center gap-1">
+                    <RingStat
+                      value={c.pctOfStatementThisWeek}
+                      size={52}
+                      stroke={5}
+                      color="var(--color-brand-navy)"
+                      centerText={`${Math.round((c.pctOfStatementThisWeek ?? 0) * 100)}%`}
+                    />
+                    <span
+                      className="text-micro uppercase tracking-wide text-neutral-500"
+                      title="Share of the card's balance charged this week, from the weekly payoff plan"
+                    >
+                      cleared this wk
+                    </span>
                   </div>
-                  {/* (WP3) The payoff card's `statementBalance` is the card's
-                      CURRENT balance (Plaid's liability balance, else the debt
-                      row) — named as such, the words the account Summary and
-                      the account chips use (`creditorLabel`). */}
-                  <div className="mt-1 text-micro text-neutral-500">
-                    {creditorLabel()}
-                  </div>
-                </div>
-                {/* Progress is progress everywhere in this app — navy, not the
-                    card's identity colour, or "% cleared" would read as which
-                    card it is rather than how far along it is.
-
-                    ⚠️ THE CAPTION SITS UNDER THE RING, NOT INSIDE IT. At 9px
-                    with the widest tracking, "cleared" is wider than a 52px
-                    ring, so as `centerSub` it spilled past the tile's right
-                    edge and read as clipped text. The label still ships —
-                    under the palette rule a number like this may not go
-                    unlabelled — it just sits where it fits. */}
-                <div className="flex shrink-0 flex-col items-center gap-1">
-                  <RingStat
-                    value={c.pctOfStatementThisWeek}
-                    size={52}
-                    stroke={5}
-                    color="var(--color-brand-navy)"
-                    centerText={`${Math.round((c.pctOfStatementThisWeek ?? 0) * 100)}%`}
-                  />
-                  <span className="text-micro uppercase tracking-wide text-neutral-500">
-                    cleared
-                  </span>
-                </div>
-              </div>
-              <div className="mt-3 border-t border-brand-line pt-2 text-micro text-neutral-500">
-                <MoneyText
-                  amount={c.weekCharges}
-                  className="font-mono font-semibold tabular-nums text-brand-navy"
-                />{" "}
-                this week
-              </div>
+                }
+              />
             </button>
             <div className="px-4 pb-4">
               <AddToAvalanche card={c} onCreated={refreshAfterCreate} />
@@ -214,6 +273,11 @@ export function AmexCardBand({
             data-testid={`amex-tile-plan-${c.accountId}`}
             data-account-id={c.accountId}
           >
+            <TileFigures
+              accountId={c.accountId}
+              period={period}
+              periodLabel={periodLabel}
+              head={
             <span className={cn(fieldLabel, "flex flex-wrap items-center gap-x-1.5")}>
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
               <span className="min-w-0 [overflow-wrap:anywhere]">
@@ -223,7 +287,9 @@ export function AmexCardBand({
                 <span className="shrink-0 font-mono normal-case tracking-normal tabular-nums text-neutral-500">••{mask}</span>
               ) : null}
             </span>
-            <span className="mt-2 text-label text-neutral-600">On the payoff plan</span>
+              }
+            />
+            <span className="mt-2 text-micro text-neutral-500">On the payoff plan</span>
           </button>
         );
       })}

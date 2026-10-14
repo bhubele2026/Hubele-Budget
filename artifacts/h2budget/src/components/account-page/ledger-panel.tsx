@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import { Panel } from "@/components/next";
 import type { AccountAccentName } from "@/lib/accountIdentity";
+import { BucketLegend } from "@/components/bucket-legend";
 
 /**
  * ⭐ THE ACCOUNT LEDGER AS A PANEL (C9) — one frame for the Chase and Amex
@@ -62,6 +63,7 @@ export function LedgerPanel({
         {pane}
       </div>
       <div data-testid="ledger-body" className="pb-2">
+        <BucketLegend className="border-b border-brand-line px-4 py-1.5" />
         {children}
       </div>
     </Panel>

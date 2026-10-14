@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, fireEvent, within } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent, within, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -355,6 +355,26 @@ describe("Amex page — summary first (W4)", () => {
     expect(page.contains(order[0]!)).toBe(true);
     const p = state.summaryParams[0]!;
     expect(String(p.from) <= todayIso && todayIso <= String(p.to)).toBe(true);
+  });
+});
+
+describe("Amex page — a card tab selects the card (W7)", () => {
+  it("a section tab (pushState to ?card=<external id>) re-points the head, the band and the summary query; All cards undoes it", async () => {
+    window.history.replaceState(null, "", "/amex");
+    render(tree());
+    await ready();
+    expect(screen.getByTestId("amex-head-all-cards")).toBeTruthy();
+    state.summaryParams.length = 0;
+    // wouter is mocked here, so it does not patch history: fire the event it would.
+    const push = (url: string) => act(() => { window.history.pushState(null, "", url); window.dispatchEvent(new Event("pushState")); });
+    push("/amex?card=ext-plat");
+    await waitFor(() => expect(screen.getByTestId("account-head-identity").textContent).toContain("••1005"));
+    expect(screen.getByTestId("amex-tile-all").getAttribute("aria-pressed")).toBe("false");
+    expect(document.querySelector('[data-account-id="ext-plat"]')!.className).toContain("ring-2");
+    expect(state.summaryParams.some((p) => p.accountId === "ext-plat")).toBe(true);
+    push("/amex");
+    await waitFor(() => expect(screen.getByTestId("amex-head-all-cards")).toBeTruthy());
+    expect(screen.getByTestId("amex-tile-all").getAttribute("aria-pressed")).toBe("true");
   });
 });
 

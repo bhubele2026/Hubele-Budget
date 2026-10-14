@@ -2140,6 +2140,8 @@ export default function AmexPage({
           onSelect={embedded ? openCardFromBand : setCardFilter}
           masks={cardMasks}
           leadCount={lead ? 1 : 0}
+          period={summaryPeriod}
+          periodLabel={summaryPeriodLabel}
         />
 
         {!embedded ? (

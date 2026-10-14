@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 
 const read = (rel: string) => readFileSync(resolve(process.cwd(), "src", rel), "utf8");
 import { BucketBubbles } from "./bucket-bubbles";
+import { BucketLegend } from "./bucket-legend";
 
 /** (W3) The four marks are labelled controls: words, not two-letter glyphs. */
 afterEach(() => cleanup());
@@ -37,14 +38,22 @@ describe("BucketBubbles", () => {
     expect(onToggle).toHaveBeenCalledWith("weekly", false);
   });
 
-  it("spells the words out (and keeps the short form for a phone), at 11px or more", () => {
+  it("spells the words out (one letter on a phone and in the wide grid, with a legend), at 11px or more", () => {
     const { container } = render(<BucketBubbles flags={flags} onToggle={vi.fn()} />);
-    for (const w of ["Weekly", "Monthly", "Unplanned", "Reimbursable", "WK", "MO", "UN", "RE"]) {
+    for (const w of ["Weekly", "Monthly", "Unplanned", "Reimbursable", "W", "M", "U", "R"]) {
       expect(container.textContent).toContain(w);
     }
     const src = read("components/bucket-bubbles.tsx");
     expect(src).not.toMatch(/text-\[(\d|10)px\]/);
     expect(src).toContain("text-[11px]");
+    // One letter where the bucket column is 6.75rem (the `@6xl` grid); the words between.
+    expect(src).toContain("sm:hidden @6xl:inline");
+    expect(src).toContain("hidden sm:inline @6xl:hidden");
+  });
+
+  it("the legend names the letters, once above the ledger", () => {
+    render(<BucketLegend />);
+    expect(screen.getByTestId("bucket-legend").textContent).toBe("W Weekly · M Monthly · U Unplanned · R Reimbursable");
   });
 });
 
