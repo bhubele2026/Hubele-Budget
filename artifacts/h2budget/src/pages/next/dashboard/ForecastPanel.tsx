@@ -51,7 +51,7 @@ export default function ForecastPanel() {
     <Panel
       title="Cash-flow forecast"
       sub="Projected checking balance"
-      span={8}
+      span={BELOW_FOLD.forecast.span}
       variant="static"
       className={cn(rise(BELOW_FOLD.forecast.rise), minH)}
       data-testid="dash-forecast"

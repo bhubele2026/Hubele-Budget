@@ -196,8 +196,8 @@ describe("the entry path and the generated client's sub-modules", () => {
     ]) {
       expect(files.has(lazyFile), `${lazyFile} must stay off the open path`).toBe(false);
     }
-    // …while the first screen (header, summary row, accounts) is on it.
-    for (const eager of ["DashboardHeader", "SummaryRow", "AccountsPanel"]) {
+    // …while the first screen (header, the six tiles) is on it.
+    for (const eager of ["DashboardHeader", "Tiles"]) {
       expect(files.has(`pages/next/dashboard/${eager}.tsx`), `${eager} is the first screen`).toBe(true);
     }
     // No chart library is imported by anything on the open path.

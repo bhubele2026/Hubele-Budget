@@ -1,5 +1,4 @@
 import { BelowFoldSkeleton } from "./BelowFoldSkeleton";
-import { PanelSkeleton } from "./shared";
 
 /**
  * ⭐ THE SHELL THAT PAINTS BEFORE CLERK ANSWERS. The dashboard's layout with
@@ -10,7 +9,7 @@ import { PanelSkeleton } from "./shared";
  * ⚠️ SAME SIZE AS THE PAGE'S OWN SKELETON, BY CONSTRUCTION. The two lazy slots
  * are the very `BelowFoldSkeleton`s the page shows (one `BELOW_FOLD` constant
  * feeds spans and minimum heights), so when Clerk answers and the page mounts,
- * nothing below the summary row jumps. The header, summary and accounts
+ * nothing below the tiles jumps. The header and the six tile
  * placeholders match the page's first paint (a test pins the slot sizes).
  */
 export function DashboardSkeleton() {
@@ -22,27 +21,14 @@ export function DashboardSkeleton() {
           <div className="skeleton mt-2 h-4 w-80 max-w-full rounded" />
           <div className="skeleton mt-2 h-3 w-56 max-w-full rounded" />
         </div>
-        <div className="panel tile-in span-12" data-testid="dashboard-skeleton-summary">
-          <div className="kpi-grid">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i}>
-                <div className="skeleton h-3 w-24 rounded" />
-                <div className="skeleton mt-2 h-7 w-32 max-w-full rounded" />
-                <div className="skeleton mt-2 h-3 w-40 max-w-full rounded" />
-              </div>
-            ))}
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="panel tile-in span-4 min-h-[11.5rem] border-l-4 p-4" data-testid="dashboard-skeleton-tile">
+            <div className="skeleton h-4 w-24 rounded" />
+            <div className="skeleton mt-4 h-7 w-32 max-w-full rounded" />
+            <div className="skeleton mt-3 h-3 w-40 max-w-full rounded" />
           </div>
-        </div>
+        ))}
         <BelowFoldSkeleton slot="forecast" />
-        {/* The accounts panel's own loading shape: its head, then the flush
-            three-row skeleton its Gate draws. */}
-        <section className="panel tile-in span-12" data-testid="dashboard-skeleton-accounts">
-          <div className="panel-head">
-            <div className="skeleton h-5 w-24 rounded" />
-          </div>
-          <PanelSkeleton rows={3} />
-        </section>
-        <BelowFoldSkeleton slot="lower" />
       </div>
     </div>
   );
