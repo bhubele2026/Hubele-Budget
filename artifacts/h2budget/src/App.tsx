@@ -60,6 +60,7 @@ import {
   importBillsOverview,
   importBudget,
   importAllowances,
+  importSpendingPeriod,
   importWishlist,
   importMappingRules,
   importSettings,
@@ -92,6 +93,7 @@ const BillsPage = lazy(importBills);
 const BillsOverviewPage = lazy(importBillsOverview);
 const BudgetPage = lazy(importBudget);
 const AllowancesPage = lazy(importAllowances);
+const SpendingPeriodPage = lazy(importSpendingPeriod);
 const WishlistPage = lazy(importWishlist);
 const MappingRulesPage = lazy(importMappingRules);
 const SettingsPage = lazy(importSettings);
@@ -465,7 +467,7 @@ function ProtectedShell() {
             <Route path="/home" component={DashboardPage} />
             <Route path="/banking" component={CommandCenterPage} />
             <Route path="/dashboard">
-              <Redirect to="/banking" />
+              <Redirect to="/home" />
             </Route>
             <Route path="/forecast/overview" component={ForecastOverviewPage} />
             <Route path="/forecast">
@@ -490,6 +492,17 @@ function ProtectedShell() {
             <Route path="/bills/all" component={BillsPage} />
             <Route path="/recurring">
               <Redirect to="/bills/all" />
+            </Route>
+            {/* (W1) This week / This month: the spending views the section tabs
+                point at. Allowances' page stands in until their own content. */}
+            <Route path="/spending/week">
+              <SpendingPeriodPage view="week" />
+            </Route>
+            <Route path="/spending/month">
+              <SpendingPeriodPage view="month" />
+            </Route>
+            <Route path="/spending">
+              <Redirect to="/spending/week" />
             </Route>
             <Route path="/budget" component={BudgetPage} />
             <Route path="/allowances" component={AllowancesPage} />

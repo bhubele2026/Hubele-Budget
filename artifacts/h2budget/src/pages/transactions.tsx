@@ -117,6 +117,8 @@ import { Panel } from "@/components/next/Panel";
 import { identityOf } from "@/lib/accountIdentity";
 import { accountPageHref } from "@/lib/accountPage";
 import { currentRowDeepLink, rowDeepLinkStatus } from "@/lib/rowDeepLink";
+import { useUrlState } from "@/hooks/useUrlState";
+import { modeParam, monthParam, urlHasMonth } from "@/lib/ledgerUrl";
 import { ChaseInsightStrip } from "@/components/chase-insight-strip";
 import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 import {
@@ -485,16 +487,10 @@ export default function TransactionsPage({
   // (#400) Track whether the initial selected month came from a `?month=`
   // URL param so the post-import auto-jump effect below can respect a
   // deliberate deep-link and not yank the user away from it.
-  const monthPinnedFromUrlRef = useRef(false);
-  const [selectedMonth, setSelectedMonth] = useState<MonthKey>(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const m = params.get("month");
-      if (m && /^\d{4}-\d{2}-01$/.test(m)) {
-        monthPinnedFromUrlRef.current = true;
-        return monthKeyFromISO(m);
-      }
-    }
+  // (W1) The month, mode and (Amex) card live in the address (`useUrlState`):
+  // a refresh, a shared link and Back/Forward land on the same view.
+  const monthPinnedFromUrlRef = useRef(urlHasMonth());
+  const [selectedMonth, setSelectedMonth] = useUrlState<MonthKey>("month", monthParam, () => {
     // (WP7) A row link with no month still pins the page (Month mode, this month).
     if (rowLink.tx) monthPinnedFromUrlRef.current = true;
     return currentMonth;
@@ -505,7 +501,7 @@ export default function TransactionsPage({
   // Weekly-first: the summary + balance trend lead with THIS week. Mo/Yr opt-in.
   // (PR14) The list follows the range too, so a `?month=` deep-link (the Budget
   // page) opens in Month mode on the month it names.
-  const [rangeMode, setRangeMode] = useState<RangeMode>(() =>
+  const [rangeMode, setRangeMode] = useUrlState<RangeMode>("mode", modeParam, () =>
     monthPinnedFromUrlRef.current ? "mo" : "wk",
   );
   const [categoryFilter, setCategoryFilter] = useState<string>("all");

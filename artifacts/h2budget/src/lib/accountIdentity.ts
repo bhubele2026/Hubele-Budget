@@ -129,6 +129,8 @@ export interface TxnAccountRef {
 /** One linked account, keyed by Plaid's external `account_id` (an `AccountEntry` fits). */
 export interface TxnAccountEntry {
   plaidAccountId: string;
+  /** Internal plaid_accounts row id: what the Chase page's `?account=` names (an `AccountEntry` has it). */
+  rowId?: string;
   identity: AccountIdentity;
   institutionName?: string | null;
   institutionSlug?: string | null;

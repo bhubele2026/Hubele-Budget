@@ -37,6 +37,8 @@ export const importBills = () => import("../pages/bills");
 export const importBillsOverview = () => import("../pages/bills-overview");
 export const importBudget = () => import("../pages/budget");
 export const importAllowances = () => import("../pages/allowances");
+// (W1) This week / This month — Allowances' page in a titled frame for now.
+export const importSpendingPeriod = () => import("../pages/spending-period");
 export const importMappingRules = () => import("../pages/mapping-rules");
 export const importWishlist = () => import("../pages/wishlist");
 export const importSettings = () => import("../pages/settings");
@@ -65,6 +67,8 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/transactions": importTransactions,
   "/budget": importBudget,
   "/allowances": importAllowances,
+  "/spending/week": importSpendingPeriod,
+  "/spending/month": importSpendingPeriod,
   "/wishlist": importWishlist,
   "/debts": importDebts,
   "/reports": importReports,

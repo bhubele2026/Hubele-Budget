@@ -325,3 +325,40 @@ describe("(WP7c) embedded for one account (/next/accounts/:id)", () => {
     expect(screen.getByTestId("chase-row-link-status").textContent).toBe("Showing August 2026 for the row you opened");
   });
 });
+
+describe("(W1) the Chase register's view is in the address", () => {
+  it("the month and the mode are written (other params kept), and a remount opens the same view", async () => {
+    window.history.replaceState(null, "", "/transactions?account=acct-b");
+    serve({ rows: DEFAULT_ROWS, balanceToday: "1000.00", otherAccounts: { "acct-b": [{ id: "b1", occurredOn: "2026-09-14", amount: "-2.00" }] } });
+    show();
+    await waitFor(() => expect(screen.getByTestId("row-tx-b1")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("range-mo"));
+    fireEvent.click(screen.getByTestId("button-prev-month"));
+    const p = new URLSearchParams(window.location.search);
+    expect(p.get("mode")).toBe("month");
+    expect(p.get("month")).toBe("2026-08-01");
+    expect(p.get("account")).toBe("acct-b");
+    cleanup();
+    show();
+    await waitFor(() => expect(screen.getByTestId("text-selected-month").textContent).toContain("Aug"));
+    expect(screen.getByTestId("range-mo").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("?mode=year&month= open that view on arrival", async () => {
+    window.history.replaceState(null, "", "/transactions?mode=year&month=2026-03-01");
+    serve({ rows: DEFAULT_ROWS, balanceToday: "1000.00" });
+    show();
+    await waitFor(() => expect(screen.getByTestId("range-yr").getAttribute("aria-pressed")).toBe("true"));
+  });
+
+  it("the ?tx= highlight strips only tx: month, mode and account stay", async () => {
+    window.history.replaceState(null, "", "/transactions?tx=sep-early&month=2026-09-01&mode=month");
+    serve({ rows: DEFAULT_ROWS, balanceToday: "1000.00" });
+    show();
+    await waitFor(() => expect(screen.getByTestId("row-tx-sep-early")).toBeTruthy());
+    await waitFor(() => expect(new URLSearchParams(window.location.search).has("tx")).toBe(false));
+    const p = new URLSearchParams(window.location.search);
+    expect(p.get("month")).toBe("2026-09-01");
+    expect(p.get("mode")).toBe("month");
+  });
+});
