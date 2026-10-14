@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { Link } from "wouter";
 import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
@@ -16,7 +17,7 @@ import { money, rise, weekdayLabel } from "./shared";
 const QUIET = "bg-transparent px-1 text-label font-semibold text-brand-navy ring-0 hover:bg-transparent hover:underline";
 
 /** The morning text preview (and the request behind it) load on first open only. */
-const RecapPreview = lazy(() => import("./RecapPreview"));
+const RecapPreview = lazyWithPreload(() => import("./RecapPreview"));
 
 /**
  * ⭐ THE HEADER: what day it is, one factual line built from the spine, how

@@ -106,6 +106,7 @@ vi.mock("./lib/routePrefetch", () => {
     importNextForecast: page("next-forecast"),
     importNextAccounts: page("next-accounts"),
     prefetchRoute: () => {},
+    whenRouteChunkLoaded: () => null,
   };
 });
 // (C11) The landing IS the dashboard page, statically imported by App.tsx.
@@ -132,7 +133,13 @@ vi.mock("@/components/plaid-reconnect-listener", () => ({
 vi.mock("@/components/version-update-prompt", () => ({
   VersionUpdatePrompt: () => null,
 }));
-vi.mock("@/lib/spineRecovery", () => ({ askForSpineAgainIfFailed: () => () => {} }));
+vi.mock("@/lib/spineRecovery", () => ({
+  askForSpineAgainIfFailed: () => () => {},
+  askForUnauthorizedAgain: () => () => {},
+  noteClerkSettled: () => {},
+  clerkHasSettled: () => true,
+  isUnauthorized: () => false,
+}));
 vi.mock("@/lib/mutationInvalidation", () => ({ onWriteSuccess: () => {} }));
 
 import App from "./App";

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetVersion,
   getGetVersionQueryKey,
@@ -12,8 +11,7 @@ import { RefreshCw } from "lucide-react";
 // (#823) New-version reload prompt. The loaded bundle bakes its build
 // identifier (APP_VERSION) at build time; the API serves the identifier
 // of the *currently deployed* build at /api/version. We check that
-// endpoint on window focus plus once shortly after load (at browser
-// idle) and, when the served version no longer matches the one we
+// endpoint once on load and again on window focus and, when the served version no longer matches the one we
 // booted with, surface a small non-intrusive banner inviting the user
 // to reload onto the new bundle. No background polling — a tab left
 // open just checks again the next time it's focused.
@@ -46,15 +44,15 @@ export function VersionUpdatePrompt() {
   const enabled = import.meta.env.PROD && APP_VERSION !== "dev";
   const [outdated, setOutdated] = useState(false);
   const [location] = useLocation();
-  const queryClient = useQueryClient();
 
   const { data } = useGetVersion({
     query: {
       queryKey: getGetVersionQueryKey(),
       enabled,
-      // Treat the version as always-stale so the focus/idle checks
-      // actually hit the network. No refetchInterval — checks happen on
-      // mount, once at idle after load, and whenever the user tabs back.
+      // Treat the version as always-stale so the focus checks actually hit
+      // the network. No refetchInterval — checks happen once on mount and
+      // whenever the user tabs back. (#perf) ONE request per load: the mount
+      // fetch IS the load check; a second "idle" one only doubled it.
       staleTime: 0,
       refetchOnWindowFocus: true,
       refetchOnMount: "always",
@@ -63,23 +61,6 @@ export function VersionUpdatePrompt() {
       retry: false,
     },
   });
-
-  // One extra check shortly after load, at browser idle — catches a deploy
-  // that lands right as the tab boots, without any recurring poll.
-  useEffect(() => {
-    if (!enabled) return;
-    const check = () => {
-      void queryClient.invalidateQueries({
-        queryKey: getGetVersionQueryKey(),
-      });
-    };
-    if (typeof window.requestIdleCallback === "function") {
-      const id = window.requestIdleCallback(check);
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = window.setTimeout(check, 3_000); // Safari: no requestIdleCallback
-    return () => window.clearTimeout(id);
-  }, [enabled, queryClient]);
 
   useEffect(() => {
     if (!enabled) return;

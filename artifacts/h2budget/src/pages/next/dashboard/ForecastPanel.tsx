@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { Link, useLocation } from "wouter";
 import { Panel, shortDate } from "@/components/next";
 import { ACCOUNT_ACCENT } from "@/lib/chartTokens";
@@ -10,7 +11,7 @@ import { useFoldMinH } from "./foldDensity";
 import { Gate, LINK, money, rise, weekdayLabel } from "./shared";
 
 /** The chart (and recharts with it) loads only when this panel mounts. */
-const Chart = lazy(() =>
+const Chart = lazyWithPreload(() =>
   import("@/pages/forecast/ProjectedBalanceChart").then((m) => ({ default: m.ProjectedBalanceChart })),
 );
 

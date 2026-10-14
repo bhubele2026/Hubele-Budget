@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   Switch,
   Route,
@@ -24,7 +24,8 @@ import { VersionUpdatePrompt } from "@/components/version-update-prompt";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
-import { askForSpineAgainIfFailed } from "@/lib/spineRecovery";
+import { askForSpineAgainIfFailed, askForUnauthorizedAgain, clerkHasSettled, isUnauthorized, noteClerkSettled } from "@/lib/spineRecovery";
+import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { onWriteSuccess } from "@/lib/mutationInvalidation";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
@@ -35,7 +36,6 @@ import { SignInPage, SignUpPage } from "./pages/auth";
 // round trip on the one screen that has to feel instant. It is cheap to carry
 // in the entry precisely because it holds zero charts and one query.
 import DashboardPage from "./pages/next/Dashboard";
-import { DashboardSkeleton } from "./pages/next/dashboard/DashboardSkeleton";
 import { PageSkeleton } from "@/components/page-skeleton";
 // (#perf) Route-chunk importers live in one shared module so the hover/idle
 // prefetch map (lib/routePrefetch) and these lazy() calls can never point at
@@ -68,6 +68,8 @@ import {
   importSuggestions,
   importNextForecast,
   importNextAccounts,
+  prefetchRoute,
+  whenRouteChunkLoaded,
 } from "./lib/routePrefetch";
 
 // (#819) Route-level code splitting. Each page is loaded on demand so the
@@ -75,34 +77,34 @@ import {
 // recharts) up front. Navigating to a route fetches just that route's
 // chunk, which is cached for subsequent visits. Behavior is unchanged —
 // a brief <Suspense> fallback shows while a route's chunk streams in.
-const CommandCenterPage = lazy(importCommandCenter);
-const ForecastPage = lazy(importForecast);
-const ForecastOverviewPage = lazy(importForecastOverview);
-const ReportsPage = lazy(importReports);
-const ReportsDebtPage = lazy(importReportsDebt);
-const ReportsCashFlowPage = lazy(importReportsCashFlow);
-const ReportsSpendingPage = lazy(importReportsSpending);
-const ReportsBudgetPage = lazy(importReportsBudget);
-const ReportsBehaviorPage = lazy(importReportsBehavior);
-const DebtsPage = lazy(importDebts);
-const AvalanchePage = lazy(importAvalanche);
-const ReviewCategoriesPage = lazy(importReviewCategories);
-const AmexPage = lazy(importAmex);
-const TransactionsPage = lazy(importTransactions);
-const BillsPage = lazy(importBills);
-const BillsOverviewPage = lazy(importBillsOverview);
-const BudgetPage = lazy(importBudget);
-const AllowancesPage = lazy(importAllowances);
-const SpendingPeriodPage = lazy(importSpendingPeriod);
-const WishlistPage = lazy(importWishlist);
-const MappingRulesPage = lazy(importMappingRules);
-const SettingsPage = lazy(importSettings);
-const AskPage = lazy(importAsk);
-const SuggestionsPage = lazy(importSuggestions);
-const NextForecastPage = lazy(importNextForecast);
-const NextAccountsPage = lazy(importNextAccounts);
-const PlaidOAuthPage = lazy(() => import("./pages/plaid-oauth"));
-const NotFound = lazy(() => import("./pages/not-found"));
+const CommandCenterPage = lazyWithPreload(importCommandCenter);
+const ForecastPage = lazyWithPreload(importForecast);
+const ForecastOverviewPage = lazyWithPreload(importForecastOverview);
+const ReportsPage = lazyWithPreload(importReports);
+const ReportsDebtPage = lazyWithPreload(importReportsDebt);
+const ReportsCashFlowPage = lazyWithPreload(importReportsCashFlow);
+const ReportsSpendingPage = lazyWithPreload(importReportsSpending);
+const ReportsBudgetPage = lazyWithPreload(importReportsBudget);
+const ReportsBehaviorPage = lazyWithPreload(importReportsBehavior);
+const DebtsPage = lazyWithPreload(importDebts);
+const AvalanchePage = lazyWithPreload(importAvalanche);
+const ReviewCategoriesPage = lazyWithPreload(importReviewCategories);
+const AmexPage = lazyWithPreload(importAmex);
+const TransactionsPage = lazyWithPreload(importTransactions);
+const BillsPage = lazyWithPreload(importBills);
+const BillsOverviewPage = lazyWithPreload(importBillsOverview);
+const BudgetPage = lazyWithPreload(importBudget);
+const AllowancesPage = lazyWithPreload(importAllowances);
+const SpendingPeriodPage = lazyWithPreload(importSpendingPeriod);
+const WishlistPage = lazyWithPreload(importWishlist);
+const MappingRulesPage = lazyWithPreload(importMappingRules);
+const SettingsPage = lazyWithPreload(importSettings);
+const AskPage = lazyWithPreload(importAsk);
+const SuggestionsPage = lazyWithPreload(importSuggestions);
+const NextForecastPage = lazyWithPreload(importNextForecast);
+const NextAccountsPage = lazyWithPreload(importNextAccounts);
+const PlaidOAuthPage = lazyWithPreload(() => import("./pages/plaid-oauth"));
+const NotFound = lazyWithPreload(() => import("./pages/not-found"));
 
 /**
  * ⭐ ONE INVALIDATION RULE FOR THE SPINE, NOT THIRTY.
@@ -154,7 +156,11 @@ const queryClient = new QueryClient({
       // budget grid to re-skeleton every time the user tabbed back
       // to the window.
       refetchOnWindowFocus: false,
-      retry: 1,
+      // A 401 before Clerk has settled is NOT retried here (the ~1 s wait would
+      // just fail again on the same cookie): `askForUnauthorizedAgain` re-asks
+      // once Clerk reports signed in. Every other failure keeps `retry: 1`.
+      retry: (failureCount, error) =>
+        isUnauthorized(error) && !clerkHasSettled() ? false : failureCount < 1,
       // Global "keep previous data on screen during a refetch" — without
       // this, every page that paginates by month (Budget, Bills,
       // Forecast) would skeleton-flash on each prev/next click. With it,
@@ -297,7 +303,18 @@ function writeAuthHint(on: boolean): void {
 // the open on doomed requests. ⚠️ A page that mounts meanwhile shares this
 // request instead of starting its own, so it is `ProtectedShell` that asks
 // again once Clerk has signed in (`askForSpineAgainIfFailed`).
-if (typeof window !== "undefined" && readAuthHint()) {
+//
+// (#perf) ONLY ON THE LANDING. On any other route the page's own data is what
+// the open is waiting for, and the spine here only feeds the nav badge: the
+// layout asks for it normally, behind the page's queries rather than ahead of
+// them.
+function onLanding(): boolean {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  let path = window.location.pathname;
+  if (base && path.startsWith(base)) path = path.slice(base.length) || "/";
+  return path === "/" || path === "/home";
+}
+if (typeof window !== "undefined" && readAuthHint() && onLanding()) {
   void queryClient
     .prefetchQuery({
       queryKey: getGetSpineQueryKey(),
@@ -325,6 +342,14 @@ function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
     ? path.slice(basePath.length) || "/"
     : path;
+}
+
+// (#perf) THE CURRENT PAGE'S CHUNK, STARTED AT MODULE LOAD — in parallel with
+// Clerk and the entry's own boot, like the spine above — instead of when the
+// route first renders. Same map and dedupe as a nav hover; the landing has no
+// chunk (it is the entry) and an unknown path warms nothing.
+if (typeof window !== "undefined") {
+  prefetchRoute(stripBase(window.location.pathname));
 }
 
 const clerkAppearance = {
@@ -383,6 +408,10 @@ const clerkAppearance = {
 };
 
 function HomeRoute() {
+  // (#perf) Signed in on this device before: go straight to the landing, don't
+  // sit blank until Clerk answers. Same hint contract as ProtectedShell — if
+  // Clerk then says signed OUT, the shell sends them to /sign-in.
+  if (HAD_AUTH_HINT) return <Redirect to="/home" />;
   return (
     <>
       <Show when="signed-in">
@@ -414,6 +443,18 @@ const HAD_AUTH_HINT = typeof window !== "undefined" && readAuthHint();
 function ProtectedShell() {
   const [location] = useLocation();
   const { isLoaded, isSignedIn } = useAuth();
+  const pendingChunk = whenRouteChunkLoaded(location);
+  const [, chunkArrived] = useState(0);
+  useEffect(() => {
+    if (!pendingChunk) return;
+    let cancelled = false;
+    void pendingChunk.then(() => {
+      if (!cancelled) chunkArrived((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingChunk]);
 
   // Keep the hint honest: set on a real signed-in resolve, cleared on sign-out
   // so the next open of a signed-out browser goes straight to the front door
@@ -421,6 +462,17 @@ function ProtectedShell() {
   useEffect(() => {
     if (!isLoaded) return;
     writeAuthHint(Boolean(isSignedIn));
+    noteClerkSettled();
+    // Clerk says signed OUT after the optimistic routes mounted: nothing the
+    // cookie fetched for them may stay in memory.
+    if (!isSignedIn) queryClient.clear();
+  }, [isLoaded, isSignedIn]);
+
+  // (#perf) A query that went out before Clerk refreshed the ~60 s session
+  // cookie and got a 401 is asked again, once, when Clerk reports signed in.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    return askForUnauthorizedAgain(queryClient);
   }, [isLoaded, isSignedIn]);
 
   // ⚠️ A PAGE CAN JOIN THE PREFETCH'S FAILURE, and would then sit on "Couldn't
@@ -432,32 +484,33 @@ function ProtectedShell() {
     return askForSpineAgainIfFailed(queryClient);
   }, [isLoaded, isSignedIn]);
 
-  // ⭐ THE OPTIMISTIC SHELL. Clerk hasn't answered yet, but this browser has
-  // been signed in before — so paint the frame and the tile skeletons now
-  // instead of holding a blank screen for the auth handshake.
+  // ⭐ OPTIMISTIC ROUTES. Clerk hasn't answered yet, but this browser has been
+  // signed in before: mount the real routes NOW so each page's queries start at
+  // once instead of ~1.5-2.5 s later, after Clerk's boot sequence. The API
+  // authenticates with the same-origin `__session` cookie, not the Clerk
+  // client, so those requests are already authorised.
   //
-  // ⚠️ ZERO NUMBERS IN THE SKELETON, BY CONSTRUCTION. Nothing here reads a
-  // query, so there is no way for a figure to paint for someone whose session
-  // turns out to be invalid. The only thing an unauthorised viewer can see is
-  // the shape of the app.
-  if (!isLoaded) {
-    if (!HAD_AUTH_HINT) return null;
-    return (
-      <AppLayout>
-        {location === "/home" ? (
-          <DashboardSkeleton />
-        ) : (
-          <div data-testid="route-loading">
-            <PageSkeleton />
-          </div>
-        )}
-      </AppLayout>
-    );
-  }
+  // ⚠️ THE HINT GATES PIXELS, NEVER ENTITLEMENT. Every byte still needs the
+  // server to accept the cookie. A stale hint costs a few 401s, then
+  // (`isLoaded && !isSignedIn`, below) the cache is emptied and the visitor is
+  // sent to /sign-in: no data outlives the answer.
+  if (!isLoaded && !HAD_AUTH_HINT) return null;
 
   // Clerk has answered and the answer is no. Same redirect as before — it just
   // happens after the shell has painted rather than instead of it.
-  if (!isSignedIn) return <Redirect to="/sign-in" />;
+  if (isLoaded && !isSignedIn) return <Redirect to="/sign-in" />;
+
+  // (#perf) Mount the routes only once this page's chunk can render without
+  // suspending. A `lazy()` that suspends costs a ~300 ms Suspense hold even
+  // when the chunk lands in 20 ms; the layout + skeleton shown meanwhile is the
+  // same frame the fallback would have painted. A failed load stops waiting.
+  if (pendingChunk) {
+    return (
+      <AppLayout>
+        <RouteFallback />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

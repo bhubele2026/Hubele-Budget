@@ -13,6 +13,8 @@
 // resolve to the same modules App.tsx references (`./pages/...`), so the
 // bundler emits one shared chunk per page.
 
+import { loadedModule, preloadImporter } from "./lazyWithPreload";
+
 // ── Per-page importers (reused by App.tsx's lazy() calls) ────────────────────
 // ⚠️ NO IMPORTER FOR THE LANDING HERE, DELIBERATELY. The landing (/home) is the
 // dashboard page, statically imported by App.tsx: it is the default destination
@@ -88,6 +90,17 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
 // for a given importer, so repeated hovers cost nothing.
 const prefetched = new Set<string>();
 
+/** The map key (longest-prefix match) for `href`, or null when it has no chunk. */
+function bestKey(href: string): string | null {
+  let best: string | null = null;
+  for (const key of Object.keys(routeImporters)) {
+    if (href === key || href.startsWith(key + "/")) {
+      if (best === null || key.length > best.length) best = key;
+    }
+  }
+  return best;
+}
+
 /**
  * Warm the JS chunk for the route `href` maps to. Finds the best (longest-
  * prefix) matching importer — so `/bills/all` warms the Bills list (not the
@@ -97,17 +110,40 @@ const prefetched = new Set<string>();
  */
 export function prefetchRoute(href: string): void {
   if (typeof window === "undefined") return;
-  let best: string | null = null;
-  for (const key of Object.keys(routeImporters)) {
-    if (href === key || href.startsWith(key + "/")) {
-      if (best === null || key.length > best.length) best = key;
-    }
-  }
+  const best = bestKey(href);
   if (best === null || prefetched.has(best)) return;
   prefetched.add(best);
   // Fire-and-forget; on failure, drop from the set so a later hover retries.
-  const key = best;
-  void routeImporters[key]().catch(() => {
-    prefetched.delete(key);
+  // (#perf) Through `preloadImporter`, not the bare importer: App.tsx's
+  // `lazyWithPreload` shares that cache, so a warmed route renders without
+  // suspending (no ~300 ms Suspense retry hold).
+  void preloadImporter(routeImporters[best] as () => Promise<{ default: never }>).catch(() => {
+    prefetched.delete(best);
+    failed.add(best);
   });
+}
+
+// Chunks that failed to load: the shell stops waiting on them and lets the
+// route's own `lazyWithPreload` fallback (and error boundary) take over.
+const failed = new Set<string>();
+
+/**
+ * (#perf) null when the page for `href` can render RIGHT NOW without suspending
+ * (no chunk of its own, already loaded, or known to have failed). Otherwise a
+ * promise that settles when its chunk is in. The shell waits on this instead of
+ * mounting a `lazy()` that would suspend: React holds a suspended tree's retry
+ * ~300 ms after the fallback commits, even when the chunk arrives in 20 ms.
+ */
+export function whenRouteChunkLoaded(href: string): Promise<void> | null {
+  const key = bestKey(href);
+  if (key === null || failed.has(key)) return null;
+  const importer = routeImporters[key] as () => Promise<{ default: never }>;
+  if (loadedModule(importer)) return null;
+  prefetched.add(key);
+  return preloadImporter(importer).then(
+    () => undefined,
+    () => {
+      failed.add(key);
+    },
+  );
 }
