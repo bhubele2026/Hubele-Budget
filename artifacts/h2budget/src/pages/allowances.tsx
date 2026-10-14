@@ -5,6 +5,7 @@ import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
 import { useSpine } from "@/hooks/useSpine";
 import { carryOverLine } from "@/lib/waysBack";
+import { TRACKING_START } from "@/pages/spending/periodDates";
 import { WeekPlanPanel } from "@/components/plan/WeekPlanPanel";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import {
@@ -17,6 +18,7 @@ import {
   getGetSettingsQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
+import { useGetPeriodBreakdown } from "@workspace/api-client-react/features";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Collapsible,
@@ -451,7 +453,8 @@ function BucketCard({
 }: {
   name: string;
   help: string;
-  actual: number;
+  /** The server's figure (GET /money/period-breakdown); null while it loads or if it failed: shown as "—", never $0. */
+  actual: number | null;
   planned: number;
   expanded: boolean;
   onToggle: () => void;
@@ -465,10 +468,12 @@ function BucketCard({
   /** Under the variance line: the over-limit offer and the carry-over note (weekly). */
   extra?: React.ReactNode;
 }) {
-  const variance = actual - planned;
-  const over = variance > 0;
-  const state = bucketState(actual, planned);
-  const pct = planned > 0 ? Math.round((actual / planned) * 100) : 0;
+  const known = actual != null;
+  const spent = actual ?? 0;
+  const variance = spent - planned;
+  const over = known && variance > 0;
+  const state = known ? bucketState(spent, planned) : { label: "—", chip: "gray" };
+  const pct = known && planned > 0 ? Math.round((spent / planned) * 100) : 0;
   const slug = name.split(" ")[0].toLowerCase();
   const [editOpen, setEditOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -535,10 +540,10 @@ function BucketCard({
               over ? "text-bad" : "text-brand-navy",
             )}
           >
-            {formatCurrency(actual)}
+            {known ? formatCurrency(spent) : "—"}
           </span>
           <span className="flex items-center gap-1.5">
-            {planned > 0 && (
+            {known && planned > 0 && (
               <span className="font-mono text-micro tabular-nums text-neutral-400">
                 {pct}%
               </span>
@@ -618,10 +623,10 @@ function BucketCard({
         </div>
 
         <CssFillMeter
-          value={actual}
+          value={spent}
           ceiling={planned}
           className="mt-2.5"
-          title={`${formatCurrency(actual)} of ${formatCurrency(planned)}`}
+          title={known ? `${formatCurrency(spent)} of ${formatCurrency(planned)}` : undefined}
         />
 
         <div
@@ -637,7 +642,9 @@ function BucketCard({
         >
           {planned <= 0
             ? "No allowance set"
-            : over
+            : !known
+              ? "—"
+              : over
               ? `${formatCurrency(variance)} over`
               : `${formatCurrency(Math.abs(variance))} under`}
         </div>
@@ -914,24 +921,28 @@ export default function AllowancesPage() {
     [txns, monthScopeStart, monthScopeEnd],
   );
 
-  const actual = useMemo(() => {
-    const out: Record<BucketKey, number> = {
-      weekly: 0,
-      monthly: 0,
-      unplanned: 0,
-    };
-    // Weekly tracks the selected week…
-    for (const t of windowTxns) {
-      if (hasBucketFlag(t, "weekly")) out.weekly += expenseAmount(t);
-    }
-    // …monthly + unplanned track the whole month.
-    for (const t of monthScopeTxns) {
-      const amt = expenseAmount(t);
-      if (hasBucketFlag(t, "monthly")) out.monthly += amt;
-      if (hasBucketFlag(t, "unplanned")) out.unplanned += amt;
-    }
-    return out;
-  }, [windowTxns, monthScopeTxns]);
+  // (W5) The spent totals are the SERVER's: GET /money/period-breakdown, the
+  // same figures the This week / This month pages show. Weekly = weekly-flagged
+  // + not-yet-filed purchases, monthly = monthly-flagged, unplanned = the
+  // breakdown's "beside" line; all netted by the server's one spending rule.
+  // They no longer come from the browser's pull of rows (`bucketSpend`). The
+  // drill-downs below still list the rows this page fetched.
+  const weekBd = useGetPeriodBreakdown(
+    { period: "week", start: windowStart, rowsPerGroup: 1 },
+    { query: { staleTime: 60_000, enabled: windowEnd >= TRACKING_START } as never },
+  );
+  const monthBd = useGetPeriodBreakdown(
+    { period: "month", start: monthScopeStart, rowsPerGroup: 1 },
+    { query: { staleTime: 60_000, enabled: monthScopeEnd >= TRACKING_START } as never },
+  );
+  const actual = useMemo<Record<BucketKey, number | null>>(
+    () => ({
+      weekly: weekBd.data ? Number(weekBd.data.actual) : null,
+      monthly: monthBd.data ? Number(monthBd.data.actual) : null,
+      unplanned: monthBd.data ? Number(monthBd.data.beside.unplanned) : null,
+    }),
+    [weekBd.data, monthBd.data],
+  );
 
   // The consecutive-weeks-over streak — drives the warning chip.
   const overStreak = useMemo(
@@ -1148,7 +1159,7 @@ export default function AllowancesPage() {
             extra={
               b.key === "weekly" ? (
                 <div className="mt-3 flex flex-col items-start gap-2">
-                  {weekIsCurrent && planned.weekly > 0 && actual.weekly > planned.weekly ? (
+                  {weekIsCurrent && planned.weekly > 0 && actual.weekly != null && actual.weekly > planned.weekly ? (
                     <WaysBackLauncher />
                   ) : null}
                   {carryLine ? (
@@ -1225,7 +1236,7 @@ export default function AllowancesPage() {
                     {b.name}
                   </span>
                   <span className="font-mono text-label tabular-nums">
-                    {formatCurrency(total)}
+                    {total == null ? "—" : formatCurrency(total)}
                   </span>
                 </button>
               </CollapsibleTrigger>
@@ -1285,25 +1296,25 @@ export default function AllowancesPage() {
               {BUCKETS.map((b) => {
                 const a = actual[b.key];
                 const p = planned[b.key];
-                const variance = a - p;
-                const state = bucketState(a, p);
+                const variance = (a ?? 0) - p;
+                const state = a == null ? { label: "—", chip: "gray" } : bucketState(a, p);
                 return (
                   <tr key={b.key} data-testid={`allowance-summary-${b.key}`}>
                     <td className={cn(td, "font-medium")}>{b.name}</td>
                     <td className={cn(td, "text-neutral-500")}>
                       {labelFor(b.key)}
                     </td>
-                    <td className={tdNum}>{formatCurrency(a)}</td>
+                    <td className={tdNum}>{a == null ? "—" : formatCurrency(a)}</td>
                     <td className={tdNum}>
                       {p > 0 ? formatCurrency(p) : "—"}
                     </td>
                     <td
                       className={cn(
                         tdNum,
-                        p > 0 && variance > 0 && "text-bad",
+                        a != null && p > 0 && variance > 0 && "text-bad",
                       )}
                     >
-                      {p > 0 ? formatCurrency(Math.abs(variance)) : "—"}
+                      {a != null && p > 0 ? formatCurrency(Math.abs(variance)) : "—"}
                     </td>
                     <td className={td}>
                       <span className={`chip ${state.chip}`}>{state.label}</span>

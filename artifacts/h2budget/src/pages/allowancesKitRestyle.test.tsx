@@ -82,11 +82,25 @@ const SETTINGS = {
   preferences: {},
 };
 
-const EXPECTED = { weekly: 195.75, monthly: 420.4, unplanned: 50.1 };
+// (W5) The spent totals are the SERVER's (GET /money/period-breakdown), not the
+// browser's sum of the rows above (195.75 / 420.40 / 50.10). The server's weekly
+// pool also counts a $24.50 purchase not filed yet, so the fixture's weekly is
+// 220.25. Monthly and unplanned are the same by both rules.
+const BROWSER_WEEKLY = 195.75;
+const EXPECTED = { weekly: 220.25, monthly: 420.4, unplanned: 50.1 };
+const SERVER = {
+  week: { actual: "220.25", beside: { unplanned: "0.00" } },
+  month: { actual: "420.40", beside: { unplanned: "50.10" } },
+};
 const PLANNED = { weekly: 450, monthly: 300, unplanned: 200 };
 
 let txns: Tx[] = [];
 let settings: Record<string, unknown> | undefined;
+let server: Record<string, unknown> | undefined = SERVER;
+const asked: Array<Record<string, unknown>> = [];
+/** Server answers for a specific period (`week:2026-09-06`); anything else gets `server`. */
+let serverBy: Record<string, unknown> = {};
+const fig = (actual: string, unplanned = "0.00") => ({ actual, beside: { unplanned } });
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
@@ -115,6 +129,13 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetSettingsQueryKey: () => ["/api/settings"],
 }));
 
+vi.mock("@workspace/api-client-react/features", () => ({
+  useGetPeriodBreakdown: (params: Record<string, unknown>) => {
+    asked.push(params);
+    return { data: serverBy[`${params.period}:${params.start}`] ?? server?.[String(params.period)] };
+  },
+}));
+
 import AllowancesPage from "./allowances";
 import { bucketSpendInWindow } from "@/lib/bucketSpend";
 
@@ -134,6 +155,9 @@ beforeEach(() => {
   vi.setSystemTime(TEST_TODAY);
   txns = TXNS;
   settings = { ...SETTINGS };
+  server = SERVER;
+  serverBy = {};
+  asked.length = 0;
 });
 
 afterEach(() => {
@@ -152,24 +176,29 @@ describe("Allowances — the money is unmoved", () => {
     }
   });
 
-  it("agrees with the Banking dashboard's bucketSpend for the same window", () => {
-    // The parity that matters: Banking sums through `bucketSpendInWindow`, so
-    // the two surfaces must print the same number for the same window.
-    // (Known pre-existing divergence, deliberately NOT changed here: the
-    // Banking helper also drops transfers / card payments / reimbursables /
-    // debt payments via `isCountableSpend`, which the Allowances page does not
-    // apply. This fixture contains no such rows, so both paths agree.)
+  it("prints the server's totals, asked for this week and this month", () => {
+    // The Banking dashboard's helper still sums the rows in the browser; this
+    // page no longer does. The weekly pool differs by rule (unfiled counts).
     expect(bucketSpendInWindow(TXNS, "weekly", "2026-05-10", "2026-05-16")).toBeCloseTo(
-      EXPECTED.weekly,
+      BROWSER_WEEKLY,
       2,
     );
-    expect(
-      bucketSpendInWindow(TXNS, "unplanned", "2026-05-01", "2026-05-31"),
-    ).toBeCloseTo(EXPECTED.unplanned, 2);
-
     renderPage();
     const weekRow = screen.getByTestId("allowance-summary-weekly");
     expect(within(weekRow).getByText(usd(EXPECTED.weekly))).toBeTruthy();
+    expect(within(weekRow).queryByText(usd(BROWSER_WEEKLY))).toBeNull();
+    expect(asked).toContainEqual(expect.objectContaining({ period: "week", start: "2026-05-10" }));
+    expect(asked).toContainEqual(expect.objectContaining({ period: "month", start: "2026-05-01" }));
+  });
+
+  it("shows a dash, never $0.00, while the server's totals have not arrived", () => {
+    server = undefined;
+    renderPage();
+    for (const key of ["weekly", "monthly", "unplanned"] as const) {
+      const row = screen.getByTestId(`allowance-summary-${key}`);
+      expect(within(row).queryByText(usd(0))).toBeNull();
+      expect(screen.getByTestId(`allowance-card-${key}`).textContent).toContain("—");
+    }
   });
 
   it("counts neither unflagged spend nor income", () => {
@@ -337,7 +366,12 @@ describe("Allowances — the household's week (PR2)", () => {
       tx({ id: "sat", amount: "-61.25", occurredOn: "2026-09-12", weeklyAllowance: true, weeklyBucket: "groceries" }),
       tx({ id: "sun", amount: "-88.40", occurredOn: "2026-09-13", weeklyAllowance: true, weeklyBucket: "groceries" }),
     ];
+    // (W5) The page asks the server for the household's week (Sun 9/6), not
+    // the UTC browser's (Sun 9/13), and prints what it answers.
+    serverBy = { "week:2026-09-06": fig("61.25"), "week:2026-09-13": fig("88.40") };
     renderPage();
+    expect(asked).toContainEqual(expect.objectContaining({ period: "week", start: "2026-09-06" }));
+    expect(asked).not.toContainEqual(expect.objectContaining({ period: "week", start: "2026-09-13" }));
     const row = screen.getByTestId("allowance-summary-weekly");
     expect(within(row).getByText(usd(61.25))).toBeTruthy();
     expect(within(row).queryByText(usd(88.4))).toBeNull();
@@ -366,7 +400,9 @@ describe("Allowances — the household's month (PR2)", () => {
   it("Wed 9/30 at 9pm Central still counts September, even on a UTC browser", () => {
     vi.setSystemTime(new Date("2026-10-01T02:00:00Z"));
     txns = MONTH_EDGE_TXNS;
+    serverBy = { "month:2026-09-01": fig("42.15", "23.45"), "month:2026-10-01": fig("17.35") };
     renderPage();
+    expect(asked).toContainEqual(expect.objectContaining({ period: "month", start: "2026-09-01" }));
     // Old, under UTC: October — $17.35 monthly and nothing unplanned.
     const monthly = screen.getByTestId("allowance-summary-monthly");
     expect(within(monthly).getByText(usd(42.15))).toBeTruthy();
@@ -379,7 +415,9 @@ describe("Allowances — the household's month (PR2)", () => {
   it("Thu 10/1 at 12:30am Central counts October, even on a Pacific browser still on 9/30", () => {
     vi.setSystemTime(new Date("2026-10-01T05:30:00Z"));
     txns = MONTH_EDGE_TXNS;
+    serverBy = { "month:2026-09-01": fig("42.15", "23.45"), "month:2026-10-01": fig("17.35") };
     renderPage();
+    expect(asked).toContainEqual(expect.objectContaining({ period: "month", start: "2026-10-01" }));
     // Old, under Pacific: September — $42.15 monthly and $23.45 unplanned.
     const monthly = screen.getByTestId("allowance-summary-monthly");
     expect(within(monthly).getByText(usd(17.35))).toBeTruthy();

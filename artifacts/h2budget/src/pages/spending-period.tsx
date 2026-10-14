@@ -1,18 +1,11 @@
-import AllowancesPage from "./allowances";
+import { PeriodView } from "./spending/PeriodView";
 
 /**
- * (W1) `/spending/week` and `/spending/month` — the two views at the head of
- * the Spending tabs. Their own content is a later batch; until then each shows
- * the Allowances page (it carries the weekly and monthly cards) under its own
- * title, so the tab is never a blank screen.
+ * (W5) `/spending/week` and `/spending/month` — "Why over?". The plan, what
+ * counts toward it, left or over, the categories that drove it and the
+ * purchases behind them, for the week or month in `?start=`. `key` remounts the
+ * view when the tab changes, so each tab reads its own URL state.
  */
 export default function SpendingPeriodPage({ view }: { view: "week" | "month" }) {
-  return (
-    <div data-testid={`spending-${view}`} className="space-y-4">
-      <h1 className="text-display font-semibold text-brand-navy">
-        {view === "week" ? "This week" : "This month"}
-      </h1>
-      <AllowancesPage />
-    </div>
-  );
+  return <PeriodView key={view} view={view} />;
 }
