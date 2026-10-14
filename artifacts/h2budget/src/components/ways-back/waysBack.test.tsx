@@ -34,6 +34,8 @@ const ways = (over: Record<string, unknown> = {}, carry: Record<string, unknown>
   weekEnd: "2026-10-10",
   overBy: 4000,
   daysLeft: 3,
+  usualBasis: "same_days",
+  usualThrough: "2026-10-07",
   hold: { perDay: 0, leavesUntilPayday: 91250 },
   trims: [
     { categoryId: "c1", name: "Dining", spentWeek: 9000, usualWeek: 5000 },
@@ -67,9 +69,15 @@ describe("Ways back", () => {
     expect(screen.getByTestId("way-hold").textContent).toContain("$912.50 until payday");
     const rows = screen.getAllByTestId("way-trim-row");
     expect(rows[0].textContent).toContain("Dining");
-    expect(rows[0].textContent).toContain("spent $90.00 this week · usually $50.00");
-    expect(rows[1].textContent).not.toContain("usually");
+    expect(rows[0].textContent).toContain("spent $90.00 this week · usual by Wed $50.00");
+    expect(rows[1].textContent).not.toContain("usual");
     expect(screen.getByTestId("way-carry").textContent).toContain("Next week starts $40.00 lower, at $210.00.");
+  });
+
+  it("(F4) the usual is labelled by the weekday it is read to; a whole-week basis says so", async () => {
+    m.ways = ways({ usualBasis: "full_period", usualThrough: null });
+    await open();
+    expect(screen.getAllByTestId("way-trim-row")[0].textContent).toContain("usual for a full week $50.00");
   });
 
   it("the owner carries it over: the next week, minus the overage, whole cents", async () => {

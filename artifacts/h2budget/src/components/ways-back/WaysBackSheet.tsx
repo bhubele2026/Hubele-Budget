@@ -32,6 +32,10 @@ interface BodyProps {
   onUndo: () => void;
 }
 
+/** (F4) The usual is read to today's weekday, so it says so: "usual by Wed". A whole-week basis says "usual for a full week". */
+const usualLabel = (w: Pick<WaysBack, "usualBasis" | "usualThrough">): string =>
+  w.usualBasis === "same_days" && w.usualThrough ? `usual by ${weekdayName(w.usualThrough).slice(0, 3)}` : "usual for a full week";
+
 const optionClass = "border-t border-brand-line py-4 first:border-t-0 first:pt-0";
 
 export function WaysBackBody({ ways, owner, ownerName, busy, error, onCarry, onUndo }: BodyProps) {
@@ -63,7 +67,12 @@ export function WaysBackBody({ ways, owner, ownerName, busy, error, onCarry, onU
                 </Link>
                 <span className="mt-0.5 block text-micro text-neutral-600">
                   spent {fmtCents(t.spentWeek)} this week
-                  {t.usualWeek != null && <> · usually {fmtCents(t.usualWeek)}</>}
+                  {t.usualWeek != null && (
+                    <>
+                      {" "}
+                      · {usualLabel(ways)} {fmtCents(t.usualWeek)}
+                    </>
+                  )}
                 </span>
               </li>
             ))}

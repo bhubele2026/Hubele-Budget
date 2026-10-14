@@ -29,10 +29,18 @@ export function plainDollars(amount: string | number | null | undefined): string
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
+/** (F4) The server's plain sentence when it refuses a plan write (409 `plan_unsafe`); null otherwise. */
+export function planRefusalReason(e: unknown): string | null {
+  const x = e as { status?: number; data?: { code?: string; reason?: string } | null } | null;
+  return x?.status === 409 && x.data?.code === "plan_unsafe" && x.data.reason ? x.data.reason : null;
+}
+
 /** The words for a plan write's error: the owner-only 403 gets its own sentence. */
 export function planErrorWords(e: unknown, fallback = "Couldn't save. Try again."): string {
   const status = (e as { status?: number } | null)?.status;
   if (status === 403) return "Only the household owner can change this.";
+  const refused = planRefusalReason(e);
+  if (refused) return refused;
   if (status === 409) return "That conflicts with another entry. Check the date.";
   return fallback;
 }

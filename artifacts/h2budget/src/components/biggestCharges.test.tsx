@@ -57,7 +57,8 @@ describe("Spending › This month › Details", () => {
     h.txns = [t("a", "ONE SHOP", "-50.00")];
     h.calls = [];
     const data = {
-      start: "2026-10-01", actual: "100.00", carryOver: null, refundFloorAdjustment: "0.00",
+      period: "month", start: "2026-10-01", actual: "100.00", known: "100.00", carryOver: null, refundFloorAdjustment: "0.00",
+      unresolved: { amount: "0.00" }, categories: [], usualBasis: "same_days", usualThrough: "2026-10-14",
       beside: { unplanned: "0.00", weekly: null, monthly: "0.00", billMatched: "0.00", reimbursable: "0.00", householdSpend: "100.00" },
     } as never;
     const { unmount } = render(<Details data={data} view="month" />);

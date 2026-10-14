@@ -48,6 +48,8 @@ tags:
     description: (PR-C) Savings, buffer, sinking and debt-payoff goals, and the money a goal holds back in checking.
   - name: banking
     description: (S4) The banking review — one bank account's period and what was not in the plan.
+  - name: review
+    description: (F2) Proposed fixes — evidence-backed corrections the owner applies himself; nothing is written.
   - name: features
     description: >-
       (C0) The fold-in operations (parity review F1-F10, plus the money position and allowance plans they read).
@@ -1537,6 +1539,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Settings" }
+        "409":
+          description: >-
+            (F1) The plan gate refused a save that changes the weekly or monthly
+            allowance or `preferences.weeklyAllowanceOverrides` (`code:
+            plan_unsafe`). Nothing is written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanUnsafe" }
 
   /forecast:
     get:
@@ -1894,6 +1904,37 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AmexWeeklyPayoff" }
+
+  /amex/cards/{accountId}/payoff-mode:
+    put:
+      operationId: setAmexCardPayoffMode
+      tags: [amex, features]
+      summary: (F1) Say how one Amex card is paid — in full by the everyday hook, or on the debt plan (household owner only)
+      description: >-
+        Stored in settings.preferences.amexCardPayoffMode (server-owned: a
+        settings save never writes or clears it). `null` clears the choice and
+        the default from the card's debt row applies (no active debt → in_full;
+        an active debt with an APR or a minimum → debt_plan). Answers the card's
+        resolved mode.
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetAmexCardPayoffModeBody" }
+      responses:
+        "200":
+          description: OK — the card's resolved payoff mode
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AmexCardPayoffMode" }
+        "400": { description: "Not in_full, debt_plan or null (invalid_mode)" }
+        "403": { description: Only the household owner chooses (owner_only) }
+        "404": { description: No such Amex card in this household (card_not_found) }
 
   /amex/summary:
     get:
@@ -2673,7 +2714,14 @@ paths:
         $0, dollars and cents. A household-pool row already starting that day is
         updated (`created: false`); otherwise one is inserted. Rows of past
         periods are never touched. Written only through allowancePlanWriter.ts,
-        which no job or agent may import.
+        which no job or agent may import. (F1) With `dryRun=1` nothing is
+        written: the answer is an AllowancePlanDryRun.
+      parameters:
+        - in: query
+          name: dryRun
+          required: false
+          description: (F1) "1" (or "true") — show the plan's effect on the forecast; write nothing
+          schema: { type: string, enum: ["1", "true"] }
       requestBody:
         required: true
         content:
@@ -2681,16 +2729,26 @@ paths:
             schema: { $ref: "#/components/schemas/CreateAllowancePlanBody" }
       responses:
         "200":
-          description: OK — the plan written, and the plans in effect after it
+          description: OK — the plan written, and the plans in effect after it; or (dryRun) its effect, nothing written
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AllowancePlanSaved" }
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AllowancePlanSaved"
+                  - $ref: "#/components/schemas/AllowancePlanDryRun"
         "400":
           description: Invalid amount, not a period start, or a past period
         "403":
           description: Only the household owner sets a plan
         "409":
-          description: Another save for the same start won the race
+          description: >-
+            Another save for the same start won the race; or (F1) the plan gate
+            refused (`code: plan_unsafe`): the household has an everyday hook and
+            either the card-obligations model is off or an Amex card the hook
+            depends on has no payoff mode yet. Nothing is written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanUnsafe" }
 
   /allowance-plans/{id}:
     put:
@@ -2728,7 +2786,13 @@ paths:
         "404":
           description: No such plan in this household
         "409":
-          description: Another plan for the same member and period already starts on that date
+          description: >-
+            Another plan for the same member and period already starts on that
+            date; or (F1) the plan gate refused (`code: plan_unsafe`). Nothing is
+            written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanUnsafe" }
 
   # ── (V5) A way back when the week is over ─────────────────────────────────
   /money/ways-back:
@@ -2763,9 +2827,14 @@ paths:
         exactly what the Monthly Spend hook counts). Refunds net per account and
         never below zero; `refundFloorAdjustment` is what that floor added, so
         Σ categories.amount + needsClassification.amount + refundFloorAdjustment
-        = actual, to the cent. With no plan in effect (or a $0 one) the plan is
-        "not_set" and remaining, over and withinPlan are null — never $0.
-        Household America/Chicago dates. Read-only.
+        = actual, to the cent. (F2) The plan comparison (remaining, over,
+        withinPlan) reads `known` — confirmed purchases only; the unfiled rows
+        with contrary evidence are `unresolved` (known + unresolved.amount =
+        actual) and `provisional` says when they could change the answer.
+        `actual` stays the money position's cautious figure. With no plan in
+        effect (or a $0 one) the plan is "not_set" and remaining, over and
+        withinPlan are null — never $0. Household America/Chicago dates.
+        Read-only.
       parameters:
         - in: query
           name: period
@@ -2880,6 +2949,38 @@ paths:
             today, more than 366 days), a bad account (not this household's
             checking or savings account), rowsPerBucket, bucket, kind (without
             bucket=unmatched), cursor or limit, or a NUL byte in any value
+
+  # ── (F2) Proposed fixes — evidence-backed corrections, never applied here ──
+  /review/proposals:
+    get:
+      operationId: getReviewProposals
+      tags: [review, features]
+      summary: Proposed fixes — evidence-backed corrections over the last 120 days (owner only; writes nothing)
+      description: >-
+        (F2) Read-only proposals for the household owner to apply himself with
+        an existing app action (Review "mark matched" — POST
+        /forecast/resolutions; Categories "change" — PATCH /transactions/{id}).
+        Each stands on evidence the rows carry, never a merchant name alone and
+        never a blanket rule. loan_payment: Plaid LOAN_PAYMENTS (not a card)
+        rows nobody filed as a payment; rows on one account paying the same
+        amount (within max($1, 1%)) are one series, proposed as the payment of
+        exactly one active bill (a distinctive word of its name or its
+        category's name in a description, and within max($25, 25%) of its
+        amount) or debt (its name, and at least its minimum). transfer:
+        TRANSFER_OUT_SAVINGS / ACCOUNT_TRANSFER rows counted as spending under
+        an expense category (no person-to-person rail). bill_match: an unfiled
+        row the forecast only suggests for a bill. income_category: a credit
+        under an expense category, Plaid primary INCOME, pairing with exactly
+        one active income plan (name and amount). A row is in one proposal at
+        most. Largest first, at most 50; at most 20 rows listed per item.
+        Household America/Chicago dates. A member gets 403 owner_only.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewProposals" }
+        "403": { description: Not the household's owner }
 
   /money/week-adjustments:
     post:
@@ -3159,6 +3260,11 @@ paths:
     post:
       operationId: acceptCategorizationDecision
       tags: [categorization, features]
+      description: >-
+        (F2) Refuses (409, code direction_conflict, nothing written) a
+        suggestion that would file money IN under an expense category or money
+        OUT under an income one (categoryDirectionConflict — a refund, a
+        transfer, a debt row are never a conflict).
       parameters:
         - { in: path, name: decisionId, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -3168,7 +3274,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ReviewResolution" }
         "404": { description: Not found }
-        "409": { description: Already resolved }
+        "409":
+          description: Already resolved, or (F2) the category goes against the money's direction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewRefusal" }
 
   /categorization/review/{decisionId}/skip:
     post:
@@ -3192,6 +3302,11 @@ paths:
       summary: |
         File the row by hand (locked), learn merchant memory, and return the
         retroactive candidates. Never applies them.
+      description: >-
+        (F2) Refuses (409, code direction_conflict, nothing written) a category
+        that would file money IN under an expense category or money OUT under
+        an income one. (F2) Merchant memory is sign-aware: money in learns
+        apart from money out.
       parameters:
         - { in: path, name: decisionId, required: true, schema: { type: string, format: uuid } }
       requestBody:
@@ -3207,7 +3322,11 @@ paths:
               schema: { $ref: "#/components/schemas/ReviewResolution" }
         "400": { description: Unknown category }
         "404": { description: Not found }
-        "409": { description: Already resolved }
+        "409":
+          description: Already resolved, or (F2) the category goes against the money's direction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewRefusal" }
 
   /category-decisions:
     get:
@@ -3464,7 +3583,7 @@ paths:
               schema: { $ref: "#/components/schemas/AgentProposal" }
         "403": { description: Only the household owner sets the weekly limit }
         "404": { description: No such proposal in this household }
-        "409": { description: "Not open (decided or expired), or its target changed" }
+        "409": { description: "Not open (decided or expired), or its target changed; or (F1) a weekly limit the plan gate refused (`code: plan_unsafe`, `reason`)" }
 
   /agent/proposals/{id}/reject:
     post:
@@ -4710,12 +4829,18 @@ components:
         (S3) One period's allowance, broken down. Money is a two-decimal string.
         actual: week → weekly-flagged + unfiled spending (the weekly cap's pool),
         month → monthly-flagged spending; refunds netted per account, never
-        below zero. remaining = plan + carryOver − actual (negative when over);
-        over = max(0, −remaining); both null with no plan. Σ categories.amount +
-        needsClassification.amount + refundFloorAdjustment = actual, exactly.
+        below zero — the money position's own figure (cautious: it counts
+        unresolved rows). (F2) known = actual without the unresolved rows,
+        netted the same way; known + unresolved.amount = actual, exactly. The
+        plan comparison reads KNOWN: remaining = plan + carryOver − known
+        (negative when over); over = max(0, −remaining); both null with no plan.
+        provisional = unresolved.amount > max($25, 5% of the plan). Σ
+        categories.amount + needsClassification.amount + refundFloorAdjustment
+        = actual, exactly (the unresolved rows are also in needsClassification).
       required:
-        [period, basis, start, end, isCurrent, timezone, scope, planScope, plan, carryOver, actual, remaining, over,
-         withinPlan, categories, needsClassification, refundFloorAdjustment, beside, limitations]
+        [period, basis, start, end, isCurrent, timezone, scope, planScope, plan, carryOver, actual, known, remaining, over,
+         withinPlan, provisional, categories, needsClassification, unresolved, excludedPayments, refundFloorAdjustment,
+         usualBasis, usualThrough, beside, limitations]
       properties:
         period: { type: string, enum: [week, month] }
         basis: { type: string, enum: [weekly_allowance, monthly_allowance] }
@@ -4730,17 +4855,42 @@ components:
           type: ["string", "null"]
           description: (week) The household's carry-over for the week, signed (never positive); null when none (and always for a month)
         actual: { type: string, description: What counts against the plan (see the schema description); "0.00" for a quiet period }
-        remaining: { type: ["string", "null"], description: "plan + carryOver − actual; negative when over; null when the plan is not set" }
+        known:
+          type: string
+          description: >-
+            (F2) Confirmed purchases only: actual without the unresolved rows,
+            netted per account and never below zero exactly as actual is. For a
+            month it equals actual (a monthly flag is the household's own
+            confirmation).
+        remaining: { type: ["string", "null"], description: "(F2) plan + carryOver − known; negative when over; null when the plan is not set" }
         over: { type: ["string", "null"], description: "max(0, −remaining); null when the plan is not set" }
         withinPlan: { type: ["boolean", "null"], description: "remaining ≥ 0; null when the plan is not set" }
+        provisional:
+          type: boolean
+          description: "(F2) unresolved.amount > max($25, 5% of the plan; $25 with no plan): the comparison may change"
         categories:
           type: array
           description: The rows filed to this plan (weekly / monthly flag), by category, largest first
           items: { $ref: "#/components/schemas/PeriodBreakdownCategory" }
         needsClassification: { $ref: "#/components/schemas/PeriodBreakdownGroup" }
+        unresolved: { $ref: "#/components/schemas/PeriodBreakdownUnresolved" }
+        excludedPayments: { $ref: "#/components/schemas/PeriodBreakdownPayments" }
         refundFloorAdjustment:
           type: string
           description: "actual − Σ groups (≥ 0): non-zero only where an account's refunds outran its purchases and its pool floored at 0"
+        usualBasis:
+          type: string
+          enum: [same_days, full_period]
+          description: >-
+            (F3) How each category's usual was read. same_days (the current
+            period): each prior period cut at the same point — a week on the same
+            weekday, a month on the same day of the month capped at that month's
+            last day (Oct 31 → Sep 30, Mar 31 → Feb 28/29) — so a period still
+            running is compared with the same days of the others. full_period (a
+            past period): whole periods.
+        usualThrough:
+          type: ["string", "null"]
+          description: "(F3) With same_days: today (YYYY-MM-DD), the point each prior period is cut at; null for full_period"
         beside: { $ref: "#/components/schemas/PeriodBreakdownBeside" }
         limitations:
           type: array
@@ -4776,7 +4926,7 @@ components:
 
     PeriodBreakdownCategory:
       type: object
-      required: [categoryId, name, amount, shareBp, count, usual, aboveUsual, rows, truncated]
+      required: [categoryId, name, amount, shareBp, count, usual, usualFullPeriod, aboveUsual, rows, truncated]
       properties:
         categoryId: { type: ["string", "null"], description: Null for rows with no category (or one that is no longer the household's) }
         name: { type: ["string", "null"] }
@@ -4788,8 +4938,13 @@ components:
           description: >-
             Median of the category's amount over the prior 8 weeks (3 months); a
             period with none counts as 0, periods before tracking began are left
-            out; null when none is left
-        aboveUsual: { type: ["string", "null"], description: "max(0, amount − usual); null when usual is null" }
+            out; null when none is left. (F3) For the current period each prior
+            period is read only to the same point (usualBasis same_days,
+            through usualThrough): the usual by today, not a whole period.
+        usualFullPeriod:
+          type: ["string", "null"]
+          description: "(F3) The same median over the whole prior periods (\"a full month usually\"); equals usual for a past period"
+        aboveUsual: { type: ["string", "null"], description: "max(0, amount − usual); null when usual is null. (F3) Against the to-date usual for the current period" }
         rows:
           type: array
           description: Largest first, at most rowsPerGroup
@@ -4812,9 +4967,106 @@ components:
         truncated: { type: boolean }
         countsAgainstPlan: { type: boolean }
 
+    PeriodBreakdownUnresolved:
+      type: object
+      description: >-
+        (F2) Rows of the plan's pool (unfiled) with contrary evidence and no
+        household confirmation: Plaid says loan payment, transfer or income, or
+        the forecast suggests a bill (see RowEvidence). They still count in
+        actual (and in the money position and safe-to-spend); the plan
+        comparison leaves them out. amount = actual − known: what they add
+        ("may add up to"). Σ rows = amount + nettedByRefunds.
+      required: [amount, nettedByRefunds, count, rows, truncated]
+      properties:
+        amount: { type: string }
+        nettedByRefunds:
+          type: string
+          description: "What a refund on the same account already took off these rows (usually 0.00)"
+        count: { type: integer }
+        rows:
+          type: array
+          description: Largest first, at most rowsPerGroup; each row's `evidence` says why
+          items: { $ref: "#/components/schemas/PeriodBreakdownRow" }
+        truncated: { type: boolean }
+
+    PeriodBreakdownPayments:
+      type: object
+      description: >-
+        (F2) Money out in scope that is NOT spending, by a household fact the
+        spending rule already reads (a transfer, a debt or card payment, an
+        excluded category, a confirmed or tier-2 bill match). Informational:
+        never in actual, known or the plan comparison.
+      required: [amount, count, rows, truncated]
+      properties:
+        amount: { type: string }
+        count: { type: integer }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/PeriodBreakdownRow" }
+        truncated: { type: boolean }
+
+    RowEvidence:
+      type: object
+      description: >-
+        (F2) The evidence rule (classifyEvidence): every outflow is a
+        known_purchase, a confirmed_payment or unresolved; a credit is
+        unresolved only when filed under an expense category (otherwise the
+        rule says nothing: null). `items` are the fields read and their values
+        (Plaid categories as Plaid spells them, a bill's label, a category's
+        name, a household flag). `suggestion` (unresolved only) is what the row
+        probably is.
+      required: [class, reason, items, suggestion]
+      properties:
+        class: { type: string, enum: [known_purchase, confirmed_payment, unresolved] }
+        reason:
+          type: string
+          enum:
+            [household_flag, purchase_category, atm_withdrawal, person_to_person, no_contrary_evidence,
+             transfer, bank_noise, debt_payment, card_payment, excluded_category, bill_match,
+             bill_suggestion, loan_payment, transfer_evidence, income_evidence, debit_in_income_category,
+             credit_in_expense_category]
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RowEvidenceItem" }
+        suggestion:
+          oneOf:
+            - $ref: "#/components/schemas/RowEvidenceSuggestion"
+            - type: "null"
+
+    RowEvidenceItem:
+      type: object
+      required: [field, value]
+      properties:
+        field: { type: string, enum: [pfc_primary, pfc_detailed, bill_suggestion, category, household] }
+        value: { type: string }
+
+    RowEvidenceSuggestion:
+      type: object
+      required: [kind, detail, target]
+      properties:
+        kind: { type: string, enum: [loan_payment, transfer, income, bill] }
+        detail:
+          type: ["string", "null"]
+          description: "A transfer's kind: savings, investment, account, other, in; null otherwise"
+        target:
+          oneOf:
+            - $ref: "#/components/schemas/RowEvidenceTarget"
+            - type: "null"
+
+    RowEvidenceTarget:
+      type: object
+      description: The bill the forecast suggests (a recurring item's occurrence)
+      required: [kind, id, label, planKey, occurrenceDate]
+      properties:
+        kind: { type: string, enum: [bill] }
+        id: { type: string, description: The recurring item id }
+        label: { type: string }
+        planKey: { type: string, description: "<itemId>|<occurrenceDate>" }
+        occurrenceDate: { type: string }
+
     PeriodBreakdownRow:
       type: object
-      required: [id, date, displayName, amount, account, pending, category, reason, splitPart]
+      required: [id, date, displayName, amount, account, pending, category, reason, splitPart, evidence]
       properties:
         id: { type: string, description: The transaction id (a split part keeps its parent's) }
         date: { type: string }
@@ -4830,6 +5082,11 @@ components:
         splitPart:
           oneOf:
             - $ref: "#/components/schemas/PeriodBreakdownSplitPart"
+            - type: "null"
+        evidence:
+          description: (F2) The evidence rule's answer for the row; null where it says nothing (a refund, an ordinary deposit)
+          oneOf:
+            - $ref: "#/components/schemas/RowEvidence"
             - type: "null"
 
     PeriodBreakdownAccount:
@@ -4902,7 +5159,7 @@ components:
         out. See GET /banking/review for the rules.
       required:
         [account, period, balance, freshness, cashFlow, planComparison, planned, notInPlan, asPlanned,
-         reconciliation, reviewInbox, balanceTie, household, page]
+         reconciliation, reviewInbox, balanceTie, balanceCheck, household, page]
       properties:
         account: { $ref: "#/components/schemas/BankingReviewAccount" }
         period: { $ref: "#/components/schemas/BankingReviewPeriod" }
@@ -4923,6 +5180,7 @@ components:
         reconciliation: { $ref: "#/components/schemas/BankingReviewReconciliation" }
         reviewInbox: { $ref: "#/components/schemas/BankingReviewInbox" }
         balanceTie: { $ref: "#/components/schemas/BankingReviewBalanceTie" }
+        balanceCheck: { $ref: "#/components/schemas/BankingReviewBalanceCheck" }
         household:
           description: Secondary and labelled — all accounts, this week (the money position's figures); null when not read
           oneOf:
@@ -5007,7 +5265,8 @@ components:
       type: object
       required:
         [key, itemId, label, scheduledDate, occurrenceDate, planned, fate, txnId, txnDate, txnAmount,
-         txnOnThisAccount, difference, dayDelta, remainder, onCurve, hook]
+         txnOnThisAccount, difference, dayDelta, remainder, onCurve, hook, eventKind, direction, expected, actual,
+         variance, varianceKind]
       properties:
         key: { type: string, description: "<itemId>|<occurrenceDate>, the resolution key" }
         itemId: { type: string }
@@ -5025,12 +5284,36 @@ components:
         remainder: { type: ["string", "null"], description: "Signed, still assumed unpaid after a partial or an evidence row" }
         onCurve: { type: boolean, description: It (or its remainder) still weighs on the forecast }
         hook: { type: ["string", "null"], enum: [weekly, monthly, null], description: An everyday hook (its card payoff) }
+        eventKind: { $ref: "#/components/schemas/BankingReviewPlanKind" }
+        direction: { $ref: "#/components/schemas/BankingReviewDirection" }
+        expected: { type: ["string", "null"], description: "(F2) |planned|, a positive magnitude; null when not sized" }
+        actual: { type: ["string", "null"], description: "(F2) |txnAmount|, a positive magnitude; null with no row" }
+        variance: { type: ["string", "null"], description: "(F2) Signed in CASH terms: txnAmount − planned. Positive = more cash than planned (received more, or paid less); null when either is unknown" }
+        varianceKind: { $ref: "#/components/schemas/BankingReviewVarianceKind" }
 
     BankingReviewPlanFate:
       type: string
       enum:
         [matched, partial, skipped, missed, paid_on_evidence, suggested, on_curve, overdue_outside,
          income_not_arrived, outside_window, not_due]
+
+    BankingReviewPlanKind:
+      type: string
+      description: "(F2) What the plan is: a paycheck, a bill, a debt payment (a debt minimum, the Avalanche extra, a bill linked to a debt), an everyday hook's card payoff"
+      enum: [income, bill, debt, hook]
+
+    BankingReviewDirection:
+      type: string
+      description: "(F2) in = money in; out = money out"
+      enum: [in, out]
+
+    BankingReviewVarianceKind:
+      type: ["string", "null"]
+      description: >-
+        (F2) Income: more_than_expected / less_than_expected (received more or
+        less than planned). Expense: over_planned / under_planned (paid more or
+        less than planned). Null when there is no variance or it is 0.
+      enum: [less_than_expected, more_than_expected, over_planned, under_planned, null]
 
     BankingReviewBucketName:
       type: string
@@ -5083,7 +5366,7 @@ components:
 
     BankingReviewBucket:
       type: object
-      required: [count, moneyIn, moneyOut, net, pendingNet, rows, truncated, differenceTotal, byKind, byReason]
+      required: [count, moneyIn, moneyOut, net, pendingNet, rows, truncated, differenceTotal, varianceIn, varianceOut, byKind, byReason]
       properties:
         count: { type: integer }
         moneyIn: { type: string }
@@ -5098,6 +5381,12 @@ components:
         differenceTotal:
           type: ["string", "null"]
           description: "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets"
+        varianceIn:
+          type: ["string", "null"]
+          description: "(F2) Σ cash variance over the bucket's money-IN plan comparisons (positive = received more); null when none compares"
+        varianceOut:
+          type: ["string", "null"]
+          description: "(F2) Σ cash variance over the bucket's money-OUT plan comparisons (positive = paid less); null when none compares"
         byKind:
           description: (unmatched) The rows by kind; null for the other buckets
           oneOf:
@@ -5111,7 +5400,7 @@ components:
 
     BankingReviewRow:
       type: object
-      required: [id, date, displayName, description, amount, pending, manual, category, flags, kind, reason, evidence, plan]
+      required: [id, date, displayName, description, amount, pending, manual, category, flags, kind, direction, classificationIssue, reason, evidence, plan]
       properties:
         id: { type: string }
         date: { type: string }
@@ -5126,6 +5415,14 @@ components:
             - type: "null"
         flags: { $ref: "#/components/schemas/BankingReviewRowFlags" }
         kind: { $ref: "#/components/schemas/BankingReviewKind" }
+        direction: { $ref: "#/components/schemas/BankingReviewDirection" }
+        classificationIssue:
+          type: ["string", "null"]
+          description: >-
+            (F2) Filed against its direction: inflow_into_expense (money in, e.g.
+            a paycheck, filed under an expense category — reported as income
+            direction) or outflow_into_income; null when not
+          enum: [inflow_into_expense, outflow_into_income, null]
         reason: { $ref: "#/components/schemas/BankingReviewReason" }
         evidence: { type: ["string", "null"], enum: [confirmed, automatic, null], description: Who tied the row to its plan }
         plan:
@@ -5154,7 +5451,7 @@ components:
 
     BankingReviewRowPlan:
       type: object
-      required: [key, label, scheduledDate, planned, difference, dayDelta]
+      required: [key, label, scheduledDate, planned, difference, dayDelta, eventKind, direction, expected, actual, variance, varianceKind]
       properties:
         key: { type: string }
         label: { type: string }
@@ -5162,6 +5459,15 @@ components:
         planned: { type: ["string", "null"] }
         difference: { type: ["string", "null"] }
         dayDelta: { type: ["integer", "null"] }
+        eventKind:
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewPlanKind"
+            - type: "null"
+        direction: { $ref: "#/components/schemas/BankingReviewDirection" }
+        expected: { type: ["string", "null"], description: "(F2) |planned|; null when not known" }
+        actual: { type: ["string", "null"], description: "(F2) |row|" }
+        variance: { type: ["string", "null"], description: "(F2) Signed in cash terms: row − planned (positive = more cash than planned)" }
+        varianceKind: { $ref: "#/components/schemas/BankingReviewVarianceKind" }
 
     BankingReviewNotInPlan:
       type: object
@@ -5176,11 +5482,13 @@ components:
     BankingReviewAsPlanned:
       type: object
       description: Rows that paid their plan cleanly — totals only
-      required: [count, net, pendingNet, withoutPlanDetail]
+      required: [count, net, pendingNet, withoutPlanDetail, varianceIn, varianceOut]
       properties:
         count: { type: integer }
         net: { type: string }
         pendingNet: { type: string }
+        varianceIn: { type: ["string", "null"], description: "(F2) As on a bucket (small: within max($1, 1%))" }
+        varianceOut: { type: ["string", "null"], description: "(F2) As on a bucket" }
         withoutPlanDetail: { type: integer, description: Confirmed rows whose plan is older than the forecast reads (placed on the household's word) }
 
     BankingReviewReconciliation:
@@ -5207,6 +5515,81 @@ components:
         status: { type: string, enum: [ties, drift, not_checked] }
         checkedAt: { type: ["string", "null"] }
         unexplained: { type: ["string", "null"], description: "bank − ledger at that check" }
+
+    BankingReviewBalanceCheck:
+      type: object
+      description: >-
+        (F3) The last manual Sync's check of the bank's own balance against H2's
+        (the previous anchor rolled forward through the ledger), for this
+        account. status: matches · off_by · resolved_since (it was off, and
+        recomputed now from the same anchor over the same days the late rows
+        explain it — one query, no Plaid call) · not_checked with reason (never ·
+        not_forecast_account · anchor_too_old: the anchor was over 45 days old ·
+        balance_unavailable: the bank gave no balance). stale (first reason
+        wins): anchor_changed (a newer anchor or a typed balance replaced the
+        one the check read) · rows_since (rows dated on or before the check's
+        day arrived after it) · age (over 7 days old); a not-checked outcome is
+        stale by age only. Kept apart from reviewInbox and the freshness
+        (synced) fields. Money is a two-decimal string.
+      required: [status, reason, stale, staleReason, checkedAt, bank, h2, difference, direction, lastDrift]
+      properties:
+        status: { type: string, enum: [matches, off_by, resolved_since, not_checked] }
+        reason:
+          type: ["string", "null"]
+          enum: [never, not_forecast_account, anchor_too_old, balance_unavailable, null]
+          description: Why not checked; null otherwise
+        stale: { type: boolean }
+        staleReason:
+          type: ["string", "null"]
+          enum: [age, anchor_changed, rows_since, null]
+        checkedAt: { type: ["string", "null"], description: When the check read the rows (ISO); null when never checked }
+        bank:
+          description: >-
+            The bank's figure the check compared: like with like, in the previous
+            anchor's field when the bank gave it (available holds pending charges,
+            not pending deposits; current is posted only). Null when none was read.
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewBalanceCheckBank"
+            - type: "null"
+        h2:
+          description: H2's figure at the check (previous anchor + the ledger's rows through the check's day); null when not compared
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewBalanceCheckH2"
+            - type: "null"
+        difference: { type: ["string", "null"], description: "|bank − H2| at the check (\"0.00\" when it matched); null when not compared" }
+        direction:
+          type: ["string", "null"]
+          enum: [bank_higher, bank_lower, null]
+          description: Which side was higher at the check; null when they matched or were not compared
+        lastDrift:
+          description: The last EARLIER check that was off (a later Sync re-anchors, so it is kept); null when none
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewBalanceCheckDrift"
+            - type: "null"
+
+    BankingReviewBalanceCheckBank:
+      type: object
+      required: [balance, at, field]
+      properties:
+        balance: { type: string }
+        at: { type: string, description: When the bank balance was read (ISO) }
+        field: { type: string, enum: [available, current] }
+
+    BankingReviewBalanceCheckH2:
+      type: object
+      required: [balance]
+      properties:
+        balance: { type: string }
+
+    BankingReviewBalanceCheckDrift:
+      type: object
+      required: [checkedAt, difference, direction]
+      properties:
+        checkedAt: { type: string }
+        difference: { type: string, description: "|bank − H2| at that check" }
+        direction:
+          type: ["string", "null"]
+          enum: [bank_higher, bank_lower, null]
 
     BankingReviewHousehold:
       type: object
@@ -5268,7 +5651,7 @@ components:
 
     WaysBackTrim:
       type: object
-      required: [categoryId, name, spentWeek, usualWeek]
+      required: [categoryId, name, spentWeek, usualWeek, usualFullWeek]
       properties:
         categoryId: { type: string }
         name: { type: string }
@@ -5285,7 +5668,12 @@ components:
             Median weekly spend in the category over the 8 weeks before this
             one (a week with none counts as 0; weeks before tracking began are
             left out), whole cents, refunds netted the same way; null when no
-            week counts.
+            week counts. (F3) Each week read only to today's weekday (Sunday
+            through usualThrough's weekday): the usual by today.
+        usualFullWeek:
+          type: ["integer", "null"]
+          description: "(F3) The same median over the whole 8 weeks, whole cents; null when no week counts"
+
 
     WaysBack:
       type: object
@@ -5297,7 +5685,7 @@ components:
         categories that spent most this week among the rows counting against
         the cap. carryOver.nextWeekCap = max(0, next week's cap + the applied
         adjustment, or − overBy when none is applied); null with no cap.
-      required: [weekStart, weekEnd, overBy, daysLeft, hold, trims, carryOver]
+      required: [weekStart, weekEnd, overBy, daysLeft, hold, trims, usualBasis, usualThrough, carryOver]
       properties:
         weekStart: { type: string }
         weekEnd: { type: string }
@@ -5312,6 +5700,8 @@ components:
         trims:
           type: array
           items: { $ref: "#/components/schemas/WaysBackTrim" }
+        usualBasis: { type: string, enum: [same_days], description: "(F3) Each trim's usualWeek reads the prior weeks to the same weekday" }
+        usualThrough: { type: string, description: "(F3) Today (YYYY-MM-DD): each prior week is cut at its weekday" }
         carryOver:
           type: object
           required: [nextWeekStart, nextWeekCap, applied, adjustment]
@@ -5426,6 +5816,17 @@ components:
         source: { type: string, enum: [hook_stored, suggested, settings] }
         label: { type: string }
 
+    PlanUnsafe:
+      type: object
+      description: >-
+        (F1) A plan write refused by the plan gate (`planSafety.ts`). `reason` is
+        the plain sentence to show; `error` repeats it for callers that read
+        `error`.
+      required: [error, code, reason]
+      properties:
+        error: { type: string }
+        code: { type: string, enum: [plan_unsafe] }
+        reason: { type: string }
     CreateAllowancePlanBody:
       type: object
       required: [period, amount, effectiveFrom]
@@ -5438,6 +5839,71 @@ components:
           pattern: '^\d{4}-\d{2}-\d{2}$'
           description: A Sunday (weekly) or the 1st (monthly), this period or later
 
+    AllowancePlanDryRunReserve:
+      type: object
+      required: [amount, onCurve, basis, incurred, paid, carried, allowanceLeft]
+      properties:
+        amount: { type: string, description: "Before payment evidence and answers (hookReserves[].amount)" }
+        onCurve: { type: string, description: What lands on the curve (amount − paid) }
+        basis: { type: string, enum: [plan, stored_amount] }
+        incurred: { type: string }
+        paid: { type: string }
+        carried: { type: string }
+        allowanceLeft: { type: string }
+    AllowancePlanDryRun:
+      type: object
+      description: >-
+        (F1) `POST /allowance-plans?dryRun=1`: nothing written. Each hook
+        occurrence the plan governs (its cadence, its period on) — and any other
+        whose figures move — before → after with its split, and the forecast's
+        low point (90 days) before → after. `allowed`/`reason`: the plan gate's
+        answer (a refused plan still shows its effect).
+      required: [dryRun, allowed, reason, plan, occurrences, lowPoint]
+      properties:
+        dryRun: { type: boolean, enum: [true] }
+        allowed: { type: boolean }
+        reason: { type: ["string", "null"] }
+        plan:
+          type: object
+          required: [period, amount, effectiveFrom]
+          properties:
+            period: { type: string, enum: [weekly, monthly] }
+            amount: { type: string }
+            effectiveFrom: { type: string }
+        occurrences:
+          type: array
+          items:
+            type: object
+            required: [planKey, hook, occurrenceDate, label, before, after, cards]
+            properties:
+              planKey: { type: string }
+              hook: { type: string, enum: [weekly, monthly] }
+              occurrenceDate: { type: string }
+              label: { type: string }
+              before:
+                oneOf:
+                  - $ref: "#/components/schemas/AllowancePlanDryRunReserve"
+                  - type: "null"
+              after: { $ref: "#/components/schemas/AllowancePlanDryRunReserve" }
+              cards:
+                type: array
+                items: { $ref: "#/components/schemas/HookReserveCard" }
+        lowPoint:
+          type: object
+          required: [before, after]
+          properties:
+            before:
+              type: object
+              required: [amount, date]
+              properties:
+                amount: { type: ["string", "null"] }
+                date: { type: ["string", "null"] }
+            after:
+              type: object
+              required: [amount, date]
+              properties:
+                amount: { type: ["string", "null"] }
+                date: { type: ["string", "null"] }
     AllowancePlanSaved:
       allOf:
         - $ref: "#/components/schemas/AllowancePlan"
@@ -7889,6 +8355,20 @@ components:
             reserve $380 · no weekly plan set"); it is not a spending cap.
             `amount` is the occurrence's reserve before any review answer.
             Present only when the household has a hook occurrence.
+
+            ⭐ (F1, owner's answers 2026-10-14) THE OBLIGATIONS MODEL. Each
+            occurrence is `incurred + carried + allowanceLeft` on the curve:
+            `incurred` = its own period's purchases − refunds on the cards paid
+            IN FULL at its cadence (debt-linked or not; never a DEBT-PLAN card's —
+            its minimum pays it) less the payments allocated to it (`paid`);
+            `carried` = earlier periods' unpaid in_full purchases, moved into the
+            latest occurrence already due (`carriedFrom` / `carriedTo`);
+            `allowanceLeft` = with a plan max(0, cap − spent) while open; with no
+            plan the stored amount less the period's purchases, never below 0; 0
+            once closed. `amount` = incurred + paid + carried + allowanceLeft (an
+            occurrence carried on: paid + allowanceLeft), so summed over the
+            reserves every obligation counts once; the curve holds `amount −
+            paid`. The F1 fields are always sent by an F1 server.
           items:
             type: object
             required: [hook, recurringItemId, planKey, occurrenceDate, label, amount, basis]
@@ -7900,6 +8380,27 @@ components:
               label: { type: string, description: The hook item's name }
               amount: { type: string }
               basis: { type: string, enum: [plan, stored_amount] }
+              storedAmount: { type: string, description: "(F1) The hook item's stored amount (the no-plan reserve)" }
+              incurred: { type: string, description: "(F1) Its own period's in_full purchases − refunds still unpaid" }
+              paid: { type: string, description: "(F1) Payments allocated to its own period (oldest obligation first)" }
+              carried: { type: string, description: "(F1) Earlier unpaid periods carried into it" }
+              carriedFrom:
+                type: array
+                description: (F1) The occurrences carried in, oldest first
+                items:
+                  type: object
+                  required: [occurrenceDate, periodStart, periodEnd, amount]
+                  properties:
+                    occurrenceDate: { type: string }
+                    periodStart: { type: string }
+                    periodEnd: { type: string }
+                    amount: { type: string }
+              carriedTo: { type: ["string", "null"], description: "(F1) The occurrence date its unpaid part was carried into" }
+              allowanceLeft: { type: string, description: "(F1) What is left of the period's allowance (the plan's, or the stored reserve's)" }
+              cards:
+                type: array
+                description: (F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds
+                items: { $ref: "#/components/schemas/HookReserveCard" }
         overdueOutsideForecast:
           type: array
           description: |
@@ -8794,6 +9295,52 @@ components:
             Amex page can still list them. Identity only; `cards` and the
             combined totals are unchanged. Always sent.
           items: { $ref: "#/components/schemas/AmexDebtLinkedCard" }
+        payoffModes:
+          type: array
+          description: >-
+            (F1) Additive. How every discovered Amex card is paid (in full by the
+            everyday hook, or on the debt plan), and whether the owner chose it.
+            `cards` and the combined totals are unchanged.
+          items: { $ref: "#/components/schemas/AmexCardPayoffMode" }
+    PayoffModeReason:
+      type: string
+      description: >-
+        (F1) Why the card is paid that way: set_by_owner; no_debt / debt_not_active
+        (default in_full: no debt row, or none active — archived, paid, zero
+        balance); debt_active (default debt_plan: an active debt with an APR or a
+        minimum); debt_terms_missing (unresolved: an active debt with neither);
+        debt_plan_without_active_debt (unresolved: the owner chose debt_plan but
+        no active revolving debt would pay it).
+      enum: [set_by_owner, no_debt, debt_not_active, debt_active, debt_terms_missing, debt_plan_without_active_debt]
+    AmexCardPayoffMode:
+      type: object
+      required: [accountId, name, mask, cadence, mode, source, reason, debtId]
+      properties:
+        accountId: { type: string, description: The card's Plaid account_id }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+        cadence: { type: string, enum: [weekly, monthly] }
+        mode: { type: ["string", "null"], enum: [in_full, debt_plan, null], description: "null = not chosen yet (plans are paused)" }
+        source: { type: string, enum: [explicit, default] }
+        reason: { $ref: "#/components/schemas/PayoffModeReason" }
+        debtId: { type: ["string", "null"], description: The linked debt the answer read }
+    SetAmexCardPayoffModeBody:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: ["string", "null"]
+          enum: [in_full, debt_plan, null]
+          description: "in_full | debt_plan; null clears the owner's choice (the default applies)"
+    HookReserveCard:
+      type: object
+      required: [accountId, name, mask, mode, amount]
+      properties:
+        accountId: { type: string }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+        mode: { type: ["string", "null"], enum: [in_full, debt_plan, null] }
+        amount: { type: string, description: "Its own period's purchases − refunds, before payments" }
     AmexDebtLinkedCard:
       type: object
       required: [accountId, name, mask, debtId, brand, cadence, displayName]
@@ -8860,6 +9407,19 @@ components:
         debtLinked: { type: boolean, description: A debt row tracks this card (it is paid through the payoff plan) }
         debtId: { type: ["string", "null"] }
         owed: { type: ["string", "null"], description: "This card's own current balance (GET /amex/anchor?accountId=); null = unknown, never 0" }
+        payoffMode:
+          type: object
+          description: >-
+            (F1) How the card is paid. `mode` null = not chosen yet (the hook
+            bills it like in_full meanwhile, and plans are paused); `source`
+            says whether the owner chose it or it is the default from the card's
+            debt row. A card on the debt plan answers to its debt (`planLink`);
+            a card paid in full answers to its hook.
+          required: [mode, source, reason]
+          properties:
+            mode: { type: ["string", "null"], enum: [in_full, debt_plan, null] }
+            source: { type: string, enum: [explicit, default] }
+            reason: { $ref: "#/components/schemas/PayoffModeReason" }
         purchases:
           $ref: "#/components/schemas/AmexSummaryTotal"
           description: >-
@@ -9819,6 +10379,112 @@ components:
           maxItems: 5
           items: { $ref: "#/components/schemas/RetroactiveSample" }
 
+    ReviewProposals:
+      type: object
+      required: [window, count, truncated, items]
+      properties:
+        window: { $ref: "#/components/schemas/ReviewProposalsWindow" }
+        count: { type: integer, description: Every proposal found (items lists at most 50) }
+        truncated: { type: boolean }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReviewProposal" }
+
+    ReviewProposalsWindow:
+      type: object
+      required: [from, to, days]
+      properties:
+        from: { type: string }
+        to: { type: string, description: The household's today }
+        days: { type: integer }
+
+    ReviewProposal:
+      type: object
+      required: [key, kind, rows, rowCount, truncated, total, evidence, action, applyWith]
+      properties:
+        key: { type: string, description: Stable for the same rows and target }
+        kind: { type: string, enum: [loan_payment, transfer, bill_match, income_category] }
+        rows:
+          type: array
+          description: Newest first, at most 20
+          items: { $ref: "#/components/schemas/ReviewProposalRow" }
+        rowCount: { type: integer }
+        truncated: { type: boolean }
+        total: { type: string, description: "Σ |amount| over every row" }
+        evidence:
+          type: array
+          items: { $ref: "#/components/schemas/ReviewProposalEvidence" }
+        action: { $ref: "#/components/schemas/ReviewProposalAction" }
+        applyWith:
+          type: array
+          description: The existing app actions that apply it
+          items: { type: string, enum: [review_mark_matched, categories_change] }
+
+    ReviewProposalRow:
+      type: object
+      required: [id, date, displayName, description, amount, pending, account, category, occurrence]
+      properties:
+        id: { type: string }
+        date: { type: string }
+        displayName: { type: string }
+        description: { type: string }
+        amount: { type: string, description: "Signed: negative is money out (a workbook Amex charge is positive)" }
+        pending: { type: boolean }
+        account: { $ref: "#/components/schemas/PeriodBreakdownAccount" }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/PeriodBreakdownRowCategory"
+            - type: "null"
+        occurrence:
+          description: The bill occurrence "mark matched" would name; null when none is in reach
+          oneOf:
+            - $ref: "#/components/schemas/ReviewProposalOccurrence"
+            - type: "null"
+
+    ReviewProposalOccurrence:
+      type: object
+      required: [planKey, recurringItemId, occurrenceDate]
+      properties:
+        planKey: { type: string }
+        recurringItemId: { type: string }
+        occurrenceDate: { type: string }
+
+    ReviewProposalEvidence:
+      type: object
+      required: [field, value]
+      properties:
+        field:
+          type: string
+          enum: [pfc_primary, pfc_detailed, bill_suggestion, category, name_match, amount_match, same_amount_rows]
+        value: { type: string }
+
+    ReviewProposalAction:
+      type: object
+      required: [code, target]
+      properties:
+        code:
+          type: string
+          enum: [file_as_bill_payment, file_as_debt_payment, file_as_transfer, confirm_bill_match, file_under_income_category]
+        target: { $ref: "#/components/schemas/ReviewProposalTarget" }
+
+    ReviewProposalTarget:
+      type: object
+      required: [kind, id, label, categoryId, categoryName]
+      properties:
+        kind: { type: string, enum: [bill, debt, category] }
+        id: { type: ["string", "null"], description: "The bill (recurring item), debt or category id; null when the household has no such category" }
+        label: { type: string }
+        categoryId: { type: ["string", "null"], description: The category the Categories change files under }
+        categoryName: { type: ["string", "null"] }
+
+    ReviewRefusal:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, description: Plain words for the household }
+        code: { type: string, enum: [direction_conflict], description: "(F2) Present when the category goes against the money's direction" }
+        conflict: { type: string, enum: [inflow_into_expense, outflow_into_income] }
+
     ReviewResolution:
       type: object
       required: [decisionId, transactionId, resolution, categoryId, userDecisionId, retroactiveCandidates]
@@ -9997,10 +10663,18 @@ components:
 
     LearnedRule:
       type: object
-      required: [id, signature, scope, plaidAccountId, amountBandLo, amountBandHi, categoryId, count, lastConfirmedAt, disabled, source, createdAt]
+      required: [id, signature, direction, scope, plaidAccountId, amountBandLo, amountBandHi, categoryId, count, lastConfirmedAt, disabled, source, createdAt]
       properties:
         id: { type: string }
         signature: { type: string }
+        direction:
+          type: string
+          enum: [in, out]
+          description: >-
+            (F2) Merchant memory is sign-aware: a rule learned from money in
+            (a paycheck, a refund) applies to money in only, one learned from
+            money out to purchases only — so a paycheck and a same-name purchase
+            never share one.
         scope: { type: string, enum: [merchant, merchant_account, merchant_amount] }
         plaidAccountId: { type: ["string", "null"] }
         amountBandLo: { type: ["string", "null"] }

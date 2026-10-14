@@ -161,21 +161,25 @@ describe("a refund with no prior charge", () => {
     expect(decideRow(row({ description: "DELTA AIR LINES REFUND" }), ctx)?.source).toBe("memory");
   });
 
-  it("(WP5c) the direction guard leaves those alone: a card credit, a REFUND word on checking; only an unexplained checking credit is queued", () => {
+  it("(WP5c, F2) the direction guard leaves those alone: a card credit, a REFUND word on checking; an unexplained checking credit never reads a purchase's memory", () => {
     // The pinned case above, in full: still filed (auto), on the card.
     const onCard = context({ memory: [memoryRow("delta air lines refund", "shopping", 4)] });
     expect(decideRow(row({ description: "DELTA AIR LINES REFUND" }), onCard)).toMatchObject({ source: "memory", categoryId: "shopping", confidence: 0.92 });
     // On checking, a REFUND word makes it a refund: still filed.
     const chk = { source: "plaid:chase", plaidAccountId: CHASE, pfcPrimary: null, pfcDetailed: null };
     expect(decideRow(row({ description: "DELTA AIR LINES REFUND", ...chk }), onCard)).toMatchObject({ source: "memory", confidence: 0.92 });
-    // On checking with no refund word it is money in under an expense category: a question, memory still named.
+    // On checking with no refund word it is no refund: (F2) sign-aware memory never offers
+    // the purchase's category to money in. Before F2 it was offered and queued (WP5c).
     const plain = context({ memory: [memoryRow("delta air lines", "shopping", 4)] });
-    expect(decideRow(row({ description: "DELTA AIR LINES", ...chk }), plain)).toEqual({
+    expect(decideRow(row({ description: "DELTA AIR LINES", ...chk }), plain)).toBeNull();
+    // A money-in memory of its own is read — and the guard still queues an expense pick for it.
+    const own = context({ memory: [memoryRow("in:delta air lines", "shopping", 4)] });
+    expect(decideRow(row({ description: "DELTA AIR LINES", ...chk }), own)).toEqual({
       source: "memory",
       categoryId: "shopping",
       confidence: 0.5,
       explanation: "Money in, but this would file it under an expense category.",
-      memoryId: "m-delta air lines",
+      memoryId: "m-in:delta air lines",
     });
   });
 

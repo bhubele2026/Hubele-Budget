@@ -97,6 +97,23 @@ export type BankReviewReason =
   | "not_compared"
   | "no_plan";
 
+/**
+ * (F2) What kind of plan an occurrence is: a paycheck (`income`), a bill, a
+ * debt's minimum or the Avalanche extra (`debt`), or an everyday hook's card
+ * payoff (`hook`).
+ */
+export type BankReviewPlanKind = "income" | "bill" | "debt" | "hook";
+
+/** (F2) Which way the money moves: in (a deposit, income) or out (a bill, a purchase). */
+export type BankReviewDirection = "in" | "out";
+
+/**
+ * (F2) How a row differs from its plan, in CASH terms:
+ *   income (in):  received more → more_than_expected · less → less_than_expected;
+ *   expense (out): paid more → over_planned · paid less → under_planned.
+ */
+export type BankReviewVarianceKind = "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned";
+
 /** A plan occurrence a row is compared with. `planned` is signed; null when not known. */
 export interface BankReviewPlanRef {
   key: string;
@@ -104,7 +121,56 @@ export interface BankReviewPlanRef {
   /** The date it was due (after any reschedule). */
   scheduledDate: string;
   planned: number | null;
+  /** (F2) The plan's kind, when the caller knows it. */
+  eventKind?: BankReviewPlanKind | null;
 }
+
+/** (F2) A plan beside the money that moved, every figure a positive magnitude except `variance`. */
+export interface BankReviewCashVariance {
+  direction: BankReviewDirection;
+  /** |planned|; null when the plan amount is not known. */
+  expected: number | null;
+  /** |row|; null when no row is known. */
+  actual: number | null;
+  /**
+   * Signed in CASH terms: row − plan (both signed). Positive = more cash than
+   * planned (received more, or paid less); negative = less. Null when either
+   * side is not known.
+   */
+  variance: number | null;
+  /** Null when the variance is null or exactly 0. */
+  varianceKind: BankReviewVarianceKind | null;
+}
+
+const centsSigned = (n: number): number => Math.round(n * 100);
+
+/**
+ * ⭐ (F2) THE CASH VARIANCE of a plan and the row behind it. `planned` and
+ * `actual` are signed (negative = money out). The direction is the plan's sign;
+ * with no plan amount, the row's; with neither, `fallback` (from the plan's
+ * kind: income → in, anything else → out).
+ */
+export function cashVarianceOf(
+  planned: number | null,
+  actual: number | null,
+  fallback: BankReviewDirection = "out",
+): BankReviewCashVariance {
+  const direction: BankReviewDirection =
+    planned != null && planned !== 0 ? (planned > 0 ? "in" : "out") : actual != null && actual !== 0 ? (actual > 0 ? "in" : "out") : fallback;
+  const expected = planned == null ? null : Math.abs(centsSigned(planned)) / 100;
+  const actualAbs = actual == null ? null : Math.abs(centsSigned(actual)) / 100;
+  const variance = planned == null || actual == null ? null : (centsSigned(actual) - centsSigned(planned)) / 100;
+  let varianceKind: BankReviewVarianceKind | null = null;
+  if (variance != null && variance !== 0) {
+    if (direction === "in") varianceKind = variance > 0 ? "more_than_expected" : "less_than_expected";
+    else varianceKind = variance > 0 ? "under_planned" : "over_planned";
+  }
+  return { direction, expected, actual: actualAbs, variance, varianceKind };
+}
+
+/** (F2) A plan's direction from its kind, when its amount is not known. */
+export const directionOfPlanKind = (kind: BankReviewPlanKind | null | undefined): BankReviewDirection =>
+  kind === "income" ? "in" : "out";
 
 export interface BankReviewRowInput {
   occurredOn: string;
@@ -124,7 +190,7 @@ export interface BankReviewRowInput {
 }
 
 /** A plan beside a row: what was planned, and how the row differs. */
-export interface BankReviewPlanComparison extends BankReviewPlanRef {
+export interface BankReviewPlanComparison extends BankReviewPlanRef, BankReviewCashVariance {
   /** |row| − |plan| (positive: more than planned); null when the plan amount is not known. */
   difference: number | null;
   /** Row date − due date, in days (negative: early). */
@@ -142,6 +208,7 @@ export interface BankReviewRowPlacement {
 function compare(plan: BankReviewPlanRef, row: Pick<BankReviewRowInput, "occurredOn" | "amount">): BankReviewPlanComparison {
   return {
     ...plan,
+    ...cashVarianceOf(plan.planned, row.amount, directionOfPlanKind(plan.eventKind)),
     difference: plan.planned == null ? null : pairDifference(plan.planned, row.amount),
     dayDelta: pairDayDelta(plan.scheduledDate, row.occurredOn),
   };
@@ -238,6 +305,18 @@ export interface BankReviewSummary {
   /** Σ every bucket's net + asPlanned's net: every row exactly once. */
   netCents: number;
   count: number;
+  /**
+   * (F2) Per bucket (and as planned): Σ cash variance (whole cents) over the
+   * rows whose plan comparison has one, money IN and money OUT kept apart —
+   * never one ambiguous net. Null on a side no row of the bucket compares.
+   */
+  varianceByBucket: Record<BankReviewPlacement, BankReviewVarianceTotals>;
+}
+
+/** (F2) A bucket's cash variance, in whole cents: positive = more cash than planned. */
+export interface BankReviewVarianceTotals {
+  inCents: number | null;
+  outCents: number | null;
 }
 
 const toCents = (n: number): number => Math.round(n * 100);
@@ -260,9 +339,18 @@ export function summarizeBankReview(rows: readonly BankReviewSummaryRow[]): Bank
   const asPlanned = emptyBankReviewTotals();
   let differenceTotalCents = 0;
   let netCents = 0;
+  const varianceByBucket = Object.fromEntries(
+    [...BANK_REVIEW_BUCKETS, "asPlanned" as const].map((b) => [b, { inCents: null, outCents: null }]),
+  ) as Record<BankReviewPlacement, BankReviewVarianceTotals>;
   for (const r of rows) {
     const { bucket, reason, plan } = r.placement;
     netCents += r.amountCents;
+    if (plan?.variance != null) {
+      const v = varianceByBucket[bucket];
+      const c = toCents(plan.variance);
+      if (plan.direction === "in") v.inCents = (v.inCents ?? 0) + c;
+      else v.outCents = (v.outCents ?? 0) + c;
+    }
     if (bucket === "asPlanned") {
       addToBankReviewTotals(asPlanned, r.amountCents, r.pending);
       continue;
@@ -274,5 +362,5 @@ export function summarizeBankReview(rows: readonly BankReviewSummaryRow[]): Bank
     }
     if (bucket === "amountDifference" && plan?.difference != null) differenceTotalCents += toCents(plan.difference);
   }
-  return { buckets, asPlanned, unmatchedByKind, uncertainByReason, differenceTotalCents, netCents, count: rows.length };
+  return { buckets, asPlanned, unmatchedByKind, uncertainByReason, differenceTotalCents, netCents, count: rows.length, varianceByBucket };
 }

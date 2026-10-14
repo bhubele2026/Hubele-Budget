@@ -170,3 +170,36 @@ export function effectiveFiling<T extends Filing & { description: string }>(
   }
   return out;
 }
+
+// ── (F2) Evidence carries too — never as filing ──────────────────────────────
+//
+// The evidence rule (`classifyEvidence`, avalanche-core) reads Plaid's category
+// to tell an unfiled purchase from a loan payment or a transfer. A posted row
+// normally carries its own; when it has NONE (neither primary nor detailed),
+// it reads the pending row's it replaced — the same charge, seen earlier by
+// the bank. This is evidence only: it never touches the filing above, and the
+// spending rule's own `pfcDetailed` (rule 8) is never fed from it, so no
+// existing figure can move.
+
+/** Plaid's two categories on a row. */
+export interface PfcEvidence {
+  pfcPrimary: string | null;
+  pfcDetailed: string | null;
+}
+
+const blank = (s: string | null | undefined): boolean => (s ?? "").trim() === "";
+
+/**
+ * ⭐ (F2) The Plaid categories a posted row borrows from the pending row it
+ * replaced: the pending row's, when the posted row has neither and the pending
+ * row has one; null otherwise (the posted row's own evidence stands).
+ */
+export function carriedPfcEvidence(
+  posted: PfcEvidence,
+  replaced: { pfc?: PfcEvidence | null } | null | undefined,
+): PfcEvidence | null {
+  if (!replaced?.pfc) return null;
+  if (!blank(posted.pfcPrimary) || !blank(posted.pfcDetailed)) return null;
+  if (blank(replaced.pfc.pfcPrimary) && blank(replaced.pfc.pfcDetailed)) return null;
+  return { pfcPrimary: replaced.pfc.pfcPrimary, pfcDetailed: replaced.pfc.pfcDetailed };
+}

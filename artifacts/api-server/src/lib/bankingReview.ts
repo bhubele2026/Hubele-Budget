@@ -12,7 +12,9 @@ import {
   BANK_REVIEW_BUCKETS,
   BANK_REVIEW_KINDS,
   bankReviewKindOf,
+  cashVarianceOf,
   classifyMovement,
+  directionOfPlanKind,
   inForecast,
   pairDayDelta,
   pairDifference,
@@ -20,10 +22,15 @@ import {
   rowAnswersResolve,
   summarizeBankReview,
   type BankReviewBucket,
+  type BankReviewDirection,
   type BankReviewKind,
+  type BankReviewPlanKind,
   type BankReviewPlanRef,
   type BankReviewRowPlacement,
   type BankReviewTotalsCents,
+  type BankReviewVarianceKind,
+  type BankReviewVarianceTotals,
+  type RowEvidence,
 } from "@workspace/avalanche-core";
 import {
   LedgerRequestError,
@@ -45,8 +52,10 @@ import { computeBankFreshness } from "./bankFreshness";
 import { buildMoneyPosition, POSITION_HORIZON_DAYS, tier2PairedTxnIdsOf } from "./moneyPosition";
 import { computeReviewCount } from "./reviewCount";
 import { loadMoneyContext } from "./moneyContext";
-import { effectiveFiling } from "./pendingFiling";
+import { carriedPfcEvidence, effectiveFiling } from "./pendingFiling";
+import { billSuggestionsOf, evidenceContextOf, rowEvidenceOf } from "./rowEvidence";
 import { readPausedReview } from "./oneTimeBillMove";
+import { readBankBalanceCheck } from "./bankBalanceCheck";
 import { addDaysISO, householdTodayISO } from "./householdClock";
 import type { LedgerPlanFate, LedgerPlanOccurrence } from "./forecastLedger";
 
@@ -76,6 +85,11 @@ import type { LedgerPlanFate, LedgerPlanOccurrence } from "./forecastLedger";
  *                  and its real scope.
  *   balanceTie     the last manual Sync's check of the bank's own balance
  *                  (`forecast_settings.last_bank_reconciliation`), read only.
+ *   balanceCheck   (F3) the same check in full (`readBankBalanceCheck`): matches /
+ *                  off by / resolved since / not checked and why, stale and why,
+ *                  the bank's figure (and field) beside H2's, the direction —
+ *                  recomputed from the stored previous anchor in one query,
+ *                  never a Plaid call. Kept apart from reviewInbox and freshness.
  *   household      secondary: the money position's week, all accounts.
  *
  * ⚠️ The plan comparison runs on the forecast's account only, over rows dated
@@ -175,6 +189,7 @@ type RowRead = {
   reimbursable: boolean;
   debtId: string | null;
   isExternalCardPayment: boolean;
+  pfcPrimary: string | null;
   pfcDetailed: string | null;
   weeklyAllowance: boolean;
   monthlyAllowance: boolean;
@@ -208,6 +223,30 @@ async function readAccountIdentity(
     mask: row.mask ?? null,
     lastSyncedAt: row.lastSyncedAt ? row.lastSyncedAt.toISOString() : null,
   };
+}
+
+/** (F2) The household's recurring items linked to a debt: their plans are debt payments, not bills. */
+async function readDebtLinkedItemIds(householdId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: recurringItemsTable.id })
+    .from(recurringItemsTable)
+    .where(and(eq(recurringItemsTable.householdId, householdId), sql`${recurringItemsTable.debtId} IS NOT NULL`));
+  return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * (F2) What kind of plan an occurrence is: an everyday hook's payoff, a
+ * paycheck, a debt's minimum / the Avalanche extra / a bill linked to a debt,
+ * or a bill.
+ */
+export function planKindOf(
+  o: Pick<LedgerPlanOccurrence, "itemId" | "eventKind" | "hookCadence">,
+  debtLinkedItemIds: ReadonlySet<string>,
+): BankReviewPlanKind {
+  if (o.hookCadence) return "hook";
+  if (o.eventKind === "income") return "income";
+  if (o.itemId.startsWith("debt:") || o.itemId.startsWith("avalanche:") || debtLinkedItemIds.has(o.itemId)) return "debt";
+  return "bill";
 }
 
 /** The household's answers that name these rows, a paused bill's pending review read as its last answer. */
@@ -253,6 +292,21 @@ async function readRowAnswers(
 
 type Totals = { count: number; moneyIn: string; moneyOut: string; net: string; pendingNet: string };
 
+/** (F2) A bucket's cash variance, money in and money out apart; null on a side nothing compares. */
+const varianceOut = (v: BankReviewVarianceTotals): { varianceIn: string | null; varianceOut: string | null } => ({
+  varianceIn: v.inCents == null ? null : money(v.inCents),
+  varianceOut: v.outCents == null ? null : money(v.outCents),
+});
+
+/** (F2) A row filed against its direction, by the evidence rule. */
+export type ClassificationIssue = "inflow_into_expense" | "outflow_into_income";
+const classificationIssueOf = (ev: RowEvidence | null): ClassificationIssue | null =>
+  ev?.reason === "credit_in_expense_category"
+    ? "inflow_into_expense"
+    : ev?.reason === "debit_in_income_category"
+      ? "outflow_into_income"
+      : null;
+
 const totalsOut = (t: BankReviewTotalsCents): Totals => ({
   count: t.count,
   moneyIn: money(t.moneyInCents),
@@ -281,6 +335,10 @@ type ReviewRowOut = {
     cardPayment: boolean;
   };
   kind: BankReviewKind;
+  /** (F2) in = money in (amount > 0), out = money out. */
+  direction: BankReviewDirection;
+  /** (F2) Filed against its direction (a credit under an expense category, or the reverse); null when not. */
+  classificationIssue: ClassificationIssue | null;
   reason: BankReviewRowPlacement["reason"];
   evidence: "confirmed" | "automatic" | null;
   plan: {
@@ -290,6 +348,12 @@ type ReviewRowOut = {
     planned: string | null;
     difference: string | null;
     dayDelta: number | null;
+    eventKind: BankReviewPlanKind | null;
+    direction: BankReviewDirection;
+    expected: string | null;
+    actual: string | null;
+    variance: string | null;
+    varianceKind: BankReviewVarianceKind | null;
   } | null;
 };
 
@@ -299,14 +363,9 @@ type PlacedRow = {
   abs: number;
   kind: BankReviewKind;
   placement: BankReviewRowPlacement;
+  /** (F2) The evidence rule's answer for the row as it counts. */
+  rowEvidence: RowEvidence | null;
 };
-
-const planRefOf = (o: LedgerPlanOccurrence): BankReviewPlanRef => ({
-  key: o.planKey,
-  label: o.label,
-  scheduledDate: o.dueDate,
-  planned: o.amount,
-});
 
 /** The fates a planned occurrence is listed with (a phantom or $0 occurrence is not a plan). */
 const LISTED_FATES: ReadonlySet<LedgerPlanFate> = new Set<LedgerPlanFate>([
@@ -337,6 +396,8 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
 
   const scope = await resolveLedgerScope(householdId, ownerUserId, q.account, { signal: signalPromise });
   const range = { start: q.from, end: q.to };
+  const debtLinkedRead = readDebtLinkedItemIds(householdId);
+  debtLinkedRead.catch(() => {});
 
   const t = transactionsTable;
   const [cash, register, freshness, badgeCount, settingsRows, position, rows] = await Promise.all([
@@ -345,7 +406,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     freshnessPromise,
     computeReviewCount(householdId, ownerUserId),
     db
-      .select({ tie: forecastSettingsTable.lastBankReconciliation })
+      .select({ tie: forecastSettingsTable.lastBankReconciliation, anchorAt: forecastSettingsTable.bankSnapshotAt })
       .from(forecastSettingsTable)
       .where(eq(forecastSettingsTable.userId, ownerUserId)),
     buildMoneyPosition(householdId, ownerUserId, { cash: cashPromise, freshness: freshnessPromise }),
@@ -361,6 +422,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
         reimbursable: t.reimbursable,
         debtId: t.debtId,
         isExternalCardPayment: t.isExternalCardPayment,
+        pfcPrimary: t.pfcPrimary,
         pfcDetailed: t.pfcDetailed,
         weeklyAllowance: t.weeklyAllowance,
         monthlyAllowance: t.monthlyAllowance,
@@ -383,6 +445,14 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
   ]);
   const ledger = cash.ledger;
   const today = ledger.todayISO;
+  const debtLinkedItemIds = await debtLinkedRead;
+  const planRefOf = (o: LedgerPlanOccurrence): BankReviewPlanRef => ({
+    key: o.planKey,
+    label: o.label,
+    scheduledDate: o.dueDate,
+    planned: o.amount,
+    eventKind: planKindOf(o, debtLinkedItemIds),
+  });
   const [totals, money2] = await Promise.all([
     readLedgerTotals(scope, { from: q.from, to: q.to }, register),
     // Categories, the filing a posted row inherits, and the checking account —
@@ -427,6 +497,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     else suggestionByTxn.set(m.txnId, planRefOf(o));
   }
   const rowsFrom = ledger.planComparison.rowsFromISO;
+  const evidenceCtx = evidenceContextOf(money2, billSuggestionsOf(ledger, money2.supersede));
 
   // ── Place every counted row exactly once.
   const placed: PlacedRow[] = counted.map((r) => {
@@ -457,9 +528,13 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     });
     // The kind: the one spending rule, on the row as it counts (a posted row
     // takes the filing its replaced pending row carried).
-    const asCounted = effectiveFiling(r, money2.supersede.replacedBy.get(r.id), money2.filingCtx);
-    const kind = bankReviewKindOf(classifyMovement(asCounted, money2, { explain: true }).coverage);
-    return { row: r, amountCents, abs: Math.abs(amountCents), kind, placement };
+    const replacedPending = money2.supersede.replacedBy.get(r.id);
+    const asCounted = effectiveFiling(r, replacedPending, money2.filingCtx);
+    const m = classifyMovement(asCounted, money2, { explain: true });
+    const kind = bankReviewKindOf(m.coverage);
+    // (F2) The evidence rule, on the same row and classification.
+    const rowEvidence = rowEvidenceOf({ ...asCounted, carriedPfc: carriedPfcEvidence(r, replacedPending) }, m, evidenceCtx);
+    return { row: r, amountCents, abs: Math.abs(amountCents), kind, placement, rowEvidence };
   });
   const summary = summarizeBankReview(
     placed.map((p) => ({ amountCents: p.amountCents, pending: p.row.pending, kind: p.kind, placement: p.placement })),
@@ -509,6 +584,8 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
         cardPayment: r.isExternalCardPayment,
       },
       kind: p.kind,
+      direction: p.amountCents > 0 ? "in" : "out",
+      classificationIssue: classificationIssueOf(p.rowEvidence),
       reason: p.placement.reason,
       evidence: p.placement.evidence,
       plan: plan
@@ -519,6 +596,12 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
             planned: moneyOrNull(plan.planned),
             difference: moneyOrNull(plan.difference),
             dayDelta: plan.dayDelta,
+            eventKind: plan.eventKind ?? null,
+            direction: plan.direction,
+            expected: moneyOrNull(plan.expected),
+            actual: moneyOrNull(plan.actual),
+            variance: moneyOrNull(plan.variance),
+            varianceKind: plan.varianceKind,
           }
         : null,
     };
@@ -528,6 +611,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     rows: shown.get(b)!.map(rowOut),
     truncated: byBucket.get(b)!.length > shown.get(b)!.length,
     differenceTotal: b === "amountDifference" ? money(summary.differenceTotalCents) : null,
+    ...varianceOut(summary.varianceByBucket[b]),
     byKind:
       b === "unmatched"
         ? (Object.fromEntries(BANK_REVIEW_KINDS.map((k) => [k, totalsOut(summary.unmatchedByKind[k])])) as Record<
@@ -571,6 +655,8 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     const inRange = o.txnId ? rowById.get(o.txnId) : undefined;
     const other = o.txnId ? elsewhere.get(o.txnId) : undefined;
     const txnDate = inRange?.occurredOn ?? other?.occurredOn ?? null;
+    const eventKind = planKindOf(o, debtLinkedItemIds);
+    const v = cashVarianceOf(o.amount, o.txnAmount, directionOfPlanKind(eventKind));
     return {
       key: o.planKey,
       itemId: o.itemId,
@@ -588,6 +674,12 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
       remainder: moneyOrNull(o.remainder),
       onCurve: o.onCurve,
       hook: o.hookCadence,
+      eventKind,
+      direction: v.direction,
+      expected: moneyOrNull(v.expected),
+      actual: moneyOrNull(v.actual),
+      variance: moneyOrNull(v.variance),
+      varianceKind: v.varianceKind,
     };
   });
 
@@ -596,7 +688,17 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
   const identity = await readAccountIdentity(householdId, identityRowId ?? null);
   const balanceStart = register.openingCents === null ? null : balanceAtEndOf(register, addDaysISO(q.from, -1));
   const tie = settingsRows[0]?.tie ?? null;
-  const tieApplies = !!tie && scope.snapshotAccount && scope.plaidAccountIds.includes(tie.accountId);
+  // (S4) The short form, unchanged: a not-checked record (F3) reads as before — not checked.
+  const tieApplies =
+    !!tie && tie.status !== "not_checked" && scope.snapshotAccount && scope.plaidAccountIds.includes(tie.accountId);
+  // (F3) The full check: one query at most (the recompute), no Plaid call.
+  const balanceCheck = await readBankBalanceCheck({
+    householdId,
+    record: tie,
+    isForecastAccount: scope.snapshotAccount,
+    accountIds: scope.plaidAccountIds,
+    currentAnchorAt: settingsRows[0]?.anchorAt ?? null,
+  });
   // (S6) The badge's own rule, shared: a posted row carries its replaced pending row's answers.
   const statusesOf = (id: string | null): string[] => (id ? (answers.get(id) ?? []).map((a) => a.status) : []);
   const resolved = (id: string): boolean => rowAnswersResolve(statusesOf(id), statusesOf(replacedOf(id)));
@@ -649,6 +751,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
       count: summary.asPlanned.count,
       net: money(summary.asPlanned.netCents),
       pendingNet: money(summary.asPlanned.pendingNetCents),
+      ...varianceOut(summary.varianceByBucket.asPlanned),
       withoutPlanDetail: placed.filter((p) => p.placement.bucket === "asPlanned" && !p.placement.plan).length,
     },
     reconciliation: {
@@ -660,6 +763,26 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     balanceTie: tieApplies
       ? { status: tie!.status, checkedAt: tie!.checkedAt, unexplained: tie!.unexplained }
       : { status: "not_checked" as const, checkedAt: null, unexplained: null },
+    balanceCheck: {
+      status: balanceCheck.status,
+      reason: balanceCheck.reason,
+      stale: balanceCheck.stale,
+      staleReason: balanceCheck.staleReason,
+      checkedAt: balanceCheck.checkedAt,
+      bank: balanceCheck.bank
+        ? { balance: money(balanceCheck.bank.balanceCents), at: balanceCheck.bank.at, field: balanceCheck.bank.field }
+        : null,
+      h2: balanceCheck.h2 ? { balance: money(balanceCheck.h2.balanceCents) } : null,
+      difference: balanceCheck.differenceCents == null ? null : money(balanceCheck.differenceCents),
+      direction: balanceCheck.direction,
+      lastDrift: balanceCheck.lastDrift
+        ? {
+            checkedAt: balanceCheck.lastDrift.checkedAt,
+            difference: money(balanceCheck.lastDrift.differenceCents),
+            direction: balanceCheck.lastDrift.direction,
+          }
+        : null,
+    },
     household: {
       scope: HOUSEHOLD_SCOPE,
       weekStart: position.weekStart,

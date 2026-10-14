@@ -5,8 +5,11 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BankingReviewDirection } from "./bankingReviewDirection";
 import type { BankingReviewPlanFate } from "./bankingReviewPlanFate";
+import type { BankingReviewPlanKind } from "./bankingReviewPlanKind";
 import type { BankingReviewPlannedHook } from "./bankingReviewPlannedHook";
+import type { BankingReviewVarianceKind } from "./bankingReviewVarianceKind";
 
 export interface BankingReviewPlanned {
   /** <itemId>|<occurrenceDate>, the resolution key */
@@ -54,4 +57,22 @@ export interface BankingReviewPlanned {
    * @nullable
    */
   hook: BankingReviewPlannedHook;
+  eventKind: BankingReviewPlanKind;
+  direction: BankingReviewDirection;
+  /**
+   * (F2) |planned|, a positive magnitude; null when not sized
+   * @nullable
+   */
+  expected: string | null;
+  /**
+   * (F2) |txnAmount|, a positive magnitude; null with no row
+   * @nullable
+   */
+  actual: string | null;
+  /**
+   * (F2) Signed in CASH terms: txnAmount − planned. Positive = more cash than planned (received more, or paid less); null when either is unknown
+   * @nullable
+   */
+  variance: string | null;
+  varianceKind: BankingReviewVarianceKind | null;
 }

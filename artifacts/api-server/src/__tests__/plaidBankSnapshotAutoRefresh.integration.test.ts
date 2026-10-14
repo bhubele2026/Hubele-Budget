@@ -375,12 +375,19 @@ describe("(S4) a manual Sync stores the bank tie it checked", () => {
     expect(await storedTie()).toMatchObject({ accountId: externalAccountId, unexplained: "0.00", status: "ties" });
   });
 
-  it("not checked: an anchor too old to compare, or a sync that is not the owner's manual Sync, stores nothing", async () => {
+  it("not checked: an anchor too old to compare is stored with its reason (F3); a sync that is not the owner's manual Sync stores nothing", async () => {
     const { itemRowId, plaidAccountRowId, externalAccountId } = await seedItemAndCheckingAccount({ institutionName: "Chase" });
     await configureRecentSnapshot({ plaidAccountRowId, balance: "1000.00", daysAgo: 60 });
     bankHolds(externalAccountId, 1000);
     await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
-    expect(await storedTie()).toBeNull();
+    // (F3) Deliberately changed: this used to store nothing, so the review could not say why.
+    expect(await storedTie()).toMatchObject({
+      accountId: externalAccountId,
+      status: "not_checked",
+      reason: "anchor_too_old",
+      unexplained: null,
+      bank: { balance: "1000.00", field: "available" },
+    });
     await db.delete(forecastSettingsTable).where(eq(forecastSettingsTable.userId, TEST_USER));
     await configureRecentSnapshot({ plaidAccountRowId, balance: "1000.00", daysAgo: 3 });
     await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "webhook" });

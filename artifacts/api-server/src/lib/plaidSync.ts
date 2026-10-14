@@ -34,13 +34,8 @@ import { afterPlaidSyncDebtPass } from "./debtPaymentConfirm";
 import { debtIdForSyncedRow } from "./debtPending";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
-import { householdDayOf, householdTodayISO } from "./householdClock";
-import { classifyLedgerRowsThroughToday } from "./ledgerCashRows";
 import { laterRowIsNearer, pickRemintCandidate, type RemintBatchEntry } from "./remintMatch";
-import {
-  anchorIsReconcilable,
-  reconcileBankBalance,
-} from "./reconcileBankBalance";
+import { checkBankBalanceOnSync, type BankBalanceRead } from "./bankBalanceCheck";
 import {
   recordPlaidSyncAttempt,
   type PlaidPendingCleanupDetails,
@@ -907,7 +902,9 @@ export async function syncPlaidItem(
       ? Number(forecastSettings.bankSnapshotBalance)
       : null;
   const prevSnapshotAt = forecastSettings?.bankSnapshotAt ?? null;
-  let liveAvailableBalance: number | null = null;
+  // (F3) What the balance call returned (both fields) and the anchor it wrote:
+  // the bank balance check compares like with like and records the field.
+  let liveBalanceRead: BankBalanceRead | null = null;
   {
     const resolved = await resolveSnapshotAccount({
       householdId,
@@ -2292,11 +2289,12 @@ export async function syncPlaidItem(
         // number the bank does NOT present as the balance.)
         const live = acct?.balances.available ?? acct?.balances.current;
         if (live != null) {
+          const anchorAt = new Date();
           await db
             .update(forecastSettingsTable)
             .set({
               bankSnapshotBalance: Number(live).toFixed(2),
-              bankSnapshotAt: new Date(),
+              bankSnapshotAt: anchorAt,
               bankSnapshotSource: "plaid",
               // Heal the pointer while we are here. Plaid just answered for
               // this account, so it demonstrably exists — write it back and the
@@ -2312,7 +2310,12 @@ export async function syncPlaidItem(
               "[plaid-sync] healed the bank snapshot account pointer",
             );
           }
-          liveAvailableBalance = Number(live);
+          liveBalanceRead = {
+            available: acct?.balances.available != null ? Number(acct.balances.available) : null,
+            current: acct?.balances.current != null ? Number(acct.balances.current) : null,
+            at: anchorAt,
+            anchorField: acct?.balances.available != null ? "available" : "current",
+          };
         } else {
           balanceNotReread = "no_balance";
         }
@@ -2596,131 +2599,48 @@ export async function syncPlaidItem(
     // On a difference we try the same self-heal #720 trusts (`/transactions/get`
     // over a window, base product, no add-on), then report whatever is still
     // unexplained rather than quietly showing a number that does not tie.
+    //
+    // ⭐ (F3) The check itself now lives in `checkBankBalanceOnSync`
+    // (lib/bankBalanceCheck.ts): it keeps what it compared (the previous anchor,
+    // the bank's figure and its field, H2's figure), stores a not-checked outcome
+    // with its reason instead of nothing, keeps the last earlier drift, and
+    // leaves out pending deposits that `available` does not hold. The prediction
+    // is still `classifyCashRows` on the PRE-sync anchor, over the rows the
+    // ledger reads, summing only rows with a Plaid account (PR4e):
+    //
+    // ⚠️ MANUAL ROWS STAY OUT, although cash today counts them. "Log
+    // payment" (routes/debts.ts) writes a `source: "manual"` checking row
+    // for every debt payment. The sync merges manual rows only on an
+    // account's first sync (#361) and dedupe is per Plaid account, so the
+    // row stays for good, beside the bank's own debit once it posts.
+    // Counting it here raised drift after every logged payment: before the
+    // debit, the bank has not moved; after it, the payment counts twice.
     let balanceDrift: SyncResult["balanceDrift"] = null;
-    if (
-      syncOrigin === "manual" &&
-      liveAvailableBalance != null &&
-      prevSnapshotBalance != null &&
-      prevSnapshotAt != null &&
-      checkingPlaidAccountId
-    ) {
-      if (anchorIsReconcilable(prevSnapshotAt)) {
-        // Household calendar days (America/Chicago), matching the roll-forward.
-        const anchorDay = householdDayOf(new Date(prevSnapshotAt));
-        const todayDay = householdTodayISO();
-        // ⭐ THE LEDGER'S OWN RULE, OVER THE BANK FEED'S OWN ROWS (PR4e). The
-        // prediction is `classifyCashRows` on the PRE-sync anchor, over the rows
-        // the ledger reads, summing only rows with a Plaid account. A day sum
-        // here used to add charges the anchor already held and both halves of an
-        // unlinked pending/posted pair, so an honest ledger raised drift — a
-        // false "doesn't match our records" toast and an extra
-        // /transactions/get backfill.
-        //
-        // ⚠️ MANUAL ROWS STAY OUT, although cash today counts them. "Log
-        // payment" (routes/debts.ts) writes a `source: "manual"` checking row
-        // for every debt payment. The sync merges manual rows only on an
-        // account's first sync (#361) and dedupe is per Plaid account, so the
-        // row stays for good, beside the bank's own debit once it posts.
-        // Counting it here raised drift after every logged payment: before the
-        // debit, the bank has not moved; after it, the payment counts twice.
-        // Re-read after a backfill: it can add rows.
-        const ledgerSince = async (): Promise<number> =>
-          (
-            await classifyLedgerRowsThroughToday({
-              householdId,
-              anchor: { at: new Date(prevSnapshotAt), day: anchorDay },
-              accountExternalId: checkingPlaidAccountId,
-              todayISO: todayDay,
-            })
-          ).plaidRowsThroughToday.net;
-
-        let recon = reconcileBankBalance({
-          anchorBalance: prevSnapshotBalance,
-          ledgerNetSinceAnchor: await ledgerSince(),
-          bankAvailable: liveAvailableBalance,
-        });
-
-        if (recon.drifted) {
-          logger.warn(
-            {
-              userId,
-              itemRowId,
-              institutionName: item.institutionName,
-              bankAvailable: liveAvailableBalance,
-              ledgerPredicted: recon.predicted,
-              unexplained: recon.unexplained,
-              anchorDay,
-              anchorBalance: prevSnapshotBalance,
-            },
-            "[plaid-sync] bank reconciliation: our rows do not explain the bank balance",
-          );
-
-          // Try to heal it the same way a stuck cursor is healed. Skipped when
-          // a backfill already ran this sync — one /transactions/get window per
-          // run, never two.
-          if (!backfillRan) {
-            try {
+    if (syncOrigin === "manual" && balanceRefreshAttempted && checkingPlaidAccountId) {
+      const outcome = await checkBankBalanceOnSync({
+        householdId,
+        ownerUserId,
+        accountExternalId: checkingPlaidAccountId,
+        prevAnchor:
+          prevSnapshotBalance != null && prevSnapshotAt != null
+            ? { balance: prevSnapshotBalance, at: new Date(prevSnapshotAt) }
+            : null,
+        previous: forecastSettings?.lastBankReconciliation ?? null,
+        read: liveBalanceRead,
+        // One /transactions/get window per run, never two.
+        heal: backfillRan
+          ? null
+          : async () => {
               const bf = await runGapBackfillForItem(userId, itemRowId);
               backfillAdded += bf.added;
               backfillRan = true;
-              if (bf.added > 0) {
-                deliveryMode = "gap-backfill";
-                recon = reconcileBankBalance({
-                  anchorBalance: prevSnapshotBalance,
-                  ledgerNetSinceAnchor: await ledgerSince(),
-                  bankAvailable: liveAvailableBalance,
-                });
-                logger.info(
-                  {
-                    userId,
-                    itemRowId,
-                    recovered: bf.added,
-                    unexplained: recon.unexplained,
-                  },
-                  "[plaid-sync] bank reconciliation: gap-backfill recovered rows",
-                );
-              }
-            } catch (e) {
-              logger.warn(
-                { userId, itemRowId, err: e },
-                "[plaid-sync] bank reconciliation: gap-backfill failed (non-fatal)",
-              );
-            }
-          }
-
-          if (recon.drifted) {
-            balanceDrift = {
-              bank: liveAvailableBalance.toFixed(2),
-              ledger: recon.predicted.toFixed(2),
-              unexplained: recon.unexplained.toFixed(2),
-            };
-          }
-        }
-
-        // ⭐ (S4) KEEP THE ANSWER. The banking review reports the last tie a
-        // manual Sync checked ("ties" / "drift"; "not checked" before any).
-        // Written here, where the answer is final (after any self-heal), on the
-        // owner's forecast settings; nothing else in the sync changes, and a
-        // failed write never fails the sync.
-        try {
-          await db
-            .update(forecastSettingsTable)
-            .set({
-              lastBankReconciliation: {
-                checkedAt: new Date().toISOString(),
-                accountId: checkingPlaidAccountId,
-                unexplained: recon.unexplained.toFixed(2),
-                status: recon.drifted ? "drift" : "ties",
-              },
-            })
-            .where(eq(forecastSettingsTable.userId, ownerUserId));
-        } catch (e) {
-          logger.warn(
-            { userId, itemRowId, err: e },
-            "[plaid-sync] bank reconciliation: could not store the tie (non-fatal)",
-          );
-        }
-      }
+              if (bf.added > 0) deliveryMode = "gap-backfill";
+              return bf.added;
+            },
+        log: logger,
+        logContext: { userId, itemRowId, institutionName: item.institutionName },
+      });
+      balanceDrift = outcome.balanceDrift;
     }
 
     // (#671) Single structured delivery-metrics log line per successful

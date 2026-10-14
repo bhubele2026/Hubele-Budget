@@ -88,6 +88,22 @@ export function monthBounds(iso: string): {
   return { start: `${y}-${pad(m)}-01`, end, endExclusive: addDaysISO(end, 1) };
 }
 
+/**
+ * ⭐ (F3) THE SAME POINT IN AN EARLIER PERIOD — the last day of `periodStart`'s
+ * period that sits where `todayISO` sits in its own: a week cuts on the same
+ * weekday (today Wednesday → that week's Sunday–Wednesday); a month on the same
+ * day of the month, capped at that month's last day (Oct 31 → Sep 30; Mar 31 →
+ * Feb 28, or 29 in a leap year; the 1st → the 1st). Inclusive. A "usual" read
+ * this far into each prior period compares like with like with a period that is
+ * still running.
+ */
+export function samePointInPeriod(period: "week" | "month", periodStart: string, todayISO: string): string {
+  if (period === "week") return addDaysISO(weekBounds(periodStart).start, dayOfWeekISO(todayISO));
+  const m = monthBounds(periodStart);
+  const day = Math.min(Number(todayISO.slice(8, 10)), Number(m.end.slice(8, 10)));
+  return `${m.start.slice(0, 8)}${pad(day)}`;
+}
+
 // ── Any IANA zone (AI-4a) ───────────────────────────────────────────────────
 // The recap is texted at each member's own local time, so the schedule needs
 // "what calendar date is it THERE" and "what instant is 07:00 THERE". Same

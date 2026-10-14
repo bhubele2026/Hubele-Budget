@@ -862,6 +862,57 @@ export const forecastClosedMonthsTable = pgTable(
   }),
 );
 
+/** (F3) A Plaid balance field: `available` (what the bank presents; holds pending charges, not pending deposits) or `current` (posted only). */
+export type BankBalanceFieldName = "available" | "current";
+
+/** (F3) Row ids a check recorded, with their signed sum (two decimals). */
+export type BankCheckIdList = { ids: string[]; amount: string };
+
+/**
+ * (F3) `forecast_settings.last_bank_reconciliation` — the last bank balance
+ * check a manual Sync made (`lib/bankBalanceCheck.ts`). Money is a two-decimal
+ * string. Fields after `status` are F3's (absent on older records).
+ */
+export type BankBalanceCheckRecord = {
+  checkedAt: string;
+  /** The Plaid account id (`plaid_accounts.account_id`) that was checked. */
+  accountId: string;
+  /** bank − H2 (the previous anchor rolled forward), two decimals; null when not checked. */
+  unexplained: string | null;
+  status: "ties" | "drift" | "not_checked";
+  /** Why no comparison was made: the anchor was older than 45 days, or Plaid returned no balance. */
+  reason?: "anchor_too_old" | "balance_unavailable" | null;
+  /** The anchor the check rolled forward, its field when known, and the deposits pending when it was read. */
+  prevAnchor?: {
+    balance: string;
+    at: string;
+    field: BankBalanceFieldName | null;
+    pendingDepositIds: string[] | null;
+  } | null;
+  /** The bank's figure compared: like with like, in the previous anchor's field when Plaid gave it. */
+  bank?: { balance: string; at: string; field: BankBalanceFieldName } | null;
+  /** The anchor in effect after this Sync: the one it wrote, or (no balance read) the one it kept. */
+  anchor?: { balance: string; at: string; field: BankBalanceFieldName } | null;
+  /** H2's figure: the previous anchor plus what the ledger adds through the check's day. */
+  predicted?: string | null;
+  /** Unpaired pending deposits at this read (an `available` balance does not hold them); null when too many to list. */
+  pendingDeposits?: BankCheckIdList | null;
+  /** Rows left out of the prediction as deposits the bank figure did not hold. */
+  excluded?: BankCheckIdList | null;
+  /** Deposits pending at the previous anchor's read that had posted by this check. */
+  added?: BankCheckIdList | null;
+  /** The anchor's field differs from the previous anchor's (the bank stopped or started giving `available`). */
+  fieldChanged?: boolean;
+  /** The last earlier check that was off: a Sync re-anchors, so it would otherwise be lost. */
+  lastDrift?: {
+    checkedAt: string;
+    accountId: string;
+    unexplained: string | null;
+    bank: { balance: string; at: string; field: BankBalanceFieldName } | null;
+    predicted: string | null;
+  } | null;
+};
+
 export const forecastSettingsTable = pgTable("forecast_settings", {
   userId: text("user_id").primaryKey(),
   householdId: uuid("household_id").references(
@@ -909,15 +960,11 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
    * (S4, 0190) The last bank-balance tie a manual Sync checked: written by
    * `plaidSync` where it reconciles the bank's balance with the ledger; read by
    * the banking review. Null until a manual Sync checks it.
+   * (F3) Also what the check compared and why one was not made; see
+   * `BankBalanceCheckRecord`. Records written before F3 carry only the first
+   * four fields.
    */
-  lastBankReconciliation: jsonb("last_bank_reconciliation").$type<{
-    checkedAt: string;
-    /** The Plaid account id (`plaid_accounts.account_id`) that was checked. */
-    accountId: string;
-    /** bank − ledger, two decimals. */
-    unexplained: string;
-    status: "ties" | "drift";
-  }>(),
+  lastBankReconciliation: jsonb("last_bank_reconciliation").$type<BankBalanceCheckRecord>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexSummary, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateAllowancePlanBody, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexCardPayoffMode, AmexSummary, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PlanUnsafe, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewProposals, ReviewRefusal, ReviewResolution, RunCategorizationInput, SetAmexCardPayoffModeBody, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -372,6 +372,38 @@ export declare function useGetMappingRuleHistory<TData = Awaited<ReturnType<type
     queryKey: QueryKey;
 };
 /**
+ * Stored in settings.preferences.amexCardPayoffMode (server-owned: a settings save never writes or clears it). `null` clears the choice and the default from the card's debt row applies (no active debt → in_full; an active debt with an APR or a minimum → debt_plan). Answers the card's resolved mode.
+ * @summary (F1) Say how one Amex card is paid — in full by the everyday hook, or on the debt plan (household owner only)
+ */
+export declare const getSetAmexCardPayoffModeUrl: (accountId: string) => string;
+export declare const setAmexCardPayoffMode: (accountId: string, setAmexCardPayoffModeBody: SetAmexCardPayoffModeBody, options?: RequestInit) => Promise<AmexCardPayoffMode>;
+export declare const getSetAmexCardPayoffModeMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof setAmexCardPayoffMode>>, TError, {
+        accountId: string;
+        data: BodyType<SetAmexCardPayoffModeBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof setAmexCardPayoffMode>>, TError, {
+    accountId: string;
+    data: BodyType<SetAmexCardPayoffModeBody>;
+}, TContext>;
+export type SetAmexCardPayoffModeMutationResult = NonNullable<Awaited<ReturnType<typeof setAmexCardPayoffMode>>>;
+export type SetAmexCardPayoffModeMutationBody = BodyType<SetAmexCardPayoffModeBody>;
+export type SetAmexCardPayoffModeMutationError = ErrorType<void>;
+/**
+ * @summary (F1) Say how one Amex card is paid — in full by the everyday hook, or on the debt plan (household owner only)
+ */
+export declare const useSetAmexCardPayoffMode: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof setAmexCardPayoffMode>>, TError, {
+        accountId: string;
+        data: BodyType<SetAmexCardPayoffModeBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof setAmexCardPayoffMode>>, TError, {
+    accountId: string;
+    data: BodyType<SetAmexCardPayoffModeBody>;
+}, TContext>;
+/**
  * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. Read-only.
  * @summary One Amex card's period (or every Amex card's) — owed, purchases, payments and credits apart, and what was not in the plan
  */
@@ -494,32 +526,36 @@ export declare function useListAllowancePlans<TData = Awaited<ReturnType<typeof 
     queryKey: QueryKey;
 };
 /**
- * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import.
+ * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import. (F1) With `dryRun=1` nothing is written: the answer is an AllowancePlanDryRun.
  * @summary Set the household's weekly or monthly plan from this period on (household owner only)
  */
-export declare const getCreateAllowancePlanUrl: () => string;
-export declare const createAllowancePlan: (createAllowancePlanBody: CreateAllowancePlanBody, options?: RequestInit) => Promise<AllowancePlanSaved>;
-export declare const getCreateAllowancePlanMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+export declare const getCreateAllowancePlanUrl: (params?: CreateAllowancePlanParams) => string;
+export declare const createAllowancePlan: (createAllowancePlanBody: CreateAllowancePlanBody, params?: CreateAllowancePlanParams, options?: RequestInit) => Promise<AllowancePlanSaved | AllowancePlanDryRun>;
+export declare const getCreateAllowancePlanMutationOptions: <TError = ErrorType<void | PlanUnsafe>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof createAllowancePlan>>, TError, {
         data: BodyType<CreateAllowancePlanBody>;
+        params?: CreateAllowancePlanParams;
     }, TContext>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationOptions<Awaited<ReturnType<typeof createAllowancePlan>>, TError, {
     data: BodyType<CreateAllowancePlanBody>;
+    params?: CreateAllowancePlanParams;
 }, TContext>;
 export type CreateAllowancePlanMutationResult = NonNullable<Awaited<ReturnType<typeof createAllowancePlan>>>;
 export type CreateAllowancePlanMutationBody = BodyType<CreateAllowancePlanBody>;
-export type CreateAllowancePlanMutationError = ErrorType<void>;
+export type CreateAllowancePlanMutationError = ErrorType<void | PlanUnsafe>;
 /**
  * @summary Set the household's weekly or monthly plan from this period on (household owner only)
  */
-export declare const useCreateAllowancePlan: <TError = ErrorType<void>, TContext = unknown>(options?: {
+export declare const useCreateAllowancePlan: <TError = ErrorType<void | PlanUnsafe>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof createAllowancePlan>>, TError, {
         data: BodyType<CreateAllowancePlanBody>;
+        params?: CreateAllowancePlanParams;
     }, TContext>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof createAllowancePlan>>, TError, {
     data: BodyType<CreateAllowancePlanBody>;
+    params?: CreateAllowancePlanParams;
 }, TContext>;
 /**
  * (S2) Never rewrites history. A row that started before the current period (this week's Sunday, or this month's 1st) is left as it is — past weeks keep the cap they were judged against — and the edit is written as the plan from the current period (or `effectiveFrom`) on: that day's row is updated or a new one inserted (`created: true`). A row starting in the current period or later is edited in place. A new `effectiveFrom` must be a period start (Sunday / the 1st), this period or later.
@@ -527,7 +563,7 @@ export declare const useCreateAllowancePlan: <TError = ErrorType<void>, TContext
  */
 export declare const getUpdateAllowancePlanUrl: (id: string) => string;
 export declare const updateAllowancePlan: (id: string, allowancePlanUpdate: AllowancePlanUpdate, options?: RequestInit) => Promise<AllowancePlanSaved>;
-export declare const getUpdateAllowancePlanMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+export declare const getUpdateAllowancePlanMutationOptions: <TError = ErrorType<void | PlanUnsafe>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateAllowancePlan>>, TError, {
         id: string;
         data: BodyType<AllowancePlanUpdate>;
@@ -539,11 +575,11 @@ export declare const getUpdateAllowancePlanMutationOptions: <TError = ErrorType<
 }, TContext>;
 export type UpdateAllowancePlanMutationResult = NonNullable<Awaited<ReturnType<typeof updateAllowancePlan>>>;
 export type UpdateAllowancePlanMutationBody = BodyType<AllowancePlanUpdate>;
-export type UpdateAllowancePlanMutationError = ErrorType<void>;
+export type UpdateAllowancePlanMutationError = ErrorType<void | PlanUnsafe>;
 /**
  * @summary Set a plan's amount (household owner only; writes source "owner"); a plan a past week used is kept and a new one starts now
  */
-export declare const useUpdateAllowancePlan: <TError = ErrorType<void>, TContext = unknown>(options?: {
+export declare const useUpdateAllowancePlan: <TError = ErrorType<void | PlanUnsafe>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateAllowancePlan>>, TError, {
         id: string;
         data: BodyType<AllowancePlanUpdate>;
@@ -578,7 +614,7 @@ export declare function useGetWaysBack<TData = Awaited<ReturnType<typeof getWays
     queryKey: QueryKey;
 };
 /**
- * week = the weekly allowance (the cap's pool: weekly-flagged + unfiled spending — exactly GET /money/position's spentWeekDiscretionary, and for the current week built from the very rows the position counted). month = the monthly allowance (monthly-flagged spending over the calendar month — exactly what the Monthly Spend hook counts). Refunds net per account and never below zero; `refundFloorAdjustment` is what that floor added, so Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, to the cent. With no plan in effect (or a $0 one) the plan is "not_set" and remaining, over and withinPlan are null — never $0. Household America/Chicago dates. Read-only.
+ * week = the weekly allowance (the cap's pool: weekly-flagged + unfiled spending — exactly GET /money/position's spentWeekDiscretionary, and for the current week built from the very rows the position counted). month = the monthly allowance (monthly-flagged spending over the calendar month — exactly what the Monthly Spend hook counts). Refunds net per account and never below zero; `refundFloorAdjustment` is what that floor added, so Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, to the cent. (F2) The plan comparison (remaining, over, withinPlan) reads `known` — confirmed purchases only; the unfiled rows with contrary evidence are `unresolved` (known + unresolved.amount = actual) and `provisional` says when they could change the answer. `actual` stays the money position's cautious figure. With no plan in effect (or a $0 one) the plan is "not_set" and remaining, over and withinPlan are null — never $0. Household America/Chicago dates. Read-only.
  * @summary Why over? One week's or month's allowance — plan, spent, left or over, and the rows behind it by category
  */
 export declare const getGetPeriodBreakdownUrl: (params: GetPeriodBreakdownParams) => string;
@@ -621,6 +657,30 @@ export type GetBankingReviewQueryError = ErrorType<void>;
  */
 export declare function useGetBankingReview<TData = Awaited<ReturnType<typeof getBankingReview>>, TError = ErrorType<void>>(params: GetBankingReviewParams, options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingReview>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * (F2) Read-only proposals for the household owner to apply himself with an existing app action (Review "mark matched" — POST /forecast/resolutions; Categories "change" — PATCH /transactions/{id}). Each stands on evidence the rows carry, never a merchant name alone and never a blanket rule. loan_payment: Plaid LOAN_PAYMENTS (not a card) rows nobody filed as a payment; rows on one account paying the same amount (within max($1, 1%)) are one series, proposed as the payment of exactly one active bill (a distinctive word of its name or its category's name in a description, and within max($25, 25%) of its amount) or debt (its name, and at least its minimum). transfer: TRANSFER_OUT_SAVINGS / ACCOUNT_TRANSFER rows counted as spending under an expense category (no person-to-person rail). bill_match: an unfiled row the forecast only suggests for a bill. income_category: a credit under an expense category, Plaid primary INCOME, pairing with exactly one active income plan (name and amount). A row is in one proposal at most. Largest first, at most 50; at most 20 rows listed per item. Household America/Chicago dates. A member gets 403 owner_only.
+ * @summary Proposed fixes — evidence-backed corrections over the last 120 days (owner only; writes nothing)
+ */
+export declare const getGetReviewProposalsUrl: () => string;
+export declare const getReviewProposals: (options?: RequestInit) => Promise<ReviewProposals>;
+export declare const getGetReviewProposalsQueryKey: () => readonly ["/api/review/proposals"];
+export declare const getGetReviewProposalsQueryOptions: <TData = Awaited<ReturnType<typeof getReviewProposals>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getReviewProposals>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getReviewProposals>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetReviewProposalsQueryResult = NonNullable<Awaited<ReturnType<typeof getReviewProposals>>>;
+export type GetReviewProposalsQueryError = ErrorType<void>;
+/**
+ * @summary Proposed fixes — evidence-backed corrections over the last 120 days (owner only; writes nothing)
+ */
+export declare function useGetReviewProposals<TData = Awaited<ReturnType<typeof getReviewProposals>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getReviewProposals>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -961,9 +1021,12 @@ export declare const useUpdateCategorizationSettings: <TError = ErrorType<void>,
 }) => UseMutationResult<Awaited<ReturnType<typeof updateCategorizationSettings>>, TError, {
     data: BodyType<CategorizationSettingsInput>;
 }, TContext>;
+/**
+ * (F2) Refuses (409, code direction_conflict, nothing written) a suggestion that would file money IN under an expense category or money OUT under an income one (categoryDirectionConflict — a refund, a transfer, a debt row are never a conflict).
+ */
 export declare const getAcceptCategorizationDecisionUrl: (decisionId: string) => string;
 export declare const acceptCategorizationDecision: (decisionId: string, options?: RequestInit) => Promise<ReviewResolution>;
-export declare const getAcceptCategorizationDecisionMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+export declare const getAcceptCategorizationDecisionMutationOptions: <TError = ErrorType<void | ReviewRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof acceptCategorizationDecision>>, TError, {
         decisionId: string;
     }, TContext>;
@@ -972,8 +1035,8 @@ export declare const getAcceptCategorizationDecisionMutationOptions: <TError = E
     decisionId: string;
 }, TContext>;
 export type AcceptCategorizationDecisionMutationResult = NonNullable<Awaited<ReturnType<typeof acceptCategorizationDecision>>>;
-export type AcceptCategorizationDecisionMutationError = ErrorType<void>;
-export declare const useAcceptCategorizationDecision: <TError = ErrorType<void>, TContext = unknown>(options?: {
+export type AcceptCategorizationDecisionMutationError = ErrorType<void | ReviewRefusal>;
+export declare const useAcceptCategorizationDecision: <TError = ErrorType<void | ReviewRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof acceptCategorizationDecision>>, TError, {
         decisionId: string;
     }, TContext>;
@@ -1002,13 +1065,14 @@ export declare const useSkipCategorizationDecision: <TError = ErrorType<void>, T
     decisionId: string;
 }, TContext>;
 /**
+ * (F2) Refuses (409, code direction_conflict, nothing written) a category that would file money IN under an expense category or money OUT under an income one. (F2) Merchant memory is sign-aware: money in learns apart from money out.
  * @summary File the row by hand (locked), learn merchant memory, and return the
 retroactive candidates. Never applies them.
 
  */
 export declare const getCorrectCategorizationDecisionUrl: (decisionId: string) => string;
 export declare const correctCategorizationDecision: (decisionId: string, correctDecisionInput: CorrectDecisionInput, options?: RequestInit) => Promise<ReviewResolution>;
-export declare const getCorrectCategorizationDecisionMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+export declare const getCorrectCategorizationDecisionMutationOptions: <TError = ErrorType<void | ReviewRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof correctCategorizationDecision>>, TError, {
         decisionId: string;
         data: BodyType<CorrectDecisionInput>;
@@ -1020,13 +1084,13 @@ export declare const getCorrectCategorizationDecisionMutationOptions: <TError = 
 }, TContext>;
 export type CorrectCategorizationDecisionMutationResult = NonNullable<Awaited<ReturnType<typeof correctCategorizationDecision>>>;
 export type CorrectCategorizationDecisionMutationBody = BodyType<CorrectDecisionInput>;
-export type CorrectCategorizationDecisionMutationError = ErrorType<void>;
+export type CorrectCategorizationDecisionMutationError = ErrorType<void | ReviewRefusal>;
 /**
  * @summary File the row by hand (locked), learn merchant memory, and return the
 retroactive candidates. Never applies them.
 
  */
-export declare const useCorrectCategorizationDecision: <TError = ErrorType<void>, TContext = unknown>(options?: {
+export declare const useCorrectCategorizationDecision: <TError = ErrorType<void | ReviewRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof correctCategorizationDecision>>, TError, {
         decisionId: string;
         data: BodyType<CorrectDecisionInput>;

@@ -1,7 +1,7 @@
 import { recurringItemsTable } from "@workspace/db";
 import { rollForwardBalance, walkLedger } from "@workspace/avalanche-core";
 import { buildForecastLedger, type ForecastLedger } from "./forecastLedger";
-import type { HookPayoff } from "./everydayHooks";
+import type { HookPayoff, PlanOverride } from "./everydayHooks";
 import type { SnapshotAccountResolution } from "./resolveSnapshotAccount";
 import { householdTodayISO } from "./householdClock";
 import { deepFreeze, ledgerFreezeEnabled, ledgerSharingEnabled, shareInFlight } from "./ledgerShare";
@@ -457,12 +457,27 @@ export async function computeCashSignalDetailed(
   return shareInFlight(cashSignalShareKey(householdId, ownerUserId, opts), build);
 }
 
+/**
+ * ⭐ (F1) The cash signal as if `planOverride` were written — the plan dialog's
+ * dry run. Built on its own (never shared: the share key does not carry the
+ * override), from the same ledger rules; nothing is written.
+ */
+export async function computeCashSignalWithPlan(
+  householdId: string,
+  ownerUserId: string,
+  opts: { horizonDays?: number; fromDate?: string },
+  planOverride: PlanOverride,
+): Promise<DetailedCashSignal> {
+  return buildCashSignalDetailed(householdId, ownerUserId, { ...opts, planOverride });
+}
+
 async function buildCashSignalDetailed(
   householdId: string,
   ownerUserId: string,
   opts: {
     horizonDays?: number;
     fromDate?: string;
+    planOverride?: PlanOverride | null;
   },
 ): Promise<DetailedCashSignal> {
   const ledger = await buildForecastLedger(householdId, ownerUserId, opts);
@@ -592,10 +607,34 @@ export interface CashSignalHookReserve {
   occurrenceDate: string;
   /** The hook item's name. */
   label: string;
-  /** What the occurrence reserves (before any review answer), dollars. */
+  /**
+   * What the occurrence reserves before payment evidence and any review answer,
+   * dollars: (F1) `incurred + paid + carried + allowanceLeft` — or, for an
+   * occurrence whose unpaid part was carried on (`carriedTo`), `paid +
+   * allowanceLeft`. Summed over the reserves, every obligation counts once. What
+   * lands on the curve is `amount − paid`.
+   */
   amount: string;
   basis: "plan" | "stored_amount";
+  /** (F1) The item's stored amount (the no-plan reserve), dollars. */
+  storedAmount: string;
+  /** (F1) Its own period's purchases − refunds on the in_full cards still unpaid. */
+  incurred: string;
+  /** (F1) Payments allocated to its own period. */
+  paid: string;
+  /** (F1) Earlier unpaid periods carried into it. */
+  carried: string;
+  /** (F1) The occurrences carried in, oldest first. */
+  carriedFrom: Array<{ occurrenceDate: string; periodStart: string; periodEnd: string; amount: string }>;
+  /** (F1) The occurrence its unpaid part was carried into, or null. */
+  carriedTo: string | null;
+  /** (F1) What is left of the period's allowance (the plan's, or the stored reserve's). */
+  allowanceLeft: string;
+  /** (F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds. */
+  cards: Array<{ accountId: string; name: string | null; mask: string | null; mode: "in_full" | "debt_plan" | null; amount: string }>;
 }
+
+const dollars = (cents: number): string => (cents / 100).toFixed(2);
 
 /** ⭐ (S2) The ledger's hook payoffs as `hookReserves`, by date then hook. Reads only. */
 export function hookReservesOf(payoffs: ReadonlyMap<string, HookPayoff>): CashSignalHookReserve[] {
@@ -606,8 +645,16 @@ export function hookReservesOf(payoffs: ReadonlyMap<string, HookPayoff>): CashSi
       planKey,
       occurrenceDate: p.occurrenceDate,
       label: p.label,
-      amount: (p.amountCents / 100).toFixed(2),
+      amount: dollars(p.amountCents),
       basis: p.fromStoredAmount ? ("stored_amount" as const) : ("plan" as const),
+      storedAmount: dollars(p.storedCents),
+      incurred: dollars(p.incurredCents),
+      paid: dollars(p.paidCents),
+      carried: dollars(p.carriedCents),
+      carriedFrom: p.carriedFrom.map((c) => ({ occurrenceDate: c.occurrenceDate, periodStart: c.periodStart, periodEnd: c.periodEnd, amount: dollars(c.cents) })),
+      carriedTo: p.carriedTo,
+      allowanceLeft: dollars(p.allowanceLeftCents),
+      cards: p.cards.map((c) => ({ accountId: c.accountId, name: c.name, mask: c.mask, mode: c.mode, amount: dollars(c.cents) })),
     }))
     .sort((a, b) => (a.occurrenceDate === b.occurrenceDate ? a.hook.localeCompare(b.hook) : a.occurrenceDate < b.occurrenceDate ? -1 : 1));
 }

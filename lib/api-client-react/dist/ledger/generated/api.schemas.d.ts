@@ -1254,6 +1254,14 @@ export type PeriodBreakdownPlanScope = (typeof PeriodBreakdownPlanScope)[keyof t
 export declare const PeriodBreakdownPlanScope: {
     readonly household: "household";
 };
+/**
+ * (F3) How each category's usual was read. same_days (the current period): each prior period cut at the same point — a week on the same weekday, a month on the same day of the month capped at that month's last day (Oct 31 → Sep 30, Mar 31 → Feb 28/29) — so a period still running is compared with the same days of the others. full_period (a past period): whole periods.
+ */
+export type PeriodBreakdownUsualBasis = (typeof PeriodBreakdownUsualBasis)[keyof typeof PeriodBreakdownUsualBasis];
+export declare const PeriodBreakdownUsualBasis: {
+    readonly same_days: "same_days";
+    readonly full_period: "full_period";
+};
 export type PeriodBreakdownScopeKind = (typeof PeriodBreakdownScopeKind)[keyof typeof PeriodBreakdownScopeKind];
 export declare const PeriodBreakdownScopeKind: {
     readonly household: "household";
@@ -1386,6 +1394,85 @@ export interface PeriodBreakdownSplitPart {
     /** What the whole row adds; the parts add up to it */
     parentAmount: string;
 }
+export type RowEvidenceClass = (typeof RowEvidenceClass)[keyof typeof RowEvidenceClass];
+export declare const RowEvidenceClass: {
+    readonly known_purchase: "known_purchase";
+    readonly confirmed_payment: "confirmed_payment";
+    readonly unresolved: "unresolved";
+};
+export type RowEvidenceReason = (typeof RowEvidenceReason)[keyof typeof RowEvidenceReason];
+export declare const RowEvidenceReason: {
+    readonly household_flag: "household_flag";
+    readonly purchase_category: "purchase_category";
+    readonly atm_withdrawal: "atm_withdrawal";
+    readonly person_to_person: "person_to_person";
+    readonly no_contrary_evidence: "no_contrary_evidence";
+    readonly transfer: "transfer";
+    readonly bank_noise: "bank_noise";
+    readonly debt_payment: "debt_payment";
+    readonly card_payment: "card_payment";
+    readonly excluded_category: "excluded_category";
+    readonly bill_match: "bill_match";
+    readonly bill_suggestion: "bill_suggestion";
+    readonly loan_payment: "loan_payment";
+    readonly transfer_evidence: "transfer_evidence";
+    readonly income_evidence: "income_evidence";
+    readonly debit_in_income_category: "debit_in_income_category";
+    readonly credit_in_expense_category: "credit_in_expense_category";
+};
+export type RowEvidenceItemField = (typeof RowEvidenceItemField)[keyof typeof RowEvidenceItemField];
+export declare const RowEvidenceItemField: {
+    readonly pfc_primary: "pfc_primary";
+    readonly pfc_detailed: "pfc_detailed";
+    readonly bill_suggestion: "bill_suggestion";
+    readonly category: "category";
+    readonly household: "household";
+};
+export interface RowEvidenceItem {
+    field: RowEvidenceItemField;
+    value: string;
+}
+export type RowEvidenceSuggestionKind = (typeof RowEvidenceSuggestionKind)[keyof typeof RowEvidenceSuggestionKind];
+export declare const RowEvidenceSuggestionKind: {
+    readonly loan_payment: "loan_payment";
+    readonly transfer: "transfer";
+    readonly income: "income";
+    readonly bill: "bill";
+};
+export type RowEvidenceTargetKind = (typeof RowEvidenceTargetKind)[keyof typeof RowEvidenceTargetKind];
+export declare const RowEvidenceTargetKind: {
+    readonly bill: "bill";
+};
+/**
+ * The bill the forecast suggests (a recurring item's occurrence)
+ */
+export interface RowEvidenceTarget {
+    kind: RowEvidenceTargetKind;
+    /** The recurring item id */
+    id: string;
+    label: string;
+    /** <itemId>|<occurrenceDate> */
+    planKey: string;
+    occurrenceDate: string;
+}
+export interface RowEvidenceSuggestion {
+    kind: RowEvidenceSuggestionKind;
+    /**
+     * A transfer's kind: savings, investment, account, other, in; null otherwise
+     * @nullable
+     */
+    detail: string | null;
+    target: RowEvidenceTarget | null;
+}
+/**
+ * (F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.
+ */
+export interface RowEvidence {
+    class: RowEvidenceClass;
+    reason: RowEvidenceReason;
+    items: RowEvidenceItem[];
+    suggestion: RowEvidenceSuggestion | null;
+}
 export interface PeriodBreakdownRow {
     /** The transaction id (a split part keeps its parent's) */
     id: string;
@@ -1399,6 +1486,8 @@ export interface PeriodBreakdownRow {
     category: PeriodBreakdownRowCategory | null;
     reason: PeriodBreakdownReason;
     splitPart: PeriodBreakdownSplitPart | null;
+    /** (F2) The evidence rule's answer for the row; null where it says nothing (a refund, an ordinary deposit) */
+    evidence: RowEvidence | null;
 }
 export interface PeriodBreakdownCategory {
     /**
@@ -1418,12 +1507,17 @@ export interface PeriodBreakdownCategory {
     /** Rows (split parts count one each) */
     count: number;
     /**
-     * Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left
+     * Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left. (F3) For the current period each prior period is read only to the same point (usualBasis same_days, through usualThrough): the usual by today, not a whole period.
      * @nullable
      */
     usual: string | null;
     /**
-     * max(0, amount − usual); null when usual is null
+     * (F3) The same median over the whole prior periods ("a full month usually"); equals usual for a past period
+     * @nullable
+     */
+    usualFullPeriod: string | null;
+    /**
+     * max(0, amount − usual); null when usual is null. (F3) Against the to-date usual for the current period
      * @nullable
      */
     aboveUsual: string | null;
@@ -1441,6 +1535,27 @@ export interface PeriodBreakdownGroup {
     rows: PeriodBreakdownRow[];
     truncated: boolean;
     countsAgainstPlan: boolean;
+}
+/**
+ * (F2) Rows of the plan's pool (unfiled) with contrary evidence and no household confirmation: Plaid says loan payment, transfer or income, or the forecast suggests a bill (see RowEvidence). They still count in actual (and in the money position and safe-to-spend); the plan comparison leaves them out. amount = actual − known: what they add ("may add up to"). Σ rows = amount + nettedByRefunds.
+ */
+export interface PeriodBreakdownUnresolved {
+    amount: string;
+    /** What a refund on the same account already took off these rows (usually 0.00) */
+    nettedByRefunds: string;
+    count: number;
+    /** Largest first, at most rowsPerGroup; each row's `evidence` says why */
+    rows: PeriodBreakdownRow[];
+    truncated: boolean;
+}
+/**
+ * (F2) Money out in scope that is NOT spending, by a household fact the spending rule already reads (a transfer, a debt or card payment, an excluded category, a confirmed or tier-2 bill match). Informational: never in actual, known or the plan comparison.
+ */
+export interface PeriodBreakdownPayments {
+    amount: string;
+    count: number;
+    rows: PeriodBreakdownRow[];
+    truncated: boolean;
 }
 /**
  * The period's other spending, netted the same way, in the same scope — it does not count against this plan.
@@ -1467,7 +1582,7 @@ export interface PeriodBreakdownBeside {
     householdSpend: string | null;
 }
 /**
- * (S3) One period's allowance, broken down. Money is a two-decimal string. actual: week → weekly-flagged + unfiled spending (the weekly cap's pool), month → monthly-flagged spending; refunds netted per account, never below zero. remaining = plan + carryOver − actual (negative when over); over = max(0, −remaining); both null with no plan. Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, exactly.
+ * (S3) One period's allowance, broken down. Money is a two-decimal string. actual: week → weekly-flagged + unfiled spending (the weekly cap's pool), month → monthly-flagged spending; refunds netted per account, never below zero — the money position's own figure (cautious: it counts unresolved rows). (F2) known = actual without the unresolved rows, netted the same way; known + unresolved.amount = actual, exactly. The plan comparison reads KNOWN: remaining = plan + carryOver − known (negative when over); over = max(0, −remaining); both null with no plan. provisional = unresolved.amount > max($25, 5% of the plan). Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, exactly (the unresolved rows are also in needsClassification).
  */
 export interface PeriodBreakdown {
     period: PeriodBreakdownPeriod;
@@ -1490,8 +1605,10 @@ export interface PeriodBreakdown {
     carryOver: string | null;
     /** What counts against the plan (see the schema description); "0.00" for a quiet period */
     actual: string;
+    /** (F2) Confirmed purchases only: actual without the unresolved rows, netted per account and never below zero exactly as actual is. For a month it equals actual (a monthly flag is the household's own confirmation). */
+    known: string;
     /**
-     * plan + carryOver − actual; negative when over; null when the plan is not set
+     * (F2) plan + carryOver − known; negative when over; null when the plan is not set
      * @nullable
      */
     remaining: string | null;
@@ -1505,11 +1622,22 @@ export interface PeriodBreakdown {
      * @nullable
      */
     withinPlan: boolean | null;
+    /** (F2) unresolved.amount > max($25, 5% of the plan; $25 with no plan): the comparison may change */
+    provisional: boolean;
     /** The rows filed to this plan (weekly / monthly flag), by category, largest first */
     categories: PeriodBreakdownCategory[];
     needsClassification: PeriodBreakdownGroup;
+    unresolved: PeriodBreakdownUnresolved;
+    excludedPayments: PeriodBreakdownPayments;
     /** actual − Σ groups (≥ 0): non-zero only where an account's refunds outran its purchases and its pool floored at 0 */
     refundFloorAdjustment: string;
+    /** (F3) How each category's usual was read. same_days (the current period): each prior period cut at the same point — a week on the same weekday, a month on the same day of the month capped at that month's last day (Oct 31 → Sep 30, Mar 31 → Feb 28/29) — so a period still running is compared with the same days of the others. full_period (a past period): whole periods. */
+    usualBasis: PeriodBreakdownUsualBasis;
+    /**
+     * (F3) With same_days: today (YYYY-MM-DD), the point each prior period is cut at; null for full_period
+     * @nullable
+     */
+    usualThrough: string | null;
     beside: PeriodBreakdownBeside;
     /** What the answer cannot see, as codes: "tier2_pairs_only_since:<date>" (a past period: bill pairs the forecast suggests are known only from that day, so an unfiled bill payment before it reads as unfiled); "tracking_start:<date>" (the period began before tracking did; rows before that day are not read); "usual_periods:<n>" (usual reads n prior periods, fewer than the full 8 weeks / 3 months). */
     limitations: string[];
@@ -1675,6 +1803,35 @@ export declare const BankingReviewPlannedHook: {
     readonly weekly: "weekly";
     readonly monthly: "monthly";
 };
+/**
+ * (F2) What the plan is: a paycheck, a bill, a debt payment (a debt minimum, the Avalanche extra, a bill linked to a debt), an everyday hook's card payoff
+ */
+export type BankingReviewPlanKind = (typeof BankingReviewPlanKind)[keyof typeof BankingReviewPlanKind];
+export declare const BankingReviewPlanKind: {
+    readonly income: "income";
+    readonly bill: "bill";
+    readonly debt: "debt";
+    readonly hook: "hook";
+};
+/**
+ * (F2) in = money in; out = money out
+ */
+export type BankingReviewDirection = (typeof BankingReviewDirection)[keyof typeof BankingReviewDirection];
+export declare const BankingReviewDirection: {
+    readonly in: "in";
+    readonly out: "out";
+};
+/**
+ * (F2) Income: more_than_expected / less_than_expected (received more or less than planned). Expense: over_planned / under_planned (paid more or less than planned). Null when there is no variance or it is 0.
+ * @nullable
+ */
+export type BankingReviewVarianceKind = (typeof BankingReviewVarianceKind)[keyof typeof BankingReviewVarianceKind] | null;
+export declare const BankingReviewVarianceKind: {
+    readonly less_than_expected: "less_than_expected";
+    readonly more_than_expected: "more_than_expected";
+    readonly over_planned: "over_planned";
+    readonly under_planned: "under_planned";
+};
 export interface BankingReviewPlanned {
     /** <itemId>|<occurrenceDate>, the resolution key */
     key: string;
@@ -1721,6 +1878,24 @@ export interface BankingReviewPlanned {
      * @nullable
      */
     hook: BankingReviewPlannedHook;
+    eventKind: BankingReviewPlanKind;
+    direction: BankingReviewDirection;
+    /**
+     * (F2) |planned|, a positive magnitude; null when not sized
+     * @nullable
+     */
+    expected: string | null;
+    /**
+     * (F2) |txnAmount|, a positive magnitude; null with no row
+     * @nullable
+     */
+    actual: string | null;
+    /**
+     * (F2) Signed in CASH terms: txnAmount − planned. Positive = more cash than planned (received more, or paid less); null when either is unknown
+     * @nullable
+     */
+    variance: string | null;
+    varianceKind: BankingReviewVarianceKind | null;
 }
 export interface BankingReviewRowCategory {
     id: string;
@@ -1750,6 +1925,15 @@ export declare const BankingReviewKind: {
     readonly income: "income";
     readonly refund: "refund";
     readonly other: "other";
+};
+/**
+ * (F2) Filed against its direction: inflow_into_expense (money in, e.g. a paycheck, filed under an expense category — reported as income direction) or outflow_into_income; null when not
+ * @nullable
+ */
+export type BankingReviewRowClassificationIssue = (typeof BankingReviewRowClassificationIssue)[keyof typeof BankingReviewRowClassificationIssue] | null;
+export declare const BankingReviewRowClassificationIssue: {
+    readonly inflow_into_expense: "inflow_into_expense";
+    readonly outflow_into_income: "outflow_into_income";
 };
 /**
  * Why a row is where it is: partial / amount (amountDifference), timing (timingDifference), marked_unplanned / ignored_unforecasted (confirmedUnplanned), needs_review / suggested_match / not_compared (uncertain), no_plan (unmatched)
@@ -1786,6 +1970,24 @@ export interface BankingReviewRowPlan {
     difference: string | null;
     /** @nullable */
     dayDelta: number | null;
+    eventKind: BankingReviewPlanKind | null;
+    direction: BankingReviewDirection;
+    /**
+     * (F2) |planned|; null when not known
+     * @nullable
+     */
+    expected: string | null;
+    /**
+     * (F2) |row|
+     * @nullable
+     */
+    actual: string | null;
+    /**
+     * (F2) Signed in cash terms: row − planned (positive = more cash than planned)
+     * @nullable
+     */
+    variance: string | null;
+    varianceKind: BankingReviewVarianceKind | null;
 }
 export interface BankingReviewRow {
     id: string;
@@ -1801,6 +2003,12 @@ export interface BankingReviewRow {
     category: BankingReviewRowCategory | null;
     flags: BankingReviewRowFlags;
     kind: BankingReviewKind;
+    direction: BankingReviewDirection;
+    /**
+     * (F2) Filed against its direction: inflow_into_expense (money in, e.g. a paycheck, filed under an expense category — reported as income direction) or outflow_into_income; null when not
+     * @nullable
+     */
+    classificationIssue: BankingReviewRowClassificationIssue;
     reason: BankingReviewReason;
     /**
      * Who tied the row to its plan
@@ -1845,6 +2053,16 @@ export interface BankingReviewBucket {
      * @nullable
      */
     differenceTotal: string | null;
+    /**
+     * (F2) Σ cash variance over the bucket's money-IN plan comparisons (positive = received more); null when none compares
+     * @nullable
+     */
+    varianceIn: string | null;
+    /**
+     * (F2) Σ cash variance over the bucket's money-OUT plan comparisons (positive = paid less); null when none compares
+     * @nullable
+     */
+    varianceOut: string | null;
     /** (unmatched) The rows by kind; null for the other buckets */
     byKind: BankingReviewKindTotals | null;
     /** (uncertain) The rows by reason; null for the other buckets */
@@ -1864,6 +2082,16 @@ export interface BankingReviewAsPlanned {
     count: number;
     net: string;
     pendingNet: string;
+    /**
+     * (F2) As on a bucket (small: within max($1, 1%))
+     * @nullable
+     */
+    varianceIn: string | null;
+    /**
+     * (F2) As on a bucket
+     * @nullable
+     */
+    varianceOut: string | null;
     /** Confirmed rows whose plan is older than the forecast reads (placed on the household's word) */
     withoutPlanDetail: number;
 }
@@ -1903,6 +2131,106 @@ export interface BankingReviewBalanceTie {
      * @nullable
      */
     unexplained: string | null;
+}
+export type BankingReviewBalanceCheckStatus = (typeof BankingReviewBalanceCheckStatus)[keyof typeof BankingReviewBalanceCheckStatus];
+export declare const BankingReviewBalanceCheckStatus: {
+    readonly matches: "matches";
+    readonly off_by: "off_by";
+    readonly resolved_since: "resolved_since";
+    readonly not_checked: "not_checked";
+};
+/**
+ * Why not checked; null otherwise
+ * @nullable
+ */
+export type BankingReviewBalanceCheckReason = (typeof BankingReviewBalanceCheckReason)[keyof typeof BankingReviewBalanceCheckReason] | null;
+export declare const BankingReviewBalanceCheckReason: {
+    readonly never: "never";
+    readonly not_forecast_account: "not_forecast_account";
+    readonly anchor_too_old: "anchor_too_old";
+    readonly balance_unavailable: "balance_unavailable";
+};
+/**
+ * @nullable
+ */
+export type BankingReviewBalanceCheckStaleReason = (typeof BankingReviewBalanceCheckStaleReason)[keyof typeof BankingReviewBalanceCheckStaleReason] | null;
+export declare const BankingReviewBalanceCheckStaleReason: {
+    readonly age: "age";
+    readonly anchor_changed: "anchor_changed";
+    readonly rows_since: "rows_since";
+};
+export type BankingReviewBalanceCheckBankField = (typeof BankingReviewBalanceCheckBankField)[keyof typeof BankingReviewBalanceCheckBankField];
+export declare const BankingReviewBalanceCheckBankField: {
+    readonly available: "available";
+    readonly current: "current";
+};
+export interface BankingReviewBalanceCheckBank {
+    balance: string;
+    /** When the bank balance was read (ISO) */
+    at: string;
+    field: BankingReviewBalanceCheckBankField;
+}
+export interface BankingReviewBalanceCheckH2 {
+    balance: string;
+}
+/**
+ * Which side was higher at the check; null when they matched or were not compared
+ * @nullable
+ */
+export type BankingReviewBalanceCheckDirection = (typeof BankingReviewBalanceCheckDirection)[keyof typeof BankingReviewBalanceCheckDirection] | null;
+export declare const BankingReviewBalanceCheckDirection: {
+    readonly bank_higher: "bank_higher";
+    readonly bank_lower: "bank_lower";
+};
+/**
+ * @nullable
+ */
+export type BankingReviewBalanceCheckDriftDirection = (typeof BankingReviewBalanceCheckDriftDirection)[keyof typeof BankingReviewBalanceCheckDriftDirection] | null;
+export declare const BankingReviewBalanceCheckDriftDirection: {
+    readonly bank_higher: "bank_higher";
+    readonly bank_lower: "bank_lower";
+};
+export interface BankingReviewBalanceCheckDrift {
+    checkedAt: string;
+    /** |bank − H2| at that check */
+    difference: string;
+    /** @nullable */
+    direction: BankingReviewBalanceCheckDriftDirection;
+}
+/**
+ * (F3) The last manual Sync's check of the bank's own balance against H2's (the previous anchor rolled forward through the ledger), for this account. status: matches · off_by · resolved_since (it was off, and recomputed now from the same anchor over the same days the late rows explain it — one query, no Plaid call) · not_checked with reason (never · not_forecast_account · anchor_too_old: the anchor was over 45 days old · balance_unavailable: the bank gave no balance). stale (first reason wins): anchor_changed (a newer anchor or a typed balance replaced the one the check read) · rows_since (rows dated on or before the check's day arrived after it) · age (over 7 days old); a not-checked outcome is stale by age only. Kept apart from reviewInbox and the freshness (synced) fields. Money is a two-decimal string.
+ */
+export interface BankingReviewBalanceCheck {
+    status: BankingReviewBalanceCheckStatus;
+    /**
+     * Why not checked; null otherwise
+     * @nullable
+     */
+    reason: BankingReviewBalanceCheckReason;
+    stale: boolean;
+    /** @nullable */
+    staleReason: BankingReviewBalanceCheckStaleReason;
+    /**
+     * When the check read the rows (ISO); null when never checked
+     * @nullable
+     */
+    checkedAt: string | null;
+    /** The bank's figure the check compared: like with like, in the previous anchor's field when the bank gave it (available holds pending charges, not pending deposits; current is posted only). Null when none was read. */
+    bank: BankingReviewBalanceCheckBank | null;
+    /** H2's figure at the check (previous anchor + the ledger's rows through the check's day); null when not compared */
+    h2: BankingReviewBalanceCheckH2 | null;
+    /**
+     * |bank − H2| at the check ("0.00" when it matched); null when not compared
+     * @nullable
+     */
+    difference: string | null;
+    /**
+     * Which side was higher at the check; null when they matched or were not compared
+     * @nullable
+     */
+    direction: BankingReviewBalanceCheckDirection;
+    /** The last EARLIER check that was off (a later Sync re-anchors, so it is kept); null when none */
+    lastDrift: BankingReviewBalanceCheckDrift | null;
 }
 export type BankingReviewHouseholdScope = (typeof BankingReviewHouseholdScope)[keyof typeof BankingReviewHouseholdScope];
 export declare const BankingReviewHouseholdScope: {
@@ -1959,6 +2287,7 @@ export interface BankingReview {
     reconciliation: BankingReviewReconciliation;
     reviewInbox: BankingReviewInbox;
     balanceTie: BankingReviewBalanceTie;
+    balanceCheck: BankingReviewBalanceCheck;
     /** Secondary and labelled — all accounts, this week (the money position's figures); null when not read */
     household: BankingReviewHousehold | null;
     /** With `bucket`, one page of that bucket's rows; null otherwise */
@@ -1978,16 +2307,28 @@ export interface WaysBackTrim {
     /** This week's spend in the category, whole cents: (S6) purchases less refunds, as the week's spent figure and the period breakdown's category amount net them. Always > 0 (a fully refunded category is not a trim). */
     spentWeek: number;
     /**
-     * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts.
+     * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts. (F3) Each week read only to today's weekday (Sunday through usualThrough's weekday): the usual by today.
      * @nullable
      */
     usualWeek: number | null;
+    /**
+     * (F3) The same median over the whole 8 weeks, whole cents; null when no week counts
+     * @nullable
+     */
+    usualFullWeek: number | null;
 }
 export type WaysBackHold = {
     /** @nullable */
     perDay: number | null;
     /** @nullable */
     leavesUntilPayday: number | null;
+};
+/**
+ * (F3) Each trim's usualWeek reads the prior weeks to the same weekday
+ */
+export type WaysBackUsualBasis = (typeof WaysBackUsualBasis)[keyof typeof WaysBackUsualBasis];
+export declare const WaysBackUsualBasis: {
+    readonly same_days: "same_days";
 };
 export type WaysBackCarryOver = {
     nextWeekStart: string;
@@ -2016,6 +2357,10 @@ export interface WaysBack {
     daysLeft: number;
     hold: WaysBackHold;
     trims: WaysBackTrim[];
+    /** (F3) Each trim's usualWeek reads the prior weeks to the same weekday */
+    usualBasis: WaysBackUsualBasis;
+    /** (F3) Today (YYYY-MM-DD): each prior week is cut at its weekday */
+    usualThrough: string;
     carryOver: WaysBackCarryOver;
 }
 export interface CreateWeekAdjustmentBody {
@@ -2131,6 +2476,18 @@ export interface AllowancePlans {
     /** (S2) Amounts a plan may start from — options only, nothing writes them: the everyday hook's stored amount (`hook_stored`, e.g. "Weekly Spend reserve"), the suggested weekly cap, and the allowance saved on the classic Allowances page. Only amounts above $0. */
     prefills: AllowancePlanPrefill[];
 }
+export type PlanUnsafeCode = (typeof PlanUnsafeCode)[keyof typeof PlanUnsafeCode];
+export declare const PlanUnsafeCode: {
+    readonly plan_unsafe: "plan_unsafe";
+};
+/**
+ * (F1) A plan write refused by the plan gate (`planSafety.ts`). `reason` is the plain sentence to show; `error` repeats it for callers that read `error`.
+ */
+export interface PlanUnsafe {
+    error: string;
+    code: PlanUnsafeCode;
+    reason: string;
+}
 export type CreateAllowancePlanBodyPeriod = (typeof CreateAllowancePlanBodyPeriod)[keyof typeof CreateAllowancePlanBodyPeriod];
 export declare const CreateAllowancePlanBodyPeriod: {
     readonly weekly: "weekly";
@@ -2148,6 +2505,93 @@ export interface CreateAllowancePlanBody {
      * @pattern ^\d{4}-\d{2}-\d{2}$
      */
     effectiveFrom: string;
+}
+export type AllowancePlanDryRunReserveBasis = (typeof AllowancePlanDryRunReserveBasis)[keyof typeof AllowancePlanDryRunReserveBasis];
+export declare const AllowancePlanDryRunReserveBasis: {
+    readonly plan: "plan";
+    readonly stored_amount: "stored_amount";
+};
+export interface AllowancePlanDryRunReserve {
+    /** Before payment evidence and answers (hookReserves[].amount) */
+    amount: string;
+    /** What lands on the curve (amount − paid) */
+    onCurve: string;
+    basis: AllowancePlanDryRunReserveBasis;
+    incurred: string;
+    paid: string;
+    carried: string;
+    allowanceLeft: string;
+}
+export type AllowancePlanDryRunPlanPeriod = (typeof AllowancePlanDryRunPlanPeriod)[keyof typeof AllowancePlanDryRunPlanPeriod];
+export declare const AllowancePlanDryRunPlanPeriod: {
+    readonly weekly: "weekly";
+    readonly monthly: "monthly";
+};
+export type AllowancePlanDryRunPlan = {
+    period: AllowancePlanDryRunPlanPeriod;
+    amount: string;
+    effectiveFrom: string;
+};
+export type AllowancePlanDryRunOccurrencesItemHook = (typeof AllowancePlanDryRunOccurrencesItemHook)[keyof typeof AllowancePlanDryRunOccurrencesItemHook];
+export declare const AllowancePlanDryRunOccurrencesItemHook: {
+    readonly weekly: "weekly";
+    readonly monthly: "monthly";
+};
+/**
+ * @nullable
+ */
+export type HookReserveCardMode = (typeof HookReserveCardMode)[keyof typeof HookReserveCardMode] | null;
+export declare const HookReserveCardMode: {
+    readonly in_full: "in_full";
+    readonly debt_plan: "debt_plan";
+};
+export interface HookReserveCard {
+    accountId: string;
+    /** @nullable */
+    name: string | null;
+    /** @nullable */
+    mask: string | null;
+    /** @nullable */
+    mode: HookReserveCardMode;
+    /** Its own period's purchases − refunds, before payments */
+    amount: string;
+}
+export type AllowancePlanDryRunOccurrencesItem = {
+    planKey: string;
+    hook: AllowancePlanDryRunOccurrencesItemHook;
+    occurrenceDate: string;
+    label: string;
+    before: AllowancePlanDryRunReserve | null;
+    after: AllowancePlanDryRunReserve;
+    cards: HookReserveCard[];
+};
+export type AllowancePlanDryRunLowPointBefore = {
+    /** @nullable */
+    amount: string | null;
+    /** @nullable */
+    date: string | null;
+};
+export type AllowancePlanDryRunLowPointAfter = {
+    /** @nullable */
+    amount: string | null;
+    /** @nullable */
+    date: string | null;
+};
+export type AllowancePlanDryRunLowPoint = {
+    before: AllowancePlanDryRunLowPointBefore;
+    after: AllowancePlanDryRunLowPointAfter;
+};
+/**
+ * (F1) `POST /allowance-plans?dryRun=1`: nothing written. Each hook occurrence the plan governs (its cadence, its period on) — and any other whose figures move — before → after with its split, and the forecast's low point (90 days) before → after. `allowed`/`reason`: the plan gate's answer (a refused plan still shows its effect).
+ */
+export interface AllowancePlanDryRun {
+    dryRun: boolean;
+    allowed: boolean;
+    /** @nullable */
+    reason: string | null;
+    plan: AllowancePlanDryRunPlan;
+    occurrences: AllowancePlanDryRunOccurrencesItem[];
+    lowPoint: AllowancePlanDryRunLowPoint;
 }
 export type AllowancePlanSaved = AllowancePlan & {
     /** True when a new row was written; false when a row of this period or later was updated in place */
@@ -4647,6 +5091,12 @@ export declare const CashSignalHookReservesItemBasis: {
     readonly plan: "plan";
     readonly stored_amount: "stored_amount";
 };
+export type CashSignalHookReservesItemCarriedFromItem = {
+    occurrenceDate: string;
+    periodStart: string;
+    periodEnd: string;
+    amount: string;
+};
 export type CashSignalHookReservesItem = {
     hook: CashSignalHookReservesItemHook;
     recurringItemId: string;
@@ -4657,6 +5107,25 @@ export type CashSignalHookReservesItem = {
     label: string;
     amount: string;
     basis: CashSignalHookReservesItemBasis;
+    /** (F1) The hook item's stored amount (the no-plan reserve) */
+    storedAmount?: string;
+    /** (F1) Its own period's in_full purchases − refunds still unpaid */
+    incurred?: string;
+    /** (F1) Payments allocated to its own period (oldest obligation first) */
+    paid?: string;
+    /** (F1) Earlier unpaid periods carried into it */
+    carried?: string;
+    /** (F1) The occurrences carried in, oldest first */
+    carriedFrom?: CashSignalHookReservesItemCarriedFromItem[];
+    /**
+     * (F1) The occurrence date its unpaid part was carried into
+     * @nullable
+     */
+    carriedTo?: string | null;
+    /** (F1) What is left of the period's allowance (the plan's, or the stored reserve's) */
+    allowanceLeft?: string;
+    /** (F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds */
+    cards?: HookReserveCard[];
 };
 export type CashSignalMatchesItemTier = (typeof CashSignalMatchesItemTier)[keyof typeof CashSignalMatchesItemTier];
 export declare const CashSignalMatchesItemTier: {
@@ -4773,6 +5242,20 @@ export interface CashSignal {
   reserve $380 · no weekly plan set"); it is not a spending cap.
   `amount` is the occurrence's reserve before any review answer.
   Present only when the household has a hook occurrence.
+  
+  ⭐ (F1, owner's answers 2026-10-14) THE OBLIGATIONS MODEL. Each
+  occurrence is `incurred + carried + allowanceLeft` on the curve:
+  `incurred` = its own period's purchases − refunds on the cards paid
+  IN FULL at its cadence (debt-linked or not; never a DEBT-PLAN card's —
+  its minimum pays it) less the payments allocated to it (`paid`);
+  `carried` = earlier periods' unpaid in_full purchases, moved into the
+  latest occurrence already due (`carriedFrom` / `carriedTo`);
+  `allowanceLeft` = with a plan max(0, cap − spent) while open; with no
+  plan the stored amount less the period's purchases, never below 0; 0
+  once closed. `amount` = incurred + paid + carried + allowanceLeft (an
+  occurrence carried on: paid + allowanceLeft), so summed over the
+  reserves every obligation counts once; the curve holds `amount −
+  paid`. The F1 fields are always sent by an F1 server.
    */
     hookReserves?: CashSignalHookReservesItem[];
     /** (PR6) Unresolved expenses due more than 14 days ago that no bank
@@ -5391,6 +5874,58 @@ export interface AmexDebtLinkedCard {
      */
     displayName: string | null;
 }
+export type AmexCardPayoffModeCadence = (typeof AmexCardPayoffModeCadence)[keyof typeof AmexCardPayoffModeCadence];
+export declare const AmexCardPayoffModeCadence: {
+    readonly weekly: "weekly";
+    readonly monthly: "monthly";
+};
+/**
+ * null = not chosen yet (plans are paused)
+ * @nullable
+ */
+export type AmexCardPayoffModeMode = (typeof AmexCardPayoffModeMode)[keyof typeof AmexCardPayoffModeMode] | null;
+export declare const AmexCardPayoffModeMode: {
+    readonly in_full: "in_full";
+    readonly debt_plan: "debt_plan";
+};
+export type AmexCardPayoffModeSource = (typeof AmexCardPayoffModeSource)[keyof typeof AmexCardPayoffModeSource];
+export declare const AmexCardPayoffModeSource: {
+    readonly explicit: "explicit";
+    readonly default: "default";
+};
+/**
+ * (F1) Why the card is paid that way: set_by_owner; no_debt / debt_not_active (default in_full: no debt row, or none active — archived, paid, zero balance); debt_active (default debt_plan: an active debt with an APR or a minimum); debt_terms_missing (unresolved: an active debt with neither); debt_plan_without_active_debt (unresolved: the owner chose debt_plan but no active revolving debt would pay it).
+ */
+export type PayoffModeReason = (typeof PayoffModeReason)[keyof typeof PayoffModeReason];
+export declare const PayoffModeReason: {
+    readonly set_by_owner: "set_by_owner";
+    readonly no_debt: "no_debt";
+    readonly debt_not_active: "debt_not_active";
+    readonly debt_active: "debt_active";
+    readonly debt_terms_missing: "debt_terms_missing";
+    readonly debt_plan_without_active_debt: "debt_plan_without_active_debt";
+};
+export interface AmexCardPayoffMode {
+    /** The card's Plaid account_id */
+    accountId: string;
+    /** @nullable */
+    name: string | null;
+    /** @nullable */
+    mask: string | null;
+    cadence: AmexCardPayoffModeCadence;
+    /**
+     * null = not chosen yet (plans are paused)
+     * @nullable
+     */
+    mode: AmexCardPayoffModeMode;
+    source: AmexCardPayoffModeSource;
+    reason: PayoffModeReason;
+    /**
+     * The linked debt the answer read
+     * @nullable
+     */
+    debtId: string | null;
+}
 export interface AmexWeeklyPayoff {
     weekStart: string;
     weekEnd: string;
@@ -5401,6 +5936,24 @@ export interface AmexWeeklyPayoff {
     combinedStatementBalance: number;
     /** (S5) Additive. The Amex cards tracked as a debt, which `cards` leaves out (they are paid through the payoff plan, not the band), so the Amex page can still list them. Identity only; `cards` and the combined totals are unchanged. Always sent. */
     debtLinkedCards?: AmexDebtLinkedCard[];
+    /** (F1) Additive. How every discovered Amex card is paid (in full by the everyday hook, or on the debt plan), and whether the owner chose it. `cards` and the combined totals are unchanged. */
+    payoffModes?: AmexCardPayoffMode[];
+}
+/**
+ * in_full | debt_plan; null clears the owner's choice (the default applies)
+ * @nullable
+ */
+export type SetAmexCardPayoffModeBodyMode = (typeof SetAmexCardPayoffModeBodyMode)[keyof typeof SetAmexCardPayoffModeBodyMode] | null;
+export declare const SetAmexCardPayoffModeBodyMode: {
+    readonly in_full: "in_full";
+    readonly debt_plan: "debt_plan";
+};
+export interface SetAmexCardPayoffModeBody {
+    /**
+     * in_full | debt_plan; null clears the owner's choice (the default applies)
+     * @nullable
+     */
+    mode: SetAmexCardPayoffModeBodyMode;
 }
 export type AmexSummaryScopeKind = (typeof AmexSummaryScopeKind)[keyof typeof AmexSummaryScopeKind];
 export declare const AmexSummaryScopeKind: {
@@ -5417,11 +5970,33 @@ export declare const AmexSummaryCardCadence: {
     readonly weekly: "weekly";
     readonly monthly: "monthly";
 };
+/**
+ * @nullable
+ */
+export type AmexSummaryCardPayoffModeMode = (typeof AmexSummaryCardPayoffModeMode)[keyof typeof AmexSummaryCardPayoffModeMode] | null;
+export declare const AmexSummaryCardPayoffModeMode: {
+    readonly in_full: "in_full";
+    readonly debt_plan: "debt_plan";
+};
+export type AmexSummaryCardPayoffModeSource = (typeof AmexSummaryCardPayoffModeSource)[keyof typeof AmexSummaryCardPayoffModeSource];
+export declare const AmexSummaryCardPayoffModeSource: {
+    readonly explicit: "explicit";
+    readonly default: "default";
+};
 export interface AmexSummaryTotal {
     /** Positive dollars (notMine is charges less credits) */
     amount: string;
     count: number;
 }
+/**
+ * (F1) How the card is paid. `mode` null = not chosen yet (the hook bills it like in_full meanwhile, and plans are paused); `source` says whether the owner chose it or it is the default from the card's debt row. A card on the debt plan answers to its debt (`planLink`); a card paid in full answers to its hook.
+ */
+export type AmexSummaryCardPayoffMode = {
+    /** @nullable */
+    mode: AmexSummaryCardPayoffModeMode;
+    source: AmexSummaryCardPayoffModeSource;
+    reason: PayoffModeReason;
+};
 export interface AmexSummaryCard {
     /** The card's Plaid account_id */
     accountId: string;
@@ -5442,6 +6017,8 @@ export interface AmexSummaryCard {
      * @nullable
      */
     owed: string | null;
+    /** (F1) How the card is paid. `mode` null = not chosen yet (the hook bills it like in_full meanwhile, and plans are paused); `source` says whether the owner chose it or it is the default from the card's debt row. A card on the debt plan answers to its debt (`planLink`); a card paid in full answers to its hook. */
+    payoffMode?: AmexSummaryCardPayoffMode;
     /** (P3) This card's purchases over the period: the same rows and rule as the top-level `purchases` of this card's own summary (?accountId=<this card>), so the card band needs one "all" call. With "all", the cards' purchases add up to the top-level `purchases`. */
     purchases: AmexSummaryTotal;
 }
@@ -6204,6 +6781,131 @@ export interface ReviewQueueCount {
 export interface CorrectDecisionInput {
     categoryId: string;
 }
+export interface ReviewProposalsWindow {
+    from: string;
+    /** The household's today */
+    to: string;
+    days: number;
+}
+export type ReviewProposalKind = (typeof ReviewProposalKind)[keyof typeof ReviewProposalKind];
+export declare const ReviewProposalKind: {
+    readonly loan_payment: "loan_payment";
+    readonly transfer: "transfer";
+    readonly bill_match: "bill_match";
+    readonly income_category: "income_category";
+};
+export interface ReviewProposalOccurrence {
+    planKey: string;
+    recurringItemId: string;
+    occurrenceDate: string;
+}
+export interface ReviewProposalRow {
+    id: string;
+    date: string;
+    displayName: string;
+    description: string;
+    /** Signed: negative is money out (a workbook Amex charge is positive) */
+    amount: string;
+    pending: boolean;
+    account: PeriodBreakdownAccount;
+    category: PeriodBreakdownRowCategory | null;
+    /** The bill occurrence "mark matched" would name; null when none is in reach */
+    occurrence: ReviewProposalOccurrence | null;
+}
+export type ReviewProposalEvidenceField = (typeof ReviewProposalEvidenceField)[keyof typeof ReviewProposalEvidenceField];
+export declare const ReviewProposalEvidenceField: {
+    readonly pfc_primary: "pfc_primary";
+    readonly pfc_detailed: "pfc_detailed";
+    readonly bill_suggestion: "bill_suggestion";
+    readonly category: "category";
+    readonly name_match: "name_match";
+    readonly amount_match: "amount_match";
+    readonly same_amount_rows: "same_amount_rows";
+};
+export interface ReviewProposalEvidence {
+    field: ReviewProposalEvidenceField;
+    value: string;
+}
+export type ReviewProposalActionCode = (typeof ReviewProposalActionCode)[keyof typeof ReviewProposalActionCode];
+export declare const ReviewProposalActionCode: {
+    readonly file_as_bill_payment: "file_as_bill_payment";
+    readonly file_as_debt_payment: "file_as_debt_payment";
+    readonly file_as_transfer: "file_as_transfer";
+    readonly confirm_bill_match: "confirm_bill_match";
+    readonly file_under_income_category: "file_under_income_category";
+};
+export type ReviewProposalTargetKind = (typeof ReviewProposalTargetKind)[keyof typeof ReviewProposalTargetKind];
+export declare const ReviewProposalTargetKind: {
+    readonly bill: "bill";
+    readonly debt: "debt";
+    readonly category: "category";
+};
+export interface ReviewProposalTarget {
+    kind: ReviewProposalTargetKind;
+    /**
+     * The bill (recurring item), debt or category id; null when the household has no such category
+     * @nullable
+     */
+    id: string | null;
+    label: string;
+    /**
+     * The category the Categories change files under
+     * @nullable
+     */
+    categoryId: string | null;
+    /** @nullable */
+    categoryName: string | null;
+}
+export interface ReviewProposalAction {
+    code: ReviewProposalActionCode;
+    target: ReviewProposalTarget;
+}
+export type ReviewProposalApplyWithItem = (typeof ReviewProposalApplyWithItem)[keyof typeof ReviewProposalApplyWithItem];
+export declare const ReviewProposalApplyWithItem: {
+    readonly review_mark_matched: "review_mark_matched";
+    readonly categories_change: "categories_change";
+};
+export interface ReviewProposal {
+    /** Stable for the same rows and target */
+    key: string;
+    kind: ReviewProposalKind;
+    /** Newest first, at most 20 */
+    rows: ReviewProposalRow[];
+    rowCount: number;
+    truncated: boolean;
+    /** Σ |amount| over every row */
+    total: string;
+    evidence: ReviewProposalEvidence[];
+    action: ReviewProposalAction;
+    /** The existing app actions that apply it */
+    applyWith: ReviewProposalApplyWithItem[];
+}
+export interface ReviewProposals {
+    window: ReviewProposalsWindow;
+    /** Every proposal found (items lists at most 50) */
+    count: number;
+    truncated: boolean;
+    items: ReviewProposal[];
+}
+/**
+ * (F2) Present when the category goes against the money's direction
+ */
+export type ReviewRefusalCode = (typeof ReviewRefusalCode)[keyof typeof ReviewRefusalCode];
+export declare const ReviewRefusalCode: {
+    readonly direction_conflict: "direction_conflict";
+};
+export type ReviewRefusalConflict = (typeof ReviewRefusalConflict)[keyof typeof ReviewRefusalConflict];
+export declare const ReviewRefusalConflict: {
+    readonly inflow_into_expense: "inflow_into_expense";
+    readonly outflow_into_income: "outflow_into_income";
+};
+export interface ReviewRefusal {
+    /** Plain words for the household */
+    error: string;
+    /** (F2) Present when the category goes against the money's direction */
+    code?: ReviewRefusalCode;
+    conflict?: ReviewRefusalConflict;
+}
 export type ReviewResolutionResolution = (typeof ReviewResolutionResolution)[keyof typeof ReviewResolutionResolution];
 export declare const ReviewResolutionResolution: {
     readonly accepted: "accepted";
@@ -6432,6 +7134,14 @@ export interface CategorizationSettings {
     /** (V7) One row per linked bank, from the rows GET /plaid/items lists. No Plaid call. */
     banks: CategorizationBank[];
 }
+/**
+ * (F2) Merchant memory is sign-aware: a rule learned from money in (a paycheck, a refund) applies to money in only, one learned from money out to purchases only — so a paycheck and a same-name purchase never share one.
+ */
+export type LearnedRuleDirection = (typeof LearnedRuleDirection)[keyof typeof LearnedRuleDirection];
+export declare const LearnedRuleDirection: {
+    readonly in: "in";
+    readonly out: "out";
+};
 export type LearnedRuleScope = (typeof LearnedRuleScope)[keyof typeof LearnedRuleScope];
 export declare const LearnedRuleScope: {
     readonly merchant: "merchant";
@@ -6441,6 +7151,8 @@ export declare const LearnedRuleScope: {
 export interface LearnedRule {
     id: string;
     signature: string;
+    /** (F2) Merchant memory is sign-aware: a rule learned from money in (a paycheck, a refund) applies to money in only, one learned from money out to purchases only — so a paycheck and a same-name purchase never share one. */
+    direction: LearnedRuleDirection;
     scope: LearnedRuleScope;
     /** @nullable */
     plaidAccountId: string | null;

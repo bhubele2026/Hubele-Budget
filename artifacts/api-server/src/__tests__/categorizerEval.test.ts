@@ -70,7 +70,7 @@ describe("categorizer eval (synthetic)", () => {
     expect(queueRatherThanWrong).toBeGreaterThanOrEqual(0.95);
   });
 
-  it("(WP5c) never files money against its direction: BIGCO PAYROLL and BIGCO CAFE are queued, naming the rule and the memory", () => {
+  it("(WP5c, F2) never files money against its direction: BIGCO PAYROLL is queued naming the rule; BIGCO CAFE never reads the paycheck's memory", () => {
     const ctx = evalContext();
     const caseOf = (prefix: string) => EVAL_CASES.find((k) => k.row.description.startsWith(prefix))!.row;
     // The broad employer rule (BIGCO → Dining) would put the payroll deposit in Dining.
@@ -81,13 +81,16 @@ describe("categorizer eval (synthetic)", () => {
       explanation: "Money in, but this would file it under an expense category.",
       ruleId: "r8",
     });
-    // The wrong memory (bigco cafe → Income) would put the cafeteria charge in Income.
+    // (F2) The wrong memory (bigco cafe → Income) is money in's: a plain-signature
+    // memory in an income category never reaches money out (sign-aware memory).
+    // Before F2 it was offered and the guard queued it; now the charge falls to
+    // the employer rule — Dining, its labelled answer, money out under an expense.
     expect(decideRow(caseOf("BIGCO CAFE"), ctx)).toEqual({
-      source: "memory",
-      categoryId: catId("Income"),
-      confidence: 0.5,
-      explanation: "Money out, but this would file it under an income category.",
-      memoryId: "m9",
+      source: "rule",
+      categoryId: catId("Dining"),
+      confidence: 0.85,
+      explanation: "Matched one of your rules.",
+      ruleId: "r8",
     });
     expect(bandFor(0.5)).toBe("queue");
   });

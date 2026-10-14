@@ -27,10 +27,44 @@
 //   Σ categories + needsClassification + refundFloorAdjustment === actual, to
 //   the cent, always (asserted in code: a negative adjustment throws).
 //
+// ⭐ (F2) KNOWN vs UNRESOLVED — the owner: "the headline compares confirmed
+// purchases only". The caller tags each row with the evidence rule's class
+// (`classifyEvidence`); an UNRESOLVED row in the plan's pool (an unfiled row
+// with contrary evidence: Plaid says loan payment / transfer / income, or the
+// forecast suggests a bill) is set apart:
+//
+//   known       the pool WITHOUT the unresolved rows, netted exactly as
+//               `actual` is (`allowanceSpentCents`: per account, never below
+//               zero). The plan comparison (`remaining` / `over` /
+//               `withinPlan`) reads it.
+//   unresolved  actual − known: what the unresolved rows add to the figure
+//               ("may add up to"). Its rows sum to amount + nettedByRefunds;
+//               `nettedByRefunds` is non-zero only where a refund on the same
+//               account outran that account's known purchases.
+//   provisional unresolved > max($25, 5% of the plan).
+//   excludedPayments  the confirmed payments and transfers in scope (money
+//               out the rule already leaves out of spending) — informational.
+//
+//   known + unresolved === actual, to the cent, always. `actual` itself is
+//   unchanged: it is still `computePosition`'s figure (the money position,
+//   safe-to-spend and the spine keep counting unresolved rows — cautious).
+//   For a month the pool is monthly-FLAGGED rows only, and a flag is the
+//   household's own confirmation, so known === actual there.
+//
 // `usual` is the median of the category's amount over the prior periods
 // (`medianCents`, the ways-back helper): 8 weeks for a week, 3 months for a
 // month; a period with nothing counts as 0, a period before tracking began is
 // left out, and with none left `usual` is null.
+//
+// ⭐ (F3) A FAIR "USUAL" FOR A PERIOD STILL RUNNING. Month-to-date against three
+// FULL months always read "under usual", so "Why over?" showed nothing above
+// usual. For the current period (`sameDaysThrough` = today) each prior period is
+// cut at the same point (`samePointInPeriod`: the same weekday; the same day of
+// the month, capped at that month's last day) and `usual` is the median of those
+// to-date amounts; `usualFullPeriod` keeps the full-period median beside it, and
+// `aboveUsual` reads the to-date one. A row ON the cut day counts; a refund dated
+// after the cut does not (it nets the full period only). A past period is
+// unchanged: full against full (`usualBasis` "full_period").
 
 import {
   allowanceRemainingCents,
@@ -39,8 +73,9 @@ import {
   type AllowanceRow,
   type MovementCoverage,
 } from "./householdMoney";
-import { addDaysISO, monthBounds, weekBounds } from "./householdTime";
+import { addDaysISO, monthBounds, samePointInPeriod, weekBounds } from "./householdTime";
 import { medianCents } from "./waysBack";
+import type { EvidenceClass } from "./evidenceRule";
 
 export type BreakdownPeriod = "week" | "month";
 export type BreakdownBasis = "weekly_allowance" | "monthly_allowance";
@@ -121,6 +156,12 @@ export interface BreakdownRowInput<T> {
   categoryId: string | null;
   /** Valid split parts (`expandSplits`: they add up to the row), or null. */
   splitParts: readonly BreakdownSplitPart[] | null;
+  /**
+   * (F2) The evidence rule's class for the row (`classifyEvidence`), or null /
+   * omitted when the rule says nothing. Only `unresolved` changes anything:
+   * such a row in the plan's pool counts in `unresolved`, not `known`.
+   */
+  evidenceClass?: EvidenceClass | null;
   /** Passed through to the output untouched. */
   item: T;
 }
@@ -147,9 +188,15 @@ export interface BreakdownCategory<T> {
   /** cents ÷ actual in basis points (rounded); null when actual is 0. Negative for a category that nets negative. */
   shareBp: number | null;
   count: number;
-  /** Median over the prior periods (see the header); null with none. */
+  /**
+   * Median over the prior periods (see the header); null with none. (F3) For the
+   * current period, each prior period to the same point (`usualBasis`
+   * "same_days"); for a past one, the full periods.
+   */
   usualCents: number | null;
-  /** max(0, cents − usual); null when `usual` is null. */
+  /** (F3) Median over the prior FULL periods; null with none. Equals `usualCents` for a past period. */
+  usualFullPeriodCents: number | null;
+  /** max(0, cents − usual); null when `usual` is null. (F3) Against the to-date usual for the current period. */
   aboveUsualCents: number | null;
   rows: BreakdownEntry<T>[];
   truncated: boolean;
@@ -180,6 +227,26 @@ export interface PeriodBreakdownInputs<T> {
   /** The household's categories: id → name. A category id not in it groups as "no category". */
   categoryNames: ReadonlyMap<string, string>;
   rowsPerGroup: number;
+  /**
+   * (F3) The current period's today: each prior period is then cut at the same
+   * point (`samePointInPeriod`) for `usual`. Null / omitted for a past period
+   * (full against full).
+   */
+  sameDaysThrough?: string | null;
+}
+
+/** (F3) How `usual` was read: the prior periods to the same point, or whole. */
+export type UsualBasis = "same_days" | "full_period";
+
+/** (F2) The unresolved rows in the plan's pool. */
+export interface BreakdownUnresolvedGroup<T> {
+  /** What they add to `actual`: actual − known (≥ 0). */
+  cents: number;
+  /** Σ rows − cents: what a refund on the same account already netted (usually 0). */
+  nettedByRefundsCents: number;
+  count: number;
+  rows: BreakdownEntry<T>[];
+  truncated: boolean;
 }
 
 export interface PeriodBreakdownCore<T> {
@@ -187,15 +254,27 @@ export interface PeriodBreakdownCore<T> {
   planCents: number | null;
   carryOverCents: number | null;
   actualCents: number;
-  /** plan + carry-over − actual (negative when over); null with no plan. */
+  /** (F2) The pool without its unresolved rows, netted as `actual` is. known + unresolved = actual. */
+  knownCents: number;
+  /** (F2) plan + carry-over − KNOWN (negative when over); null with no plan. */
   remainingCents: number | null;
   /** max(0, −remaining); null with no plan. */
   overCents: number | null;
   /** remaining ≥ 0; null with no plan. */
   withinPlan: boolean | null;
+  /** (F2) unresolved > max($25, 5% of the plan). */
+  provisional: boolean;
   categories: BreakdownCategory<T>[];
   needsClassification: BreakdownGroup<T>;
+  /** (F2) The unresolved rows of the pool (a subset of `needsClassification`'s rows). */
+  unresolved: BreakdownUnresolvedGroup<T>;
+  /** (F2) Confirmed payments and transfers in scope: money out that is not spending. Informational. */
+  excludedPayments: BreakdownGroup<T>;
   refundFloorAdjustmentCents: number;
+  /** (F3) "same_days" for the current period, "full_period" for a past one. */
+  usualBasis: UsualBasis;
+  /** (F3) The current period's cut (today, YYYY-MM-DD) when `usualBasis` is "same_days"; null otherwise. */
+  usualThrough: string | null;
   /** The period's other figures, netted the same way, in the same scope. */
   beside: {
     unplannedCents: number;
@@ -293,6 +372,25 @@ export function allowancePeriodFigures(
   return { remainingCents, overCents: Math.max(0, -remainingCents), withinPlan: remainingCents >= 0 };
 }
 
+/** (F2) Unresolved rows make the comparison provisional above max($25, 5% of the plan). */
+export const BREAKDOWN_PROVISIONAL_MIN_CENTS = 2500;
+export const BREAKDOWN_PROVISIONAL_SHARE = 0.05;
+
+/** (F2) Is the plan comparison provisional: unresolved > max($25, 5% of the plan)? With no plan, > $25. */
+export function isProvisional(unresolvedCents: number, planCents: number | null): boolean {
+  const share = planCents == null ? 0 : Math.round(Math.abs(planCents) * BREAKDOWN_PROVISIONAL_SHARE);
+  return unresolvedCents > Math.max(BREAKDOWN_PROVISIONAL_MIN_CENTS, share);
+}
+
+/** (F2) The coverages a confirmed payment or transfer carries (money out the spending rule already leaves out). */
+const PAYMENT_COVERAGES: ReadonlySet<MovementCoverage> = new Set<MovementCoverage>([
+  "transfer",
+  "debt_payment",
+  "card_payment",
+  "excluded",
+  "bill_matched",
+]);
+
 /** ⭐ THE BREAKDOWN. See the file header. */
 export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBreakdownCore<T> {
   const rule = RULES[inputs.period];
@@ -305,10 +403,22 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
   // ── Group the rows that count against the plan.
   const filedByCategory = new Map<string, BreakdownEntry<T>[]>();
   const unfiled: BreakdownEntry<T>[] = [];
+  const unresolvedEntries: BreakdownEntry<T>[] = [];
+  const paymentEntries: BreakdownEntry<T>[] = [];
+  // (F2) The pool's rows that are unresolved: out of `known`, into `unresolved`.
+  const inPool = (c: MovementCoverage): boolean => c === rule.filed || c === rule.unfiled;
+  const isUnresolved = (row: BreakdownRowInput<T>): boolean =>
+    row.evidenceClass === "unresolved" && inPool(row.allowance.coverage) && row.allowance.spend > 0;
   for (const row of inputs.rows) {
     const coverage = row.allowance.coverage;
-    if (coverage !== rule.filed && coverage !== rule.unfiled) continue;
+    if (PAYMENT_COVERAGES.has(coverage) && row.allowance.spend > 0) {
+      paymentEntries.push(...breakdownEntriesOf({ ...row, splitParts: null }, inputs.categoryNames));
+      continue;
+    }
+    if (!inPool(coverage)) continue;
+    const unresolved = isUnresolved(row);
     for (const e of breakdownEntriesOf(row, inputs.categoryNames)) {
+      if (unresolved) unresolvedEntries.push(e);
       if (coverage === rule.filed) {
         const k = keyOf(e.categoryId);
         const list = filedByCategory.get(k);
@@ -320,19 +430,39 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
     }
   }
 
+  // ── (F2) Known: the pool without its unresolved rows, netted the same way.
+  const knownCents = allowanceSpentCents(
+    inputs.rows.filter((r) => !isUnresolved(r)).map((r) => r.allowance),
+    rule.cadence,
+  );
+  const unresolvedCents = actualCents - knownCents;
+  if (unresolvedCents < 0) {
+    // Impossible by construction: removing outflows from a floored pool never raises it.
+    throw new Error(`periodBreakdown: known (${knownCents}) exceeds the figure (${actualCents})`);
+  }
+
   // ── The usual period, per category, from the prior periods' filed rows.
+  // (F3) For the current period, also each prior period to the same point.
+  const through = inputs.sameDaysThrough ?? null;
+  const cutOf = new Map<string, string>(
+    through ? inputs.history.starts.map((s) => [s, samePointInPeriod(inputs.period, s, through)] as const) : [],
+  );
   const perPeriod = new Map<string, number>(); // `${periodStart}|${categoryKey}` → cents
+  const perPeriodToDate = new Map<string, number>();
   for (const row of inputs.history.rows) {
     if (row.allowance.coverage !== rule.filed) continue;
+    const cut = cutOf.get(row.periodStart);
+    const toDate = cut !== undefined && row.date <= cut;
     for (const e of breakdownEntriesOf(row, inputs.categoryNames)) {
       const k = `${row.periodStart}|${keyOf(e.categoryId)}`;
       perPeriod.set(k, (perPeriod.get(k) ?? 0) + e.cents);
+      if (toDate) perPeriodToDate.set(k, (perPeriodToDate.get(k) ?? 0) + e.cents);
     }
   }
-  const usualOf = (key: string): number | null =>
-    inputs.history.starts.length === 0
-      ? null
-      : medianCents(inputs.history.starts.map((s) => perPeriod.get(`${s}|${key}`) ?? 0));
+  const medianOf = (by: ReadonlyMap<string, number>, key: string): number | null =>
+    inputs.history.starts.length === 0 ? null : medianCents(inputs.history.starts.map((s) => by.get(`${s}|${key}`) ?? 0));
+  const usualFullOf = (key: string): number | null => medianOf(perPeriod, key);
+  const usualOf = (key: string): number | null => (through ? medianOf(perPeriodToDate, key) : usualFullOf(key));
 
   const sum = (es: readonly BreakdownEntry<T>[]): number => es.reduce((a, e) => a + e.cents, 0);
   const categories: BreakdownCategory<T>[] = [...filedByCategory.entries()].map(([key, entries]) => {
@@ -347,6 +477,7 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
       shareBp: actualCents > 0 ? Math.round((cents * 10_000) / actualCents) : null,
       count: entries.length,
       usualCents,
+      usualFullPeriodCents: usualFullOf(key),
       aboveUsualCents: usualCents == null ? null : Math.max(0, cents - usualCents),
       rows: sorted.slice(0, limit),
       truncated: sorted.length > limit,
@@ -378,9 +509,14 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
   }
 
   // ── Plan, carry-over, remaining (S6: the one left/over helper the spine reads too).
+  // (F2) Against KNOWN purchases: the owner's headline. `actual` stays the cautious figure.
   const planCents = inputs.planCents;
   const carryOverCents = inputs.carryOverCents;
-  const { remainingCents, overCents, withinPlan } = allowancePeriodFigures(planCents, carryOverCents, actualCents);
+  const { remainingCents, overCents, withinPlan } = allowancePeriodFigures(planCents, carryOverCents, knownCents);
+
+  const unresolvedSorted = [...unresolvedEntries].sort(byAmountDesc);
+  const unresolvedRowsCents = sum(unresolvedEntries);
+  const paymentsSorted = [...paymentEntries].sort(byAmountDesc);
 
   const totals = allowanceTotals(allowanceRows);
   return {
@@ -388,12 +524,30 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
     planCents,
     carryOverCents,
     actualCents,
+    knownCents,
     remainingCents,
     overCents,
     withinPlan,
+    provisional: isProvisional(unresolvedCents, planCents),
     categories,
     needsClassification,
+    unresolved: {
+      cents: unresolvedCents,
+      nettedByRefundsCents: unresolvedRowsCents - unresolvedCents,
+      count: unresolvedEntries.length,
+      rows: unresolvedSorted.slice(0, limit),
+      truncated: unresolvedSorted.length > limit,
+    },
+    excludedPayments: {
+      cents: sum(paymentEntries),
+      count: paymentEntries.length,
+      rows: paymentsSorted.slice(0, limit),
+      truncated: paymentsSorted.length > limit,
+      countsAgainstPlan: false,
+    },
     refundFloorAdjustmentCents,
+    usualBasis: through ? "same_days" : "full_period",
+    usualThrough: through,
     beside: {
       unplannedCents: totals.unplannedCents,
       weeklyCents: rule.cadence === "weekly" ? null : totals.discretionaryCents,

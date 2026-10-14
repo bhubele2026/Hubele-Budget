@@ -24,6 +24,16 @@ export interface BankingReviewBucket {
    * @nullable
    */
   differenceTotal: string | null;
+  /**
+   * (F2) Σ cash variance over the bucket's money-IN plan comparisons (positive = received more); null when none compares
+   * @nullable
+   */
+  varianceIn: string | null;
+  /**
+   * (F2) Σ cash variance over the bucket's money-OUT plan comparisons (positive = paid less); null when none compares
+   * @nullable
+   */
+  varianceOut: string | null;
   /** (unmatched) The rows by kind; null for the other buckets */
   byKind: BankingReviewKindTotals | null;
   /** (uncertain) The rows by reason; null for the other buckets */

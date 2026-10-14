@@ -1,4 +1,6 @@
-import { merchantSignature } from "../../merchantNameExtract";
+import { classifyRefund } from "@workspace/avalanche-core";
+import { memoryDirectionOf, memoryKeyOf, memoryRowDirection, merchantSignature } from "../../merchantNameExtract";
+import { isCardRow, spendTxnOf } from "../direction";
 import type { EngineContext, EngineRow, MemoryRow, StageResult } from "../types";
 
 const bySpecificity = (a: MemoryRow, b: MemoryRow): number =>
@@ -38,11 +40,38 @@ export function applicableMemory(
   );
 }
 
+/**
+ * ⭐ (F2) SIGN-AWARE: the memory rows a row may read (see `memoryKeyOf` in
+ * merchantNameExtract.ts).
+ *   - money OUT reads its plain signature's rows, leaving out a pre-F2 row
+ *     learned into an INCOME category (that one was a paycheck's);
+ *   - money IN reads its own `in:` rows; with none that applies, a pre-F2 plain
+ *     row whose category is an income one (a paycheck learned before F2) —
+ *     and, only for a REFUND (`classifyRefund`: a credit on a card, or a
+ *     REFUND word), the purchase's own memory: money back nets the category
+ *     it was spent in.
+ * A payroll credit and a same-name card purchase therefore never share one.
+ */
+export function memoryCandidates(row: EngineRow, ctx: EngineContext): { primary: MemoryRow[]; fallback: MemoryRow[] } {
+  const key = memoryKeyOf(row);
+  if (!key) return { primary: [], fallback: [] };
+  const kindOf = (m: MemoryRow) => ctx.spendCtx.categoriesById.get(m.categoryId)?.kind ?? null;
+  const plain = ctx.memoryBySignature.get(merchantSignature(row.description)) ?? [];
+  if (memoryDirectionOf(row) === "out") {
+    return { primary: plain.filter((m) => memoryRowDirection(m.signature, kindOf(m)) === "out"), fallback: [] };
+  }
+  const refund =
+    classifyRefund(spendTxnOf(row), ctx.spendCtx, { reimbursableIsSpend: true, isCardAccount: isCardRow(row, ctx.accounts) }) != null;
+  return {
+    primary: ctx.memoryBySignature.get(key) ?? [],
+    fallback: plain.filter((m) => refund || memoryRowDirection(m.signature, kindOf(m)) === "in"),
+  };
+}
+
 /** What the household taught it: 0.92 once confirmed 3+ times, else 0.75. */
 export function memoryStage(row: EngineRow, ctx: EngineContext): StageResult | null {
-  const sig = merchantSignature(row.description);
-  if (!sig) return null;
-  const m = applicableMemory(ctx.memoryBySignature.get(sig) ?? [], row);
+  const { primary, fallback } = memoryCandidates(row, ctx);
+  const m = applicableMemory(primary, row) ?? applicableMemory(fallback, row);
   if (!m) return null;
   const where =
     m.scope === "merchant_amount"

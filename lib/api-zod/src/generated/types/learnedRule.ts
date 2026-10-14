@@ -5,11 +5,14 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { LearnedRuleDirection } from "./learnedRuleDirection";
 import type { LearnedRuleScope } from "./learnedRuleScope";
 
 export interface LearnedRule {
   id: string;
   signature: string;
+  /** (F2) Merchant memory is sign-aware: a rule learned from money in (a paycheck, a refund) applies to money in only, one learned from money out to purchases only — so a paycheck and a same-name purchase never share one. */
+  direction: LearnedRuleDirection;
   scope: LearnedRuleScope;
   /** @nullable */
   plaidAccountId: string | null;

@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { lazy, Suspense, useMemo, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useGetSettings, type Spine } from "@workspace/api-client-react";
@@ -13,7 +13,8 @@ import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { useSpine } from "@/hooks/useSpine";
 import { cn } from "@/lib/utils";
 import { useDebtsQ, useLiabilityAccountsQ, useMoneyPositionQ, usePlaidItemsQ } from "./queries";
-import { dayLabel, money, PanelError, rise, weekdayLabel } from "./shared";
+import { dayLabel, money, PanelError, weekdayLabel } from "./shared";
+import { Fig, Skel, Tile, Why, leftOver, type TileStatus } from "./tileParts";
 
 /**
  * ⭐ THE SIX TILES: the home base. Each is one whole-card link (a stretched
@@ -22,107 +23,6 @@ import { dayLabel, money, PanelError, rise, weekdayLabel } from "./shared";
  * position's or the debts' own. Unknown and loading draw "—" or a skeleton,
  * never $0; "Plan not set" is never over.
  */
-
-type Tone = "ok" | "bad" | "neutral";
-type Accent = "checking" | "amex" | "other";
-
-// Literal class names so Tailwind sees them.
-const EDGE: Record<Accent, string> = {
-  checking: "border-l-acct-checking",
-  amex: "border-l-acct-amex",
-  other: "border-l-acct-other",
-};
-const CHIP: Record<Tone, string> = {
-  ok: "bg-acct-checking-bg text-brand-navy",
-  bad: "bg-bad-bg text-bad-ink",
-  neutral: "bg-platinum-3 text-neutral-600",
-};
-
-export interface TileStatus { word: string; tone: Tone }
-
-function Tile({
-  testid, title, sub, href, accent, status, children, why, index,
-}: {
-  testid: string;
-  title: string;
-  /** Account identity or one short line under the title. */
-  sub?: ReactNode;
-  href: string;
-  accent: Accent;
-  status?: TileStatus | null;
-  children: ReactNode;
-  why?: ReactNode;
-  index: number;
-}) {
-  const qc = useQueryClient();
-  return (
-    <div
-      data-testid={`tile-${testid}`}
-      className={cn(
-        "panel group span-4 relative flex min-h-[11.5rem] flex-col gap-3 border-l-4 p-4",
-        EDGE[accent],
-        "transition-[transform,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:shadow-[var(--shadow-milled-lift)] focus-within:shadow-[var(--shadow-milled-lift)]",
-        rise(index),
-      )}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="text-body font-semibold text-brand-navy">
-            <Link
-              href={href}
-              data-testid={`tile-${testid}-link`}
-              {...warmHandlers((h) => warmRoute(qc, h), href)}
-              className="rounded-control after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand-navy/50 focus-visible:after:rounded-[inherit]"
-            >
-              {title}
-            </Link>
-          </h2>
-          {sub ? <div className="mt-0.5 text-micro text-neutral-600 [overflow-wrap:anywhere]">{sub}</div> : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {status ? (
-            <span data-testid={`tile-${testid}-status`} data-tone={status.tone} className={cn("rounded-full px-2 py-0.5 text-micro font-semibold", CHIP[status.tone])}>
-              {status.word}
-            </span>
-          ) : null}
-          <span aria-hidden className="text-neutral-400 transition-transform motion-safe:group-hover:translate-x-0.5">→</span>
-        </div>
-      </div>
-      <div className="flex flex-1 flex-col gap-2">{children}</div>
-      {why ? <div className="relative z-10 text-micro text-neutral-600">{why}</div> : null}
-    </div>
-  );
-}
-
-/** One named figure. `value` null draws an em dash; `tone` bad takes the rust. */
-function Fig({ label, value, tone = "neutral", big = false, testid }: {
-  label: string; value: ReactNode; tone?: "neutral" | "bad"; big?: boolean; testid?: string;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="text-micro font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
-      <div
-        data-testid={testid}
-        className={cn("font-mono font-semibold tabular-nums", big ? "text-kpi" : "text-body", tone === "bad" ? "text-bad-ink" : "text-brand-navy")}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-const Skel = () => <span className="skeleton block h-7 w-28 rounded" aria-busy="true" />;
-
-function Why({ children }: { children: ReactNode }) {
-  return (
-    <details className="group/why">
-      <summary className="inline cursor-pointer list-none font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control">
-        Why?
-      </summary>
-      <p className="mt-1 max-w-xs">{children}</p>
-    </details>
-  );
-}
 
 // ── Banking ─────────────────────────────────────────────────────────────────
 function BankingTile({ s }: { s: Spine | undefined }) {
@@ -221,12 +121,22 @@ function AmexTile({ weekCharges }: AmexTileProps) {
 }
 
 // ── This week / This month ─────────────────────────────────────────────────
-/** left/over as one phrase: the server's remaining figure, said by sign. */
-function leftOver(remaining: number): { text: string; over: boolean } {
-  return remaining < 0 ? { text: `Over ${money(-remaining)}`, over: true } : { text: `${money(remaining)} left`, over: false };
-}
+// (F4) The week tile's headline is the KNOWN figure (period breakdown). That read
+// lives in the `features` sub-module, which the landing must not import, so the
+// tile that reads it is a lazy chunk; the spine-based tile below shows until it lands.
+const WeekKnownTile = lazy(() => import("./WeekKnownTile"));
 
 function WeekTile({ s }: { s: Spine | undefined }) {
+  const base = <WeekTileBase s={s} />;
+  if (!s) return base;
+  return (
+    <Suspense fallback={base}>
+      <WeekKnownTile s={s} base={base} />
+    </Suspense>
+  );
+}
+
+function WeekTileBase({ s }: { s: Spine | undefined }) {
   const pos = useMoneyPositionQ();
   if (!s) return <Tile testid="week" title="This week" href="/spending/week" accent="checking" index={3}><Skel /></Tile>;
   const rem = s.position.remainingWeek == null ? null : Number(s.position.remainingWeek);
@@ -258,7 +168,7 @@ function WeekTile({ s }: { s: Spine | undefined }) {
 }
 
 function MonthTile({ s }: { s: Spine | undefined }) {
-  if (!s) return <Tile testid="month" title="This month" href="/spending/month" accent="checking" index={4}><Skel /></Tile>;
+  if (!s) return <Tile testid="month" title="Monthly allowance" href="/spending/month" accent="checking" index={4}><Skel /></Tile>;
   const m = s.monthAllowance;
   const planSet = m.plan != null;
   // The server's verdict (status) picks the word; (S6) the line is the server's
@@ -269,11 +179,11 @@ function MonthTile({ s }: { s: Spine | undefined }) {
     ? { word: "Plan not set", tone: "neutral" }
     : m.status === "over" ? { word: "Over", tone: "bad" } : { word: "Within", tone: "ok" };
   return (
-    <Tile testid="month" title="This month" href="/spending/month" accent="checking" index={4} status={status}>
+    <Tile testid="month" title="Monthly allowance" href="/spending/month" accent="checking" index={4} status={status}>
       <Fig label="Spent" big testid="tile-month-spent" value={money(m.actual)} />
       {planSet ? (
         <>
-          <Fig label="Monthly allowance" value={money(m.plan)} testid="tile-month-plan" />
+          <Fig label="Plan" value={money(m.plan)} testid="tile-month-plan" />
           <div className={cn("font-mono text-body font-semibold tabular-nums", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-month-left">{lo!.text}</div>
         </>
       ) : (

@@ -236,10 +236,15 @@ export function computeAvalanchePayoffFacts(
   };
 }
 
-/** Convert DB debt rows to the simulator input shape, filtering inactive. */
-export function activeSimDebts(debts: DebtRow[]): SimInputDebt[] {
+/**
+ * Convert DB debt rows to the simulator input shape, filtering inactive.
+ * (F1) `exclude`: debts linked to a card the owner pays IN FULL — the everyday
+ * hook pays that card each period, so it is not part of the payoff population.
+ */
+export function activeSimDebts(debts: DebtRow[], opts: { exclude?: ReadonlySet<string> } = {}): SimInputDebt[] {
   const out: SimInputDebt[] = [];
   for (const d of debts) {
+    if (opts.exclude?.has(d.id)) continue;
     if ((d.status ?? "active") !== "active") continue;
     const balance = Number(d.balance) || 0;
     if (balance <= CENTS) continue;

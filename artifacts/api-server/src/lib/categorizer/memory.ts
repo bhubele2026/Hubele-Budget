@@ -3,9 +3,16 @@
 // `applyMemoryRetroactively` (an explicit request); a correction returns the
 // candidates and touches nothing else.
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { db, merchantMemoryTable, transactionsTable } from "@workspace/db";
+import { budgetCategoriesTable, db, merchantMemoryTable, transactionsTable } from "@workspace/db";
 import { isExcludedCategory } from "../excludedCategory";
-import { merchantSignature } from "../merchantNameExtract";
+import {
+  memoryDirectionOf,
+  memoryKeyOf,
+  memoryRowDirection,
+  merchantSignature,
+  parseMemoryKey,
+  type MemoryDirection,
+} from "../merchantNameExtract";
 import { toMemoryRow } from "./context";
 import type { Exec } from "./db";
 import { applicableMemory } from "./stages/memory";
@@ -17,6 +24,8 @@ export interface SigRow {
   id: string;
   description: string;
   amount: string;
+  /** (F2) Which way the money moved reads the amount's sign by source (a workbook Amex charge is positive). */
+  source: string;
   occurredOn: string;
   categoryId: string | null;
   plaidAccountId: string | null;
@@ -37,6 +46,7 @@ const SIG_ROW = {
   id: transactionsTable.id,
   description: transactionsTable.description,
   amount: transactionsTable.amount,
+  source: transactionsTable.source,
   occurredOn: transactionsTable.occurredOn,
   categoryId: transactionsTable.categoryId,
   plaidAccountId: transactionsTable.plaidAccountId,
@@ -44,13 +54,20 @@ const SIG_ROW = {
   createdAt: transactionsTable.createdAt,
 };
 
-/** Household rows whose description has this merchant signature (newest first). */
+/**
+ * Household rows whose description has this merchant signature (newest first).
+ * (F2) `signature` may be a memory key (`in:<signature>`): it is read as its
+ * plain signature. `direction` keeps only rows whose money moved that way
+ * (`memoryDirectionOf`) — memory never spans a payroll credit and a same-name
+ * purchase.
+ */
 export async function rowsWithSignature(
   exec: Exec,
   householdId: string,
-  signature: string,
-  opts: { unlockedOnly?: boolean; lockedOnly?: boolean } = {},
+  signatureOrKey: string,
+  opts: { unlockedOnly?: boolean; lockedOnly?: boolean; direction?: MemoryDirection } = {},
 ): Promise<SigRow[]> {
+  const signature = parseMemoryKey(signatureOrKey).signature;
   if (!signature) return [];
   const rows = await exec
     .select(SIG_ROW)
@@ -64,7 +81,9 @@ export async function rowsWithSignature(
       ),
     )
     .orderBy(desc(transactionsTable.occurredOn), transactionsTable.id);
-  return rows.filter((r) => merchantSignature(r.description) === signature);
+  return rows.filter(
+    (r) => merchantSignature(r.description) === signature && (!opts.direction || memoryDirectionOf(r) === opts.direction),
+  );
 }
 
 /**
@@ -105,15 +124,20 @@ export interface RetroactiveCandidates {
   sample: { id: string; occurredOn: string; description: string; amount: string; categoryId: string | null }[];
 }
 
-/** Unlocked rows of the same merchant not already in `categoryId`. Never applied here. */
+/**
+ * Unlocked rows of the same merchant not already in `categoryId`. Never applied here.
+ * (F2) Only rows whose money moved the same way as `txn`'s (sign-aware memory).
+ */
 export async function retroactiveCandidates(
   householdId: string,
-  txn: { id: string; description: string },
+  txn: { id: string; description: string; amount: string; source: string },
   categoryId: string,
   scopeFilter?: (r: SigRow) => boolean,
 ): Promise<RetroactiveCandidates> {
   const sig = merchantSignature(txn.description);
-  const rows = (await rowsWithSignature(db, householdId, sig, { unlockedOnly: true })).filter(
+  const rows = (
+    await rowsWithSignature(db, householdId, sig, { unlockedOnly: true, direction: memoryDirectionOf(txn) })
+  ).filter(
     (r) => r.id !== txn.id && r.categoryId !== categoryId && (!scopeFilter || scopeFilter(r)),
   );
   return {
@@ -201,13 +225,15 @@ export interface LearnOutcome {
 export async function learnFromChoice(
   exec: Exec,
   householdId: string,
-  txn: { id: string; description: string; amount: string; plaidAccountId: string | null },
+  txn: { id: string; description: string; amount: string; source: string; plaidAccountId: string | null },
   categoryId: string | null,
 ): Promise<LearnOutcome | null> {
   if (!categoryId) return null;
   if (await isExcludedCategory(householdId, categoryId)) return null;
-  const signature = merchantSignature(txn.description);
+  // (F2) Sign-aware: money in learns under `in:<signature>`, money out under the plain signature.
+  const signature = memoryKeyOf(txn);
   if (!signature) return null;
+  const direction = memoryDirectionOf(txn);
   const live = (
     await exec
       .select()
@@ -267,7 +293,7 @@ export async function learnFromChoice(
     }
   }
   // Two amount clusters?
-  const priors = (await rowsWithSignature(exec, householdId, signature, { lockedOnly: true })).filter(
+  const priors = (await rowsWithSignature(exec, householdId, signature, { lockedOnly: true, direction })).filter(
     (r) => r.id !== txn.id,
   );
   const bands = splitAmountBands(
@@ -322,9 +348,17 @@ export async function loadMemory(householdId: string, id: string): Promise<Memor
   return m ? { ...toMemoryRow(m), disabledAt: m.disabledAt, lastConfirmedAt: m.lastConfirmedAt, source: m.source } : null;
 }
 
-/** Ids of unlocked rows a memory row would move if applied now. */
+/**
+ * Ids of unlocked rows a memory row would move if applied now.
+ * (F2) Only rows whose money moved the memory's way (`memoryRowDirection`).
+ */
 export async function memoryRetroactiveIds(householdId: string, m: MemoryRow): Promise<SigRow[]> {
-  return (await rowsWithSignature(db, householdId, m.signature, { unlockedOnly: true })).filter(
+  const [cat] = await db
+    .select({ kind: budgetCategoriesTable.kind })
+    .from(budgetCategoriesTable)
+    .where(and(eq(budgetCategoriesTable.id, m.categoryId), eq(budgetCategoriesTable.householdId, householdId)));
+  const direction = memoryRowDirection(m.signature, cat?.kind ?? null);
+  return (await rowsWithSignature(db, householdId, m.signature, { unlockedOnly: true, direction })).filter(
     (r) => r.categoryId !== m.categoryId && memoryCovers(m, r),
   );
 }

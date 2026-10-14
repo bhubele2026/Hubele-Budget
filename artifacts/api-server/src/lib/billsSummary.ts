@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { expandItem, fmtISO, isPastOneTime, parseISO } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
+import { loadInFullDebtIds } from "./cardPayoffMode";
 import {
   buildDebtMinSchedule,
   buildAvalancheExtraRow,
@@ -314,10 +315,12 @@ export async function buildBillsSummary(
   // Build debt-min rows + figure out which recurring items are linked to a
   // debt (so we suppress them from the regular bills list to avoid double
   // counting the same payment in bills + debt minimums).
+  // (F1) A card paid in full has no minimum row: the everyday hook pays it.
   const { rows: debtMinRows, suppressedRecurringIds } = buildDebtMinSchedule(
     debts,
     items,
     today,
+    { inFullDebtIds: await loadInFullDebtIds(householdId, ownerUserId) },
   );
 
   // Synthetic "Avalanche extra payment" locked row — surfaces the slider

@@ -71,7 +71,7 @@ export const SECTIONS: Section[] = [
     href: "/spending/week",
     tabs: [
       { name: "This week", href: "/spending/week" },
-      { name: "This month", href: "/spending/month" },
+      { name: "Monthly allowance", href: "/spending/month" },
       { name: "Budget", href: "/budget" },
       { name: "Allowances", href: "/allowances" },
       { name: "Wish list", href: "/wishlist" },

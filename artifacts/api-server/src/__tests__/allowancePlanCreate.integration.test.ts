@@ -17,10 +17,12 @@
 //     this week  Plat 10/12 HEB GROCERY   −40.00 weekly
 //                Chase 10/13 SHELL OIL    −25.00 weekly
 //   Spent this week (the weekly cap's pool) 40 + 25 = 65.00.
-//   No plan: each Weekly Spend occurrence keeps the stored 380 (basis stored_amount).
+//   No plan: the open week and later ones keep the stored 380 (basis
+//   stored_amount); (F1) a closed week owes its unpaid card purchases — last
+//   week 120 (the Platinum has no debt row: paid in full).
 //   After POST weekly 380 from 10/11: this week's payoff = card charges 40 +
 //   what is left (380 − 65 = 315) = 355; next weeks 380; LAST week (no plan
-//   then) keeps the stored 380 — past weeks are untouched.
+//   then) is untouched by the plan — it still owes its 120.
 //
 // Household Q — history: a weekly plan $300 from Sun 9/27 (a fixture row, as if
 //   set two weeks ago), a monthly plan $600 from 5/1, and last week's stored
@@ -138,7 +140,7 @@ type Spine = {
 type Signal = {
   events?: Array<{ date: string; amount: string; itemId?: string | null; occurrenceKey?: string; originalDate?: string; assumption?: string | null }>;
   hookAmountIgnored?: Array<{ itemId: string; cadence: string; storedAmount: string }>;
-  hookReserves?: Array<{ hook: string; recurringItemId: string; planKey: string; occurrenceDate: string; label: string; amount: string; basis: string }>;
+  hookReserves?: Array<{ hook: string; recurringItemId: string; planKey: string; occurrenceDate: string; label: string; amount: string; basis: string; storedAmount?: string }>;
 };
 
 const week = (start: string) => `/money/period-breakdown?period=week&start=${start}`;
@@ -313,19 +315,27 @@ describe("household P — no weekly plan: 'Plan not set', and the forecast keeps
     expect(b.actual).toBe("65.00");
   });
 
-  it("the cash signal: every Weekly Spend occurrence is the stored 380 with basis stored_amount — not a plan", async () => {
+  it("the cash signal: no plan — the open and later weeks keep the stored 380 (basis stored_amount); (F1) the closed week owes its card purchases, 120", async () => {
     const sig = await get<Signal>(SIGNAL, P);
     expect(() => GetForecastCashSignalResponse.parse(sig)).not.toThrow();
     expect(sig.hookAmountIgnored).toBeUndefined();
-    for (const d of ["2026-10-10", "2026-10-17", "2026-10-24"]) {
-      expect(reserveOn(sig, d), d).toEqual({
+    // (F1) Last week (10/4 – 10/10) closed with TARGET 120 on the card unpaid: it
+    // owes that, nothing more (before F1: the stored 380). This week: HEB 40
+    // charged + 340 of the stored reserve left = 380.
+    for (const [d, amount] of [
+      ["2026-10-10", "120.00"],
+      ["2026-10-17", "380.00"],
+      ["2026-10-24", "380.00"],
+    ] as const) {
+      expect(reserveOn(sig, d), d).toMatchObject({
         hook: "weekly",
         recurringItemId: pWeeklySpend,
         planKey: `${pWeeklySpend}|${d}`,
         occurrenceDate: d,
         label: "Weekly Spend",
-        amount: "380.00",
+        amount,
         basis: "stored_amount",
+        storedAmount: "380.00",
       });
     }
     expect(sig.hookReserves!.every((r) => r.basis === "stored_amount")).toBe(true);
@@ -334,6 +344,7 @@ describe("household P — no weekly plan: 'Plan not set', and the forecast keeps
 });
 
 describe("POST /allowance-plans — the rules", () => {
+
   it("a member of the household is refused (403), and nothing is written", async () => {
     const r = await call("POST", "/allowance-plans", P_MEMBER, { period: "weekly", amount: "380", effectiveFrom: THIS_SUNDAY });
     expect(r.status).toBe(403);
@@ -409,14 +420,14 @@ describe("household P — POST weekly 380 from this Sunday (the owner's one tap)
     expect(spine.position.withinPlan).toBe(pos.withinPlan);
   });
 
-  it("⭐ the forecast hook is now card charges + what is left (basis plan): 40 + 315 = 355; later weeks 380; LAST week keeps the stored 380", async () => {
+  it("⭐ the forecast hook is now card charges + what is left (basis plan): 40 + 315 = 355; later weeks 380; LAST week (no plan then) owes its card purchases, 120", async () => {
     const sig = await get<Signal>(SIGNAL, P);
     expect(() => GetForecastCashSignalResponse.parse(sig)).not.toThrow();
     expect(reserveOn(sig, "2026-10-17")).toMatchObject({ amount: "355.00", basis: "plan", label: "Weekly Spend" });
     expect(hookEventOn(sig, "2026-10-17")?.amount).toBe("-355.00");
     expect(reserveOn(sig, "2026-10-24")).toMatchObject({ amount: "380.00", basis: "plan" });
-    // Past weeks are untouched: last week had no plan, so it still reserves the stored amount.
-    expect(reserveOn(sig, "2026-10-10")).toMatchObject({ amount: "380.00", basis: "stored_amount" });
+    // Past weeks are untouched: last week had no plan (basis stored_amount); (F1) closed, it owes its unpaid card purchases.
+    expect(reserveOn(sig, "2026-10-10")).toMatchObject({ amount: "120.00", basis: "stored_amount" });
     expect(sig.hookAmountIgnored).toEqual([{ itemId: pWeeklySpend, cadence: "weekly", storedAmount: "380.00" }]);
   });
 

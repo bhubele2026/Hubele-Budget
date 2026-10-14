@@ -7,6 +7,7 @@
  */
 import type { AmexSummaryCardBrand } from "./amexSummaryCardBrand";
 import type { AmexSummaryCardCadence } from "./amexSummaryCardCadence";
+import type { AmexSummaryCardPayoffMode } from "./amexSummaryCardPayoffMode";
 import type { AmexSummaryTotal } from "./amexSummaryTotal";
 
 export interface AmexSummaryCard {
@@ -29,6 +30,8 @@ export interface AmexSummaryCard {
    * @nullable
    */
   owed: string | null;
+  /** (F1) How the card is paid. `mode` null = not chosen yet (the hook bills it like in_full meanwhile, and plans are paused); `source` says whether the owner chose it or it is the default from the card's debt row. A card on the debt plan answers to its debt (`planLink`); a card paid in full answers to its hook. */
+  payoffMode?: AmexSummaryCardPayoffMode;
   /** (P3) This card's purchases over the period: the same rows and rule as the top-level `purchases` of this card's own summary (?accountId=<this card>), so the card band needs one "all" call. With "all", the cards' purchases add up to the top-level `purchases`. */
   purchases: AmexSummaryTotal;
 }

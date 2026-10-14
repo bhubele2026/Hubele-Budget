@@ -89,6 +89,12 @@ export function buildDebtMinSchedule(
   debts: DebtRow[],
   recurring: RecurringRow[],
   today: Date,
+  /**
+   * (F1) Debts linked to a card the owner pays IN FULL (`cardPayoffMode.ts`):
+   * the hook pays the card, so no minimum row is built for them — as when a
+   * recurring bill is linked to the debt, except that nothing stands in.
+   */
+  opts: { inFullDebtIds?: ReadonlySet<string> } = {},
 ): {
   rows: DebtMinRow[];
   suppressedRecurringIds: Set<string>;
@@ -106,6 +112,7 @@ export function buildDebtMinSchedule(
   const rows: DebtMinRow[] = [];
   const suppressed = new Set<string>();
   for (const d of debts) {
+    if (opts.inFullDebtIds?.has(d.id)) continue;
     const isActive = activeDebt(d);
     const justPaidOff = !isActive && justPaidOffDebt(d, today);
     if (!isActive && !justPaidOff) continue;
@@ -153,6 +160,8 @@ export function expandDebtMin(
   linked: RecurringRow | null,
   from: Date,
   to: Date,
+  /** (F1) The debt is linked to a card the owner pays IN FULL: the everyday hook pays it. */
+  opts: { inFull?: boolean } = {},
 ): CashEvent[] {
   if (!activeDebt(debt)) return [];
   // If a recurring item is explicitly linked to this debt, the recurring
@@ -160,6 +169,9 @@ export function expandDebtMin(
   // that recurring item in the events list (and not also emit synthetic
   // debt-min events for the same debt).
   if (linked) return [];
+  // (F1) The same for a card paid in full: the hook's payment is the cash flow,
+  // and a minimum on top would count the card twice.
+  if (opts.inFull) return [];
   const day = debt.dueDay && debt.dueDay >= 1 && debt.dueDay <= 31
     ? debt.dueDay
     : 1;
@@ -239,9 +251,11 @@ export function expandAvalancheExtra(
   from: Date,
   to: Date,
   today: Date,
+  /** (F1) Debts of cards paid IN FULL stay out of the simulation (the hook pays them). */
+  opts: { inFullDebtIds?: ReadonlySet<string> } = {},
 ): CashEvent[] {
   if (!Number.isFinite(manualExtra) || manualExtra <= 0.005) return [];
-  const sim = activeSimDebts(debts);
+  const sim = activeSimDebts(debts, { exclude: opts.inFullDebtIds });
   if (sim.length === 0) return [];
   const months = monthsUntilAvalanchePayoff(sim, manualExtra);
   // months === null → never converges within MAX_MONTHS (e.g. underwater
@@ -311,6 +325,8 @@ export function resolutionScheduleLookup(
   recurring: RecurringRow[],
   debts: DebtRow[],
   linkedRecurringByDebt: Map<string, RecurringRow>,
+  /** (F1) Debts of cards paid IN FULL have no minimum schedule. */
+  opts: { inFullDebtIds?: ReadonlySet<string> } = {},
 ): (itemId: string) => ResolutionSchedule | null {
   const recurringById = new Map(recurring.map((r) => [r.id, r] as const));
   const debtById = new Map(debts.map((d) => [d.id, d] as const));
@@ -323,7 +339,8 @@ export function resolutionScheduleLookup(
     const d = debtById.get(itemId.slice("debt:".length));
     if (!d) return null;
     const linked = linkedRecurringByDebt.get(d.id) ?? null;
-    return { cadence: "monthly", occurrences: (from, to) => expandDebtMin(d, linked, from, to).map((e) => e.date) };
+    const inFull = opts.inFullDebtIds?.has(d.id) === true;
+    return { cadence: "monthly", occurrences: (from, to) => expandDebtMin(d, linked, from, to, { inFull }).map((e) => e.date) };
   };
 }
 

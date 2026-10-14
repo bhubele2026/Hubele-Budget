@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Info } from "lucide-react";
 import {
   useGetForecastBankBalanceExplain,
@@ -30,7 +30,9 @@ const Body = lazy(() => import("./bank-balance-why-body"));
  * server reads them a moment apart, so they stay separate lines, and a note says
  * so whenever they don't add up to the cent.
  */
-export function BankBalanceWhy() {
+// (F4) `trigger` replaces the corner icon with the caller's own button (the
+// Banking review's "Investigate"); the popover and its body are the same.
+export function BankBalanceWhy({ trigger }: { trigger?: ReactNode } = {}) {
   const [open, setOpen] = useState(false);
   const query = useGetForecastBankBalanceExplain({
     query: {
@@ -43,6 +45,7 @@ export function BankBalanceWhy() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
+        {trigger ?? (
         <button
           type="button"
           className="tile-in press absolute right-1 top-1 rounded-control p-1 text-neutral-500 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40"
@@ -52,6 +55,7 @@ export function BankBalanceWhy() {
         >
           <Info className="h-4 w-4" />
         </button>
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-80 p-3" align="end" data-testid="bank-why">
         <Suspense fallback={<p className="text-micro text-neutral-500" data-testid="bank-why-chunk">Loading…</p>}>

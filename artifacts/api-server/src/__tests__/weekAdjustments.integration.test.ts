@@ -228,10 +228,13 @@ describe("GET /money/ways-back — the fixture week (cap 300, spent 340)", () =>
       daysLeft: 4,
       hold: { perDay: 0, leavesUntilPayday: 250000 },
       trims: [
-        { categoryId: DINING, name: expect.stringMatching(/^Dining/), spentWeek: 18000, usualWeek: 8500 },
-        { categoryId: GROCERIES, name: expect.stringMatching(/^Groceries/), spentWeek: 12000, usualWeek: 0 },
-        { categoryId: FUN, name: expect.stringMatching(/^Fun/), spentWeek: 4000, usualWeek: 0 },
+        // (F3) Read to Wednesday: the Saturday 10/3 dinner (100.01) waits for Saturday → 7,500; whole weeks 8,500.
+        { categoryId: DINING, name: expect.stringMatching(/^Dining/), spentWeek: 18000, usualWeek: 7500, usualFullWeek: 8500 },
+        { categoryId: GROCERIES, name: expect.stringMatching(/^Groceries/), spentWeek: 12000, usualWeek: 0, usualFullWeek: 0 },
+        { categoryId: FUN, name: expect.stringMatching(/^Fun/), spentWeek: 4000, usualWeek: 0, usualFullWeek: 0 },
       ],
+      usualBasis: "same_days",
+      usualThrough: "2026-10-07",
       carryOver: { nextWeekStart: "2026-10-11", nextWeekCap: 26000, applied: false, adjustment: null },
     });
     // The trims never exceed what counts against the cap.

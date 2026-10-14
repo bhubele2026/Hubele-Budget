@@ -252,6 +252,8 @@ describe("findSupersededPendingForRange — the whole-ledger answer inside the r
         // (PR-A) The pending row's lock travels with its category.
         categoryLockedByUser: false,
       },
+      // (F2) Its Plaid categories ride along as evidence (never filing); this row has none.
+      pfc: { pfcPrimary: null, pfcDetailed: null },
     });
   });
 });

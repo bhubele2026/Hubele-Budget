@@ -59,7 +59,17 @@ describe("placeBankReviewRow — first matching rule wins", () => {
     // A partial is a difference whatever it paid.
     expect(where(confirmed(-120, "2026-10-05", "partial"))).toBe("amountDifference partial confirmed");
     const p = placeBankReviewRow(confirmed(-135.4));
-    expect(p.plan).toEqual({ ...plan(-120), difference: 15.4, dayDelta: 0 });
+    // (F2) The cash variance beside the old difference: paid $15.40 more than planned is $15.40 LESS cash.
+    expect(p.plan).toEqual({
+      ...plan(-120),
+      difference: 15.4,
+      dayDelta: 0,
+      direction: "out",
+      expected: 120,
+      actual: 135.4,
+      variance: -15.4,
+      varianceKind: "over_planned",
+    });
   });
 
   it("rule 1: a confirmed row whose plan the ledger did not load is as planned, on the household's word", () => {

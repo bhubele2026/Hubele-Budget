@@ -35,6 +35,12 @@ export interface HookPayoffLine {
   basis: "plan" | "stored_amount" | null;
   /** (S2) The hook item's name ("Weekly Spend"), when the signal names it. */
   label: string | null;
+  /**
+   * (F4) What the reserve is made of, the server's strings (`hookReserves[]`): card purchases
+   * made (`incurred`), carried from an earlier unpaid period, and what is left to spend.
+   * Null when the signal does not say.
+   */
+  parts: { incurred: string; carried: string; left: string } | null;
 }
 
 type HookSignal = Pick<CashSignal, "events" | "hookAmountIgnored" | "overdueAssumedPaid" | "hookReserves">;
@@ -55,7 +61,9 @@ export function hookPayoffsOf(
   const reserves = new Map((signal?.hookReserves ?? []).map((r) => [r.planKey, r]));
   const hooks = new Map<string, { cadence: "weekly" | "monthly"; storedAmount: string }>();
   for (const r of signal?.hookReserves ?? []) {
-    if (r.basis === "stored_amount" && !hooks.has(r.recurringItemId)) hooks.set(r.recurringItemId, { cadence: r.hook, storedAmount: r.amount });
+    // (F1) A no-plan occurrence's `amount` is no longer always the stored amount
+    // (a closed week reserves its unpaid purchases); the server says it apart.
+    if (r.basis === "stored_amount" && !hooks.has(r.recurringItemId)) hooks.set(r.recurringItemId, { cadence: r.hook, storedAmount: r.storedAmount ?? r.amount });
   }
   for (const h of signal?.hookAmountIgnored ?? []) hooks.set(h.itemId, h);
   if (hooks.size === 0) return out;
@@ -72,6 +80,7 @@ export function hookPayoffsOf(
         paidOnEvidence: null,
         basis: r?.basis ?? null,
         label: r?.label || null,
+        parts: r && r.basis === "plan" && r.incurred != null && r.allowanceLeft != null ? { incurred: r.incurred, carried: r.carried ?? "0.00", left: r.allowanceLeft } : null,
       };
       out.set(planKey, line);
     }
@@ -110,6 +119,12 @@ export function hookPayoffWords(line: HookPayoffLine): string {
   }
   if (line.basis === "stored_amount") {
     return `${line.label ?? "Spend"} reserve ${planMoney(line.plan)} · ${noPlan}`;
+  }
+  // (F4) With a plan: the three things the reserve is made of, in the owner's words.
+  if (line.parts) {
+    const p = line.parts;
+    const carried = Math.round(Number(p.carried) * 100) !== 0 ? ` (+ carried ${money(Number(p.carried))})` : "";
+    return `${line.label ?? (line.cadence === "weekly" ? "Weekly Spend" : "Monthly Spend")}: card purchases ${money(Number(p.incurred))}${carried} + left to spend ${money(Number(p.left))}`;
   }
   return line.payoff === null
     ? `card payoff · plan ${planMoney(line.plan)}`

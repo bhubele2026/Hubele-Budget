@@ -16,10 +16,12 @@ import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries, accountViewOf } from "@/pages/next/accounts/entries";
 import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { Help, input } from "@/ui";
+import { BalanceCheck } from "./banking/BalanceCheck";
 import { BucketRows } from "./banking/BucketRows";
+import { ProposedFixes } from "./banking/ProposedFixes";
 import { PRESETS, isDay, presetOf, presetRange, rangeWords, sanitizeRange } from "./banking/reviewDates";
 import { bankingBase, bankingSummaryParams } from "./banking/reviewParams";
-import { BUCKETS, KIND_ORDER, KIND_WORDS, dayWords, fateWords, isBucketName, isKind } from "./banking/words";
+import { BUCKETS, KIND_ORDER, KIND_WORDS, dayWords, fateWords, isBucketName, isKind, sideWords, signedCash } from "./banking/words";
 
 /**
  * (W3) ⭐ BANKING › REVIEW — "what wasn't in the plan?" for ONE bank account.
@@ -50,34 +52,15 @@ const CELL_VALUE = "mt-1 font-mono text-display font-semibold tabular-nums text-
 const face = (v: string | null | undefined) => (v == null || v === "" ? "—" : formatCurrency(v));
 const cents = (v: string | null | undefined) => (v == null ? 0 : Math.round(Number(v) * 100));
 
-function BalanceCheck({ tie }: { tie: BankingReview["balanceTie"] }) {
-  const when = tie.checkedAt ? formatRelativeTime(tie.checkedAt) : "";
-  if (tie.status === "ties") {
-    return (
-      <>
-        <div className="mt-1.5"><span className="chip ok" data-testid="br-tie">Ties to bank</span></div>
-        {when ? <div className="mt-1 text-micro text-neutral-500">Checked {when}</div> : null}
-      </>
-    );
-  }
-  if (tie.status === "drift") {
-    const off = tie.unexplained == null ? null : formatCurrency(Math.abs(Number(tie.unexplained)));
-    return (
-      <>
-        <div className="mt-1.5"><span className="chip bad" data-testid="br-tie">{off ? `Off by ${off}` : "Off from bank"}</span></div>
-        {when ? <div className="mt-1 text-micro text-neutral-500">Checked {when}</div> : null}
-      </>
-    );
-  }
-  return (
-    <>
-      <div className="mt-1.5"><span className="chip gray" data-testid="br-tie">Not checked yet</span></div>
-      <div className="mt-1 text-micro text-neutral-500">A Sync on the register checks it.</div>
-    </>
-  );
-}
-
 function BucketCard({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)[number]; bucket: BankingReviewBucket; selected: boolean; onPick: () => void }) {
+  // (F4) Money in and money out are compared apart: never one ambiguous net.
+  const sides = [
+    { side: "in" as const, v: bucket.varianceIn },
+    { side: "out" as const, v: bucket.varianceOut },
+  ].flatMap((x) => {
+    const words = sideWords(x.side, x.v);
+    return words && x.v != null ? [{ ...x, words }] : [];
+  });
   return (
     <button
       type="button"
@@ -90,9 +73,22 @@ function BucketCard({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)
       )}
     >
       <div className="text-label font-semibold text-brand-navy">{meta.title}</div>
+      {sides.length ? (
+        <ul className="mt-1 space-y-0.5" data-testid={`br-sides-${meta.name}`}>
+          {sides.map((x) => (
+            <li key={x.side} className="text-label" data-testid={`br-side-${meta.name}-${x.side}`}>
+              <span className="block font-semibold text-brand-ink">{x.words}</span>
+              <span className="block font-mono text-micro tabular-nums text-neutral-600">{signedCash(x.v!)} cash</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="mt-1 flex items-baseline justify-between gap-2">
         <span className="font-mono text-title font-semibold tabular-nums text-brand-ink" data-testid={`br-count-${meta.name}`}>{bucket.count}</span>
-        <span className="font-mono text-label tabular-nums text-neutral-600" data-testid={`br-net-${meta.name}`}>{formatCurrency(bucket.net)}</span>
+        {/* On a variance card the full amount is context, never the difference: label it. */}
+        <span className={cn("font-mono tabular-nums text-neutral-600", sides.length ? "text-micro" : "text-label")} data-testid={`br-net-${meta.name}`}>
+          {sides.length ? `${formatCurrency(bucket.net)} total moved` : formatCurrency(bucket.net)}
+        </span>
       </div>
       <div className="mt-1 text-micro text-neutral-500">{meta.line}</div>
     </button>
@@ -105,6 +101,7 @@ export default function BankingReviewPage() {
   const [fromParam, setFrom] = useUrlState<string>("from", dayCodec, "");
   const [toParam, setTo] = useUrlState<string>("to", dayCodec, "");
   const [bucketParam, setBucket] = useUrlState<string>("bucket", str, "");
+  const [fixesParam] = useUrlState<string>("fixes", str, "");
   const [kindParam, setKind] = useUrlState<string>("kind", str, "");
   const [cursors, setCursors] = useState<string[]>([]);
   const [rowsKey, setRowsKey] = useState("");
@@ -165,7 +162,10 @@ export default function BankingReviewPage() {
   const hrefOf = (r: BankingReviewRow): string | null =>
     txnRoute({ id: r.id, occurredOn: r.date, plaidAccountId: ext, source: null }, entries, { entriesKnown }).href;
 
-  const unexplained = d ? cents(d.reconciliation.unexplained) !== 0 || d.reconciliation.rowsUnexplained !== 0 : false;
+  // Rows the review could not place in a bucket (kept apart from the balance check).
+  const checkMonth = d?.balanceCheck.checkedAt ? `${d.balanceCheck.checkedAt.slice(0, 7)}-01` : null;
+  const registerHref = accountId && checkMonth ? `/transactions?account=${encodeURIComponent(accountId)}&month=${checkMonth}` : null;
+  const unplaced = d ? cents(d.reconciliation.unexplained) !== 0 || d.reconciliation.rowsUnexplained !== 0 : false;
   const syncedWords = d?.account.lastSyncedAt ? `Synced ${formatRelativeTime(d.account.lastSyncedAt)}` : d ? "Not synced yet" : "";
   const needsOwnSync = !!d && d.account.id != null && !/chase|american express|amex/i.test(d.account.institution ?? "");
   const activePreset = presetOf(range, today);
@@ -254,7 +254,7 @@ export default function BankingReviewPage() {
                 Balance check
                 <Help>Compares the bank's own balance with H2's ledger at the last Sync.</Help>
               </div>
-              <BalanceCheck tie={d.balanceTie} />
+              <BalanceCheck check={d.balanceCheck} registerHref={registerHref} />
             </div>
             <div className={cn(CELL, "col-span-2 lg:col-span-1")} data-testid="br-inbox-cell">
               <div className={CELL_LABEL}>
@@ -269,9 +269,9 @@ export default function BankingReviewPage() {
             </div>
           </div>
 
-          {unexplained ? (
-            <div className="rounded-card bg-bad-bg px-4 py-2.5 text-body text-bad ring-1 ring-bad/15" role="status" data-testid="br-unexplained">
-              Some rows couldn't be placed: {formatCurrency(d.reconciliation.unexplained)}
+          {unplaced ? (
+            <div className="rounded-card bg-bad-bg px-4 py-2.5 text-body text-bad ring-1 ring-bad/15" role="status" data-testid="br-unplaced">
+              H2 could not place some rows: {formatCurrency(d.reconciliation.unexplained)}
             </div>
           ) : null}
 
@@ -377,6 +377,8 @@ export default function BankingReviewPage() {
               </p>
             )}
           </details>
+
+          <ProposedFixes defaultOpen={fixesParam === "1"} />
 
           {d.household ? (
             <section className="surface rounded-card px-4 py-3 ring-1 ring-brand-line" data-testid="br-household">

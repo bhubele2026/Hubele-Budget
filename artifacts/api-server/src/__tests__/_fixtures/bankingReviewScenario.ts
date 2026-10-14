@@ -182,12 +182,31 @@ export const EXPECTED_OCTOBER: Partial<Record<RowKey, string>> = {
 /** October 1–14 by hand (see the header). */
 export const OCTOBER_TOTALS = {
   cashFlow: { moneyIn: "2425.00", moneyOut: "2219.19", net: "205.81", count: 23, pendingNet: "-6.50", supersededExcluded: 1, otherExcluded: 0 },
-  asPlanned: { count: 3, net: "1904.51", pendingNet: "0.00", withoutPlanDetail: 0 },
+  // (F2) Every as-planned row paid its plan exactly: variance 0.00 on each side.
+  asPlanned: { count: 3, net: "1904.51", pendingNet: "0.00", withoutPlanDetail: 0, varianceIn: "0.00", varianceOut: "0.00" },
   amountDifference: { count: 4, moneyIn: "0.00", moneyOut: "643.40", net: "-643.40", pendingNet: "0.00", differenceTotal: "233.40" },
   timingDifference: { count: 1, moneyIn: "0.00", moneyOut: "40.00", net: "-40.00", pendingNet: "0.00" },
   confirmedUnplanned: { count: 3, moneyIn: "0.00", moneyOut: "132.50", net: "-132.50", pendingNet: "0.00" },
   uncertain: { count: 2, moneyIn: "0.00", moneyOut: "145.00", net: "-145.00", pendingNet: "0.00" },
   unmatched: { count: 9, moneyIn: "425.00", moneyOut: "1162.80", net: "-737.80", pendingNet: "-6.50" },
+} as const;
+
+/**
+ * (F2) The cash variance per bucket, October 1–14 — row − plan, both signed:
+ * positive = more cash than planned. Money in and money out kept apart.
+ *   amountDifference  out: electric −15.40 + insurance (partial) +50.00 +
+ *                     Capital One −260.00 + water −8.00 = −233.40 (the
+ *                     direction-blind differenceTotal is +233.40); nothing in
+ *   timingDifference  out: gym 0.00
+ *   uncertain         out: Internet (needs review) 0.00 + Lawn (suggested) 0.00
+ *   confirmedUnplanned, unmatched: no plan to compare → null
+ */
+export const OCTOBER_VARIANCE = {
+  amountDifference: { varianceIn: null, varianceOut: "-233.40" },
+  timingDifference: { varianceIn: null, varianceOut: "0.00" },
+  confirmedUnplanned: { varianceIn: null, varianceOut: null },
+  uncertain: { varianceIn: null, varianceOut: "0.00" },
+  unmatched: { varianceIn: null, varianceOut: null },
 } as const;
 
 /** The plan occurrences due October 1–14: "<due> <label> <fate> <planned> ← <row amount on date>". */

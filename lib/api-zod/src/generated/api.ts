@@ -4464,11 +4464,80 @@ export const GetForecastResponse = zod.object({
               label: zod.string().describe("The hook item's name"),
               amount: zod.string(),
               basis: zod.enum(["plan", "stored_amount"]),
+              storedAmount: zod
+                .string()
+                .optional()
+                .describe(
+                  "(F1) The hook item's stored amount (the no-plan reserve)",
+                ),
+              incurred: zod
+                .string()
+                .optional()
+                .describe(
+                  "(F1) Its own period's in_full purchases − refunds still unpaid",
+                ),
+              paid: zod
+                .string()
+                .optional()
+                .describe(
+                  "(F1) Payments allocated to its own period (oldest obligation first)",
+                ),
+              carried: zod
+                .string()
+                .optional()
+                .describe("(F1) Earlier unpaid periods carried into it"),
+              carriedFrom: zod
+                .array(
+                  zod.object({
+                    occurrenceDate: zod.string(),
+                    periodStart: zod.string(),
+                    periodEnd: zod.string(),
+                    amount: zod.string(),
+                  }),
+                )
+                .optional()
+                .describe("(F1) The occurrences carried in, oldest first"),
+              carriedTo: zod
+                .string()
+                .nullish()
+                .describe(
+                  "(F1) The occurrence date its unpaid part was carried into",
+                ),
+              allowanceLeft: zod
+                .string()
+                .optional()
+                .describe(
+                  "(F1) What is left of the period's allowance (the plan's, or the stored reserve's)",
+                ),
+              cards: zod
+                .array(
+                  zod.object({
+                    accountId: zod.string(),
+                    name: zod.string().nullable(),
+                    mask: zod.string().nullable(),
+                    mode: zod
+                      .union([
+                        zod.literal("in_full"),
+                        zod.literal("debt_plan"),
+                        zod.literal(null),
+                      ])
+                      .nullable(),
+                    amount: zod
+                      .string()
+                      .describe(
+                        "Its own period's purchases − refunds, before payments",
+                      ),
+                  }),
+                )
+                .optional()
+                .describe(
+                  "(F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds",
+                ),
             }),
           )
           .optional()
           .describe(
-            "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n",
+            "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n\n⭐ (F1, owner's answers 2026-10-14) THE OBLIGATIONS MODEL. Each\noccurrence is `incurred + carried + allowanceLeft` on the curve:\n`incurred` = its own period's purchases − refunds on the cards paid\nIN FULL at its cadence (debt-linked or not; never a DEBT-PLAN card's —\nits minimum pays it) less the payments allocated to it (`paid`);\n`carried` = earlier periods' unpaid in_full purchases, moved into the\nlatest occurrence already due (`carriedFrom` \/ `carriedTo`);\n`allowanceLeft` = with a plan max(0, cap − spent) while open; with no\nplan the stored amount less the period's purchases, never below 0; 0\nonce closed. `amount` = incurred + paid + carried + allowanceLeft (an\noccurrence carried on: paid + allowanceLeft), so summed over the\nreserves every obligation counts once; the curve holds `amount −\npaid`. The F1 fields are always sent by an F1 server.\n",
           ),
         overdueOutsideForecast: zod
           .array(
@@ -4877,11 +4946,78 @@ export const GetForecastCashSignalResponse = zod.object({
         label: zod.string().describe("The hook item's name"),
         amount: zod.string(),
         basis: zod.enum(["plan", "stored_amount"]),
+        storedAmount: zod
+          .string()
+          .optional()
+          .describe("(F1) The hook item's stored amount (the no-plan reserve)"),
+        incurred: zod
+          .string()
+          .optional()
+          .describe(
+            "(F1) Its own period's in_full purchases − refunds still unpaid",
+          ),
+        paid: zod
+          .string()
+          .optional()
+          .describe(
+            "(F1) Payments allocated to its own period (oldest obligation first)",
+          ),
+        carried: zod
+          .string()
+          .optional()
+          .describe("(F1) Earlier unpaid periods carried into it"),
+        carriedFrom: zod
+          .array(
+            zod.object({
+              occurrenceDate: zod.string(),
+              periodStart: zod.string(),
+              periodEnd: zod.string(),
+              amount: zod.string(),
+            }),
+          )
+          .optional()
+          .describe("(F1) The occurrences carried in, oldest first"),
+        carriedTo: zod
+          .string()
+          .nullish()
+          .describe(
+            "(F1) The occurrence date its unpaid part was carried into",
+          ),
+        allowanceLeft: zod
+          .string()
+          .optional()
+          .describe(
+            "(F1) What is left of the period's allowance (the plan's, or the stored reserve's)",
+          ),
+        cards: zod
+          .array(
+            zod.object({
+              accountId: zod.string(),
+              name: zod.string().nullable(),
+              mask: zod.string().nullable(),
+              mode: zod
+                .union([
+                  zod.literal("in_full"),
+                  zod.literal("debt_plan"),
+                  zod.literal(null),
+                ])
+                .nullable(),
+              amount: zod
+                .string()
+                .describe(
+                  "Its own period's purchases − refunds, before payments",
+                ),
+            }),
+          )
+          .optional()
+          .describe(
+            "(F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds",
+          ),
       }),
     )
     .optional()
     .describe(
-      "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n",
+      "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n\n⭐ (F1, owner's answers 2026-10-14) THE OBLIGATIONS MODEL. Each\noccurrence is `incurred + carried + allowanceLeft` on the curve:\n`incurred` = its own period's purchases − refunds on the cards paid\nIN FULL at its cadence (debt-linked or not; never a DEBT-PLAN card's —\nits minimum pays it) less the payments allocated to it (`paid`);\n`carried` = earlier periods' unpaid in_full purchases, moved into the\nlatest occurrence already due (`carriedFrom` \/ `carriedTo`);\n`allowanceLeft` = with a plan max(0, cap − spent) while open; with no\nplan the stored amount less the period's purchases, never below 0; 0\nonce closed. `amount` = incurred + paid + carried + allowanceLeft (an\noccurrence carried on: paid + allowanceLeft), so summed over the\nreserves every obligation counts once; the curve holds `amount −\npaid`. The F1 fields are always sent by an F1 server.\n",
     ),
   overdueOutsideForecast: zod
     .array(
@@ -5811,6 +5947,94 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
     .describe(
       "(S5) Additive. The Amex cards tracked as a debt, which `cards` leaves out (they are paid through the payoff plan, not the band), so the Amex page can still list them. Identity only; `cards` and the combined totals are unchanged. Always sent.",
     ),
+  payoffModes: zod
+    .array(
+      zod.object({
+        accountId: zod.string().describe("The card's Plaid account_id"),
+        name: zod.string().nullable(),
+        mask: zod.string().nullable(),
+        cadence: zod.enum(["weekly", "monthly"]),
+        mode: zod
+          .union([
+            zod.literal("in_full"),
+            zod.literal("debt_plan"),
+            zod.literal(null),
+          ])
+          .nullable()
+          .describe("null = not chosen yet (plans are paused)"),
+        source: zod.enum(["explicit", "default"]),
+        reason: zod
+          .enum([
+            "set_by_owner",
+            "no_debt",
+            "debt_not_active",
+            "debt_active",
+            "debt_terms_missing",
+            "debt_plan_without_active_debt",
+          ])
+          .describe(
+            "(F1) Why the card is paid that way: set_by_owner; no_debt \/ debt_not_active (default in_full: no debt row, or none active — archived, paid, zero balance); debt_active (default debt_plan: an active debt with an APR or a minimum); debt_terms_missing (unresolved: an active debt with neither); debt_plan_without_active_debt (unresolved: the owner chose debt_plan but no active revolving debt would pay it).",
+          ),
+        debtId: zod
+          .string()
+          .nullable()
+          .describe("The linked debt the answer read"),
+      }),
+    )
+    .optional()
+    .describe(
+      "(F1) Additive. How every discovered Amex card is paid (in full by the everyday hook, or on the debt plan), and whether the owner chose it. `cards` and the combined totals are unchanged.",
+    ),
+});
+
+/**
+ * Stored in settings.preferences.amexCardPayoffMode (server-owned: a settings save never writes or clears it). `null` clears the choice and the default from the card's debt row applies (no active debt → in_full; an active debt with an APR or a minimum → debt_plan). Answers the card's resolved mode.
+ * @summary (F1) Say how one Amex card is paid — in full by the everyday hook, or on the debt plan (household owner only)
+ */
+export const SetAmexCardPayoffModeParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const SetAmexCardPayoffModeBody = zod.object({
+  mode: zod
+    .union([
+      zod.literal("in_full"),
+      zod.literal("debt_plan"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe(
+      "in_full | debt_plan; null clears the owner's choice (the default applies)",
+    ),
+});
+
+export const SetAmexCardPayoffModeResponse = zod.object({
+  accountId: zod.string().describe("The card's Plaid account_id"),
+  name: zod.string().nullable(),
+  mask: zod.string().nullable(),
+  cadence: zod.enum(["weekly", "monthly"]),
+  mode: zod
+    .union([
+      zod.literal("in_full"),
+      zod.literal("debt_plan"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("null = not chosen yet (plans are paused)"),
+  source: zod.enum(["explicit", "default"]),
+  reason: zod
+    .enum([
+      "set_by_owner",
+      "no_debt",
+      "debt_not_active",
+      "debt_active",
+      "debt_terms_missing",
+      "debt_plan_without_active_debt",
+    ])
+    .describe(
+      "(F1) Why the card is paid that way: set_by_owner; no_debt \/ debt_not_active (default in_full: no debt row, or none active — archived, paid, zero balance); debt_active (default debt_plan: an active debt with an APR or a minimum); debt_terms_missing (unresolved: an active debt with neither); debt_plan_without_active_debt (unresolved: the owner chose debt_plan but no active revolving debt would pay it).",
+    ),
+  debtId: zod.string().nullable().describe("The linked debt the answer read"),
 });
 
 /**
@@ -5887,6 +6111,33 @@ export const GetAmexSummaryResponse = zod.object({
             .nullable()
             .describe(
               "This card's own current balance (GET \/amex\/anchor?accountId=); null = unknown, never 0",
+            ),
+          payoffMode: zod
+            .object({
+              mode: zod
+                .union([
+                  zod.literal("in_full"),
+                  zod.literal("debt_plan"),
+                  zod.literal(null),
+                ])
+                .nullable(),
+              source: zod.enum(["explicit", "default"]),
+              reason: zod
+                .enum([
+                  "set_by_owner",
+                  "no_debt",
+                  "debt_not_active",
+                  "debt_active",
+                  "debt_terms_missing",
+                  "debt_plan_without_active_debt",
+                ])
+                .describe(
+                  "(F1) Why the card is paid that way: set_by_owner; no_debt \/ debt_not_active (default in_full: no debt row, or none active — archived, paid, zero balance); debt_active (default debt_plan: an active debt with an APR or a minimum); debt_terms_missing (unresolved: an active debt with neither); debt_plan_without_active_debt (unresolved: the owner chose debt_plan but no active revolving debt would pay it).",
+                ),
+            })
+            .optional()
+            .describe(
+              "(F1) How the card is paid. `mode` null = not chosen yet (the hook bills it like in_full meanwhile, and plans are paused); `source` says whether the owner chose it or it is the default from the card's debt row. A card on the debt plan answers to its debt (`planLink`); a card paid in full answers to its hook.",
             ),
           purchases: zod
             .object({
@@ -7939,9 +8190,18 @@ export const ListAllowancePlansResponse = zod.object({
 });
 
 /**
- * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import.
+ * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import. (F1) With `dryRun=1` nothing is written: the answer is an AllowancePlanDryRun.
  * @summary Set the household's weekly or monthly plan from this period on (household owner only)
  */
+export const CreateAllowancePlanQueryParams = zod.object({
+  dryRun: zod
+    .enum(["1", "true"])
+    .optional()
+    .describe(
+      '(F1) \"1\" (or \"true\") — show the plan\'s effect on the forecast; write nothing',
+    ),
+});
+
 export const createAllowancePlanBodyAmountRegExp = new RegExp(
   "^\\d{1,8}(\\.\\d{1,2})?$",
 );
@@ -7961,79 +8221,165 @@ export const CreateAllowancePlanBody = zod.object({
     .describe("A Sunday (weekly) or the 1st (monthly), this period or later"),
 });
 
-export const CreateAllowancePlanResponse = zod
-  .object({
-    id: zod.string(),
-    memberUserId: zod
-      .string()
-      .nullable()
-      .describe("Null for the household's shared pool"),
-    period: zod.enum(["weekly", "monthly"]),
-    amount: zod.string(),
-    effectiveFrom: zod.string(),
-    source: zod.enum(["owner", "derived"]),
-    derivation: zod
-      .unknown()
-      .describe(
-        "The suggestion's working when the owner accepted it; null for a typed amount",
+export const CreateAllowancePlanResponse = zod.union([
+  zod
+    .object({
+      id: zod.string(),
+      memberUserId: zod
+        .string()
+        .nullable()
+        .describe("Null for the household's shared pool"),
+      period: zod.enum(["weekly", "monthly"]),
+      amount: zod.string(),
+      effectiveFrom: zod.string(),
+      source: zod.enum(["owner", "derived"]),
+      derivation: zod
+        .unknown()
+        .describe(
+          "The suggestion's working when the owner accepted it; null for a typed amount",
+        ),
+      createdAt: zod.string(),
+    })
+    .and(
+      zod.object({
+        created: zod
+          .boolean()
+          .describe(
+            "True when a new row was written; false when a row of this period or later was updated in place",
+          ),
+        inEffect: zod
+          .object({
+            weekly: zod.union([
+              zod.object({
+                id: zod.string(),
+                memberUserId: zod
+                  .string()
+                  .nullable()
+                  .describe("Null for the household's shared pool"),
+                period: zod.enum(["weekly", "monthly"]),
+                amount: zod.string(),
+                effectiveFrom: zod.string(),
+                source: zod.enum(["owner", "derived"]),
+                derivation: zod
+                  .unknown()
+                  .describe(
+                    "The suggestion's working when the owner accepted it; null for a typed amount",
+                  ),
+                createdAt: zod.string(),
+              }),
+              zod.null(),
+            ]),
+            monthly: zod.union([
+              zod.object({
+                id: zod.string(),
+                memberUserId: zod
+                  .string()
+                  .nullable()
+                  .describe("Null for the household's shared pool"),
+                period: zod.enum(["weekly", "monthly"]),
+                amount: zod.string(),
+                effectiveFrom: zod.string(),
+                source: zod.enum(["owner", "derived"]),
+                derivation: zod
+                  .unknown()
+                  .describe(
+                    "The suggestion's working when the owner accepted it; null for a typed amount",
+                  ),
+                createdAt: zod.string(),
+              }),
+              zod.null(),
+            ]),
+          })
+          .describe(
+            "(S2) The household-pool plan row in effect for this week and for this month, by the money position's own rule: a $0 row is no plan (null), never a $0 cap. A week's per-week override is not a plan row (the money position and the period breakdown report it as `source: override`).",
+          ),
+      }),
+    ),
+  zod
+    .object({
+      dryRun: zod.literal(true),
+      allowed: zod.boolean(),
+      reason: zod.string().nullable(),
+      plan: zod.object({
+        period: zod.enum(["weekly", "monthly"]),
+        amount: zod.string(),
+        effectiveFrom: zod.string(),
+      }),
+      occurrences: zod.array(
+        zod.object({
+          planKey: zod.string(),
+          hook: zod.enum(["weekly", "monthly"]),
+          occurrenceDate: zod.string(),
+          label: zod.string(),
+          before: zod.union([
+            zod.object({
+              amount: zod
+                .string()
+                .describe(
+                  "Before payment evidence and answers (hookReserves[].amount)",
+                ),
+              onCurve: zod
+                .string()
+                .describe("What lands on the curve (amount − paid)"),
+              basis: zod.enum(["plan", "stored_amount"]),
+              incurred: zod.string(),
+              paid: zod.string(),
+              carried: zod.string(),
+              allowanceLeft: zod.string(),
+            }),
+            zod.null(),
+          ]),
+          after: zod.object({
+            amount: zod
+              .string()
+              .describe(
+                "Before payment evidence and answers (hookReserves[].amount)",
+              ),
+            onCurve: zod
+              .string()
+              .describe("What lands on the curve (amount − paid)"),
+            basis: zod.enum(["plan", "stored_amount"]),
+            incurred: zod.string(),
+            paid: zod.string(),
+            carried: zod.string(),
+            allowanceLeft: zod.string(),
+          }),
+          cards: zod.array(
+            zod.object({
+              accountId: zod.string(),
+              name: zod.string().nullable(),
+              mask: zod.string().nullable(),
+              mode: zod
+                .union([
+                  zod.literal("in_full"),
+                  zod.literal("debt_plan"),
+                  zod.literal(null),
+                ])
+                .nullable(),
+              amount: zod
+                .string()
+                .describe(
+                  "Its own period's purchases − refunds, before payments",
+                ),
+            }),
+          ),
+        }),
       ),
-    createdAt: zod.string(),
-  })
-  .and(
-    zod.object({
-      created: zod
-        .boolean()
-        .describe(
-          "True when a new row was written; false when a row of this period or later was updated in place",
-        ),
-      inEffect: zod
-        .object({
-          weekly: zod.union([
-            zod.object({
-              id: zod.string(),
-              memberUserId: zod
-                .string()
-                .nullable()
-                .describe("Null for the household's shared pool"),
-              period: zod.enum(["weekly", "monthly"]),
-              amount: zod.string(),
-              effectiveFrom: zod.string(),
-              source: zod.enum(["owner", "derived"]),
-              derivation: zod
-                .unknown()
-                .describe(
-                  "The suggestion's working when the owner accepted it; null for a typed amount",
-                ),
-              createdAt: zod.string(),
-            }),
-            zod.null(),
-          ]),
-          monthly: zod.union([
-            zod.object({
-              id: zod.string(),
-              memberUserId: zod
-                .string()
-                .nullable()
-                .describe("Null for the household's shared pool"),
-              period: zod.enum(["weekly", "monthly"]),
-              amount: zod.string(),
-              effectiveFrom: zod.string(),
-              source: zod.enum(["owner", "derived"]),
-              derivation: zod
-                .unknown()
-                .describe(
-                  "The suggestion's working when the owner accepted it; null for a typed amount",
-                ),
-              createdAt: zod.string(),
-            }),
-            zod.null(),
-          ]),
-        })
-        .describe(
-          "(S2) The household-pool plan row in effect for this week and for this month, by the money position's own rule: a $0 row is no plan (null), never a $0 cap. A week's per-week override is not a plan row (the money position and the period breakdown report it as `source: override`).",
-        ),
-    }),
-  );
+      lowPoint: zod.object({
+        before: zod.object({
+          amount: zod.string().nullable(),
+          date: zod.string().nullable(),
+        }),
+        after: zod.object({
+          amount: zod.string().nullable(),
+          date: zod.string().nullable(),
+        }),
+      }),
+    })
+    .describe(
+      "(F1) `POST \/allowance-plans?dryRun=1`: nothing written. Each hook occurrence the plan governs (its cadence, its period on) — and any other whose figures move — before → after with its split, and the forecast's low point (90 days) before → after. `allowed`\/`reason`: the plan gate's answer (a refused plan still shows its effect).",
+    ),
+]);
 
 /**
  * (S2) Never rewrites history. A row that started before the current period (this week's Sunday, or this month's 1st) is left as it is — past weeks keep the cap they were judged against — and the edit is written as the plan from the current period (or `effectiveFrom`) on: that day's row is updated or a new one inserted (`created: true`). A row starting in the current period or later is edited in place. A new `effectiveFrom` must be a period start (Sunday / the 1st), this period or later.
@@ -8175,10 +8521,26 @@ export const GetWaysBackResponse = zod
           .number()
           .nullable()
           .describe(
-            "Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts.",
+            "Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts. (F3) Each week read only to today's weekday (Sunday through usualThrough's weekday): the usual by today.",
+          ),
+        usualFullWeek: zod
+          .number()
+          .nullable()
+          .describe(
+            "(F3) The same median over the whole 8 weeks, whole cents; null when no week counts",
           ),
       }),
     ),
+    usualBasis: zod
+      .enum(["same_days"])
+      .describe(
+        "(F3) Each trim's usualWeek reads the prior weeks to the same weekday",
+      ),
+    usualThrough: zod
+      .string()
+      .describe(
+        "(F3) Today (YYYY-MM-DD): each prior week is cut at its weekday",
+      ),
     carryOver: zod.object({
       nextWeekStart: zod.string(),
       nextWeekCap: zod.number().nullable(),
@@ -8200,7 +8562,7 @@ export const GetWaysBackResponse = zod
   );
 
 /**
- * week = the weekly allowance (the cap's pool: weekly-flagged + unfiled spending — exactly GET /money/position's spentWeekDiscretionary, and for the current week built from the very rows the position counted). month = the monthly allowance (monthly-flagged spending over the calendar month — exactly what the Monthly Spend hook counts). Refunds net per account and never below zero; `refundFloorAdjustment` is what that floor added, so Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, to the cent. With no plan in effect (or a $0 one) the plan is "not_set" and remaining, over and withinPlan are null — never $0. Household America/Chicago dates. Read-only.
+ * week = the weekly allowance (the cap's pool: weekly-flagged + unfiled spending — exactly GET /money/position's spentWeekDiscretionary, and for the current week built from the very rows the position counted). month = the monthly allowance (monthly-flagged spending over the calendar month — exactly what the Monthly Spend hook counts). Refunds net per account and never below zero; `refundFloorAdjustment` is what that floor added, so Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, to the cent. (F2) The plan comparison (remaining, over, withinPlan) reads `known` — confirmed purchases only; the unfiled rows with contrary evidence are `unresolved` (known + unresolved.amount = actual) and `provisional` says when they could change the answer. `actual` stays the money position's cautious figure. With no plan in effect (or a $0 one) the plan is "not_set" and remaining, over and withinPlan are null — never $0. Household America/Chicago dates. Read-only.
  * @summary Why over? One week's or month's allowance — plan, spent, left or over, and the rows behind it by category
  */
 export const getPeriodBreakdownQueryStartRegExp = new RegExp(
@@ -8291,11 +8653,16 @@ export const GetPeriodBreakdownResponse = zod
       .describe(
         'What counts against the plan (see the schema description); \"0.00\" for a quiet period',
       ),
+    known: zod
+      .string()
+      .describe(
+        "(F2) Confirmed purchases only: actual without the unresolved rows, netted per account and never below zero exactly as actual is. For a month it equals actual (a monthly flag is the household's own confirmation).",
+      ),
     remaining: zod
       .string()
       .nullable()
       .describe(
-        "plan + carryOver − actual; negative when over; null when the plan is not set",
+        "(F2) plan + carryOver − known; negative when over; null when the plan is not set",
       ),
     over: zod
       .string()
@@ -8305,6 +8672,11 @@ export const GetPeriodBreakdownResponse = zod
       .boolean()
       .nullable()
       .describe("remaining ≥ 0; null when the plan is not set"),
+    provisional: zod
+      .boolean()
+      .describe(
+        "(F2) unresolved.amount > max($25, 5% of the plan; $25 with no plan): the comparison may change",
+      ),
     categories: zod
       .array(
         zod.object({
@@ -8331,12 +8703,20 @@ export const GetPeriodBreakdownResponse = zod
             .string()
             .nullable()
             .describe(
-              "Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left",
+              "Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left. (F3) For the current period each prior period is read only to the same point (usualBasis same_days, through usualThrough): the usual by today, not a whole period.",
+            ),
+          usualFullPeriod: zod
+            .string()
+            .nullable()
+            .describe(
+              '(F3) The same median over the whole prior periods (\"a full month usually\"); equals usual for a past period',
             ),
           aboveUsual: zod
             .string()
             .nullable()
-            .describe("max(0, amount − usual); null when usual is null"),
+            .describe(
+              "max(0, amount − usual); null when usual is null. (F3) Against the to-date usual for the current period",
+            ),
           rows: zod
             .array(
               zod.object({
@@ -8427,6 +8807,90 @@ export const GetPeriodBreakdownResponse = zod
                   }),
                   zod.null(),
                 ]),
+                evidence: zod
+                  .union([
+                    zod
+                      .object({
+                        class: zod.enum([
+                          "known_purchase",
+                          "confirmed_payment",
+                          "unresolved",
+                        ]),
+                        reason: zod.enum([
+                          "household_flag",
+                          "purchase_category",
+                          "atm_withdrawal",
+                          "person_to_person",
+                          "no_contrary_evidence",
+                          "transfer",
+                          "bank_noise",
+                          "debt_payment",
+                          "card_payment",
+                          "excluded_category",
+                          "bill_match",
+                          "bill_suggestion",
+                          "loan_payment",
+                          "transfer_evidence",
+                          "income_evidence",
+                          "debit_in_income_category",
+                          "credit_in_expense_category",
+                        ]),
+                        items: zod.array(
+                          zod.object({
+                            field: zod.enum([
+                              "pfc_primary",
+                              "pfc_detailed",
+                              "bill_suggestion",
+                              "category",
+                              "household",
+                            ]),
+                            value: zod.string(),
+                          }),
+                        ),
+                        suggestion: zod.union([
+                          zod.object({
+                            kind: zod.enum([
+                              "loan_payment",
+                              "transfer",
+                              "income",
+                              "bill",
+                            ]),
+                            detail: zod
+                              .string()
+                              .nullable()
+                              .describe(
+                                "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                              ),
+                            target: zod.union([
+                              zod
+                                .object({
+                                  kind: zod.enum(["bill"]),
+                                  id: zod
+                                    .string()
+                                    .describe("The recurring item id"),
+                                  label: zod.string(),
+                                  planKey: zod
+                                    .string()
+                                    .describe("<itemId>|<occurrenceDate>"),
+                                  occurrenceDate: zod.string(),
+                                })
+                                .describe(
+                                  "The bill the forecast suggests (a recurring item's occurrence)",
+                                ),
+                              zod.null(),
+                            ]),
+                          }),
+                          zod.null(),
+                        ]),
+                      })
+                      .describe(
+                        "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                      ),
+                    zod.null(),
+                  ])
+                  .describe(
+                    "(F2) The evidence rule's answer for the row; null where it says nothing (a refund, an ordinary deposit)",
+                  ),
               }),
             )
             .describe("Largest first, at most rowsPerGroup"),
@@ -8525,6 +8989,90 @@ export const GetPeriodBreakdownResponse = zod
               }),
               zod.null(),
             ]),
+            evidence: zod
+              .union([
+                zod
+                  .object({
+                    class: zod.enum([
+                      "known_purchase",
+                      "confirmed_payment",
+                      "unresolved",
+                    ]),
+                    reason: zod.enum([
+                      "household_flag",
+                      "purchase_category",
+                      "atm_withdrawal",
+                      "person_to_person",
+                      "no_contrary_evidence",
+                      "transfer",
+                      "bank_noise",
+                      "debt_payment",
+                      "card_payment",
+                      "excluded_category",
+                      "bill_match",
+                      "bill_suggestion",
+                      "loan_payment",
+                      "transfer_evidence",
+                      "income_evidence",
+                      "debit_in_income_category",
+                      "credit_in_expense_category",
+                    ]),
+                    items: zod.array(
+                      zod.object({
+                        field: zod.enum([
+                          "pfc_primary",
+                          "pfc_detailed",
+                          "bill_suggestion",
+                          "category",
+                          "household",
+                        ]),
+                        value: zod.string(),
+                      }),
+                    ),
+                    suggestion: zod.union([
+                      zod.object({
+                        kind: zod.enum([
+                          "loan_payment",
+                          "transfer",
+                          "income",
+                          "bill",
+                        ]),
+                        detail: zod
+                          .string()
+                          .nullable()
+                          .describe(
+                            "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                          ),
+                        target: zod.union([
+                          zod
+                            .object({
+                              kind: zod.enum(["bill"]),
+                              id: zod
+                                .string()
+                                .describe("The recurring item id"),
+                              label: zod.string(),
+                              planKey: zod
+                                .string()
+                                .describe("<itemId>|<occurrenceDate>"),
+                              occurrenceDate: zod.string(),
+                            })
+                            .describe(
+                              "The bill the forecast suggests (a recurring item's occurrence)",
+                            ),
+                          zod.null(),
+                        ]),
+                      }),
+                      zod.null(),
+                    ]),
+                  })
+                  .describe(
+                    "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                  ),
+                zod.null(),
+              ])
+              .describe(
+                "(F2) The evidence rule's answer for the row; null where it says nothing (a refund, an ordinary deposit)",
+              ),
           }),
         ),
         truncated: zod.boolean(),
@@ -8533,10 +9081,394 @@ export const GetPeriodBreakdownResponse = zod
       .describe(
         "Spending not filed to any allowance yet. It counts against the WEEKLY cap until it is filed (countsAgainstPlan true for a week); it never counts against the monthly plan, so for a month the group is empty.",
       ),
+    unresolved: zod
+      .object({
+        amount: zod.string(),
+        nettedByRefunds: zod
+          .string()
+          .describe(
+            "What a refund on the same account already took off these rows (usually 0.00)",
+          ),
+        count: zod.number(),
+        rows: zod
+          .array(
+            zod.object({
+              id: zod
+                .string()
+                .describe(
+                  "The transaction id (a split part keeps its parent's)",
+                ),
+              date: zod.string(),
+              displayName: zod
+                .string()
+                .describe("The household's merchant alias"),
+              amount: zod
+                .string()
+                .describe(
+                  "What the row adds to its group: + a purchase, − a refund",
+                ),
+              account: zod
+                .object({
+                  id: zod.string().nullable().describe("plaid_accounts.id"),
+                  institution: zod.string().nullable(),
+                  name: zod.string().nullable(),
+                  mask: zod.string().nullable(),
+                })
+                .describe(
+                  "The account the row is on (a split part keeps its parent's); all null for a row with no linked account",
+                ),
+              pending: zod.boolean(),
+              category: zod.union([
+                zod.object({
+                  id: zod.string(),
+                  name: zod.string(),
+                }),
+                zod.null(),
+              ]),
+              reason: zod
+                .object({
+                  coverage: zod.enum([
+                    "transfer",
+                    "debt_payment",
+                    "card_payment",
+                    "bill_matched",
+                    "unplanned",
+                    "allowance_monthly",
+                    "allowance_weekly",
+                    "reimbursable",
+                    "needs_classification",
+                    "income",
+                    "excluded",
+                    "refund",
+                  ]),
+                  nets: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "For a refund, the coverage it takes money off; null otherwise",
+                    ),
+                  rule: zod.enum([
+                    "transfer",
+                    "bank_noise",
+                    "debt_payment",
+                    "card_payment",
+                    "excluded_category",
+                    "income_category",
+                    "income",
+                    "inflow_other",
+                    "bill_match_confirmed",
+                    "bill_match_tier2",
+                    "reimbursable",
+                    "unplanned_flag",
+                    "monthly_flag",
+                    "weekly_flag",
+                    "unfiled",
+                  ]),
+                })
+                .describe(
+                  "Why the row counts where it does — classifyMovement's own answer",
+                ),
+              splitPart: zod.union([
+                zod.object({
+                  index: zod.number().describe("0-based"),
+                  count: zod.number(),
+                  parentAmount: zod
+                    .string()
+                    .describe(
+                      "What the whole row adds; the parts add up to it",
+                    ),
+                }),
+                zod.null(),
+              ]),
+              evidence: zod
+                .union([
+                  zod
+                    .object({
+                      class: zod.enum([
+                        "known_purchase",
+                        "confirmed_payment",
+                        "unresolved",
+                      ]),
+                      reason: zod.enum([
+                        "household_flag",
+                        "purchase_category",
+                        "atm_withdrawal",
+                        "person_to_person",
+                        "no_contrary_evidence",
+                        "transfer",
+                        "bank_noise",
+                        "debt_payment",
+                        "card_payment",
+                        "excluded_category",
+                        "bill_match",
+                        "bill_suggestion",
+                        "loan_payment",
+                        "transfer_evidence",
+                        "income_evidence",
+                        "debit_in_income_category",
+                        "credit_in_expense_category",
+                      ]),
+                      items: zod.array(
+                        zod.object({
+                          field: zod.enum([
+                            "pfc_primary",
+                            "pfc_detailed",
+                            "bill_suggestion",
+                            "category",
+                            "household",
+                          ]),
+                          value: zod.string(),
+                        }),
+                      ),
+                      suggestion: zod.union([
+                        zod.object({
+                          kind: zod.enum([
+                            "loan_payment",
+                            "transfer",
+                            "income",
+                            "bill",
+                          ]),
+                          detail: zod
+                            .string()
+                            .nullable()
+                            .describe(
+                              "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                            ),
+                          target: zod.union([
+                            zod
+                              .object({
+                                kind: zod.enum(["bill"]),
+                                id: zod
+                                  .string()
+                                  .describe("The recurring item id"),
+                                label: zod.string(),
+                                planKey: zod
+                                  .string()
+                                  .describe("<itemId>|<occurrenceDate>"),
+                                occurrenceDate: zod.string(),
+                              })
+                              .describe(
+                                "The bill the forecast suggests (a recurring item's occurrence)",
+                              ),
+                            zod.null(),
+                          ]),
+                        }),
+                        zod.null(),
+                      ]),
+                    })
+                    .describe(
+                      "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                    ),
+                  zod.null(),
+                ])
+                .describe(
+                  "(F2) The evidence rule's answer for the row; null where it says nothing (a refund, an ordinary deposit)",
+                ),
+            }),
+          )
+          .describe(
+            "Largest first, at most rowsPerGroup; each row's `evidence` says why",
+          ),
+        truncated: zod.boolean(),
+      })
+      .describe(
+        '(F2) Rows of the plan\'s pool (unfiled) with contrary evidence and no household confirmation: Plaid says loan payment, transfer or income, or the forecast suggests a bill (see RowEvidence). They still count in actual (and in the money position and safe-to-spend); the plan comparison leaves them out. amount = actual − known: what they add (\"may add up to\"). Σ rows = amount + nettedByRefunds.',
+      ),
+    excludedPayments: zod
+      .object({
+        amount: zod.string(),
+        count: zod.number(),
+        rows: zod.array(
+          zod.object({
+            id: zod
+              .string()
+              .describe("The transaction id (a split part keeps its parent's)"),
+            date: zod.string(),
+            displayName: zod
+              .string()
+              .describe("The household's merchant alias"),
+            amount: zod
+              .string()
+              .describe(
+                "What the row adds to its group: + a purchase, − a refund",
+              ),
+            account: zod
+              .object({
+                id: zod.string().nullable().describe("plaid_accounts.id"),
+                institution: zod.string().nullable(),
+                name: zod.string().nullable(),
+                mask: zod.string().nullable(),
+              })
+              .describe(
+                "The account the row is on (a split part keeps its parent's); all null for a row with no linked account",
+              ),
+            pending: zod.boolean(),
+            category: zod.union([
+              zod.object({
+                id: zod.string(),
+                name: zod.string(),
+              }),
+              zod.null(),
+            ]),
+            reason: zod
+              .object({
+                coverage: zod.enum([
+                  "transfer",
+                  "debt_payment",
+                  "card_payment",
+                  "bill_matched",
+                  "unplanned",
+                  "allowance_monthly",
+                  "allowance_weekly",
+                  "reimbursable",
+                  "needs_classification",
+                  "income",
+                  "excluded",
+                  "refund",
+                ]),
+                nets: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "For a refund, the coverage it takes money off; null otherwise",
+                  ),
+                rule: zod.enum([
+                  "transfer",
+                  "bank_noise",
+                  "debt_payment",
+                  "card_payment",
+                  "excluded_category",
+                  "income_category",
+                  "income",
+                  "inflow_other",
+                  "bill_match_confirmed",
+                  "bill_match_tier2",
+                  "reimbursable",
+                  "unplanned_flag",
+                  "monthly_flag",
+                  "weekly_flag",
+                  "unfiled",
+                ]),
+              })
+              .describe(
+                "Why the row counts where it does — classifyMovement's own answer",
+              ),
+            splitPart: zod.union([
+              zod.object({
+                index: zod.number().describe("0-based"),
+                count: zod.number(),
+                parentAmount: zod
+                  .string()
+                  .describe("What the whole row adds; the parts add up to it"),
+              }),
+              zod.null(),
+            ]),
+            evidence: zod
+              .union([
+                zod
+                  .object({
+                    class: zod.enum([
+                      "known_purchase",
+                      "confirmed_payment",
+                      "unresolved",
+                    ]),
+                    reason: zod.enum([
+                      "household_flag",
+                      "purchase_category",
+                      "atm_withdrawal",
+                      "person_to_person",
+                      "no_contrary_evidence",
+                      "transfer",
+                      "bank_noise",
+                      "debt_payment",
+                      "card_payment",
+                      "excluded_category",
+                      "bill_match",
+                      "bill_suggestion",
+                      "loan_payment",
+                      "transfer_evidence",
+                      "income_evidence",
+                      "debit_in_income_category",
+                      "credit_in_expense_category",
+                    ]),
+                    items: zod.array(
+                      zod.object({
+                        field: zod.enum([
+                          "pfc_primary",
+                          "pfc_detailed",
+                          "bill_suggestion",
+                          "category",
+                          "household",
+                        ]),
+                        value: zod.string(),
+                      }),
+                    ),
+                    suggestion: zod.union([
+                      zod.object({
+                        kind: zod.enum([
+                          "loan_payment",
+                          "transfer",
+                          "income",
+                          "bill",
+                        ]),
+                        detail: zod
+                          .string()
+                          .nullable()
+                          .describe(
+                            "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                          ),
+                        target: zod.union([
+                          zod
+                            .object({
+                              kind: zod.enum(["bill"]),
+                              id: zod
+                                .string()
+                                .describe("The recurring item id"),
+                              label: zod.string(),
+                              planKey: zod
+                                .string()
+                                .describe("<itemId>|<occurrenceDate>"),
+                              occurrenceDate: zod.string(),
+                            })
+                            .describe(
+                              "The bill the forecast suggests (a recurring item's occurrence)",
+                            ),
+                          zod.null(),
+                        ]),
+                      }),
+                      zod.null(),
+                    ]),
+                  })
+                  .describe(
+                    "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                  ),
+                zod.null(),
+              ])
+              .describe(
+                "(F2) The evidence rule's answer for the row; null where it says nothing (a refund, an ordinary deposit)",
+              ),
+          }),
+        ),
+        truncated: zod.boolean(),
+      })
+      .describe(
+        "(F2) Money out in scope that is NOT spending, by a household fact the spending rule already reads (a transfer, a debt or card payment, an excluded category, a confirmed or tier-2 bill match). Informational: never in actual, known or the plan comparison.",
+      ),
     refundFloorAdjustment: zod
       .string()
       .describe(
         "actual − Σ groups (≥ 0): non-zero only where an account's refunds outran its purchases and its pool floored at 0",
+      ),
+    usualBasis: zod
+      .enum(["same_days", "full_period"])
+      .describe(
+        "(F3) How each category's usual was read. same_days (the current period): each prior period cut at the same point — a week on the same weekday, a month on the same day of the month capped at that month's last day (Oct 31 → Sep 30, Mar 31 → Feb 28\/29) — so a period still running is compared with the same days of the others. full_period (a past period): whole periods.",
+      ),
+    usualThrough: zod
+      .string()
+      .nullable()
+      .describe(
+        "(F3) With same_days: today (YYYY-MM-DD), the point each prior period is cut at; null for full_period",
       ),
     beside: zod
       .object({
@@ -8572,7 +9504,7 @@ export const GetPeriodBreakdownResponse = zod
       ),
   })
   .describe(
-    "(S3) One period's allowance, broken down. Money is a two-decimal string. actual: week → weekly-flagged + unfiled spending (the weekly cap's pool), month → monthly-flagged spending; refunds netted per account, never below zero. remaining = plan + carryOver − actual (negative when over); over = max(0, −remaining); both null with no plan. Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, exactly.",
+    "(S3) One period's allowance, broken down. Money is a two-decimal string. actual: week → weekly-flagged + unfiled spending (the weekly cap's pool), month → monthly-flagged spending; refunds netted per account, never below zero — the money position's own figure (cautious: it counts unresolved rows). (F2) known = actual without the unresolved rows, netted the same way; known + unresolved.amount = actual, exactly. The plan comparison reads KNOWN: remaining = plan + carryOver − known (negative when over); over = max(0, −remaining); both null with no plan. provisional = unresolved.amount > max($25, 5% of the plan). Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, exactly (the unresolved rows are also in needsClassification).",
   );
 
 /**
@@ -8826,6 +9758,44 @@ export const GetBankingReviewResponse = zod
             ])
             .nullable()
             .describe("An everyday hook (its card payoff)"),
+          eventKind: zod
+            .enum(["income", "bill", "debt", "hook"])
+            .describe(
+              "(F2) What the plan is: a paycheck, a bill, a debt payment (a debt minimum, the Avalanche extra, a bill linked to a debt), an everyday hook's card payoff",
+            ),
+          direction: zod
+            .enum(["in", "out"])
+            .describe("(F2) in = money in; out = money out"),
+          expected: zod
+            .string()
+            .nullable()
+            .describe(
+              "(F2) |planned|, a positive magnitude; null when not sized",
+            ),
+          actual: zod
+            .string()
+            .nullable()
+            .describe(
+              "(F2) |txnAmount|, a positive magnitude; null with no row",
+            ),
+          variance: zod
+            .string()
+            .nullable()
+            .describe(
+              "(F2) Signed in CASH terms: txnAmount − planned. Positive = more cash than planned (received more, or paid less); null when either is unknown",
+            ),
+          varianceKind: zod
+            .union([
+              zod.literal("less_than_expected"),
+              zod.literal("more_than_expected"),
+              zod.literal("over_planned"),
+              zod.literal("under_planned"),
+              zod.literal(null),
+            ])
+            .nullable()
+            .describe(
+              "(F2) Income: more_than_expected \/ less_than_expected (received more or less than planned). Expense: over_planned \/ under_planned (paid more or less than planned). Null when there is no variance or it is 0.",
+            ),
         }),
       )
       .describe(
@@ -8881,6 +9851,19 @@ export const GetBankingReviewResponse = zod
                 "refund",
                 "other",
               ]),
+              direction: zod
+                .enum(["in", "out"])
+                .describe("(F2) in = money in; out = money out"),
+              classificationIssue: zod
+                .union([
+                  zod.literal("inflow_into_expense"),
+                  zod.literal("outflow_into_income"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe(
+                  "(F2) Filed against its direction: inflow_into_expense (money in, e.g. a paycheck, filed under an expense category — reported as income direction) or outflow_into_income; null when not",
+                ),
               reason: zod
                 .enum([
                   "partial",
@@ -8913,6 +9896,40 @@ export const GetBankingReviewResponse = zod
                   planned: zod.string().nullable(),
                   difference: zod.string().nullable(),
                   dayDelta: zod.number().nullable(),
+                  eventKind: zod.union([
+                    zod
+                      .enum(["income", "bill", "debt", "hook"])
+                      .describe(
+                        "(F2) What the plan is: a paycheck, a bill, a debt payment (a debt minimum, the Avalanche extra, a bill linked to a debt), an everyday hook's card payoff",
+                      ),
+                    zod.null(),
+                  ]),
+                  direction: zod
+                    .enum(["in", "out"])
+                    .describe("(F2) in = money in; out = money out"),
+                  expected: zod
+                    .string()
+                    .nullable()
+                    .describe("(F2) |planned|; null when not known"),
+                  actual: zod.string().nullable().describe("(F2) |row|"),
+                  variance: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "(F2) Signed in cash terms: row − planned (positive = more cash than planned)",
+                    ),
+                  varianceKind: zod
+                    .union([
+                      zod.literal("less_than_expected"),
+                      zod.literal("more_than_expected"),
+                      zod.literal("over_planned"),
+                      zod.literal("under_planned"),
+                      zod.literal(null),
+                    ])
+                    .nullable()
+                    .describe(
+                      "(F2) Income: more_than_expected \/ less_than_expected (received more or less than planned). Expense: over_planned \/ under_planned (paid more or less than planned). Null when there is no variance or it is 0.",
+                    ),
                 }),
                 zod.null(),
               ]),
@@ -8925,6 +9942,18 @@ export const GetBankingReviewResponse = zod
           .nullable()
           .describe(
             "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        varianceIn: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-IN plan comparisons (positive = received more); null when none compares",
+          ),
+        varianceOut: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-OUT plan comparisons (positive = paid less); null when none compares",
           ),
         byKind: zod
           .union([
@@ -9062,6 +10091,19 @@ export const GetBankingReviewResponse = zod
                 "refund",
                 "other",
               ]),
+              direction: zod
+                .enum(["in", "out"])
+                .describe("(F2) in = money in; out = money out"),
+              classificationIssue: zod
+                .union([
+                  zod.literal("inflow_into_expense"),
+                  zod.literal("outflow_into_income"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe(
+                  "(F2) Filed against its direction: inflow_into_expense (money in, e.g. a paycheck, filed under an expense category — reported as income direction) or outflow_into_income; null when not",
+                ),
               reason: zod
                 .enum([
                   "partial",
@@ -9094,6 +10136,40 @@ export const GetBankingReviewResponse = zod
                   planned: zod.string().nullable(),
                   difference: zod.string().nullable(),
                   dayDelta: zod.number().nullable(),
+                  eventKind: zod.union([
+                    zod
+                      .enum(["income", "bill", "debt", "hook"])
+                      .describe(
+                        "(F2) What the plan is: a paycheck, a bill, a debt payment (a debt minimum, the Avalanche extra, a bill linked to a debt), an everyday hook's card payoff",
+                      ),
+                    zod.null(),
+                  ]),
+                  direction: zod
+                    .enum(["in", "out"])
+                    .describe("(F2) in = money in; out = money out"),
+                  expected: zod
+                    .string()
+                    .nullable()
+                    .describe("(F2) |planned|; null when not known"),
+                  actual: zod.string().nullable().describe("(F2) |row|"),
+                  variance: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "(F2) Signed in cash terms: row − planned (positive = more cash than planned)",
+                    ),
+                  varianceKind: zod
+                    .union([
+                      zod.literal("less_than_expected"),
+                      zod.literal("more_than_expected"),
+                      zod.literal("over_planned"),
+                      zod.literal("under_planned"),
+                      zod.literal(null),
+                    ])
+                    .nullable()
+                    .describe(
+                      "(F2) Income: more_than_expected \/ less_than_expected (received more or less than planned). Expense: over_planned \/ under_planned (paid more or less than planned). Null when there is no variance or it is 0.",
+                    ),
                 }),
                 zod.null(),
               ]),
@@ -9106,6 +10182,18 @@ export const GetBankingReviewResponse = zod
           .nullable()
           .describe(
             "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        varianceIn: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-IN plan comparisons (positive = received more); null when none compares",
+          ),
+        varianceOut: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-OUT plan comparisons (positive = paid less); null when none compares",
           ),
         byKind: zod
           .union([
@@ -9243,6 +10331,19 @@ export const GetBankingReviewResponse = zod
                 "refund",
                 "other",
               ]),
+              direction: zod
+                .enum(["in", "out"])
+                .describe("(F2) in = money in; out = money out"),
+              classificationIssue: zod
+                .union([
+                  zod.literal("inflow_into_expense"),
+                  zod.literal("outflow_into_income"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe(
+                  "(F2) Filed against its direction: inflow_into_expense (money in, e.g. a paycheck, filed under an expense category — reported as income direction) or outflow_into_income; null when not",
+                ),
               reason: zod
                 .enum([
                   "partial",
@@ -9275,6 +10376,40 @@ export const GetBankingReviewResponse = zod
                   planned: zod.string().nullable(),
                   difference: zod.string().nullable(),
                   dayDelta: zod.number().nullable(),
+                  eventKind: zod.union([
+                    zod
+                      .enum(["income", "bill", "debt", "hook"])
+                      .describe(
+                        "(F2) What the plan is: a paycheck, a bill, a debt payment (a debt minimum, the Avalanche extra, a bill linked to a debt), an everyday hook's card payoff",
+                      ),
+                    zod.null(),
+                  ]),
+                  direction: zod
+                    .enum(["in", "out"])
+                    .describe("(F2) in = money in; out = money out"),
+                  expected: zod
+                    .string()
+                    .nullable()
+                    .describe("(F2) |planned|; null when not known"),
+                  actual: zod.string().nullable().describe("(F2) |row|"),
+                  variance: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "(F2) Signed in cash terms: row − planned (positive = more cash than planned)",
+                    ),
+                  varianceKind: zod
+                    .union([
+                      zod.literal("less_than_expected"),
+                      zod.literal("more_than_expected"),
+                      zod.literal("over_planned"),
+                      zod.literal("under_planned"),
+                      zod.literal(null),
+                    ])
+                    .nullable()
+                    .describe(
+                      "(F2) Income: more_than_expected \/ less_than_expected (received more or less than planned). Expense: over_planned \/ under_planned (paid more or less than planned). Null when there is no variance or it is 0.",
+                    ),
                 }),
                 zod.null(),
               ]),
@@ -9287,6 +10422,18 @@ export const GetBankingReviewResponse = zod
           .nullable()
           .describe(
             "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        varianceIn: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-IN plan comparisons (positive = received more); null when none compares",
+          ),
+        varianceOut: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-OUT plan comparisons (positive = paid less); null when none compares",
           ),
         byKind: zod
           .union([
@@ -9424,6 +10571,19 @@ export const GetBankingReviewResponse = zod
                 "refund",
                 "other",
               ]),
+              direction: zod
+                .enum(["in", "out"])
+                .describe("(F2) in = money in; out = money out"),
+              classificationIssue: zod
+                .union([
+                  zod.literal("inflow_into_expense"),
+                  zod.literal("outflow_into_income"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe(
+                  "(F2) Filed against its direction: inflow_into_expense (money in, e.g. a paycheck, filed under an expense category — reported as income direction) or outflow_into_income; null when not",
+                ),
               reason: zod
                 .enum([
                   "partial",
@@ -9456,6 +10616,40 @@ export const GetBankingReviewResponse = zod
                   planned: zod.string().nullable(),
                   difference: zod.string().nullable(),
                   dayDelta: zod.number().nullable(),
+                  eventKind: zod.union([
+                    zod
+                      .enum(["income", "bill", "debt", "hook"])
+                      .describe(
+                        "(F2) What the plan is: a paycheck, a bill, a debt payment (a debt minimum, the Avalanche extra, a bill linked to a debt), an everyday hook's card payoff",
+                      ),
+                    zod.null(),
+                  ]),
+                  direction: zod
+                    .enum(["in", "out"])
+                    .describe("(F2) in = money in; out = money out"),
+                  expected: zod
+                    .string()
+                    .nullable()
+                    .describe("(F2) |planned|; null when not known"),
+                  actual: zod.string().nullable().describe("(F2) |row|"),
+                  variance: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "(F2) Signed in cash terms: row − planned (positive = more cash than planned)",
+                    ),
+                  varianceKind: zod
+                    .union([
+                      zod.literal("less_than_expected"),
+                      zod.literal("more_than_expected"),
+                      zod.literal("over_planned"),
+                      zod.literal("under_planned"),
+                      zod.literal(null),
+                    ])
+                    .nullable()
+                    .describe(
+                      "(F2) Income: more_than_expected \/ less_than_expected (received more or less than planned). Expense: over_planned \/ under_planned (paid more or less than planned). Null when there is no variance or it is 0.",
+                    ),
                 }),
                 zod.null(),
               ]),
@@ -9468,6 +10662,18 @@ export const GetBankingReviewResponse = zod
           .nullable()
           .describe(
             "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        varianceIn: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-IN plan comparisons (positive = received more); null when none compares",
+          ),
+        varianceOut: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-OUT plan comparisons (positive = paid less); null when none compares",
           ),
         byKind: zod
           .union([
@@ -9605,6 +10811,19 @@ export const GetBankingReviewResponse = zod
                 "refund",
                 "other",
               ]),
+              direction: zod
+                .enum(["in", "out"])
+                .describe("(F2) in = money in; out = money out"),
+              classificationIssue: zod
+                .union([
+                  zod.literal("inflow_into_expense"),
+                  zod.literal("outflow_into_income"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe(
+                  "(F2) Filed against its direction: inflow_into_expense (money in, e.g. a paycheck, filed under an expense category — reported as income direction) or outflow_into_income; null when not",
+                ),
               reason: zod
                 .enum([
                   "partial",
@@ -9637,6 +10856,40 @@ export const GetBankingReviewResponse = zod
                   planned: zod.string().nullable(),
                   difference: zod.string().nullable(),
                   dayDelta: zod.number().nullable(),
+                  eventKind: zod.union([
+                    zod
+                      .enum(["income", "bill", "debt", "hook"])
+                      .describe(
+                        "(F2) What the plan is: a paycheck, a bill, a debt payment (a debt minimum, the Avalanche extra, a bill linked to a debt), an everyday hook's card payoff",
+                      ),
+                    zod.null(),
+                  ]),
+                  direction: zod
+                    .enum(["in", "out"])
+                    .describe("(F2) in = money in; out = money out"),
+                  expected: zod
+                    .string()
+                    .nullable()
+                    .describe("(F2) |planned|; null when not known"),
+                  actual: zod.string().nullable().describe("(F2) |row|"),
+                  variance: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "(F2) Signed in cash terms: row − planned (positive = more cash than planned)",
+                    ),
+                  varianceKind: zod
+                    .union([
+                      zod.literal("less_than_expected"),
+                      zod.literal("more_than_expected"),
+                      zod.literal("over_planned"),
+                      zod.literal("under_planned"),
+                      zod.literal(null),
+                    ])
+                    .nullable()
+                    .describe(
+                      "(F2) Income: more_than_expected \/ less_than_expected (received more or less than planned). Expense: over_planned \/ under_planned (paid more or less than planned). Null when there is no variance or it is 0.",
+                    ),
                 }),
                 zod.null(),
               ]),
@@ -9649,6 +10902,18 @@ export const GetBankingReviewResponse = zod
           .nullable()
           .describe(
             "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        varianceIn: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-IN plan comparisons (positive = received more); null when none compares",
+          ),
+        varianceOut: zod
+          .string()
+          .nullable()
+          .describe(
+            "(F2) Σ cash variance over the bucket's money-OUT plan comparisons (positive = paid less); null when none compares",
           ),
         byKind: zod
           .union([
@@ -9743,6 +11008,11 @@ export const GetBankingReviewResponse = zod
         count: zod.number(),
         net: zod.string(),
         pendingNet: zod.string(),
+        varianceIn: zod
+          .string()
+          .nullable()
+          .describe("(F2) As on a bucket (small: within max($1, 1%))"),
+        varianceOut: zod.string().nullable().describe("(F2) As on a bucket"),
         withoutPlanDetail: zod
           .number()
           .describe(
@@ -9779,6 +11049,99 @@ export const GetBankingReviewResponse = zod
       })
       .describe(
         "The last check of the bank's own balance against the ledger (a manual Sync), for this account",
+      ),
+    balanceCheck: zod
+      .object({
+        status: zod.enum([
+          "matches",
+          "off_by",
+          "resolved_since",
+          "not_checked",
+        ]),
+        reason: zod
+          .union([
+            zod.literal("never"),
+            zod.literal("not_forecast_account"),
+            zod.literal("anchor_too_old"),
+            zod.literal("balance_unavailable"),
+            zod.literal(null),
+          ])
+          .nullable()
+          .describe("Why not checked; null otherwise"),
+        stale: zod.boolean(),
+        staleReason: zod
+          .union([
+            zod.literal("age"),
+            zod.literal("anchor_changed"),
+            zod.literal("rows_since"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        checkedAt: zod
+          .string()
+          .nullable()
+          .describe(
+            "When the check read the rows (ISO); null when never checked",
+          ),
+        bank: zod
+          .union([
+            zod.object({
+              balance: zod.string(),
+              at: zod.string().describe("When the bank balance was read (ISO)"),
+              field: zod.enum(["available", "current"]),
+            }),
+            zod.null(),
+          ])
+          .describe(
+            "The bank's figure the check compared: like with like, in the previous anchor's field when the bank gave it (available holds pending charges, not pending deposits; current is posted only). Null when none was read.",
+          ),
+        h2: zod
+          .union([
+            zod.object({
+              balance: zod.string(),
+            }),
+            zod.null(),
+          ])
+          .describe(
+            "H2's figure at the check (previous anchor + the ledger's rows through the check's day); null when not compared",
+          ),
+        difference: zod
+          .string()
+          .nullable()
+          .describe(
+            '|bank − H2| at the check (\"0.00\" when it matched); null when not compared',
+          ),
+        direction: zod
+          .union([
+            zod.literal("bank_higher"),
+            zod.literal("bank_lower"),
+            zod.literal(null),
+          ])
+          .nullable()
+          .describe(
+            "Which side was higher at the check; null when they matched or were not compared",
+          ),
+        lastDrift: zod
+          .union([
+            zod.object({
+              checkedAt: zod.string(),
+              difference: zod.string().describe("|bank − H2| at that check"),
+              direction: zod
+                .union([
+                  zod.literal("bank_higher"),
+                  zod.literal("bank_lower"),
+                  zod.literal(null),
+                ])
+                .nullable(),
+            }),
+            zod.null(),
+          ])
+          .describe(
+            "The last EARLIER check that was off (a later Sync re-anchors, so it is kept); null when none",
+          ),
+      })
+      .describe(
+        "(F3) The last manual Sync's check of the bank's own balance against H2's (the previous anchor rolled forward through the ledger), for this account. status: matches · off_by · resolved_since (it was off, and recomputed now from the same anchor over the same days the late rows explain it — one query, no Plaid call) · not_checked with reason (never · not_forecast_account · anchor_too_old: the anchor was over 45 days old · balance_unavailable: the bank gave no balance). stale (first reason wins): anchor_changed (a newer anchor or a typed balance replaced the one the check read) · rows_since (rows dated on or before the check's day arrived after it) · age (over 7 days old); a not-checked outcome is stale by age only. Kept apart from reviewInbox and the freshness (synced) fields. Money is a two-decimal string.",
       ),
     household: zod
       .union([
@@ -9871,6 +11234,19 @@ export const GetBankingReviewResponse = zod
                 "refund",
                 "other",
               ]),
+              direction: zod
+                .enum(["in", "out"])
+                .describe("(F2) in = money in; out = money out"),
+              classificationIssue: zod
+                .union([
+                  zod.literal("inflow_into_expense"),
+                  zod.literal("outflow_into_income"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe(
+                  "(F2) Filed against its direction: inflow_into_expense (money in, e.g. a paycheck, filed under an expense category — reported as income direction) or outflow_into_income; null when not",
+                ),
               reason: zod
                 .enum([
                   "partial",
@@ -9903,6 +11279,40 @@ export const GetBankingReviewResponse = zod
                   planned: zod.string().nullable(),
                   difference: zod.string().nullable(),
                   dayDelta: zod.number().nullable(),
+                  eventKind: zod.union([
+                    zod
+                      .enum(["income", "bill", "debt", "hook"])
+                      .describe(
+                        "(F2) What the plan is: a paycheck, a bill, a debt payment (a debt minimum, the Avalanche extra, a bill linked to a debt), an everyday hook's card payoff",
+                      ),
+                    zod.null(),
+                  ]),
+                  direction: zod
+                    .enum(["in", "out"])
+                    .describe("(F2) in = money in; out = money out"),
+                  expected: zod
+                    .string()
+                    .nullable()
+                    .describe("(F2) |planned|; null when not known"),
+                  actual: zod.string().nullable().describe("(F2) |row|"),
+                  variance: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "(F2) Signed in cash terms: row − planned (positive = more cash than planned)",
+                    ),
+                  varianceKind: zod
+                    .union([
+                      zod.literal("less_than_expected"),
+                      zod.literal("more_than_expected"),
+                      zod.literal("over_planned"),
+                      zod.literal("under_planned"),
+                      zod.literal(null),
+                    ])
+                    .nullable()
+                    .describe(
+                      "(F2) Income: more_than_expected \/ less_than_expected (received more or less than planned). Expense: over_planned \/ under_planned (paid more or less than planned). Null when there is no variance or it is 0.",
+                    ),
                 }),
                 zod.null(),
               ]),
@@ -9920,6 +11330,120 @@ export const GetBankingReviewResponse = zod
   .describe(
     '(S4) One bank account\'s period: balance, cash in and out, the plan occurrences due in it, and every counted row placed exactly once — in one of the five \"not in the plan\" buckets or as planned. Money is a two-decimal string, signed (negative is money out) unless named in \/ out. See GET \/banking\/review for the rules.',
   );
+
+/**
+ * (F2) Read-only proposals for the household owner to apply himself with an existing app action (Review "mark matched" — POST /forecast/resolutions; Categories "change" — PATCH /transactions/{id}). Each stands on evidence the rows carry, never a merchant name alone and never a blanket rule. loan_payment: Plaid LOAN_PAYMENTS (not a card) rows nobody filed as a payment; rows on one account paying the same amount (within max($1, 1%)) are one series, proposed as the payment of exactly one active bill (a distinctive word of its name or its category's name in a description, and within max($25, 25%) of its amount) or debt (its name, and at least its minimum). transfer: TRANSFER_OUT_SAVINGS / ACCOUNT_TRANSFER rows counted as spending under an expense category (no person-to-person rail). bill_match: an unfiled row the forecast only suggests for a bill. income_category: a credit under an expense category, Plaid primary INCOME, pairing with exactly one active income plan (name and amount). A row is in one proposal at most. Largest first, at most 50; at most 20 rows listed per item. Household America/Chicago dates. A member gets 403 owner_only.
+ * @summary Proposed fixes — evidence-backed corrections over the last 120 days (owner only; writes nothing)
+ */
+export const GetReviewProposalsResponse = zod.object({
+  window: zod.object({
+    from: zod.string(),
+    to: zod.string().describe("The household's today"),
+    days: zod.number(),
+  }),
+  count: zod.number().describe("Every proposal found (items lists at most 50)"),
+  truncated: zod.boolean(),
+  items: zod.array(
+    zod.object({
+      key: zod.string().describe("Stable for the same rows and target"),
+      kind: zod.enum([
+        "loan_payment",
+        "transfer",
+        "bill_match",
+        "income_category",
+      ]),
+      rows: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            date: zod.string(),
+            displayName: zod.string(),
+            description: zod.string(),
+            amount: zod
+              .string()
+              .describe(
+                "Signed: negative is money out (a workbook Amex charge is positive)",
+              ),
+            pending: zod.boolean(),
+            account: zod
+              .object({
+                id: zod.string().nullable().describe("plaid_accounts.id"),
+                institution: zod.string().nullable(),
+                name: zod.string().nullable(),
+                mask: zod.string().nullable(),
+              })
+              .describe(
+                "The account the row is on (a split part keeps its parent's); all null for a row with no linked account",
+              ),
+            category: zod.union([
+              zod.object({
+                id: zod.string(),
+                name: zod.string(),
+              }),
+              zod.null(),
+            ]),
+            occurrence: zod
+              .union([
+                zod.object({
+                  planKey: zod.string(),
+                  recurringItemId: zod.string(),
+                  occurrenceDate: zod.string(),
+                }),
+                zod.null(),
+              ])
+              .describe(
+                'The bill occurrence \"mark matched\" would name; null when none is in reach',
+              ),
+          }),
+        )
+        .describe("Newest first, at most 20"),
+      rowCount: zod.number(),
+      truncated: zod.boolean(),
+      total: zod.string().describe("Σ |amount| over every row"),
+      evidence: zod.array(
+        zod.object({
+          field: zod.enum([
+            "pfc_primary",
+            "pfc_detailed",
+            "bill_suggestion",
+            "category",
+            "name_match",
+            "amount_match",
+            "same_amount_rows",
+          ]),
+          value: zod.string(),
+        }),
+      ),
+      action: zod.object({
+        code: zod.enum([
+          "file_as_bill_payment",
+          "file_as_debt_payment",
+          "file_as_transfer",
+          "confirm_bill_match",
+          "file_under_income_category",
+        ]),
+        target: zod.object({
+          kind: zod.enum(["bill", "debt", "category"]),
+          id: zod
+            .string()
+            .nullable()
+            .describe(
+              "The bill (recurring item), debt or category id; null when the household has no such category",
+            ),
+          label: zod.string(),
+          categoryId: zod
+            .string()
+            .nullable()
+            .describe("The category the Categories change files under"),
+          categoryName: zod.string().nullable(),
+        }),
+      }),
+      applyWith: zod
+        .array(zod.enum(["review_mark_matched", "categories_change"]))
+        .describe("The existing app actions that apply it"),
+    }),
+  ),
+});
 
 /**
  * Upserts the household's carry-over for one week (unique on household, week and kind). amountCents is whole cents and must be negative: an adjustment can only LOWER a week. weekStart must be a Sunday, this week or later. The money position subtracts it from that week's remainingWeek.
@@ -10687,6 +12211,9 @@ export const GetCategorizationReviewCountResponse = zod.object({
     ),
 });
 
+/**
+ * (F2) Refuses (409, code direction_conflict, nothing written) a suggestion that would file money IN under an expense category or money OUT under an income one (categoryDirectionConflict — a refund, a transfer, a debt row are never a conflict).
+ */
 export const AcceptCategorizationDecisionParams = zod.object({
   decisionId: zod.coerce.string().uuid(),
 });
@@ -10764,6 +12291,7 @@ export const SkipCategorizationDecisionResponse = zod.object({
 });
 
 /**
+ * (F2) Refuses (409, code direction_conflict, nothing written) a category that would file money IN under an expense category or money OUT under an income one. (F2) Merchant memory is sign-aware: money in learns apart from money out.
  * @summary File the row by hand (locked), learn merchant memory, and return the
 retroactive candidates. Never applies them.
 
@@ -10864,6 +12392,11 @@ export const UndoCategoryDecisionResponse = zod.object({
 export const ListLearnedRulesResponseItem = zod.object({
   id: zod.string(),
   signature: zod.string(),
+  direction: zod
+    .enum(["in", "out"])
+    .describe(
+      "(F2) Merchant memory is sign-aware: a rule learned from money in (a paycheck, a refund) applies to money in only, one learned from money out to purchases only — so a paycheck and a same-name purchase never share one.",
+    ),
   scope: zod.enum(["merchant", "merchant_account", "merchant_amount"]),
   plaidAccountId: zod.string().nullable(),
   amountBandLo: zod.string().nullable(),
@@ -10892,6 +12425,11 @@ export const UpdateLearnedRuleBody = zod.object({
 export const UpdateLearnedRuleResponse = zod.object({
   id: zod.string(),
   signature: zod.string(),
+  direction: zod
+    .enum(["in", "out"])
+    .describe(
+      "(F2) Merchant memory is sign-aware: a rule learned from money in (a paycheck, a refund) applies to money in only, one learned from money out to purchases only — so a paycheck and a same-name purchase never share one.",
+    ),
   scope: zod.enum(["merchant", "merchant_account", "merchant_amount"]),
   plaidAccountId: zod.string().nullable(),
   amountBandLo: zod.string().nullable(),

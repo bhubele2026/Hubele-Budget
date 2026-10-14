@@ -390,15 +390,15 @@ describe("W1 — section tabs under the bar", () => {
     // One account's page is still the Accounts tab.
     ["/next/accounts/acc-1", "Banking", ["Review", "Chase register", "Accounts"], "/next/accounts"],
     ["/amex", "Amex", ["All cards"], "/amex"],
-    ["/spending/week", "Spending", ["This week", "This month", "Budget", "Allowances", "Wish list", "Reports"], "/spending/week"],
-    ["/spending/month", "Spending", ["This week", "This month", "Budget", "Allowances", "Wish list", "Reports"], "/spending/month"],
-    ["/budget", "Spending", ["This week", "This month", "Budget", "Allowances", "Wish list", "Reports"], "/budget"],
+    ["/spending/week", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/spending/week"],
+    ["/spending/month", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/spending/month"],
+    ["/budget", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/budget"],
     // Reports owns its four pages.
-    ["/reports", "Spending", ["This week", "This month", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
-    ["/reports/spending", "Spending", ["This week", "This month", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
-    ["/reports/cashflow", "Spending", ["This week", "This month", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
-    ["/reports/budget", "Spending", ["This week", "This month", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
-    ["/reports/behavior", "Spending", ["This week", "This month", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
+    ["/reports", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
+    ["/reports/spending", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
+    ["/reports/cashflow", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
+    ["/reports/budget", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
+    ["/reports/behavior", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
     ["/forecast/overview", "Forecast", ["Overview", "Forecast", "Reconcile", "Bills"], "/forecast/overview"],
     // /forecast/overview never also lights /forecast, and /next/forecast is Forecast's.
     ["/forecast", "Forecast", ["Overview", "Forecast", "Reconcile", "Bills"], "/forecast"],
@@ -583,7 +583,7 @@ describe("the phone drawer reaches every page the section rows reach", () => {
       ["Amex /amex"],
       [
         "Spending /spending/week",
-        "This month /spending/month",
+        "Monthly allowance /spending/month",
         "Budget /budget",
         "Allowances /allowances",
         "Wish list /wishlist",

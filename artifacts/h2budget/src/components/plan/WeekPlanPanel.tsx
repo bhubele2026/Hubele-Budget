@@ -19,6 +19,7 @@ import {
   plainDollars,
   planErrorWords,
   planFor,
+  planRefusalReason,
 } from "@/lib/planWords";
 
 const ENTRY_HINT = "Enter a dollar amount above $0, like 350 or 350.50.";
@@ -113,6 +114,8 @@ export function WeekPlanPanel() {
   const { toast } = useToast();
   const [own, setOwn] = useState("");
   const [ownError, setOwnError] = useState<string | null>(null);
+  // (F4) The server refused the plan write (`plan_unsafe`): its one-line reason stays on screen and the buttons stay off.
+  const [refused, setRefused] = useState<string | null>(null);
 
   const say = (title: string, bad = false) => toast({ title, ...(bad ? { variant: "destructive" as const } : {}) });
   const data = plans.data;
@@ -160,9 +163,13 @@ export function WeekPlanPanel() {
         onSuccess: () => {
           void qc.invalidateQueries({ queryKey: getListAllowancePlansQueryKey() });
           invalidateAfterWrite(qc);
+          setRefused(null);
           say(done);
         },
-        onError: (e) => say(planErrorWords(e), true),
+        onError: (e) => {
+          setRefused(planRefusalReason(e));
+          say(planErrorWords(e), true);
+        },
       },
     );
   };
@@ -241,13 +248,18 @@ export function WeekPlanPanel() {
                     data-testid="input-own"
                   />
                 </label>
-                <button type="button" className={btnSecondary} disabled={update.isPending} onClick={saveOwn} data-testid="save-own">
+                <button type="button" className={btnSecondary} disabled={update.isPending || refused != null} onClick={saveOwn} data-testid="save-own">
                   Save
                 </button>
               </div>
             ) : (
               <p className="text-body text-neutral-600" data-testid="read-only">
                 {sourceWord.startsWith("set by") ? `The limit is ${sourceWord}.` : "Only the household owner sets the limit."}
+              </p>
+            )}
+            {refused && (
+              <p className="mt-1 text-micro text-bad" role="alert" data-testid="plan-refused">
+                {refused}
               </p>
             )}
             {ownError && (
@@ -275,7 +287,7 @@ export function WeekPlanPanel() {
               <button
                 type="button"
                 className={btn}
-                disabled={update.isPending}
+                disabled={update.isPending || refused != null}
                 onClick={() => save(shared.id, suggested.weekly, "Using the suggestion.")}
                 data-testid="use-suggestion"
               >
@@ -297,7 +309,7 @@ export function WeekPlanPanel() {
           ) : (
             <ul className="mt-1 flex flex-col">
               {memberPlans.map((p) => (
-                <MemberRow key={p.id} plan={p} name={nameOf(p.memberUserId)} canSet={canSet} busy={update.isPending} onSave={saveMember} />
+                <MemberRow key={p.id} plan={p} name={nameOf(p.memberUserId)} canSet={canSet} busy={update.isPending || refused != null} onSave={saveMember} />
               ))}
             </ul>
           )}

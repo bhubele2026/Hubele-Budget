@@ -138,6 +138,8 @@ export async function recordHandFiling(
       id: transactionsTable.id,
       description: transactionsTable.description,
       amount: transactionsTable.amount,
+      // (F2) Memory is sign-aware: which way the money moved reads the amount by source.
+      source: transactionsTable.source,
       plaidAccountId: transactionsTable.plaidAccountId,
     })
     .from(transactionsTable)

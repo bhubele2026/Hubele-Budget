@@ -68,9 +68,9 @@ export function startWords(iso: string): string {
   return dayWords(iso);
 }
 
-/** The header line: "This week · Sun Oct 11 – Sat Oct 17", "Week · …" for another week. */
+/** The header line: "This week · Sun Oct 11 – Sat Oct 17", "Week · …" for another week; "Monthly allowance · Oct 2026" for a month. */
 export function periodTitle(view: PeriodView, start: string, isCurrent: boolean): string {
   const range = view === "week" ? weekRangeWords(start) : monthWords(start);
-  const lead = view === "week" ? (isCurrent ? "This week" : "Week") : isCurrent ? "This month" : "Month";
+  const lead = view === "week" ? (isCurrent ? "This week" : "Week") : "Monthly allowance";
   return `${lead} · ${range}`;
 }

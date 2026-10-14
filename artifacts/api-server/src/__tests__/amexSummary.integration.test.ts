@@ -292,6 +292,8 @@ describe("S5 · GET /amex/summary — one card's week", () => {
     expect(s.scope.cards).toEqual([
       {
         accountId: ext.plat, name: "Everyday Plat", mask: "1001", institution: "American Express", brand: "silver", cadence: "weekly", debtLinked: false, debtId: null, owed: e.owed,
+        // (F1) How the card is paid: no debt row → in full (the default).
+        payoffMode: { mode: "in_full", source: "default", reason: "no_debt" },
         // (P3) The card's own purchases: one card in scope, so the top-level figure.
         purchases: { amount: s.purchases.amount, count: s.purchases.count },
       },

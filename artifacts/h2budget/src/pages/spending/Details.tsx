@@ -3,6 +3,7 @@ import type { PeriodBreakdown } from "@workspace/api-client-react";
 import { formatCurrency } from "@/lib/utils";
 import { BiggestCharges } from "@/components/spending/BiggestCharges";
 import { monthWords, type PeriodView } from "./periodDates";
+import { sortedCategories, usualPoint } from "./Breakdown";
 
 const isZero = (v: string | null | undefined): boolean => Math.round(Number(v ?? 0) * 100) === 0;
 
@@ -20,8 +21,10 @@ export function Details({ data, view }: { data: PeriodBreakdown; view: PeriodVie
     [other.label, other.v, "other"],
     ["Matched to a bill", b.billMatched, "bill"],
     ["Reimbursable", b.reimbursable, "reimbursable"],
-    ["All household purchases (all accounts)", b.householdSpend, "household"],
+    ["All household transactions (all accounts)", b.householdSpend, "household"],
   ];
+  // Under "usual by <day>", the whole period's usual: only when the two differ in kind (same_days).
+  const fullUsual = usualPoint(data) ? sortedCategories(data.categories).filter((c) => c.usualFullPeriod != null) : [];
   // (W3) The charges list reads transactions, so it mounts only once Details is opened.
   const [opened, setOpened] = useState(false);
   return (
@@ -37,6 +40,16 @@ export function Details({ data, view }: { data: PeriodBreakdown; view: PeriodVie
         <dl className="space-y-1 text-body">
           <div className="flex justify-between gap-3">
             <dt className="text-neutral-700">Counts toward the {view === "week" ? "weekly" : "monthly"} plan</dt>
+            <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-known">{formatCurrency(data.known)}</dd>
+          </div>
+          {!isZero(data.unresolved.amount) ? (
+            <div className="flex justify-between gap-3">
+              <dt className="text-neutral-700">Unconfirmed (not counted yet)</dt>
+              <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-unconfirmed">{formatCurrency(data.unresolved.amount)}</dd>
+            </div>
+          ) : null}
+          <div className="flex justify-between gap-3">
+            <dt className="text-neutral-700">Counted for safe to spend</dt>
             <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-actual">{formatCurrency(data.actual)}</dd>
           </div>
           {data.carryOver != null && !isZero(data.carryOver) ? (
@@ -52,6 +65,19 @@ export function Details({ data, view }: { data: PeriodBreakdown; view: PeriodVie
             </div>
           ) : null}
         </dl>
+        {fullUsual.length ? (
+          <div data-testid="sp-d-fullusual">
+            <h3 className="text-label font-semibold text-brand-navy">A full {view === "week" ? "week" : "month"} is usually</h3>
+            <dl className="mt-1 space-y-1 text-body">
+              {fullUsual.map((c) => (
+                <div key={c.categoryId ?? "none"} className="flex justify-between gap-3">
+                  <dt className="text-neutral-700">{c.name ?? "No category"}</dt>
+                  <dd className="font-mono tabular-nums text-brand-ink">{formatCurrency(c.usualFullPeriod)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ) : null}
         <div>
           <h3 className="text-label font-semibold text-brand-navy">Beside the plan</h3>
           <p className="mt-0.5 text-micro text-neutral-500" data-testid="sp-d-why">

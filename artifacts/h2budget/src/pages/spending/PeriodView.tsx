@@ -20,7 +20,7 @@ import { buildEntries } from "@/pages/next/accounts/entries";
 import { SpendingWhy } from "@/pages/next/dashboard/SpendingPanel";
 import { cn, formatCurrency } from "@/lib/utils";
 import { periodParams, PERIOD_MIN } from "./periodParams";
-import { Breakdown } from "./Breakdown";
+import { Breakdown, provisionalLine } from "./Breakdown";
 import { Details } from "./Details";
 import { PlanPrompt } from "./PlanPrompt";
 import { canGoBack, isIsoDay, monthWords, periodTitle, resolveStart, shiftPeriod, type PeriodView } from "./periodDates";
@@ -129,7 +129,8 @@ export function PeriodView({ view }: { view: PeriodView }) {
             </div>
             <div className={CELL}>
               <div className={CELL_LABEL}>Counts toward plan</div>
-              <div className={cn(CELL_VALUE, "text-brand-ink")} data-testid="sp-actual">{formatCurrency(d.actual)}</div>
+              <div className={cn(CELL_VALUE, "text-brand-ink")} data-testid="sp-actual">{formatCurrency(d.known)}</div>
+              {d.provisional ? <span className="chip warn mt-1.5" data-testid="sp-provisional">Provisional</span> : null}
             </div>
             <div className={CELL}>
               {d.remaining == null ? (
@@ -139,17 +140,20 @@ export function PeriodView({ view }: { view: PeriodView }) {
                 </>
               ) : over ? (
                 <>
-                  <div className={CELL_LABEL}>Over</div>
-                  <div className={cn(CELL_VALUE, "text-bad")} data-testid="sp-left">{formatCurrency(d.over)}</div>
+                  <div className={CELL_LABEL}>{d.provisional ? "Over so far" : "Over"}</div>
+                  <div className={cn(CELL_VALUE, d.provisional ? "text-brand-navy" : "text-bad")} data-testid="sp-left">{formatCurrency(d.over)}</div>
                 </>
               ) : (
                 <>
-                  <div className={CELL_LABEL}>Left</div>
+                  <div className={CELL_LABEL}>{d.provisional ? "Left so far" : "Left"}</div>
                   <div className={cn(CELL_VALUE, "text-brand-navy")} data-testid="sp-left">{formatCurrency(d.remaining)}</div>
                 </>
               )}
             </div>
           </div>
+          {provisionalLine(d) ? (
+            <p className="text-label text-neutral-700" data-testid="sp-provisional-line">{provisionalLine(d)}</p>
+          ) : null}
 
           {d.plan.status === "not_set" && d.isCurrent ? (
             <PlanPrompt view={view} start={d.start} prefills={plans.data?.prefills ?? []} canSet={canSet} />

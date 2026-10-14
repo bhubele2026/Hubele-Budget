@@ -196,7 +196,7 @@ const OLD_ROUTES: Row[] = [
   { from: "/bills/all", lands: "/bills/all", page: "bills", lit: "Forecast", tab: "/bills", crumb: "Dashboard › Forecast › Bills" },
   { from: "/recurring", lands: "/bills/all", page: "bills", lit: "Forecast", tab: "/bills", crumb: "Dashboard › Forecast › Bills" },
   { from: "/spending/week", lands: "/spending/week", page: "spending-period", lit: "Spending", tab: "/spending/week", crumb: "Dashboard › Spending › This week" },
-  { from: "/spending/month", lands: "/spending/month", page: "spending-period", lit: "Spending", tab: "/spending/month", crumb: "Dashboard › Spending › This month" },
+  { from: "/spending/month", lands: "/spending/month", page: "spending-period", lit: "Spending", tab: "/spending/month", crumb: "Dashboard › Spending › Monthly allowance" },
   { from: "/spending", lands: "/spending/week", page: "spending-period", lit: "Spending", tab: "/spending/week", crumb: "Dashboard › Spending › This week" },
   { from: "/reports/spending", lands: "/reports/spending", page: "reports-spending", lit: "Spending", tab: "/reports", crumb: "Dashboard › Spending › Reports" },
   { from: "/budget", lands: "/budget", page: "budget", lit: "Spending", tab: "/budget", crumb: "Dashboard › Spending › Budget" },

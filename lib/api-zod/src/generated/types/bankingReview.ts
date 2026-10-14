@@ -8,6 +8,7 @@
 import type { BankingReviewAccount } from "./bankingReviewAccount";
 import type { BankingReviewAsPlanned } from "./bankingReviewAsPlanned";
 import type { BankingReviewBalance } from "./bankingReviewBalance";
+import type { BankingReviewBalanceCheck } from "./bankingReviewBalanceCheck";
 import type { BankingReviewBalanceTie } from "./bankingReviewBalanceTie";
 import type { BankingReviewCashFlow } from "./bankingReviewCashFlow";
 import type { BankingReviewFreshness } from "./bankingReviewFreshness";
@@ -38,6 +39,7 @@ export interface BankingReview {
   reconciliation: BankingReviewReconciliation;
   reviewInbox: BankingReviewInbox;
   balanceTie: BankingReviewBalanceTie;
+  balanceCheck: BankingReviewBalanceCheck;
   /** Secondary and labelled — all accounts, this week (the money position's figures); null when not read */
   household: BankingReviewHousehold | null;
   /** With `bucket`, one page of that bucket's rows; null otherwise */

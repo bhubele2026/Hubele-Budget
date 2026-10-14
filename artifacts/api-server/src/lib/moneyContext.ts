@@ -43,13 +43,13 @@
 //     (`opts.tier2PairedTxnIds`; the money position hands in the forecast
 //     ledger's tier-2 off-curve pairs). Omitted, the set is empty.
 
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, type SQL } from "drizzle-orm";
 import {
   SUPERSEDE_MAX_DAYS,
   classifyMovement,
+  type EvidenceRow,
   type MovementClassification,
   type MovementContext,
-  type MovementRow,
 } from "@workspace/avalanche-core";
 import {
   budgetCategoriesTable,
@@ -61,7 +61,7 @@ import {
 } from "@workspace/db";
 import { resolveLedgerAccounts } from "./bankLedger";
 import { findSupersededPendingForRange, type SupersededPending } from "./supersededPending";
-import { effectiveFiling, uncategorizedCategoryIds, type FilingContext } from "./pendingFiling";
+import { carriedPfcEvidence, effectiveFiling, uncategorizedCategoryIds, type FilingContext } from "./pendingFiling";
 import { discoverAmexCards, type AmexCardCadence } from "./amexCardCadence";
 import { loadCardAccountIds } from "./cardAccounts";
 import { addDaysISO } from "./householdClock";
@@ -311,9 +311,18 @@ export async function loadMoneyContext(
  * (S3) A row as `loadMovementRows` reads it: what `classifyMovement` needs,
  * plus `pending`, which a screen shows beside the row (it decides nothing here:
  * a replaced pending row is already left out).
+ * (F2) It is also an `EvidenceRow`: Plaid's primary category, and — for a
+ * posted row with no Plaid category of its own — the replaced pending row's
+ * (`carriedPfc`, `carriedPfcEvidence`). `classifyMovement` reads neither.
  */
-export interface MovementRowRead extends MovementRow {
+export interface MovementRowRead extends EvidenceRow {
   pending: boolean;
+}
+
+/** (F2) `loadMovementRows`' options. */
+export interface LoadMovementRowsOptions {
+  /** An extra SQL filter on `transactions` (the proposals read only rows that can carry evidence). */
+  where?: SQL;
 }
 
 /**
@@ -329,6 +338,7 @@ export async function loadMovementRows(
   start: string,
   end: string,
   money: Pick<MoneyContext, "supersede" | "filingCtx">,
+  opts: LoadMovementRowsOptions = {},
 ): Promise<MovementRowRead[]> {
   const txns = await db
     .select({
@@ -342,6 +352,7 @@ export async function loadMovementRows(
       reimbursable: transactionsTable.reimbursable,
       debtId: transactionsTable.debtId,
       isExternalCardPayment: transactionsTable.isExternalCardPayment,
+      pfcPrimary: transactionsTable.pfcPrimary,
       pfcDetailed: transactionsTable.pfcDetailed,
       weeklyAllowance: transactionsTable.weeklyAllowance,
       monthlyAllowance: transactionsTable.monthlyAllowance,
@@ -357,12 +368,15 @@ export async function loadMovementRows(
         eq(transactionsTable.householdId, householdId),
         gte(transactionsTable.occurredOn, start),
         lte(transactionsTable.occurredOn, end),
+        opts.where,
       ),
     );
   const rows: MovementRowRead[] = [];
   for (const row of txns) {
     if (money.supersede.replacedIds.has(row.id)) continue;
-    rows.push(effectiveFiling(row, money.supersede.replacedBy.get(row.id), money.filingCtx));
+    const replaced = money.supersede.replacedBy.get(row.id);
+    const filed = effectiveFiling(row, replaced, money.filingCtx);
+    rows.push({ ...filed, carriedPfc: carriedPfcEvidence(row, replaced) });
   }
   return rows;
 }

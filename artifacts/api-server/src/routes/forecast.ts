@@ -33,6 +33,7 @@ import { readPausedReview } from "../lib/oneTimeBillMove";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
+import { loadInFullDebtIds } from "../lib/cardPayoffMode";
 import {
   forecastTodayISO,
   inForecast,
@@ -274,6 +275,8 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     .select()
     .from(debtsTable)
     .where(eq(debtsTable.householdId, householdId));
+  // (F1) A card paid in full has no minimum here either (the ledger's own rule).
+  const inFullDebtIds = await loadInFullDebtIds(householdId, ownerUserId);
 
   // Same series as Bills: linked recurring items represent the debt's
   // minimum; for unlinked active debts we synthesize monthly events so the
@@ -291,7 +294,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   for (const item of recurring) events.push(...expandItem(item, from, to));
   for (const d of debtsList) {
     events.push(
-      ...expandDebtMin(d, linkedRecurringByDebt.get(d.id) ?? null, from, to),
+      ...expandDebtMin(d, linkedRecurringByDebt.get(d.id) ?? null, from, to, { inFull: inFullDebtIds.has(d.id) }),
     );
   }
   // Inject the synthetic "Avalanche extra payment" events alongside the
@@ -302,7 +305,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     .from(avalancheSettingsTable)
     .where(eq(avalancheSettingsTable.userId, ownerUserId));
   const manualExtra = Number(avaSettingsRow?.manualExtra ?? 0) || 0;
-  events.push(...expandAvalancheExtra(debtsList, manualExtra, from, to, today));
+  events.push(...expandAvalancheExtra(debtsList, manualExtra, from, to, today, { inFullDebtIds }));
   events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   // Forecast is Chase-checking-only. Resolve the configured checking
@@ -400,7 +403,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const pausedItemIds = new Set(recurring.filter((r) => r.active !== "true").map((r) => r.id));
   const resolutions = remapOrphanResolutions(
     resolutionRows.map((r) => readPausedReview(r, pausedItemIds)),
-    resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt),
+    resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt, { inFullDebtIds }),
   )
     .filter(
       (r) =>

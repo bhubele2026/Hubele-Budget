@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import type { AmexSummary, AmexSummaryAttentionGroup, AmexSummaryRow } from "@workspace/api-client-react";
 import { Panel } from "@/components/next/Panel";
+import { CardPayModes } from "@/components/amex-pay-mode";
 import { moneyFace } from "@/components/data-state";
 import { cn } from "@/lib/utils";
 import {
@@ -117,6 +118,7 @@ export function AmexSummaryPanel({
               onClick={() => toggle("credits")}
             />
           </div>
+          <CardPayModes cards={summary.scope.cards.filter((c) => c.payoffMode != null && (summary.scope.kind !== "card" || c.accountId === summary.scope.accountId))} />
           <div className="space-y-1 text-body text-brand-ink" data-testid="amex-plan-lines">
             {plan ? (
               <p data-testid="amex-plan-line">

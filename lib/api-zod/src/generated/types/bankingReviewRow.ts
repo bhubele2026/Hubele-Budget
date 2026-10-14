@@ -5,9 +5,11 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BankingReviewDirection } from "./bankingReviewDirection";
 import type { BankingReviewKind } from "./bankingReviewKind";
 import type { BankingReviewReason } from "./bankingReviewReason";
 import type { BankingReviewRowCategory } from "./bankingReviewRowCategory";
+import type { BankingReviewRowClassificationIssue } from "./bankingReviewRowClassificationIssue";
 import type { BankingReviewRowEvidence } from "./bankingReviewRowEvidence";
 import type { BankingReviewRowFlags } from "./bankingReviewRowFlags";
 import type { BankingReviewRowPlan } from "./bankingReviewRowPlan";
@@ -26,6 +28,12 @@ export interface BankingReviewRow {
   category: BankingReviewRowCategory | null;
   flags: BankingReviewRowFlags;
   kind: BankingReviewKind;
+  direction: BankingReviewDirection;
+  /**
+   * (F2) Filed against its direction: inflow_into_expense (money in, e.g. a paycheck, filed under an expense category — reported as income direction) or outflow_into_income; null when not
+   * @nullable
+   */
+  classificationIssue: BankingReviewRowClassificationIssue;
   reason: BankingReviewReason;
   /**
    * Who tied the row to its plan

@@ -90,6 +90,7 @@ type Signal = {
   events: Event[];
   overdueAssumedPaid?: Array<{ planKey: string; txnId: string; confidence: string; unpaidRemainder: string; planAmount: string }>;
   hookAmountIgnored?: Array<{ itemId: string; storedAmount: string }>;
+  daily?: Array<{ date: string; balance: string }>;
 };
 
 async function get<T>(path: string): Promise<T> {
@@ -278,13 +279,21 @@ describe("(WP8) case 3 — last week's payoff leaves the curve on evidence of it
     expect(hookEvents(sig).some((e) => e.occurrenceKey === `${weeklySpendId}|2026-10-03`)).toBe(false);
   });
 
-  it("a $50.00 payment proves nothing: last week's $120.00 stays on the curve (next business day), not listed paid", async () => {
+  it("(F1) a $50.00 payment pays $50.00 of it: the other $70.00 stays on the curve (next business day), listed paid in part — the $50 is never counted twice (before F1: the whole $120 stayed on top of the $50 already out of cash)", async () => {
     await seed("-50.00");
     const sig = await signal();
     expect(sig.bankToday).toBe("1950.00");
-    expect(sig.overdueAssumedPaid?.find((p) => p.planKey === `${weeklySpendId}|2026-10-03`)).toBeUndefined();
+    expect(sig.overdueAssumedPaid?.find((p) => p.planKey === `${weeklySpendId}|2026-10-03`)).toMatchObject({
+      txnId: paymentId,
+      planAmount: "-120.00",
+      txnAmount: "-50.00",
+      confidence: "card_payment",
+      unpaidRemainder: "-70.00",
+    });
     const last = hookEvents(sig).find((e) => e.occurrenceKey === `${weeklySpendId}|2026-10-03`);
-    expect(last).toMatchObject({ date: "2026-10-08", amount: "-120.00", assumption: "overdue_assumed_unpaid" });
+    expect(last).toMatchObject({ date: "2026-10-08", amount: "-70.00", assumption: "overdue_remainder_assumed_unpaid" });
+    // Cash after last week is settled reads as with the full payment: 2,000 − 120.
+    expect(sig.daily?.find((d) => d.date === "2026-10-08")?.balance).toBe("1880.00");
   });
 });
 

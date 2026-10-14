@@ -598,12 +598,15 @@ describe("(WP5c) the direction guard", () => {
     expect((await run()).decisions).toHaveLength(0);
   });
 
-  it("a memory that would file a cafeteria charge under the paycheck queues it, naming the memory", async () => {
-    const memoryId = await memory(merchantSignature("BIGCO CAFE 0042"), cats.Paycheck!);
+  it("(F2) a paycheck's memory never reaches a cafeteria charge: nothing filed, and no memory pick to queue", async () => {
+    // Before F2 the shared memory proposed Paycheck and the guard queued it
+    // (WP5c). Memory is sign-aware now: a plain-signature memory in an INCOME
+    // category is money in's, so money out never reads it at all.
+    await memory(merchantSignature("BIGCO CAFE 0042"), cats.Paycheck!);
     const cafe = await txn({ description: "BIGCO CAFE 0042", amount: "-8.50" });
     await run();
     expect((await row(cafe)).categoryId).toBeNull();
-    expect((await decisionsOf(cafe))[0]).toMatchObject({ source: "memory", band: "queue", categoryId: cats.Paycheck, memoryId, explanation: MONEY_OUT });
+    expect((await decisionsOf(cafe)).some((d) => d.source === "memory")).toBe(false);
   });
 
   it("a recurring income item that would file money out under income queues it, naming the item", async () => {
@@ -620,15 +623,18 @@ describe("(WP5c) the direction guard", () => {
     expect((await row(deposit)).categoryId).toBe(cats.Paycheck);
   });
 
-  it("must not change: a credit on ANY card (not only Amex) filed by memory stays filed; the same credit on checking is queued", async () => {
+  it("must not change: a credit on ANY card (not only Amex) filed by memory stays filed; the same credit on checking is not filed", async () => {
     await memory(merchantSignature("BIGCO STORE 77"), cats.Shopping!);
     const onCard = await txn({ description: "BIGCO STORE 77", amount: "20.00", source: "plaid:chase", plaidAccountId: CARD });
     const onChecking = await txn({ description: "BIGCO STORE 77", amount: "20.00" });
     await run();
+    // Money back on a card nets the purchase's category: it still reads the purchase's memory.
     expect((await row(onCard)).categoryId).toBe(cats.Shopping);
     expect((await decisionsOf(onCard))[0]).toMatchObject({ source: "memory", band: "auto" });
+    // (F2) On checking it is no refund: sign-aware memory never offers the purchase's
+    // category to money in (before F2 it was offered and the guard queued it).
     expect((await row(onChecking)).categoryId).toBeNull();
-    expect((await decisionsOf(onChecking))[0]).toMatchObject({ source: "memory", band: "queue", explanation: MONEY_IN });
+    expect((await decisionsOf(onChecking)).some((d) => d.source === "memory")).toBe(false);
   });
 
   it("must not change: a checking refund, a reimbursable credit, a transfer and a card payment are filed as before", async () => {

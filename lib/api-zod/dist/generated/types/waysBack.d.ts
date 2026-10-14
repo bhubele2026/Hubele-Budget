@@ -8,6 +8,7 @@
 import type { WaysBackCarryOver } from "./waysBackCarryOver";
 import type { WaysBackHold } from "./waysBackHold";
 import type { WaysBackTrim } from "./waysBackTrim";
+import type { WaysBackUsualBasis } from "./waysBackUsualBasis";
 /**
  * (V5) A way back when the week is over. Every amount is WHOLE CENTS. overBy = max(0, −remainingWeek). hold.perDay = floor(max(0, remainingWeek) ÷ daysLeft), null with no cap; hold.leavesUntilPayday = availableUntilPayday (null with no bank data). trims = the three categories that spent most this week among the rows counting against the cap. carryOver.nextWeekCap = max(0, next week's cap + the applied adjustment, or − overBy when none is applied); null with no cap.
  */
@@ -27,6 +28,10 @@ export interface WaysBack {
     daysLeft: number;
     hold: WaysBackHold;
     trims: WaysBackTrim[];
+    /** (F3) Each trim's usualWeek reads the prior weeks to the same weekday */
+    usualBasis: WaysBackUsualBasis;
+    /** (F3) Today (YYYY-MM-DD): each prior week is cut at its weekday */
+    usualThrough: string;
     carryOver: WaysBackCarryOver;
 }
 //# sourceMappingURL=waysBack.d.ts.map

@@ -22,6 +22,7 @@ import {
   isPeriodStart,
   periodBreakdown,
   priorPeriodStarts,
+  samePointInPeriod,
   type BreakdownRowInput,
   type MovementContext,
   type MovementRow,
@@ -453,3 +454,140 @@ function positionInputs(rows: readonly BreakdownRowInput<string>[], capCents: nu
     nextWeekAdjustmentCents: null,
   };
 }
+
+// ── (F3) A fair usual: the prior periods read to the same point ──────────────
+
+describe("samePointInPeriod — (F3) the same point in an earlier period", () => {
+  it("weeks: the same weekday", () => {
+    // Today Wednesday 10/14 → the week of 9/20 is read Sunday 9/20 – Wednesday 9/23.
+    expect(samePointInPeriod("week", "2026-09-20", "2026-10-14")).toBe("2026-09-23");
+    expect(samePointInPeriod("week", "2026-09-20", "2026-10-17")).toBe("2026-09-26"); // Saturday: the whole week
+    expect(samePointInPeriod("week", "2026-09-20", "2026-10-11")).toBe("2026-09-20"); // Sunday: its Sunday
+  });
+  it("months: the same day of the month, capped at that month's last day", () => {
+    expect(samePointInPeriod("month", "2026-09-01", "2026-10-14")).toBe("2026-09-14");
+    expect(samePointInPeriod("month", "2026-09-01", "2026-10-31")).toBe("2026-09-30"); // Oct 31 → Sep 30
+    expect(samePointInPeriod("month", "2026-08-01", "2026-10-31")).toBe("2026-08-31");
+    expect(samePointInPeriod("month", "2026-02-01", "2026-03-31")).toBe("2026-02-28"); // Mar 31 → Feb 28
+    expect(samePointInPeriod("month", "2028-02-01", "2028-03-31")).toBe("2028-02-29"); // a leap year: Feb 29
+    expect(samePointInPeriod("month", "2026-09-01", "2026-10-01")).toBe("2026-09-01"); // the 1st → the 1st
+  });
+});
+
+describe("periodBreakdown — (F3) usual for a period still running", () => {
+  const monthly = (id: string, on: string, amount: string) =>
+    ({ ...input(row({ id, occurredOn: on, amount, categoryId: "cat-food", monthlyAllowance: true })), periodStart: `${on.slice(0, 7)}-01` });
+  const MONTH_STARTS = ["2026-07-01", "2026-08-01", "2026-09-01"];
+  // The brief's worked example: Jul 5 100 · Jul 20 200 · Aug 10 50 · Aug 25 300 · Sep 14 80 · Sep 15 500.
+  const HISTORY = [
+    monthly("h1", "2026-07-05", "-100.00"),
+    monthly("h2", "2026-07-20", "-200.00"),
+    monthly("h3", "2026-08-10", "-50.00"),
+    monthly("h4", "2026-08-25", "-300.00"),
+    monthly("h5", "2026-09-14", "-80.00"),
+    monthly("h6", "2026-09-15", "-500.00"),
+  ];
+  const october = (through: string | null, history = HISTORY) =>
+    periodBreakdown({
+      period: "month",
+      rows: [input(row({ id: "now", occurredOn: "2026-10-12", amount: "-120.00", categoryId: "cat-food", monthlyAllowance: true }))],
+      planCents: 40000,
+      carryOverCents: null,
+      history: { starts: MONTH_STARTS, rows: history },
+      categoryNames: NAMES,
+      rowsPerGroup: 10,
+      sameDaysThrough: through,
+    });
+
+  it("⭐ the worked example: today Oct 14 → usual by the 14th 80.00, a full month 350.00; 120.00 is 40.00 above usual", () => {
+    // To the 14th: Jul 100 · Aug 50 · Sep 80 (the 14th itself counts) → median 80.
+    // Full months: Jul 300 · Aug 350 · Sep 580 → median 350.
+    const b = october("2026-10-14");
+    expect(b.categories[0]).toMatchObject({ cents: 12000, usualCents: 8000, usualFullPeriodCents: 35000, aboveUsualCents: 4000 });
+    expect(b).toMatchObject({ usualBasis: "same_days", usualThrough: "2026-10-14" });
+    // The figures themselves do not move.
+    expect(b).toMatchObject({ actualCents: 12000, knownCents: 12000, remainingCents: 28000 });
+  });
+
+  it("a past period (no sameDaysThrough) is full against full, as before", () => {
+    const b = october(null);
+    expect(b.categories[0]).toMatchObject({ usualCents: 35000, usualFullPeriodCents: 35000, aboveUsualCents: 0 });
+    expect(b).toMatchObject({ usualBasis: "full_period", usualThrough: null });
+  });
+
+  it("the cut-off day counts, the next day does not", () => {
+    // Today the 13th: Sep 14 drops out → Jul 100 · Aug 50 · Sep 0 → 50.
+    expect(october("2026-10-13").categories[0]!.usualCents).toBe(5000);
+    // Today the 15th: Sep 15 joins → Jul 100 · Aug 50 · Sep 580 → 100.
+    expect(october("2026-10-15").categories[0]!.usualCents).toBe(10000);
+  });
+
+  it("Oct 31: each prior month whole (Sep cut at the 30th) — usual equals the full month", () => {
+    const b = october("2026-10-31", [...HISTORY, monthly("h7", "2026-09-30", "-10.00")]);
+    // Jul 300 · Aug 350 · Sep 590 → 350 both ways.
+    expect(b.categories[0]).toMatchObject({ usualCents: 35000, usualFullPeriodCents: 35000 });
+  });
+
+  it("Mar 31: February is read whole (to the 28th)", () => {
+    const b = periodBreakdown({
+      period: "month",
+      rows: [input(row({ id: "now", occurredOn: "2027-03-02", amount: "-10.00", categoryId: "cat-food", monthlyAllowance: true }))],
+      planCents: null,
+      carryOverCents: null,
+      history: {
+        starts: ["2026-12-01", "2027-01-01", "2027-02-01"],
+        rows: [
+          monthly("d1", "2026-12-31", "-60.00"),
+          monthly("j1", "2027-01-31", "-70.00"),
+          monthly("f1", "2027-02-28", "-40.00"),
+        ],
+      },
+      categoryNames: NAMES,
+      rowsPerGroup: 10,
+      sameDaysThrough: "2027-03-31",
+    });
+    // Dec 60 · Jan 70 · Feb 40 (Feb 28 ≤ the capped cut) → 60.
+    expect(b.categories[0]).toMatchObject({ usualCents: 6000, usualFullPeriodCents: 6000 });
+  });
+
+  it("the 1st: only each prior month's 1st counts", () => {
+    const b = october("2026-10-01", [...HISTORY, monthly("h8", "2026-08-01", "-25.00")]);
+    // Jul 0 · Aug 25 · Sep 0 → 0; full Jul 300 · Aug 375 · Sep 580 → 375.
+    expect(b.categories[0]).toMatchObject({ usualCents: 0, usualFullPeriodCents: 37500 });
+  });
+
+  it("a refund after the cut nets the full month only", () => {
+    const amex = { source: "plaid:amex", plaidAccountId: AMEX, description: "HEB REFUND" };
+    const refund = { ...input(row({ id: "r1", occurredOn: "2026-09-20", amount: "80.00", categoryId: "cat-food", monthlyAllowance: true, ...amex })), periodStart: "2026-09-01" };
+    expect(refund.allowance).toMatchObject({ coverage: "allowance_monthly", spend: -80 });
+    const b = october("2026-10-14", [...HISTORY, refund]);
+    // To the 14th unchanged: 80. Full: Jul 300 · Aug 350 · Sep 500 → 350.
+    expect(b.categories[0]).toMatchObject({ usualCents: 8000, usualFullPeriodCents: 35000 });
+    const early = { ...refund, id: "r2", date: "2026-09-02", periodStart: "2026-09-01" };
+    // A refund on the 2nd nets both: to the 14th Jul 100 · Aug 50 · Sep 0 → 50.
+    expect(october("2026-10-14", [...HISTORY, early]).categories[0]).toMatchObject({ usualCents: 5000, usualFullPeriodCents: 35000 });
+  });
+
+  it("weeks: Wednesday reads Sunday–Wednesday; Saturday the whole week", () => {
+    const weekly = (id: string, on: string, amount: string) =>
+      ({ ...input(row({ id, occurredOn: on, amount, categoryId: "cat-food", weeklyAllowance: true })), periodStart: priorWeekOf(on) });
+    const starts = ["2026-09-20", "2026-09-27", "2026-10-04"];
+    // 9/23 Wed 30 · 9/26 Sat 70 · 10/4 Sun 10 · 10/8 Thu 90.
+    const history = [weekly("w1", "2026-09-23", "-30.00"), weekly("w2", "2026-09-26", "-70.00"), weekly("w3", "2026-10-04", "-10.00"), weekly("w4", "2026-10-08", "-90.00")];
+    const at = (today: string) =>
+      periodBreakdown({
+        period: "week",
+        rows: [input(row({ id: "now", occurredOn: "2026-10-12", amount: "-60.00", categoryId: "cat-food", weeklyAllowance: true }))],
+        planCents: 30000,
+        carryOverCents: null,
+        history: { starts, rows: history },
+        categoryNames: NAMES,
+        rowsPerGroup: 10,
+        sameDaysThrough: today,
+      }).categories[0]!;
+    // Wed 10/14: 9/20 → 30 · 9/27 → 0 · 10/4 → 10 → median 10. Full: 100 · 0 · 100 → 100.
+    expect(at("2026-10-14")).toMatchObject({ usualCents: 1000, usualFullPeriodCents: 10000, aboveUsualCents: 5000 });
+    // Sat 10/17: whole weeks → 100 both ways.
+    expect(at("2026-10-17")).toMatchObject({ usualCents: 10000, usualFullPeriodCents: 10000, aboveUsualCents: 0 });
+  });
+});

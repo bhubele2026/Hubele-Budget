@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { AllowancePlanPrefill } from "@workspace/api-client-react";
+import type { AllowancePlanDryRun, AllowancePlanPrefill } from "@workspace/api-client-react";
 import {
   getGetPeriodBreakdownQueryKey,
   getListAllowancePlansQueryKey,
@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-client-react/features";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { PlanDryRunPreview } from "@/components/plan/PlanDryRunPreview";
 import { parsePositiveDollars, planErrorWords } from "@/lib/planWords";
 import { formatCurrency } from "@/lib/utils";
 import { btn, btnSecondary, fieldLabel, input } from "@/ui";
@@ -18,6 +19,11 @@ import { startWords, type PeriodView } from "./periodDates";
  * opens a dialog that says the amount, the start day and that past periods keep
  * their plan; only its Confirm sends `POST /allowance-plans`, from THIS period's
  * first day (this Sunday / the 1st). Past periods are never offered a plan.
+ *
+ * (F4) The dialog asks the server what the plan would do first (`dryRun=1`,
+ * writes nothing) and shows it per Saturday; Set plan is enabled only once that
+ * answer is in and the server allows the plan. A refused plan shows the
+ * server's one-line reason and the button stays off.
  *
  * Every amount here is one the server offered (`prefills[]`) or one the owner
  * types. The weekly default is the `hook_stored` prefill (the Weekly Spend
@@ -51,9 +57,34 @@ export function PlanPrompt({
   const qc = useQueryClient();
   const { toast } = useToast();
   const create = useCreateAllowancePlan();
+  const check = useCreateAllowancePlan();
+  const [dry, setDry] = useState<{ amount: string; data: AllowancePlanDryRun | null; failed: boolean } | null>(null);
   const [pick, setPick] = useState<Pick | null>(null);
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const typedAmount = pick?.custom ? parsePositiveDollars(typed) : pick ? pick.amount : null;
+  useEffect(() => {
+    if (!typedAmount || !canSet) {
+      setDry(null);
+      return;
+    }
+    let live = true;
+    const run = () =>
+      check.mutate(
+        { data: { period, amount: typedAmount, effectiveFrom: start }, params: { dryRun: "1" } },
+        {
+          onSuccess: (r) => live && setDry({ amount: typedAmount, data: r as AllowancePlanDryRun, failed: false }),
+          onError: () => live && setDry({ amount: typedAmount, data: null, failed: true }),
+        },
+      );
+    const t = setTimeout(run, pick?.custom ? 400 : 0);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typedAmount, period, start, canSet]);
 
   const mine = prefills.filter((p) => p.period === period);
   const primary = view === "week" ? mine.find((p) => p.source === "hook_stored") ?? null : null;
@@ -69,13 +100,18 @@ export function PlanPrompt({
   }
 
   const close = () => {
+    setDry(null);
     setPick(null);
     setTyped("");
     setError(null);
   };
 
+  const checked = dry != null && dry.amount === typedAmount ? dry : null;
+  const refusal = checked?.data && !checked.data.allowed ? checked.data.reason ?? "This plan can't be set yet." : null;
+  const ready = !!checked?.data && checked.data.allowed;
+
   const confirm = () => {
-    if (!pick) return;
+    if (!pick || !ready) return;
     const amount = pick.custom ? parsePositiveDollars(typed) : pick.amount;
     if (!amount) {
       setError("Enter a dollar amount above $0, like 350 or 350.50.");
@@ -155,12 +191,27 @@ export function PlanPrompt({
           </dl>
           <p className="text-label text-neutral-600">Past {view === "week" ? "weeks" : "months"} keep their plan.</p>
           <p className="text-label text-neutral-600">Left or over for {w.noun} updates once it is saved.</p>
+          {typedAmount ? (
+            <div className="border-t border-brand-line pt-2" data-testid="plan-effect">
+              <h3 className="text-label font-semibold text-brand-navy">What it does to the forecast</h3>
+              {checked?.data ? (
+                <PlanDryRunPreview dry={checked.data} />
+              ) : checked?.failed ? (
+                <p className="text-label text-neutral-600" data-testid="plan-effect-failed">H2 couldn't check this plan. Try again.</p>
+              ) : (
+                <p className="text-label text-neutral-600" aria-busy="true" data-testid="plan-effect-loading">Checking the effect…</p>
+              )}
+            </div>
+          ) : null}
+          {refusal ? (
+            <p className="text-label text-bad" role="alert" data-testid="plan-refused">{refusal}</p>
+          ) : null}
           {error ? (
             <p className="text-label text-bad" role="alert">{error}</p>
           ) : null}
           <DialogFooter>
             <button type="button" className={btnSecondary} onClick={close} data-testid="plan-cancel">Cancel</button>
-            <button type="button" className={btn} disabled={create.isPending} onClick={confirm} data-testid="plan-confirm-go">
+            <button type="button" className={btn} disabled={create.isPending || !ready} onClick={confirm} data-testid="plan-confirm-go">
               Set plan
             </button>
           </DialogFooter>

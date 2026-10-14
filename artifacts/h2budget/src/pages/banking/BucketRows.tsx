@@ -10,7 +10,7 @@ import { getBankingReview, getGetBankingReviewQueryKey, useGetBankingReview } fr
 import { emptyNote } from "@/ui";
 import { formatCurrency } from "@/lib/utils";
 import { BANKING_MIN as MIN, BANKING_PAGE as PAGE } from "./reviewParams";
-import { dayWords, planLine, REASON_WORDS } from "./words";
+import { classificationNote, dayWords, planLine, REASON_WORDS, varianceShort, variancePinches } from "./words";
 
 /**
  * (W3) One bucket's rows, paged by the server (`bucket` + `cursor`). Each page
@@ -25,6 +25,10 @@ function RowLine({ row, href, bucket }: { row: BankingReviewRow; href: string | 
   const plan = planLine(row);
   const flags = row.flags;
   const name = row.displayName || row.description;
+  const note = classificationNote(row);
+  // (F4) A row that compares with its plan leads with the DIFFERENCE; the full amount is secondary.
+  const variance = row.plan ? varianceShort(row.plan) : null;
+  const pinches = row.plan?.varianceKind ? variancePinches(row.plan.varianceKind) : false;
   return (
     <li className="px-4 py-2.5" data-testid={`br-row-${row.id}`}>
       <div className="flex items-baseline justify-between gap-3">
@@ -47,10 +51,23 @@ function RowLine({ row, href, bucket }: { row: BankingReviewRow; href: string | 
             {flags.reimbursable ? <span className={chip}>Reimbursable</span> : null}
           </div>
           {plan ? <div className="mt-1 text-micro text-neutral-600" data-testid={`br-plan-${row.id}`}>{plan}</div> : null}
+          {note ? (
+            <div className="mt-1 text-micro text-neutral-700" data-testid={`br-issue-${row.id}`}>
+              {note} ·{" "}
+              <Link href="/review/categories" className="font-semibold text-brand-navy underline">Categories</Link>
+            </div>
+          ) : null}
         </div>
-        <span className="shrink-0 font-mono text-body tabular-nums text-brand-ink" data-testid={`br-amount-${row.id}`}>
-          {formatCurrency(row.amount)}
-        </span>
+        {variance && row.plan ? (
+          <span className="shrink-0 text-right" data-testid={`br-variance-box-${row.id}`}>
+            <span className={`block font-mono text-body font-semibold tabular-nums ${pinches ? "text-bad-ink" : "text-brand-navy"}`} data-testid={`br-variance-${row.id}`}>{variance}</span>
+            <span className="block font-mono text-micro tabular-nums text-neutral-500" data-testid={`br-amount-${row.id}`}>{formatCurrency(row.amount)}</span>
+          </span>
+        ) : (
+          <span className="shrink-0 font-mono text-body tabular-nums text-brand-ink" data-testid={`br-amount-${row.id}`}>
+            {formatCurrency(row.amount)}
+          </span>
+        )}
       </div>
     </li>
   );

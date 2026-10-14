@@ -9,13 +9,16 @@ import type { PeriodBreakdownBasis } from "./periodBreakdownBasis";
 import type { PeriodBreakdownBeside } from "./periodBreakdownBeside";
 import type { PeriodBreakdownCategory } from "./periodBreakdownCategory";
 import type { PeriodBreakdownGroup } from "./periodBreakdownGroup";
+import type { PeriodBreakdownPayments } from "./periodBreakdownPayments";
 import type { PeriodBreakdownPeriod } from "./periodBreakdownPeriod";
 import type { PeriodBreakdownPlan } from "./periodBreakdownPlan";
 import type { PeriodBreakdownPlanScope } from "./periodBreakdownPlanScope";
 import type { PeriodBreakdownScope } from "./periodBreakdownScope";
 import type { PeriodBreakdownTimezone } from "./periodBreakdownTimezone";
+import type { PeriodBreakdownUnresolved } from "./periodBreakdownUnresolved";
+import type { PeriodBreakdownUsualBasis } from "./periodBreakdownUsualBasis";
 /**
- * (S3) One period's allowance, broken down. Money is a two-decimal string. actual: week → weekly-flagged + unfiled spending (the weekly cap's pool), month → monthly-flagged spending; refunds netted per account, never below zero. remaining = plan + carryOver − actual (negative when over); over = max(0, −remaining); both null with no plan. Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, exactly.
+ * (S3) One period's allowance, broken down. Money is a two-decimal string. actual: week → weekly-flagged + unfiled spending (the weekly cap's pool), month → monthly-flagged spending; refunds netted per account, never below zero — the money position's own figure (cautious: it counts unresolved rows). (F2) known = actual without the unresolved rows, netted the same way; known + unresolved.amount = actual, exactly. The plan comparison reads KNOWN: remaining = plan + carryOver − known (negative when over); over = max(0, −remaining); both null with no plan. provisional = unresolved.amount > max($25, 5% of the plan). Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, exactly (the unresolved rows are also in needsClassification).
  */
 export interface PeriodBreakdown {
     period: PeriodBreakdownPeriod;
@@ -38,8 +41,10 @@ export interface PeriodBreakdown {
     carryOver: string | null;
     /** What counts against the plan (see the schema description); "0.00" for a quiet period */
     actual: string;
+    /** (F2) Confirmed purchases only: actual without the unresolved rows, netted per account and never below zero exactly as actual is. For a month it equals actual (a monthly flag is the household's own confirmation). */
+    known: string;
     /**
-     * plan + carryOver − actual; negative when over; null when the plan is not set
+     * (F2) plan + carryOver − known; negative when over; null when the plan is not set
      * @nullable
      */
     remaining: string | null;
@@ -53,11 +58,22 @@ export interface PeriodBreakdown {
      * @nullable
      */
     withinPlan: boolean | null;
+    /** (F2) unresolved.amount > max($25, 5% of the plan; $25 with no plan): the comparison may change */
+    provisional: boolean;
     /** The rows filed to this plan (weekly / monthly flag), by category, largest first */
     categories: PeriodBreakdownCategory[];
     needsClassification: PeriodBreakdownGroup;
+    unresolved: PeriodBreakdownUnresolved;
+    excludedPayments: PeriodBreakdownPayments;
     /** actual − Σ groups (≥ 0): non-zero only where an account's refunds outran its purchases and its pool floored at 0 */
     refundFloorAdjustment: string;
+    /** (F3) How each category's usual was read. same_days (the current period): each prior period cut at the same point — a week on the same weekday, a month on the same day of the month capped at that month's last day (Oct 31 → Sep 30, Mar 31 → Feb 28/29) — so a period still running is compared with the same days of the others. full_period (a past period): whole periods. */
+    usualBasis: PeriodBreakdownUsualBasis;
+    /**
+     * (F3) With same_days: today (YYYY-MM-DD), the point each prior period is cut at; null for full_period
+     * @nullable
+     */
+    usualThrough: string | null;
     beside: PeriodBreakdownBeside;
     /** What the answer cannot see, as codes: "tier2_pairs_only_since:<date>" (a past period: bill pairs the forecast suggests are known only from that day, so an unfiled bill payment before it reads as unfiled); "tracking_start:<date>" (the period began before tracking did; rows before that day are not read); "usual_periods:<n>" (usual reads n prior periods, fewer than the full 8 weeks / 3 months). */
     limitations: string[];

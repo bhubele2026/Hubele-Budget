@@ -24,12 +24,17 @@ export interface PeriodBreakdownCategory {
     /** Rows (split parts count one each) */
     count: number;
     /**
-     * Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left
+     * Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left. (F3) For the current period each prior period is read only to the same point (usualBasis same_days, through usualThrough): the usual by today, not a whole period.
      * @nullable
      */
     usual: string | null;
     /**
-     * max(0, amount − usual); null when usual is null
+     * (F3) The same median over the whole prior periods ("a full month usually"); equals usual for a past period
+     * @nullable
+     */
+    usualFullPeriod: string | null;
+    /**
+     * max(0, amount − usual); null when usual is null. (F3) Against the to-date usual for the current period
      * @nullable
      */
     aboveUsual: string | null;

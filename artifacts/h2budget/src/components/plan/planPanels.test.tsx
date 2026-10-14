@@ -50,6 +50,19 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe("Weekly plan panel — a refused write (F4)", () => {
+  it("a 409 plan_unsafe keeps the server's one-line reason on screen and turns the buttons off", () => {
+    mount(<WeekPlanPanel />);
+    m.update.mockImplementation((_a: unknown, opts: { onError: (e: unknown) => void }) =>
+      opts.onError({ status: 409, data: { code: "plan_unsafe", reason: "Platinum has no payoff mode yet. Choose how it is paid first.", error: "x" } }),
+    );
+    fireEvent.click(screen.getByTestId("use-suggestion"));
+    expect(screen.getByTestId("plan-refused").textContent).toBe("Platinum has no payoff mode yet. Choose how it is paid first.");
+    expect((screen.getByTestId("save-own") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId("use-suggestion") ? (screen.getByTestId("use-suggestion") as HTMLButtonElement).disabled : true).toBe(true);
+  });
+});
+
 describe("Weekly plan panel", () => {
   it("shows the limit, its source, the monthly figure and the server's ledger", () => {
     mount(<WeekPlanPanel />);

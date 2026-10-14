@@ -4,6 +4,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  allocateHookPayments,
+  hookOccurrenceAmounts,
   hookPeriodOf,
   namesCardIssuer,
   nextHookOccurrence,
@@ -11,6 +13,8 @@ import {
   payoffsPaidBy,
   readEverydayHooks,
   type DuePayoff,
+  type HookObligation,
+  type HookOccurrenceFacts,
   type PayoffPaymentRow,
 } from "@workspace/avalanche-core";
 
@@ -145,5 +149,155 @@ describe("nextHookOccurrence — the window's end when no later occurrence is ex
     expect(nextHookOccurrence("monthly", "2026-10-28")).toBe("2026-11-28");
     expect(nextHookOccurrence("monthly", "2026-01-31")).toBe("2026-02-28");
     expect(nextHookOccurrence("monthly", "2026-12-15")).toBe("2027-01-15");
+  });
+});
+
+// ── (F1) The obligations model.
+
+const ob = (key: string, occurrenceDate: string, accountId: string, cents: number, cadence: "weekly" | "monthly" = "weekly"): HookObligation => ({
+  key,
+  cadence,
+  occurrenceDate,
+  accountId,
+  cents,
+});
+
+describe("(F1) allocateHookPayments — one payment, allocated once, oldest obligation first", () => {
+  it("a payment covering two weeks pays the older first, then the next; what is left of it pays nothing", () => {
+    const out = allocateHookPayments(
+      [ob("w|10-03", "2026-10-03", "plat", 8000), ob("w|10-10", "2026-10-10", "plat", 24000)],
+      [{ txnId: "p", occurredOn: "2026-10-12", cents: 40000, accountId: null }],
+    );
+    expect(out).toEqual([
+      { txnId: "p", key: "w|10-03", accountId: "plat", cents: 8000 },
+      { txnId: "p", key: "w|10-10", accountId: "plat", cents: 24000 },
+    ]);
+  });
+
+  it("partial payments add up; a payment never pays a week that has not closed on its date", () => {
+    const out = allocateHookPayments(
+      [ob("w|10-03", "2026-10-03", "plat", 13000), ob("w|10-10", "2026-10-10", "plat", 24000)],
+      [
+        { txnId: "a", occurredOn: "2026-10-05", cents: 5000, accountId: null },
+        { txnId: "b", occurredOn: "2026-10-09", cents: 10000, accountId: null },
+      ],
+    );
+    // b (10/9) cannot pay 10/10's week: 80 of it goes to 10/3's remaining 80, the 20 left pays nothing.
+    expect(out).toEqual([
+      { txnId: "a", key: "w|10-03", accountId: "plat", cents: 5000 },
+      { txnId: "b", key: "w|10-03", accountId: "plat", cents: 8000 },
+    ]);
+  });
+
+  it("a payment known to be one card's (a tag, the card's own ledger) pays only that card", () => {
+    const out = allocateHookPayments(
+      [ob("w|9-26", "2026-09-26", "gold", 3000), ob("w|9-26", "2026-09-26", "plat", 9000)],
+      [{ txnId: "t", occurredOn: "2026-10-05", cents: 5000, accountId: "plat" }],
+    );
+    expect(out).toEqual([{ txnId: "t", key: "w|9-26", accountId: "plat", cents: 5000 }]);
+  });
+
+  it("order is stable: by date, weekly before monthly on a day, then the card; payments by date then id", () => {
+    const out = allocateHookPayments(
+      [ob("m|9-30", "2026-09-30", "blue", 5000, "monthly"), ob("w|9-30", "2026-09-30", "plat", 5000)],
+      [
+        { txnId: "z", occurredOn: "2026-10-01", cents: 6000, accountId: null },
+        { txnId: "a", occurredOn: "2026-10-01", cents: 1000, accountId: null },
+      ],
+    );
+    expect(out).toEqual([
+      { txnId: "a", key: "w|9-30", accountId: "plat", cents: 1000 },
+      { txnId: "z", key: "w|9-30", accountId: "plat", cents: 4000 },
+      { txnId: "z", key: "m|9-30", accountId: "blue", cents: 2000 },
+    ]);
+  });
+
+  it("a $0 obligation or payment takes part in nothing", () => {
+    expect(allocateHookPayments([ob("w", "2026-10-03", "plat", 0)], [{ txnId: "p", occurredOn: "2026-10-05", cents: 100, accountId: null }])).toEqual([]);
+    expect(allocateHookPayments([ob("w", "2026-10-03", "plat", 100)], [{ txnId: "p", occurredOn: "2026-10-05", cents: 0, accountId: null }])).toEqual([]);
+  });
+});
+
+describe("(F1) hookOccurrenceAmounts — incurred + carried + allowance left", () => {
+  const f = (o: Partial<HookOccurrenceFacts> & { key: string; occurrenceDate: string; periodEnd: string }): HookOccurrenceFacts => ({
+    itemId: "ws",
+    capCents: null,
+    storedCents: 45000,
+    spentCents: 0,
+    ownCents: 0,
+    paidCents: 0,
+    due: false,
+    settled: false,
+    partial: false,
+    ...o,
+  });
+  const TODAY = "2026-10-14";
+
+  it("with a plan: open → max(0, cap − spent); closed → 0; future → the cap", () => {
+    const a = hookOccurrenceAmounts(
+      [
+        f({ key: "c", occurrenceDate: "2026-10-10", periodEnd: "2026-10-10", capCents: 30000, ownCents: 24000, due: true }),
+        f({ key: "o", occurrenceDate: "2026-10-17", periodEnd: "2026-10-17", capCents: 15000, spentCents: 18000, ownCents: 12000 }),
+        f({ key: "u", occurrenceDate: "2026-10-17", periodEnd: "2026-10-17", capCents: 30000, spentCents: 18000, ownCents: 12000, itemId: "x" }),
+        f({ key: "n", occurrenceDate: "2026-10-24", periodEnd: "2026-10-24", capCents: 30000 }),
+      ],
+      TODAY,
+    );
+    expect([...a.entries()].map(([k, v]) => [k, v.amountCents, v.allowanceLeftCents, v.curveCents, v.closed])).toEqual([
+      ["c", 24000, 0, 24000, true],
+      ["o", 12000, 0, 12000, false],
+      ["u", 24000, 12000, 24000, false],
+      ["n", 30000, 30000, 30000, false],
+    ]);
+  });
+
+  it("with no plan: the stored amount less the period's own purchases (never below 0) while open; closed → its purchases only", () => {
+    const a = hookOccurrenceAmounts(
+      [
+        f({ key: "c", occurrenceDate: "2026-10-10", periodEnd: "2026-10-10", ownCents: 12000, due: true }),
+        f({ key: "o", occurrenceDate: "2026-10-17", periodEnd: "2026-10-17", ownCents: 12000 }),
+        f({ key: "big", occurrenceDate: "2026-10-17", periodEnd: "2026-10-17", ownCents: 50000, itemId: "y" }),
+      ],
+      TODAY,
+    );
+    expect([...a.values()].map((v) => [v.amountCents, v.allowanceLeftCents])).toEqual([
+      [12000, 0],
+      [45000, 33000],
+      [50000, 0],
+    ]);
+  });
+
+  it("⭐ the latest due, unanswered occurrence carries every earlier unpaid one; each obligation once (Σ amount = Σ own + Σ left)", () => {
+    const facts = [
+      f({ key: "9-26", occurrenceDate: "2026-09-26", periodEnd: "2026-09-26", ownCents: 12000, paidCents: 12000, due: true }),
+      f({ key: "10-03", occurrenceDate: "2026-10-03", periodEnd: "2026-10-03", ownCents: 13000, paidCents: 8000, due: true }),
+      f({ key: "10-10", occurrenceDate: "2026-10-10", periodEnd: "2026-10-10", ownCents: 24000, due: true }),
+      f({ key: "10-17", occurrenceDate: "2026-10-17", periodEnd: "2026-10-17", ownCents: 12000 }),
+    ];
+    const a = hookOccurrenceAmounts(facts, TODAY);
+    expect(a.get("10-03")).toMatchObject({ incurredCents: 5000, paidCents: 8000, carriedTo: "10-10", amountCents: 8000, curveCents: 0 });
+    expect(a.get("10-10")).toMatchObject({ incurredCents: 24000, carriedCents: 5000, carriedFrom: [{ key: "10-03", occurrenceDate: "2026-10-03", cents: 5000 }], amountCents: 29000, curveCents: 29000 });
+    expect(a.get("9-26")).toMatchObject({ carriedTo: null, amountCents: 12000, curveCents: 0 });
+    const sumAmount = [...a.values()].reduce((s, v) => s + v.amountCents, 0);
+    const sumOwn = facts.reduce((s, x) => s + x.ownCents, 0);
+    const sumLeft = [...a.values()].reduce((s, v) => s + v.allowanceLeftCents, 0);
+    expect(sumAmount).toBe(sumOwn + sumLeft);
+    // On the curve: the due unpaid once (290) + this week.
+    expect([...a.values()].reduce((s, v) => s + v.curveCents, 0)).toBe(29000 + 45000);
+  });
+
+  it("an answered occurrence never carries nor is carried; a partial one keeps its own amount; carry stays within one hook item", () => {
+    const a = hookOccurrenceAmounts(
+      [
+        f({ key: "a", occurrenceDate: "2026-09-26", periodEnd: "2026-09-26", ownCents: 1000, due: true, settled: true }),
+        f({ key: "b", occurrenceDate: "2026-10-03", periodEnd: "2026-10-03", ownCents: 2000, due: true, partial: true }),
+        f({ key: "c", occurrenceDate: "2026-10-03", periodEnd: "2026-10-31", ownCents: 4000, due: true, itemId: "monthly" }),
+        f({ key: "d", occurrenceDate: "2026-10-10", periodEnd: "2026-10-10", ownCents: 3000, due: true }),
+      ],
+      TODAY,
+    );
+    expect(a.get("d")).toMatchObject({ carriedCents: 0, amountCents: 3000 });
+    expect(a.get("b")).toMatchObject({ carriedTo: null, amountCents: 2000 });
+    expect(a.get("c")).toMatchObject({ carriedTo: null, carriedCents: 0 });
   });
 });

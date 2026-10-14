@@ -177,3 +177,200 @@ export function nextHookOccurrence(cadence: HookCadence, occurrenceISO: string):
   const day = Math.min(d, last);
   return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
+
+// ── (F1) THE OBLIGATIONS MODEL ───────────────────────────────────────────────
+//
+// The owner, 2026-10-14: a card paid IN FULL ("we try to pay weekly for what we
+// spend, doesn't always happen") owes its purchases until they are paid — an
+// unpaid week stays owed; a card on the DEBT PLAN (minimum + extra) is paid by
+// its debt plan, so its new purchases are never reserved again here.
+//
+// Each hook occurrence is then
+//
+//     incurred      its own period's purchases − refunds on the in_full cards
+//                   of its cadence (debt-linked or not), less the payments
+//                   allocated to it;
+//   + carried       earlier periods' unpaid in_full obligations, moved into the
+//                   latest occurrence already due ("an unpaid week stays owed");
+//   + allowanceLeft with a plan, max(0, cap − spent) while the period is open;
+//                   with no plan, the stored amount less the period's own
+//                   purchases, never below 0; 0 once the period has closed.
+//
+// "Unpaid" is measured per occurrence from evidence, never from the card's
+// balance: the balance is a point-in-time sync value with no period split, and
+// it holds whatever the card owed before the window (an archived debt's old
+// balance) — reserving it would move a whole paydown onto one Saturday. So a
+// purchase counts once (its period, pending→posted once), a refund nets the
+// period it is dated in, and each payment is allocated ONCE, oldest obligation
+// first, possibly across several weeks (`allocateHookPayments`).
+
+/** One in_full card's obligation for one hook occurrence's period. */
+export interface HookObligation {
+  /** The occurrence (`<itemId>|<occurrenceDate>`). */
+  key: string;
+  cadence: HookCadence;
+  occurrenceDate: string;
+  /** External account id of the card. */
+  accountId: string;
+  /** The period's purchases − refunds on the card, in cents (≥ 0). */
+  cents: number;
+}
+
+/** A payment the obligations may be paid by. */
+export interface HookPaymentEvidence {
+  txnId: string;
+  occurredOn: string;
+  /** What was paid, in cents (> 0). */
+  cents: number;
+  /** The card it is known to have paid (a debt tag, the card's own ledger), or null: any in_full card. */
+  accountId: string | null;
+}
+
+export interface HookAllocation {
+  txnId: string;
+  key: string;
+  accountId: string;
+  cents: number;
+}
+
+const byDateThen = <T>(date: (t: T) => string, ...rest: Array<(t: T) => string>) =>
+  (a: T, b: T): number => {
+    for (const f of [date, ...rest]) {
+      const x = f(a);
+      const y = f(b);
+      if (x !== y) return x < y ? -1 : 1;
+    }
+    return 0;
+  };
+
+/**
+ * ⭐ ONE PAYMENT, ALLOCATED ONCE, OLDEST OBLIGATION FIRST. Payments in date
+ * order; each pays the outstanding obligations already DUE on its date (the
+ * occurrence on or before the payment — a payment never pays a week that has
+ * not closed, as before F1), oldest first (weekly before monthly on the same
+ * day, then the card), only its own card's when it is known; what is left of it
+ * pays nothing (it paid an older balance). Multi-week and partial payments fall
+ * out of this; a payment can never be counted twice. Pure.
+ */
+export function allocateHookPayments(
+  obligations: readonly HookObligation[],
+  payments: readonly HookPaymentEvidence[],
+): HookAllocation[] {
+  const open = obligations
+    .filter((o) => o.cents > 0)
+    .map((o) => ({ ...o, left: Math.round(o.cents) }))
+    .sort(byDateThen((o) => o.occurrenceDate, (o) => (o.cadence === "weekly" ? "0" : "1"), (o) => o.accountId, (o) => o.key));
+  const out: HookAllocation[] = [];
+  const ordered = payments.filter((p) => p.cents > 0).slice().sort(byDateThen((p) => p.occurredOn, (p) => p.txnId));
+  for (const p of ordered) {
+    let left = Math.round(p.cents);
+    for (const o of open) {
+      if (left <= 0) break;
+      if (o.left <= 0 || o.occurrenceDate > p.occurredOn) continue;
+      if (p.accountId != null && p.accountId !== o.accountId) continue;
+      const take = Math.min(left, o.left);
+      o.left -= take;
+      left -= take;
+      out.push({ txnId: p.txnId, key: o.key, accountId: o.accountId, cents: take });
+    }
+  }
+  return out;
+}
+
+/** What the model knows about one hook occurrence. */
+export interface HookOccurrenceFacts {
+  key: string;
+  /** The hook item (carry stays within one item). */
+  itemId: string;
+  occurrenceDate: string;
+  periodEnd: string;
+  /** The period's cap in cents, or null: no plan. */
+  capCents: number | null;
+  /** The hook item's stored amount, cents (≥ 0). */
+  storedCents: number;
+  /** What the open period has spent from its allowance (any account), cents; ignored otherwise. */
+  spentCents: number;
+  /** Its own period's in_full obligations (purchases − refunds), cents (≥ 0). */
+  ownCents: number;
+  /** Payments allocated to its own period, cents (≤ ownCents). */
+  paidCents: number;
+  /** On or before the drag cutoff (and sized): due now. */
+  due: boolean;
+  /** Answered matched / skipped / missed / dismissed: settled, never carried. */
+  settled: boolean;
+  /** Answered partial: keeps its own amount, never carried, never a carrier. */
+  partial: boolean;
+}
+
+export interface HookOccurrenceAmounts {
+  /** Own unpaid: ownCents − paidCents. */
+  incurredCents: number;
+  paidCents: number;
+  /** Earlier occurrences' unpaid carried into this one. */
+  carriedCents: number;
+  /** The occurrences carried in, oldest first. */
+  carriedFrom: Array<{ key: string; occurrenceDate: string; cents: number }>;
+  /** The occurrence this one's unpaid was carried into (its key), or null. */
+  carriedTo: string | null;
+  allowanceLeftCents: number;
+  /** Before payment evidence and review answers: (carriedTo ? 0 : incurred) + paid + carried + allowanceLeft. */
+  amountCents: number;
+  /** What lands on the curve before review answers: amountCents − paidCents. */
+  curveCents: number;
+  closed: boolean;
+}
+
+/**
+ * ⭐ EACH OCCURRENCE'S AMOUNT (F1). See the section header. For each hook item,
+ * the LATEST due occurrence that is not answered (nor partial) is the carrier:
+ * every earlier due, unanswered occurrence with something unpaid moves it there
+ * (`carriedTo` / `carriedFrom`), so the curve holds each obligation once, on
+ * one event, until it is paid. Pure.
+ */
+export function hookOccurrenceAmounts(facts: readonly HookOccurrenceFacts[], todayISO: string): Map<string, HookOccurrenceAmounts> {
+  const out = new Map<string, HookOccurrenceAmounts>();
+  for (const f of facts) {
+    const closed = f.periodEnd < todayISO;
+    const own = Math.max(0, Math.round(f.ownCents));
+    const paid = Math.min(own, Math.max(0, Math.round(f.paidCents)));
+    const allowanceLeft = closed
+      ? 0
+      : f.capCents != null
+        ? Math.max(0, Math.round(f.capCents) - Math.round(f.spentCents))
+        : Math.max(0, Math.round(f.storedCents) - own);
+    out.set(f.key, {
+      incurredCents: own - paid,
+      paidCents: paid,
+      carriedCents: 0,
+      carriedFrom: [],
+      carriedTo: null,
+      allowanceLeftCents: allowanceLeft,
+      amountCents: own + allowanceLeft,
+      curveCents: own - paid + allowanceLeft,
+      closed,
+    });
+  }
+  const byItem = new Map<string, HookOccurrenceFacts[]>();
+  for (const f of facts) {
+    if (!f.due || f.settled || f.partial) continue;
+    const list = byItem.get(f.itemId) ?? [];
+    list.push(f);
+    byItem.set(f.itemId, list);
+  }
+  for (const list of byItem.values()) {
+    list.sort(byDateThen((f) => f.occurrenceDate, (f) => f.key));
+    const carrier = out.get(list[list.length - 1]!.key)!;
+    for (const f of list.slice(0, -1)) {
+      const a = out.get(f.key)!;
+      if (a.incurredCents <= 0) continue;
+      carrier.carriedFrom.push({ key: f.key, occurrenceDate: f.occurrenceDate, cents: a.incurredCents });
+      carrier.carriedCents += a.incurredCents;
+      carrier.amountCents += a.incurredCents;
+      carrier.curveCents += a.incurredCents;
+      a.carriedTo = list[list.length - 1]!.key;
+      a.amountCents -= a.incurredCents;
+      a.curveCents -= a.incurredCents;
+    }
+  }
+  return out;
+}

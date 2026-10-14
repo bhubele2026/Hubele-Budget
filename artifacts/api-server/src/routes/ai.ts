@@ -248,7 +248,7 @@ router.post("/agent/proposals/:id/approve", requireAuth, async (req, res): Promi
   if (!result.ok) {
     // Nothing was written: it stays open for whoever may apply it.
     await db.update(agentProposalsTable).set({ status: "proposed", decidedBy: null, decidedAt: null }).where(eq(agentProposalsTable.id, row.id));
-    res.status(result.status).json({ error: result.error });
+    res.status(result.status).json(result.code ? { error: result.error, code: result.code, reason: result.error } : { error: result.error });
     return;
   }
   const [done] = await db

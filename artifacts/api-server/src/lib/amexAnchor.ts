@@ -21,6 +21,7 @@ import {
   classifyAmexBrand,
   discoverAmexCards,
   type AmexBrand,
+  type AmexCardCadence,
 } from "./amexCardCadence";
 
 // Re-exported for backward compatibility: both used to be defined here.
@@ -305,6 +306,37 @@ export interface AmexWeeklyPayoff {
 /** (S5) What the card's payoff and summary ask of the one spending rule: a reimbursable charge is still owed to the card. */
 export const CARD_OWED = { reimbursableIsSpend: true } as const;
 
+/** A row on a card, as the payoff rule reads it. */
+type CardRuleRow = Parameters<typeof classifyCardCredit>[0] & { id: string };
+
+/**
+ * ⭐ WHAT ONE CARD ROW DOES TO WHAT THE CARD IS OWED — the payoff's per-row
+ * rule, moved verbatim out of `computeWeeklyPayoff` (F1) so the everyday hooks'
+ * obligations (`readCardPeriods`) read every row exactly as the Amex page does:
+ *   - a "not mine" row (`amexExcludedTxnIds`) and a pending row its posted row
+ *     replaced (PR7b: counted once, on the posted row) → nothing;
+ *   - (PR7) the one spending rule, with one exception: a reimbursable charge is
+ *     still owed to Amex. (S5) Through `classifyCardCredit`, the card summary's
+ *     own rule: "purchase" is `classifyOutflow(…).kind === "spend"` and "refund"
+ *     is `classifyRefund` — so GET /amex/summary's purchases − refunds for a
+ *     card's billing window IS its `weekCharges` (before the floor);
+ *   - `allCoverages` (the hooks, and the card page since WP8): every purchase,
+ *     filed or not; otherwise categorized real spend only (`isRealSpend`);
+ *   - (B6) a refund, filed or not, is money back on the card.
+ */
+export function cardRowOwed(
+  t: CardRuleRow,
+  o: { ctx: SpendContext; excludedTxnIds: ReadonlySet<string>; replacedPendingIds: ReadonlySet<string>; allCoverages: boolean },
+): { kind: "charge" | "refund"; amount: number } | null {
+  if (o.excludedTxnIds.has(t.id)) return null;
+  if (o.replacedPendingIds.has(t.id)) return null;
+  const kind = classifyCardCredit(t, o.ctx, CARD_OWED);
+  const owed = o.allCoverages ? kind === "purchase" : isRealSpend(t, o.ctx, CARD_OWED);
+  if (owed) return { kind: "charge", amount: spendAmount(t) };
+  if (kind === "refund") return { kind: "refund", amount: creditAmount(t) };
+  return null;
+}
+
 /** Default `weekStart` = the Sunday of the last fully-completed Sun–Sat week. */
 export function lastCompletedWeekStart(today: Date = householdTodayDate()): string {
   const thisWeekSunday = weekStartFor(today);
@@ -482,23 +514,16 @@ export async function computeWeeklyPayoff(
     // Only count charges inside THIS card's billing window (week or month).
     const win = windowFor(t.plaidAccountId);
     if (t.occurredOn < win.start || t.occurredOn > win.end) continue;
-    // Skip "not mine" charges (reimbursements) — user-excluded from payoff.
-    if (excludedTxnIds.has(t.id)) continue;
-    if (replacedPendingIds.has(t.id)) continue;
-    // (PR7) The one spending rule, with one exception: a reimbursable charge
-    // is still owed to Amex, so it stays in what to pay this card.
-    // (S5) Through `classifyCardCredit`, the card summary's own rule:
-    // "purchase" is `classifyOutflow(…).kind === "spend"` and "refund" is
-    // `classifyRefund`, exactly as before — so GET /amex/summary's purchases −
-    // refunds for a card's billing window IS its `weekCharges` (before the floor).
-    const kind = classifyCardCredit(t, ctx, CARD_OWED);
-    const owed = opts.allCoverages ? kind === "purchase" : isRealSpend(t, ctx, CARD_OWED);
-    if (!owed) {
+    // (F1) The per-row rule is `cardRowOwed`, shared with `readCardPeriods`
+    // (the hooks' obligations) so the two can never disagree on a row.
+    const owed = cardRowOwed(t, { ctx, excludedTxnIds, replacedPendingIds, allCoverages: opts.allCoverages === true });
+    if (!owed) continue;
+    if (owed.kind === "refund") {
       // (B6) Money back on the card, filed or not, on the page and the payoff alike.
-      if (kind === "refund") agg.refunds += creditAmount(t);
+      agg.refunds += owed.amount;
       continue;
     }
-    const amt = spendAmount(t);
+    const amt = owed.amount;
     agg.charges += amt;
     agg.count += 1;
     if (!agg.top || amt > agg.top.amount) {
@@ -590,4 +615,129 @@ export async function computeWeeklyPayoff(
     combinedStatementBalance,
     debtLinkedCards,
   };
+}
+
+// ---------------------------------------------------------------------------
+// ⭐ (F1) THE CARDS' OBLIGATIONS FOR THE EVERYDAY HOOKS — every Amex card, every
+// hook period, in ONE read. `computeWeeklyPayoff` answers one week (and it
+// leaves out every debt-linked card); the hooks need each card's own figure for
+// several periods and choose the cards themselves, by payoff mode
+// (`cardPayoffMode.ts`). The per-row rule is `cardRowOwed` — the payoff's own —
+// so for any card and any of its billing windows, `charges` here IS that card's
+// `weekCharges` in cents (proven on the rich fixture, every week).
+// ---------------------------------------------------------------------------
+
+/** A period a hook bills: the cards of `cadence` over [start, end]. */
+export interface CardPeriod {
+  cadence: "weekly" | "monthly";
+  start: string;
+  end: string;
+}
+
+/** A payment credit on a card's own ledger ("ONLINE PAYMENT - THANK YOU"). */
+export interface CardPaymentCredit {
+  txnId: string;
+  /** External account id. */
+  accountId: string;
+  occurredOn: string;
+  cents: number;
+}
+
+export interface CardPeriodsRead {
+  /** `${cadence}|${start}` → external account id → purchases − refunds in cents (≥ 0), for every card of that cadence. */
+  charges: Map<string, Map<string, number>>;
+  /** Payment credits on any card dated in [creditsFrom, creditsTo] (pending → posted once, "not mine" out). */
+  paymentCredits: CardPaymentCredit[];
+}
+
+/**
+ * ⭐ Each card's purchases − refunds (per card, never below zero — B6) in each
+ * period of its own cadence, and the payment credits on the cards' own ledgers.
+ * Read-only: one row read, one pending-pair read, one category read.
+ */
+export async function readCardPeriods(
+  householdId: string,
+  roster: Pick<AmexCardCadence, "cardRows" | "excludedTxnIds" | "cadenceFor">,
+  periods: readonly CardPeriod[],
+  credits: { from: string; to: string } | null,
+): Promise<CardPeriodsRead> {
+  const charges = new Map<string, Map<string, number>>();
+  const externalIds = roster.cardRows.map((c) => c.accountId).filter((v): v is string => !!v);
+  if (externalIds.length === 0 || (periods.length === 0 && !credits)) return { charges, paymentCredits: [] };
+  const bounds = [...periods.flatMap((p) => [p.start, p.end]), ...(credits ? [credits.from, credits.to] : [])].sort();
+  const from = bounds[0]!;
+  const to = bounds[bounds.length - 1]!;
+  const [cats, txns, replacedPendingIds] = await Promise.all([
+    db
+      .select({ id: budgetCategoriesTable.id, name: budgetCategoriesTable.name, debtId: budgetCategoriesTable.debtId, kind: budgetCategoriesTable.kind })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.householdId, householdId)),
+    db
+      .select({
+        id: transactionsTable.id,
+        plaidAccountId: transactionsTable.plaidAccountId,
+        occurredOn: transactionsTable.occurredOn,
+        amount: transactionsTable.amount,
+        source: transactionsTable.source,
+        isTransfer: transactionsTable.isTransfer,
+        categoryId: transactionsTable.categoryId,
+        description: transactionsTable.description,
+        debtId: transactionsTable.debtId,
+        isExternalCardPayment: transactionsTable.isExternalCardPayment,
+        reimbursable: transactionsTable.reimbursable,
+        pfcDetailed: transactionsTable.pfcDetailed,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          inArray(transactionsTable.plaidAccountId, externalIds),
+          gte(transactionsTable.occurredOn, from),
+          lte(transactionsTable.occurredOn, to),
+        ),
+      ),
+    findSupersededPendingForRange(householdId, from, to).then((r) => r.replacedIds),
+  ]);
+  const categoriesById = new Map<string, { name: string; debtId: string | null; kind: string }>();
+  const debtCategoryIds = new Set<string>();
+  for (const c of cats) {
+    categoriesById.set(c.id, { name: c.name, debtId: c.debtId, kind: c.kind });
+    if (c.debtId) debtCategoryIds.add(c.id);
+  }
+  const rule = { ctx: { categoriesById, debtCategoryIds } as SpendContext, excludedTxnIds: roster.excludedTxnIds, replacedPendingIds, allCoverages: true };
+
+  // Each row's effect once, by card.
+  type Effect = { on: string; kind: "charge" | "refund"; cents: number };
+  const byCard = new Map<string, Effect[]>(externalIds.map((id) => [id, []]));
+  const paymentCredits: CardPaymentCredit[] = [];
+  for (const t of txns) {
+    if (!t.plaidAccountId || !byCard.has(t.plaidAccountId)) continue;
+    const owed = cardRowOwed(t, rule);
+    if (owed) {
+      byCard.get(t.plaidAccountId)!.push({ on: t.occurredOn, kind: owed.kind, cents: Math.round(owed.amount * 100) });
+      continue;
+    }
+    if (!credits || t.occurredOn < credits.from || t.occurredOn > credits.to) continue;
+    if (roster.excludedTxnIds.has(t.id) || replacedPendingIds.has(t.id)) continue;
+    if (classifyCardCredit(t, rule.ctx, CARD_OWED) !== "payment") continue;
+    const cents = Math.round(creditAmount(t) * 100);
+    if (cents > 0) paymentCredits.push({ txnId: t.id, accountId: t.plaidAccountId, occurredOn: t.occurredOn, cents });
+  }
+  for (const p of periods) {
+    const perCard = new Map<string, number>();
+    for (const accountId of externalIds) {
+      if (roster.cadenceFor(accountId) !== p.cadence) continue;
+      let charge = 0;
+      let refund = 0;
+      for (const e of byCard.get(accountId)!) {
+        if (e.on < p.start || e.on > p.end) continue;
+        if (e.kind === "charge") charge += e.cents;
+        else refund += e.cents;
+      }
+      perCard.set(accountId, Math.max(0, charge - refund));
+    }
+    charges.set(`${p.cadence}|${p.start}`, perCard);
+  }
+  paymentCredits.sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : a.occurredOn > b.occurredOn ? 1 : a.txnId < b.txnId ? -1 : 1));
+  return { charges, paymentCredits };
 }

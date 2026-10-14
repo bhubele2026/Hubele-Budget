@@ -181,22 +181,26 @@ describe("(S6 fix 3) GET /money/ways-back nets refunds like the week's figure", 
   it("trims: Groceries 120.00, Dining 100.00 (was 150.00) with usual 55.00 (was 75.00), Fun 40.00", async () => {
     const w = await get("/money/ways-back");
     expect(w.overBy).toBe(6000);
+    // (F3) Every history row is a Tuesday or a Wednesday: read to Wednesday, the usual is the whole week's.
     expect(w.trims).toEqual([
-      { categoryId: GROCERIES, name: expect.stringMatching(/^Groceries/), spentWeek: 12000, usualWeek: 0 },
-      { categoryId: DINING, name: expect.stringMatching(/^Dining/), spentWeek: 10000, usualWeek: 5500 },
-      { categoryId: FUN, name: expect.stringMatching(/^Fun/), spentWeek: 4000, usualWeek: 0 },
+      { categoryId: GROCERIES, name: expect.stringMatching(/^Groceries/), spentWeek: 12000, usualWeek: 0, usualFullWeek: 0 },
+      { categoryId: DINING, name: expect.stringMatching(/^Dining/), spentWeek: 10000, usualWeek: 5500, usualFullWeek: 5500 },
+      { categoryId: FUN, name: expect.stringMatching(/^Fun/), spentWeek: 4000, usualWeek: 0, usualFullWeek: 0 },
     ]);
   });
 
   it("each weekly-filed trim equals the week's breakdown for that category: amount and usual, to the cent", async () => {
     const w = await get("/money/ways-back");
     const b = await get("/money/period-breakdown?period=week&start=2026-10-04");
+    expect([b.usualBasis, b.usualThrough]).toEqual([w.usualBasis, w.usualThrough]);
     const byId = new Map(b.categories.map((c: { categoryId: string }) => [c.categoryId, c]));
     for (const id of [DINING, FUN]) {
       const trim = w.trims.find((t: { categoryId: string }) => t.categoryId === id);
-      const cat = byId.get(id) as { amount: string; usual: string | null };
+      const cat = byId.get(id) as { amount: string; usual: string | null; usualFullPeriod: string | null };
       expect(Math.round(Number(cat.amount) * 100), id).toBe(trim.spentWeek);
       expect(cat.usual == null ? null : Math.round(Number(cat.usual) * 100), id).toBe(trim.usualWeek);
+      // (F3) Both read the same cut (to today's weekday) and the same whole weeks.
+      expect(cat.usualFullPeriod == null ? null : Math.round(Number(cat.usualFullPeriod) * 100), id).toBe(trim.usualFullWeek);
     }
   });
 });

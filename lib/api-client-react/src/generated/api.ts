@@ -31,11 +31,13 @@ import type {
   AiConversationDetail,
   AiConversationList,
   AiUsageSummary,
+  AllowancePlanDryRun,
   AllowancePlanSaved,
   AllowancePlanUpdate,
   AllowancePlans,
   AmexAnchor,
   AmexAnchorInput,
+  AmexCardPayoffMode,
   AmexSummary,
   AmexWeeklyPayoff,
   ApplyLearnedRuleRetroactivelyParams,
@@ -74,6 +76,7 @@ import type {
   CloseForecastMonthBody,
   CorrectDecisionInput,
   CreateAllowancePlanBody,
+  CreateAllowancePlanParams,
   CreateDebtFromPlaidAccount409,
   CreateDebtFromPlaidResult,
   CreateInvitationInput,
@@ -173,6 +176,7 @@ import type {
   PlaidSyncInput,
   PlaidSyncResult,
   PlaidUpdateLinkTokenInput,
+  PlanUnsafe,
   PutMemoryBody,
   PutMerchantAliasInput,
   PutMerchantAliasResult,
@@ -199,13 +203,16 @@ import type {
   ReopenWeekParams,
   ReorderMappingRulesInput,
   ReplaceTransactionSplitsInput,
+  ReviewProposals,
   ReviewQueue,
   ReviewQueueCount,
+  ReviewRefusal,
   ReviewResolution,
   RunCategorizationInput,
   SeedDefaultBudgetResult,
   SendTransactionsToReviewInput,
   SendTransactionsToReviewResult,
+  SetAmexCardPayoffModeBody,
   SetBankSnapshotInput,
   Settings,
   SettingsInput,
@@ -6047,7 +6054,7 @@ export const updateSettings = async (
 };
 
 export const getUpdateSettingsMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<PlanUnsafe>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -6088,10 +6095,10 @@ export type UpdateSettingsMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateSettings>>
 >;
 export type UpdateSettingsMutationBody = BodyType<SettingsInput>;
-export type UpdateSettingsMutationError = ErrorType<unknown>;
+export type UpdateSettingsMutationError = ErrorType<PlanUnsafe>;
 
 export const useUpdateSettings = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<PlanUnsafe>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -7941,6 +7948,98 @@ export function useGetAmexWeeklyPayoff<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Stored in settings.preferences.amexCardPayoffMode (server-owned: a settings save never writes or clears it). `null` clears the choice and the default from the card's debt row applies (no active debt → in_full; an active debt with an APR or a minimum → debt_plan). Answers the card's resolved mode.
+ * @summary (F1) Say how one Amex card is paid — in full by the everyday hook, or on the debt plan (household owner only)
+ */
+export const getSetAmexCardPayoffModeUrl = (accountId: string) => {
+  return `/api/amex/cards/${accountId}/payoff-mode`;
+};
+
+export const setAmexCardPayoffMode = async (
+  accountId: string,
+  setAmexCardPayoffModeBody: SetAmexCardPayoffModeBody,
+  options?: RequestInit,
+): Promise<AmexCardPayoffMode> => {
+  return customFetch<AmexCardPayoffMode>(
+    getSetAmexCardPayoffModeUrl(accountId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(setAmexCardPayoffModeBody),
+    },
+  );
+};
+
+export const getSetAmexCardPayoffModeMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setAmexCardPayoffMode>>,
+    TError,
+    { accountId: string; data: BodyType<SetAmexCardPayoffModeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setAmexCardPayoffMode>>,
+  TError,
+  { accountId: string; data: BodyType<SetAmexCardPayoffModeBody> },
+  TContext
+> => {
+  const mutationKey = ["setAmexCardPayoffMode"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setAmexCardPayoffMode>>,
+    { accountId: string; data: BodyType<SetAmexCardPayoffModeBody> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return setAmexCardPayoffMode(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetAmexCardPayoffModeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setAmexCardPayoffMode>>
+>;
+export type SetAmexCardPayoffModeMutationBody =
+  BodyType<SetAmexCardPayoffModeBody>;
+export type SetAmexCardPayoffModeMutationError = ErrorType<void>;
+
+/**
+ * @summary (F1) Say how one Amex card is paid — in full by the everyday hook, or on the debt plan (household owner only)
+ */
+export const useSetAmexCardPayoffMode = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setAmexCardPayoffMode>>,
+    TError,
+    { accountId: string; data: BodyType<SetAmexCardPayoffModeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setAmexCardPayoffMode>>,
+  TError,
+  { accountId: string; data: BodyType<SetAmexCardPayoffModeBody> },
+  TContext
+> => {
+  return useMutation(getSetAmexCardPayoffModeMutationOptions(options));
+};
 
 /**
  * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. Read-only.
@@ -11327,40 +11426,64 @@ export function useListAllowancePlans<
 }
 
 /**
- * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import.
+ * (S2) The owner's confirmed "Use $X as the weekly plan from this week". A weekly plan starts on a household week start (Sunday, America/Chicago), a monthly one on the 1st, this period or later; the amount is more than $0, dollars and cents. A household-pool row already starting that day is updated (`created: false`); otherwise one is inserted. Rows of past periods are never touched. Written only through allowancePlanWriter.ts, which no job or agent may import. (F1) With `dryRun=1` nothing is written: the answer is an AllowancePlanDryRun.
  * @summary Set the household's weekly or monthly plan from this period on (household owner only)
  */
-export const getCreateAllowancePlanUrl = () => {
-  return `/api/allowance-plans`;
+export const getCreateAllowancePlanUrl = (
+  params?: CreateAllowancePlanParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/allowance-plans?${stringifiedParams}`
+    : `/api/allowance-plans`;
 };
 
 export const createAllowancePlan = async (
   createAllowancePlanBody: CreateAllowancePlanBody,
+  params?: CreateAllowancePlanParams,
   options?: RequestInit,
-): Promise<AllowancePlanSaved> => {
-  return customFetch<AllowancePlanSaved>(getCreateAllowancePlanUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createAllowancePlanBody),
-  });
+): Promise<AllowancePlanSaved | AllowancePlanDryRun> => {
+  return customFetch<AllowancePlanSaved | AllowancePlanDryRun>(
+    getCreateAllowancePlanUrl(params),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createAllowancePlanBody),
+    },
+  );
 };
 
 export const getCreateAllowancePlanMutationOptions = <
-  TError = ErrorType<void>,
+  TError = ErrorType<void | PlanUnsafe>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createAllowancePlan>>,
     TError,
-    { data: BodyType<CreateAllowancePlanBody> },
+    {
+      data: BodyType<CreateAllowancePlanBody>;
+      params?: CreateAllowancePlanParams;
+    },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createAllowancePlan>>,
   TError,
-  { data: BodyType<CreateAllowancePlanBody> },
+  {
+    data: BodyType<CreateAllowancePlanBody>;
+    params?: CreateAllowancePlanParams;
+  },
   TContext
 > => {
   const mutationKey = ["createAllowancePlan"];
@@ -11374,11 +11497,14 @@ export const getCreateAllowancePlanMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createAllowancePlan>>,
-    { data: BodyType<CreateAllowancePlanBody> }
+    {
+      data: BodyType<CreateAllowancePlanBody>;
+      params?: CreateAllowancePlanParams;
+    }
   > = (props) => {
-    const { data } = props ?? {};
+    const { data, params } = props ?? {};
 
-    return createAllowancePlan(data, requestOptions);
+    return createAllowancePlan(data, params, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -11388,26 +11514,32 @@ export type CreateAllowancePlanMutationResult = NonNullable<
   Awaited<ReturnType<typeof createAllowancePlan>>
 >;
 export type CreateAllowancePlanMutationBody = BodyType<CreateAllowancePlanBody>;
-export type CreateAllowancePlanMutationError = ErrorType<void>;
+export type CreateAllowancePlanMutationError = ErrorType<void | PlanUnsafe>;
 
 /**
  * @summary Set the household's weekly or monthly plan from this period on (household owner only)
  */
 export const useCreateAllowancePlan = <
-  TError = ErrorType<void>,
+  TError = ErrorType<void | PlanUnsafe>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createAllowancePlan>>,
     TError,
-    { data: BodyType<CreateAllowancePlanBody> },
+    {
+      data: BodyType<CreateAllowancePlanBody>;
+      params?: CreateAllowancePlanParams;
+    },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof createAllowancePlan>>,
   TError,
-  { data: BodyType<CreateAllowancePlanBody> },
+  {
+    data: BodyType<CreateAllowancePlanBody>;
+    params?: CreateAllowancePlanParams;
+  },
   TContext
 > => {
   return useMutation(getCreateAllowancePlanMutationOptions(options));
@@ -11435,7 +11567,7 @@ export const updateAllowancePlan = async (
 };
 
 export const getUpdateAllowancePlanMutationOptions = <
-  TError = ErrorType<void>,
+  TError = ErrorType<void | PlanUnsafe>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -11476,13 +11608,13 @@ export type UpdateAllowancePlanMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateAllowancePlan>>
 >;
 export type UpdateAllowancePlanMutationBody = BodyType<AllowancePlanUpdate>;
-export type UpdateAllowancePlanMutationError = ErrorType<void>;
+export type UpdateAllowancePlanMutationError = ErrorType<void | PlanUnsafe>;
 
 /**
  * @summary Set a plan's amount (household owner only; writes source "owner"); a plan a past week used is kept and a new one starts now
  */
 export const useUpdateAllowancePlan = <
-  TError = ErrorType<void>,
+  TError = ErrorType<void | PlanUnsafe>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -11576,7 +11708,7 @@ export function useGetWaysBack<
 }
 
 /**
- * week = the weekly allowance (the cap's pool: weekly-flagged + unfiled spending — exactly GET /money/position's spentWeekDiscretionary, and for the current week built from the very rows the position counted). month = the monthly allowance (monthly-flagged spending over the calendar month — exactly what the Monthly Spend hook counts). Refunds net per account and never below zero; `refundFloorAdjustment` is what that floor added, so Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, to the cent. With no plan in effect (or a $0 one) the plan is "not_set" and remaining, over and withinPlan are null — never $0. Household America/Chicago dates. Read-only.
+ * week = the weekly allowance (the cap's pool: weekly-flagged + unfiled spending — exactly GET /money/position's spentWeekDiscretionary, and for the current week built from the very rows the position counted). month = the monthly allowance (monthly-flagged spending over the calendar month — exactly what the Monthly Spend hook counts). Refunds net per account and never below zero; `refundFloorAdjustment` is what that floor added, so Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, to the cent. (F2) The plan comparison (remaining, over, withinPlan) reads `known` — confirmed purchases only; the unfiled rows with contrary evidence are `unresolved` (known + unresolved.amount = actual) and `provisional` says when they could change the answer. `actual` stays the money position's cautious figure. With no plan in effect (or a $0 one) the plan is "not_set" and remaining, over and withinPlan are null — never $0. Household America/Chicago dates. Read-only.
  * @summary Why over? One week's or month's allowance — plan, spent, left or over, and the rows behind it by category
  */
 export const getGetPeriodBreakdownUrl = (params: GetPeriodBreakdownParams) => {
@@ -11763,6 +11895,82 @@ export function useGetBankingReview<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetBankingReviewQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * (F2) Read-only proposals for the household owner to apply himself with an existing app action (Review "mark matched" — POST /forecast/resolutions; Categories "change" — PATCH /transactions/{id}). Each stands on evidence the rows carry, never a merchant name alone and never a blanket rule. loan_payment: Plaid LOAN_PAYMENTS (not a card) rows nobody filed as a payment; rows on one account paying the same amount (within max($1, 1%)) are one series, proposed as the payment of exactly one active bill (a distinctive word of its name or its category's name in a description, and within max($25, 25%) of its amount) or debt (its name, and at least its minimum). transfer: TRANSFER_OUT_SAVINGS / ACCOUNT_TRANSFER rows counted as spending under an expense category (no person-to-person rail). bill_match: an unfiled row the forecast only suggests for a bill. income_category: a credit under an expense category, Plaid primary INCOME, pairing with exactly one active income plan (name and amount). A row is in one proposal at most. Largest first, at most 50; at most 20 rows listed per item. Household America/Chicago dates. A member gets 403 owner_only.
+ * @summary Proposed fixes — evidence-backed corrections over the last 120 days (owner only; writes nothing)
+ */
+export const getGetReviewProposalsUrl = () => {
+  return `/api/review/proposals`;
+};
+
+export const getReviewProposals = async (
+  options?: RequestInit,
+): Promise<ReviewProposals> => {
+  return customFetch<ReviewProposals>(getGetReviewProposalsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReviewProposalsQueryKey = () => {
+  return [`/api/review/proposals`] as const;
+};
+
+export const getGetReviewProposalsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReviewProposals>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getReviewProposals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetReviewProposalsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReviewProposals>>
+  > = ({ signal }) => getReviewProposals({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReviewProposals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReviewProposalsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReviewProposals>>
+>;
+export type GetReviewProposalsQueryError = ErrorType<void>;
+
+/**
+ * @summary Proposed fixes — evidence-backed corrections over the last 120 days (owner only; writes nothing)
+ */
+
+export function useGetReviewProposals<
+  TData = Awaited<ReturnType<typeof getReviewProposals>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getReviewProposals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReviewProposalsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -13037,6 +13245,9 @@ export function useGetCategorizationReviewCount<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+/**
+ * (F2) Refuses (409, code direction_conflict, nothing written) a suggestion that would file money IN under an expense category or money OUT under an income one (categoryDirectionConflict — a refund, a transfer, a debt row are never a conflict).
+ */
 export const getAcceptCategorizationDecisionUrl = (decisionId: string) => {
   return `/api/categorization/review/${decisionId}/accept`;
 };
@@ -13055,7 +13266,7 @@ export const acceptCategorizationDecision = async (
 };
 
 export const getAcceptCategorizationDecisionMutationOptions = <
-  TError = ErrorType<void>,
+  TError = ErrorType<void | ReviewRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -13096,10 +13307,11 @@ export type AcceptCategorizationDecisionMutationResult = NonNullable<
   Awaited<ReturnType<typeof acceptCategorizationDecision>>
 >;
 
-export type AcceptCategorizationDecisionMutationError = ErrorType<void>;
+export type AcceptCategorizationDecisionMutationError =
+  ErrorType<void | ReviewRefusal>;
 
 export const useAcceptCategorizationDecision = <
-  TError = ErrorType<void>,
+  TError = ErrorType<void | ReviewRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -13200,6 +13412,7 @@ export const useSkipCategorizationDecision = <
 };
 
 /**
+ * (F2) Refuses (409, code direction_conflict, nothing written) a category that would file money IN under an expense category or money OUT under an income one. (F2) Merchant memory is sign-aware: money in learns apart from money out.
  * @summary File the row by hand (locked), learn merchant memory, and return the
 retroactive candidates. Never applies them.
 
@@ -13225,7 +13438,7 @@ export const correctCategorizationDecision = async (
 };
 
 export const getCorrectCategorizationDecisionMutationOptions = <
-  TError = ErrorType<void>,
+  TError = ErrorType<void | ReviewRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -13267,7 +13480,8 @@ export type CorrectCategorizationDecisionMutationResult = NonNullable<
 >;
 export type CorrectCategorizationDecisionMutationBody =
   BodyType<CorrectDecisionInput>;
-export type CorrectCategorizationDecisionMutationError = ErrorType<void>;
+export type CorrectCategorizationDecisionMutationError =
+  ErrorType<void | ReviewRefusal>;
 
 /**
  * @summary File the row by hand (locked), learn merchant memory, and return the
@@ -13275,7 +13489,7 @@ retroactive candidates. Never applies them.
 
  */
 export const useCorrectCategorizationDecision = <
-  TError = ErrorType<void>,
+  TError = ErrorType<void | ReviewRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<

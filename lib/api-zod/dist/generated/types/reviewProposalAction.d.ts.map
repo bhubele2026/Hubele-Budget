@@ -1,0 +1,1 @@
+{"version":3,"file":"reviewProposalAction.d.ts","sourceRoot":"","sources":["../../../src/generated/types/reviewProposalAction.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,wBAAwB,EAAE,MAAM,4BAA4B,CAAC;AAC3E,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,wBAAwB,CAAC;AAEnE,MAAM,WAAW,oBAAoB;IACnC,IAAI,EAAE,wBAAwB,CAAC;IAC/B,MAAM,EAAE,oBAAoB,CAAC;CAC9B"}

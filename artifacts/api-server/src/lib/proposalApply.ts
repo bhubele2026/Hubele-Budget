@@ -14,6 +14,7 @@ import { writeOwnerAllowancePlan } from "./allowancePlanWriter";
 import { syncAvalanchePaymentCategory } from "../routes/avalanche";
 import { householdTodayISO } from "./householdClock";
 import { monthStartOf, type PlanPayload } from "./proposalTargets";
+import { PLAN_UNSAFE, planWriteGate } from "./planSafety";
 
 // (AI-2) THE ONLY PLACE A PROPOSAL BECOMES A CHANGE — called by
 // POST /agent/proposals/:id/approve for a signed-in person, never by the
@@ -31,7 +32,8 @@ export interface Approver {
 
 export type ApplyResult =
   | { ok: true; actionId: string }
-  | { ok: false; status: 403 | 404 | 409; error: string };
+  /** (F1) `code: "plan_unsafe"` when the plan gate refused a weekly limit (`planSafety.ts`). */
+  | { ok: false; status: 403 | 404 | 409; error: string; code?: typeof PLAN_UNSAFE };
 
 async function recordAction(
   p: AgentProposal,
@@ -73,6 +75,9 @@ export async function applyProposal(p: AgentProposal, who: Approver): Promise<Ap
 
   if (p.kind === "weekly_limit") {
     if (!who.isOwner) return { ok: false, status: 403, error: "Only the household owner sets the weekly limit." };
+    // ⭐ (F1) No plan while the forecast cannot size the card payments it moves.
+    const gate = await planWriteGate(householdId, who.ownerUserId);
+    if (!gate.ok) return { ok: false, status: 409, error: gate.reason, code: gate.code };
     const r = await writeOwnerAllowancePlan(householdId, payload.target, { amount: fixed });
     if (!r.ok) return { ok: false, status: r.reason === "conflict" ? 409 : 404, error: r.reason === "conflict" ? "Another plan already starts that day." : "That plan no longer exists." };
     return {

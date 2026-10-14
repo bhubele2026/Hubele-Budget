@@ -23,9 +23,12 @@ import {
 } from "../lib/allowancePlans";
 import {
   createOwnerAllowancePlan,
+  planStartProblem,
   writeOwnerAllowancePlan,
   type AllowancePlanWriteResult,
 } from "../lib/allowancePlanWriter";
+import { planUnsafeBody, planWriteGate } from "../lib/planSafety";
+import { planDryRun } from "../lib/planDryRun";
 import { buildAffordBaseline } from "../lib/afford";
 import { evaluateWishlist } from "../jobs/handlers/wishlistEvaluate";
 import { buildWaysBack, deleteCarryOver, upsertCarryOver, WeekAdjustmentError } from "../lib/weekAdjustments";
@@ -339,6 +342,27 @@ router.post("/allowance-plans", requireAuth, async (req, res): Promise<void> => 
     return;
   }
   const todayISO = householdTodayISO();
+  // (F1) The request's own mistakes answer first (400), then the gate (409).
+  const problem = !(Number(amount) > 0) ? "amount_not_positive" : planStartProblem(period, effectiveFrom, todayISO);
+  if (problem) {
+    const refusal = PLAN_WRITE_REFUSAL[problem];
+    res.status(refusal.status).json({ error: refusal.error });
+    return;
+  }
+  // ⭐ (F1) `?dryRun=1`: the same body, nothing written — each hook occurrence the
+  // plan governs before → after (with its split), the low point before → after,
+  // and the gate's answer (a refused plan still shows its effect).
+  const dryRun = req.query.dryRun;
+  if (dryRun === "1" || dryRun === "true") {
+    res.json(await planDryRun(req.householdId!, req.householdOwnerId!, { period, amount, effectiveFrom }));
+    return;
+  }
+  // ⭐ (F1) No plan while the forecast cannot size the card payments it moves.
+  const gate = await planWriteGate(req.householdId!, req.householdOwnerId!);
+  if (!gate.ok) {
+    res.status(409).json(planUnsafeBody(gate));
+    return;
+  }
   await sendPlanWrite(res, req.householdId!, todayISO, await createOwnerAllowancePlan(req.householdId!, { period, amount, effectiveFrom }, todayISO));
 });
 
@@ -377,6 +401,12 @@ router.put("/allowance-plans/:id", requireAuth, async (req, res): Promise<void> 
     return;
   }
   const todayISO = householdTodayISO();
+  // ⭐ (F1) No plan while the forecast cannot size the card payments it moves.
+  const gate = await planWriteGate(req.householdId!, req.householdOwnerId!);
+  if (!gate.ok) {
+    res.status(409).json(planUnsafeBody(gate));
+    return;
+  }
   await sendPlanWrite(
     res,
     req.householdId!,

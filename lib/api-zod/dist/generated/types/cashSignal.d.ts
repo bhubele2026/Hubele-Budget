@@ -63,6 +63,20 @@ export interface CashSignal {
   reserve $380 · no weekly plan set"); it is not a spending cap.
   `amount` is the occurrence's reserve before any review answer.
   Present only when the household has a hook occurrence.
+  
+  ⭐ (F1, owner's answers 2026-10-14) THE OBLIGATIONS MODEL. Each
+  occurrence is `incurred + carried + allowanceLeft` on the curve:
+  `incurred` = its own period's purchases − refunds on the cards paid
+  IN FULL at its cadence (debt-linked or not; never a DEBT-PLAN card's —
+  its minimum pays it) less the payments allocated to it (`paid`);
+  `carried` = earlier periods' unpaid in_full purchases, moved into the
+  latest occurrence already due (`carriedFrom` / `carriedTo`);
+  `allowanceLeft` = with a plan max(0, cap − spent) while open; with no
+  plan the stored amount less the period's purchases, never below 0; 0
+  once closed. `amount` = incurred + paid + carried + allowanceLeft (an
+  occurrence carried on: paid + allowanceLeft), so summed over the
+  reserves every obligation counts once; the curve holds `amount −
+  paid`. The F1 fields are always sent by an F1 server.
    */
     hookReserves?: CashSignalHookReservesItem[];
     /** (PR6) Unresolved expenses due more than 14 days ago that no bank

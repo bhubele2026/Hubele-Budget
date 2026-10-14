@@ -22,6 +22,12 @@
 //                 even count is the lower-rounded mean of the middle two).
 //                 Biggest spend first; ties by name, then id. Rows with no
 //                 category are never a trim (there is nothing to name).
+//                 ⭐ (F3) TO THE SAME WEEKDAY: the week is still running, so
+//                 each of the 8 weeks is cut at today's weekday
+//                 (`samePointInPeriod`: today Wednesday → that week's
+//                 Sunday–Wednesday) before the median; `usualFullWeek` keeps
+//                 the whole-week median beside it. `usualBasis` is always
+//                 "same_days" and `usualThrough` is today.
 //                 ⭐ (S6) REFUNDS NET, as the week's figure nets them: a row is
 //                 `allowanceRowOf`'s (a refund in the coverage it nets, its
 //                 credit negative), so a category's spend is purchases less
@@ -41,7 +47,7 @@
 
 import type { MoneyPosition } from "./availableToSpend";
 import type { MovementCoverage } from "./householdMoney";
-import { addDaysISO, dayOfWeekISO } from "./householdTime";
+import { addDaysISO, dayOfWeekISO, samePointInPeriod } from "./householdTime";
 
 /** How many trims the answer offers. */
 export const WAYS_BACK_TRIMS = 3;
@@ -90,8 +96,13 @@ export interface WaysBackTrim {
   name: string;
   /** This week's spend in the category, cents. */
   spentWeek: number;
-  /** The median weekly spend over the 8 weeks before, cents; null when none of them counts. */
+  /**
+   * The median weekly spend over the 8 weeks before, cents; null when none of
+   * them counts. (F3) Each week to today's weekday (see the header).
+   */
   usualWeek: number | null;
+  /** (F3) The median over the same 8 weeks, whole; null when none of them counts. */
+  usualFullWeek: number | null;
 }
 
 export interface WaysBack {
@@ -101,6 +112,10 @@ export interface WaysBack {
   daysLeft: number;
   hold: { perDay: number | null; leavesUntilPayday: number | null };
   trims: WaysBackTrim[];
+  /** (F3) The usual week is read to the same weekday: always "same_days" (the week is the current one). */
+  usualBasis: "same_days";
+  /** (F3) Today: each prior week is cut at its weekday. */
+  usualThrough: string;
   carryOver: {
     nextWeekStart: string;
     nextWeekCap: number | null;
@@ -155,18 +170,23 @@ export function computeWaysBack(inputs: WaysBackInputs): WaysBack {
   }
   const wanted = new Set(top.map((t) => t.categoryId));
   const perWeek = new Map<string, number>(); // `${weekStart}|${categoryId}` → cents
+  const perWeekToDate = new Map<string, number>(); // (F3) each week to today's weekday
   for (const r of inputs.rows) {
     if (!counts(r) || !wanted.has(r.categoryId) || r.date >= position.weekStart) continue;
     const ws = addDaysISO(r.date, -dayOfWeekISO(r.date));
     if (!weekStarts.includes(ws)) continue;
     const key = `${ws}|${r.categoryId}`;
     perWeek.set(key, (perWeek.get(key) ?? 0) + r.spendCents);
+    if (r.date <= samePointInPeriod("week", ws, position.todayISO)) {
+      perWeekToDate.set(key, (perWeekToDate.get(key) ?? 0) + r.spendCents);
+    }
   }
   const trims: WaysBackTrim[] = top.map((t) => ({
     categoryId: t.categoryId,
     name: t.name,
     spentWeek: t.spentWeek,
-    usualWeek: medianCents(weekStarts.map((ws) => perWeek.get(`${ws}|${t.categoryId}`) ?? 0)),
+    usualWeek: medianCents(weekStarts.map((ws) => perWeekToDate.get(`${ws}|${t.categoryId}`) ?? 0)),
+    usualFullWeek: medianCents(weekStarts.map((ws) => perWeek.get(`${ws}|${t.categoryId}`) ?? 0)),
   }));
 
   // ── Carry-over: next week with the overage taken out (or the choice already made).
@@ -181,6 +201,8 @@ export function computeWaysBack(inputs: WaysBackInputs): WaysBack {
     daysLeft,
     hold: { perDay, leavesUntilPayday: toCents(position.availableUntilPayday) },
     trims,
+    usualBasis: "same_days",
+    usualThrough: position.todayISO,
     carryOver: {
       nextWeekStart,
       nextWeekCap: capCents == null ? null : Math.max(0, capCents + adjustmentCents),

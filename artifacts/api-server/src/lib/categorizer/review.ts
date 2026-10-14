@@ -1,8 +1,19 @@
 // (PR-A) The review queue: open decisions (provisional | queue, unresolved,
 // not undone), oldest first, and what a person can do with one.
 import { and, asc, count, eq, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
-import { db, categoryDecisionsTable, merchantMemoryTable, transactionsTable } from "@workspace/db";
+import {
+  db,
+  budgetCategoriesTable,
+  categoryDecisionsTable,
+  merchantMemoryTable,
+  plaidAccountsTable,
+  transactionsTable,
+} from "@workspace/db";
+import { categoryDirectionConflict, isCardLedgerRow, type DirectionConflict } from "@workspace/avalanche-core";
 import { merchantSignature } from "../merchantNameExtract";
+import { uncategorizedCategoryIds } from "../pendingFiling";
+import { spendContextOf } from "../spendContext";
+import { DIRECTION_EXPLANATION } from "./direction";
 import { rowsWithSignatures, type RetroactiveCandidates } from "./memory";
 import { categoryBelongs, recordHandFiling, setCategoryByHand } from "./userDecisions";
 
@@ -218,7 +229,60 @@ export type ReviewOutcome =
         retroactiveCandidates: RetroactiveCandidates | null;
       };
     }
-  | { status: 400 | 404 | 409; body: { error: string } };
+  | { status: 400 | 404 | 409; body: { error: string; code?: "direction_conflict"; conflict?: DirectionConflict } };
+
+/**
+ * ⭐ (F2) THE QUEUE'S DIRECTION GUARD. Accept or Change never files money IN
+ * under an EXPENSE category, nor money OUT under an INCOME one — the one rule
+ * (`categoryDirectionConflict`, the engine's own guard) on the row as it is,
+ * with the category being picked. A refund (a credit on a card, or a REFUND
+ * word), a transfer, a debt row and the system categories are never a
+ * conflict. Null when the pick is fine; otherwise the conflict, and nothing is
+ * written.
+ */
+export async function queuePickConflict(
+  householdId: string,
+  txnId: string,
+  categoryId: string,
+): Promise<DirectionConflict | null> {
+  const [row] = await db
+    .select({
+      amount: transactionsTable.amount,
+      source: transactionsTable.source,
+      isTransfer: transactionsTable.isTransfer,
+      categoryId: transactionsTable.categoryId,
+      description: transactionsTable.description,
+      debtId: transactionsTable.debtId,
+      isExternalCardPayment: transactionsTable.isExternalCardPayment,
+      reimbursable: transactionsTable.reimbursable,
+      pfcDetailed: transactionsTable.pfcDetailed,
+      plaidAccountId: transactionsTable.plaidAccountId,
+    })
+    .from(transactionsTable)
+    .where(and(eq(transactionsTable.id, txnId), eq(transactionsTable.householdId, householdId)));
+  if (!row) return null;
+  const [cats, account] = await Promise.all([
+    db
+      .select({
+        id: budgetCategoriesTable.id,
+        name: budgetCategoriesTable.name,
+        debtId: budgetCategoriesTable.debtId,
+        kind: budgetCategoriesTable.kind,
+      })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.householdId, householdId)),
+    row.plaidAccountId
+      ? db
+          .select({ type: plaidAccountsTable.type })
+          .from(plaidAccountsTable)
+          .where(and(eq(plaidAccountsTable.householdId, householdId), eq(plaidAccountsTable.accountId, row.plaidAccountId)))
+      : Promise.resolve([] as { type: string | null }[]),
+  ]);
+  return categoryDirectionConflict(row, categoryId, spendContextOf(cats), {
+    isCardAccount: isCardLedgerRow(row.source, account[0]?.type ?? null),
+    uncategorizedIds: uncategorizedCategoryIds(cats),
+  });
+}
 
 async function openDecision(householdId: string, decisionId: string) {
   const [d] = await db
@@ -255,6 +319,13 @@ export async function resolveDecision(
   const target = action === "correct" ? (categoryId ?? null) : action === "accept" ? d.categoryId : null;
   if (action === "correct" && (!target || !(await categoryBelongs(householdId, target)))) {
     return { status: 400, body: { error: "Unknown category." } };
+  }
+  // (F2) Accept / Change never file against the money's direction: 409, nothing written.
+  if (target) {
+    const conflict = await queuePickConflict(householdId, d.transactionId, target);
+    if (conflict) {
+      return { status: 409, body: { error: DIRECTION_EXPLANATION[conflict], code: "direction_conflict", conflict } };
+    }
   }
   if (action === "skip" || (action === "accept" && !target)) {
     const resolution = action === "skip" ? "skipped" : "accepted";

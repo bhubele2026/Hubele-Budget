@@ -81,6 +81,13 @@ export {
   type BankReviewSummary,
   type BankReviewSummaryRow,
   type BankReviewTotalsCents,
+  cashVarianceOf,
+  directionOfPlanKind,
+  type BankReviewCashVariance,
+  type BankReviewDirection,
+  type BankReviewPlanKind,
+  type BankReviewVarianceKind,
+  type BankReviewVarianceTotals,
 } from "./bankReview";
 export {
   canSupersede,
@@ -98,6 +105,25 @@ export {
   type CashRowReason,
   type CashRowsResult,
 } from "./cashRows";
+// (F3) The bank balance check: the comparison's own rules on top of the cash rule, and the review's answer.
+export {
+  BANK_CHECK_EPSILON,
+  BANK_CHECK_MAX_IDS,
+  BANK_CHECK_STALE_DAYS,
+  bankBalanceCheckOf,
+  bankCheckLedger,
+  type BankBalanceCheck,
+  type BankBalanceCheckArgs,
+  type BankBalanceField,
+  type BankCheckDirection,
+  type BankCheckIds,
+  type BankCheckLedger,
+  type BankCheckLedgerInputs,
+  type BankCheckReason,
+  type BankCheckRecordInput,
+  type BankCheckStaleReason,
+  type BankCheckStatus,
+} from "./bankCheck";
 export {
   CARD_PAYMENT_PATTERNS,
   CARD_PAYMENT_WORD_PREFIXES,
@@ -144,6 +170,7 @@ export {
   dayOfWeekISO,
   weekBounds,
   monthBounds,
+  samePointInPeriod,
   localDateInZone,
   zonedTimeToUtc,
 } from "./householdTime";
@@ -229,7 +256,32 @@ export {
   type AllowancePeriodFigures,
   type PeriodBreakdownCore,
   type PeriodBreakdownInputs,
+  BREAKDOWN_PROVISIONAL_MIN_CENTS,
+  BREAKDOWN_PROVISIONAL_SHARE,
+  isProvisional,
+  type BreakdownUnresolvedGroup,
+  type UsualBasis,
 } from "./periodBreakdown";
+// (F2) The evidence rule: is an unfiled outflow a purchase, a payment, or unresolved?
+export {
+  PFC_PRIMARIES,
+  PFC_WITHDRAWAL,
+  PURCHASE_PFC_PRIMARIES,
+  classifyEvidence,
+  namesPersonToPersonRail,
+  pfcOf,
+  type BillSuggestionRef,
+  type CarriedPfc,
+  type EvidenceClass,
+  type EvidenceContext,
+  type EvidenceField,
+  type EvidenceItem,
+  type EvidenceReason,
+  type EvidenceRow,
+  type EvidenceSuggestion,
+  type RowEvidence,
+  type SuggestionKind,
+} from "./evidenceRule";
 export {
   rollForwardBalance,
   walkLedger,
@@ -927,6 +979,8 @@ export function payoffPct(
 // (PR-B2, decision 7) The everyday hooks: the funding bills become date hooks,
 // each occurrence replaced by the card payoff it stands for.
 export {
+  allocateHookPayments,
+  hookOccurrenceAmounts,
   hookPeriodOf,
   namesCardIssuer,
   nextHookOccurrence,
@@ -934,6 +988,11 @@ export {
   payoffsPaidBy,
   readEverydayHooks,
   type DuePayoff,
+  type HookAllocation,
+  type HookObligation,
+  type HookOccurrenceAmounts,
+  type HookOccurrenceFacts,
+  type HookPaymentEvidence,
   type EverydayHook,
   type EverydayHooks,
   type HookCadence,

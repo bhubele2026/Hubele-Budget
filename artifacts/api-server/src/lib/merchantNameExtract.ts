@@ -6,6 +6,8 @@
 // merchant label so the Spending tab can group by real merchant instead of
 // by raw bank string. Pure + regex-driven; no I/O.
 
+import { creditAmount } from "@workspace/avalanche-core";
+
 function titleCaseSmart(s: string): string {
   const t = s.trim();
   if (!t) return t;
@@ -112,6 +114,57 @@ export function merchantSignature(rawDescription: string): string {
     .trim();
 
   return out;
+}
+
+// ── (F2) Merchant memory is SIGN-AWARE ───────────────────────────────────────
+//
+// The owner's payroll deposit and the small cafeteria charges at the same
+// employer share one merchant signature. One memory for both meant a paycheck
+// accepted as "Paycheck" re-pointed the cafeteria's memory, and a cafeteria
+// charge filed "Dining" re-pointed the paycheck's — the payroll CREDIT ended
+// up filed under an expense category. From F2 on, money IN learns and reads
+// under its own key, `in:<signature>`; money OUT keeps the plain signature, so
+// every memory learned before F2 from a purchase keeps working unchanged. The
+// key can never collide with a signature: `merchantSignature` drops ":".
+//
+// A memory row's DIRECTION (`memoryRowDirection`): an `in:` key is money in. A
+// plain key is money out — except a row learned before F2 into an INCOME
+// category, which can only have been learned from money in (filing money out
+// as income is a direction conflict the engine never writes); that legacy row
+// stays money in's. No stored row is rewritten.
+
+/** Which way a row's money moves, as merchant memory keys it. */
+export type MemoryDirection = "in" | "out";
+
+/** The prefix money-in memory is keyed under. */
+export const MEMORY_IN_PREFIX = "in:";
+
+/**
+ * Money in or out: a credit (`creditAmount` > 0 — a bank row above zero, a
+ * workbook Amex row below zero) is in; everything else is out.
+ */
+export function memoryDirectionOf(row: { amount: string | number; source: string }): MemoryDirection {
+  return creditAmount(row) > 0 ? "in" : "out";
+}
+
+/** ⭐ The key merchant memory learns and reads a row under: `in:<signature>` for money in, the plain signature for money out ("" with none). */
+export function memoryKeyOf(row: { description: string; amount: string | number; source: string }): string {
+  const sig = merchantSignature(row.description);
+  if (!sig) return "";
+  return memoryDirectionOf(row) === "in" ? `${MEMORY_IN_PREFIX}${sig}` : sig;
+}
+
+/** A stored memory key: its plain signature, and whether it is an `in:` key. */
+export function parseMemoryKey(key: string): { signature: string; inKey: boolean } {
+  return key.startsWith(MEMORY_IN_PREFIX)
+    ? { signature: key.slice(MEMORY_IN_PREFIX.length), inKey: true }
+    : { signature: key, inKey: false };
+}
+
+/** A memory row's direction: its key, or (a plain key) its category's kind. See the section header. */
+export function memoryRowDirection(key: string, categoryKind: string | null | undefined): MemoryDirection {
+  if (parseMemoryKey(key).inKey) return "in";
+  return categoryKind === "income" ? "in" : "out";
 }
 
 /**

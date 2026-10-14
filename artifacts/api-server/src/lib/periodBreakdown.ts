@@ -47,10 +47,13 @@ import {
   priorPeriodStarts,
   weekBounds,
   weeklyCapCents,
+  type BillSuggestionRef,
   type BreakdownEntry,
   type BreakdownPeriod,
   type BreakdownRowInput,
+  type EvidenceContext,
   type MovementClassification,
+  type RowEvidence,
 } from "@workspace/avalanche-core";
 import { computeCashSignalDetailed, type DetailedCashSignal } from "./cashSignal";
 import { loadAllowanceWindow, type ClassifiedMovement, type MoneyContext, type MovementRowRead } from "./moneyContext";
@@ -60,6 +63,7 @@ import { TRACKING_START, buildSpendingFacts } from "./spendingFacts";
 import { householdTodayISO } from "./householdClock";
 import { expandSplits, loadSplitsForTxns } from "./categorizer/splits";
 import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
+import { billSuggestionsOf, evidenceContextOf, rowEvidenceOf } from "./rowEvidence";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -104,6 +108,8 @@ interface PeriodRead {
   movement: ClassifiedMovement[];
   money: MoneyContext;
   tier2PairedTxnIds: ReadonlySet<string>;
+  /** (F2) The bills the forecast only suggests for rows (`billSuggestionsOf`, the same ledger). */
+  billSuggestions: ReadonlyMap<string, BillSuggestionRef>;
   planCents: number | null;
   plan: PlanView;
   carryOverCents: number | null;
@@ -182,6 +188,7 @@ async function readPeriod(
         movement: read.weekMovement,
         money: read.money,
         tier2PairedTxnIds: read.money.tier2PairedTxnIds,
+        billSuggestions: billSuggestionsOf(read.cash.ledger, read.money.supersede),
         planCents: capCents,
         plan: planViewOf(period, start, read.allowancePlans, read.money.settings.weeklyAllowanceOverrides, capCents),
         carryOverCents: read.inputs.weekAdjustmentCents ?? null,
@@ -212,6 +219,7 @@ async function readPeriod(
     movement: window.movement,
     money: window.money,
     tier2PairedTxnIds,
+    billSuggestions: billSuggestionsOf(cash.ledger, window.money.supersede),
     planCents: capCents,
     plan: planViewOf(period, start, plans, overrides, capCents),
     carryOverCents: adjustments?.get(start)?.amountCents ?? null,
@@ -288,6 +296,8 @@ async function loadAccountIdentities(householdId: string): Promise<Map<string, A
 interface RowItem {
   row: MovementRowRead;
   m: MovementClassification;
+  /** (F2) The evidence rule's answer for the row (null for the history rows `usual` reads, and where it says nothing). */
+  evidence: RowEvidence | null;
 }
 
 /** The period's (or a prior period's) rows, in scope, as the pure breakdown reads them — split parts attached. */
@@ -296,22 +306,29 @@ async function breakdownRowsOf(
   period: BreakdownPeriod,
   movement: readonly ClassifiedMovement[],
   inScope: (row: MovementRowRead) => boolean,
+  evidenceCtx: EvidenceContext | null,
 ): Promise<BreakdownRowInput<RowItem>[]> {
   const counted = new Set<string>(breakdownCountedCoverages(period));
   const scoped = movement
     .filter(({ row }) => inScope(row))
-    .map(({ row, m }) => ({ row, m, allowance: allowanceRowOf(row, m) }));
+    .map(({ row, m }) => ({
+      row,
+      m,
+      allowance: allowanceRowOf(row, m),
+      evidence: evidenceCtx ? rowEvidenceOf(row, m, evidenceCtx) : null,
+    }));
   // Split parts only for the rows that count (one query, valid parents only;
   // `expandSplits` drops any whose parts do not add up to the row).
   const counting = scoped.filter((r) => counted.has(r.allowance.coverage)).map((r) => ({ id: r.row.id, amount: String(r.row.amount) }));
   const parts = expandSplits(counting, await loadSplitsForTxns(householdId, counting.map((r) => r.id)));
-  return scoped.map(({ row, m, allowance }) => ({
+  return scoped.map(({ row, m, allowance, evidence }) => ({
     id: row.id,
     date: row.occurredOn,
     allowance,
     categoryId: row.categoryId ?? null,
     splitParts: parts.get(row.id) ?? null,
-    item: { row, m },
+    evidenceClass: evidence?.class ?? null,
+    item: { row, m, evidence },
   }));
 }
 
@@ -351,6 +368,32 @@ function rowView(
     // `loadAllowanceWindow` always classifies with `explain`, so `rule` is always said.
     reason: { coverage: m.coverage, nets: m.nets ?? null, rule: m.rule! },
     splitPart: e.splitPart ? { index: e.splitPart.index, count: e.splitPart.count, parentAmount: money(e.splitPart.parentCents) } : null,
+    evidence: evidenceView(e.item.evidence),
+  };
+}
+
+/** (F2) A row's evidence as the response states it: its class, why, what was read, and what it probably is. */
+function evidenceView(ev: RowEvidence | null) {
+  if (!ev) return null;
+  return {
+    class: ev.class,
+    reason: ev.reason,
+    items: ev.evidence.map((i) => ({ field: i.field, value: i.value })),
+    suggestion: ev.suggestion
+      ? {
+          kind: ev.suggestion.kind,
+          detail: ev.suggestion.detail,
+          target: ev.suggestion.target
+            ? {
+                kind: ev.suggestion.target.kind,
+                id: ev.suggestion.target.itemId,
+                label: ev.suggestion.target.label,
+                planKey: ev.suggestion.target.planKey,
+                occurrenceDate: ev.suggestion.target.occurrenceDate,
+              }
+            : null,
+        }
+      : null,
   };
 }
 
@@ -396,10 +439,12 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
         )
       : null;
 
+  // (F2) The evidence rule reads the period's own money context and the forecast's suggestions.
+  const evidenceCtx = evidenceContextOf(read.money, read.billSuggestions);
   const [rows, history, accounts, aliasRows, facts] = await Promise.all([
-    breakdownRowsOf(householdId, period, read.movement, inScope),
+    breakdownRowsOf(householdId, period, read.movement, inScope, evidenceCtx),
     historyRead
-      ? historyRead.then((h) => breakdownRowsOf(householdId, period, h.movement, inScope))
+      ? historyRead.then((h) => breakdownRowsOf(householdId, period, h.movement, inScope, null))
       : Promise.resolve([] as BreakdownRowInput<RowItem>[]),
     loadAccountIdentities(householdId),
     loadMerchantAliases(householdId),
@@ -421,6 +466,8 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
     },
     categoryNames,
     rowsPerGroup: q.rowsPerGroup,
+    // (F3) A period still running compares the same days of each prior period.
+    sameDaysThrough: read.isCurrent ? read.todayISO : null,
   });
 
   const view = {
@@ -452,9 +499,12 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
     plan: read.plan,
     carryOver: moneyOrNull(read.carryOverCents),
     actual: money(core.actualCents),
+    // (F2) known + unresolved.amount === actual; the plan comparison reads known.
+    known: money(core.knownCents),
     remaining: moneyOrNull(core.remainingCents),
     over: moneyOrNull(core.overCents),
     withinPlan: core.withinPlan,
+    provisional: core.provisional,
     categories: core.categories.map((c) => ({
       categoryId: c.categoryId,
       name: c.name,
@@ -462,6 +512,7 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
       shareBp: c.shareBp,
       count: c.count,
       usual: moneyOrNull(c.usualCents),
+      usualFullPeriod: moneyOrNull(c.usualFullPeriodCents),
       aboveUsual: moneyOrNull(c.aboveUsualCents),
       rows: c.rows.map((e) => rowView(e, view)),
       truncated: c.truncated,
@@ -473,7 +524,23 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
       truncated: core.needsClassification.truncated,
       countsAgainstPlan: core.needsClassification.countsAgainstPlan,
     },
+    unresolved: {
+      amount: money(core.unresolved.cents),
+      nettedByRefunds: money(core.unresolved.nettedByRefundsCents),
+      count: core.unresolved.count,
+      rows: core.unresolved.rows.map((e) => rowView(e, view)),
+      truncated: core.unresolved.truncated,
+    },
+    excludedPayments: {
+      amount: money(core.excludedPayments.cents),
+      count: core.excludedPayments.count,
+      rows: core.excludedPayments.rows.map((e) => rowView(e, view)),
+      truncated: core.excludedPayments.truncated,
+    },
     refundFloorAdjustment: money(core.refundFloorAdjustmentCents),
+    // (F3) How `usual` was read, and (for the current period) through which day.
+    usualBasis: core.usualBasis,
+    usualThrough: core.usualThrough,
     beside: {
       unplanned: money(core.beside.unplannedCents),
       weekly: moneyOrNull(core.beside.weeklyCents),

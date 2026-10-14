@@ -35,6 +35,7 @@ import learnedRulesRouter from "./learnedRules";
 import aiRouter from "./ai";
 import goalsRouter from "./goals";
 import bankingRouter from "./banking";
+import reviewProposalsRouter from "./reviewProposals";
 import { ledgerWriteFence } from "../middlewares/ledgerWriteFence";
 
 const router: IRouter = Router();
@@ -78,5 +79,6 @@ router.use(learnedRulesRouter);
 router.use(aiRouter);
 router.use(goalsRouter);
 router.use(bankingRouter);
+router.use(reviewProposalsRouter);
 
 export default router;

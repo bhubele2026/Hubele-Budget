@@ -135,6 +135,7 @@ function formatTxnDate(iso: string): string {
 // two surfaces always agree. Source-aware: Amex charges are stored positive,
 // bank/Chase charges negative — both count as spend.
 import { expenseMagnitude as expenseAmount } from "@/lib/bucketSpend";
+import { planRefusalReason } from "@/lib/planWords";
 
 // How many COMPLETED weeks in a row, ending last week, did they blow the
 // weekly allowance? Walks back week-by-week from the last finished Sun–Sat
@@ -795,7 +796,7 @@ export default function AllowancesPage() {
       } catch (e) {
         toast({
           title: "Couldn't update",
-          description: (e as Error).message,
+          description: planRefusalReason(e) ?? (e as Error).message,
           variant: "destructive",
         });
       }
@@ -814,7 +815,7 @@ export default function AllowancesPage() {
     } catch (e) {
       toast({
         title: "Couldn't update",
-        description: (e as Error).message,
+        description: planRefusalReason(e) ?? (e as Error).message,
         variant: "destructive",
       });
     }

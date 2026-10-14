@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CashSignalHookReservesItemBasis } from "./cashSignalHookReservesItemBasis";
+import type { CashSignalHookReservesItemCarriedFromItem } from "./cashSignalHookReservesItemCarriedFromItem";
 import type { CashSignalHookReservesItemHook } from "./cashSignalHookReservesItemHook";
+import type { HookReserveCard } from "./hookReserveCard";
 
 export type CashSignalHookReservesItem = {
   hook: CashSignalHookReservesItemHook;
@@ -18,4 +20,23 @@ export type CashSignalHookReservesItem = {
   label: string;
   amount: string;
   basis: CashSignalHookReservesItemBasis;
+  /** (F1) The hook item's stored amount (the no-plan reserve) */
+  storedAmount?: string;
+  /** (F1) Its own period's in_full purchases − refunds still unpaid */
+  incurred?: string;
+  /** (F1) Payments allocated to its own period (oldest obligation first) */
+  paid?: string;
+  /** (F1) Earlier unpaid periods carried into it */
+  carried?: string;
+  /** (F1) The occurrences carried in, oldest first */
+  carriedFrom?: CashSignalHookReservesItemCarriedFromItem[];
+  /**
+   * (F1) The occurrence date its unpaid part was carried into
+   * @nullable
+   */
+  carriedTo?: string | null;
+  /** (F1) What is left of the period's allowance (the plan's, or the stored reserve's) */
+  allowanceLeft?: string;
+  /** (F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds */
+  cards?: HookReserveCard[];
 };

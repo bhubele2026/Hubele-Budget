@@ -33,6 +33,12 @@ export interface ReplacedPending {
   /** (round 3 M1) The rules match on it: was the pending row's category a hand filing? */
   description: string;
   filing: Filing;
+  /**
+   * (F2) The pending row's Plaid categories — EVIDENCE only, never filing: the
+   * evidence rule reads them for a posted row that has none of its own
+   * (`carriedPfcEvidence`, pendingFiling.ts).
+   */
+  pfc?: { pfcPrimary: string | null; pfcDetailed: string | null };
 }
 
 export type SupersededPending = {
@@ -267,6 +273,9 @@ export function supersedeCandidatesQuery(
       pIsTransferUserOverridden: pendingRow.isTransferUserOverridden,
       // (PR-A) The pending row's lock, carried with its category.
       pCategoryLockedByUser: pendingRow.categoryLockedByUser,
+      // (F2) Its Plaid categories: evidence a posted row with none may read.
+      pPfcPrimary: pendingRow.pfcPrimary,
+      pPfcDetailed: pendingRow.pfcDetailed,
       qId: postedRow.id,
       qAccount: postedRow.plaidAccountId,
       qOn: postedRow.occurredOn,
@@ -338,6 +347,7 @@ function pairCandidates(
   // One object per row, and each posted row's candidate pending rows.
   const rows = new Map<string, SupersedeRow>();
   const filingById = new Map<string, Filing>();
+  const pfcById = new Map<string, NonNullable<ReplacedPending["pfc"]>>();
   const candidatesByPosted = new Map<string, SupersedeRow[]>();
   const rowOf = (r: SupersedeRow): SupersedeRow => {
     const seen = rows.get(r.id);
@@ -360,6 +370,7 @@ function pairCandidates(
         isTransferUserOverridden: c.pIsTransferUserOverridden,
         categoryLockedByUser: c.pCategoryLockedByUser,
       });
+      pfcById.set(c.pId, { pfcPrimary: c.pPfcPrimary, pfcDetailed: c.pPfcDetailed });
     }
     rowOf(postedRowOf(c));
     const list = candidatesByPosted.get(c.qId);
@@ -383,6 +394,7 @@ function pairCandidates(
         occurredOn: pending.occurredOn,
         description: pending.description ?? "",
         filing: filingById.get(pending.id)!,
+        pfc: pfcById.get(pending.id) ?? { pfcPrimary: null, pfcDetailed: null },
       });
     }
   }

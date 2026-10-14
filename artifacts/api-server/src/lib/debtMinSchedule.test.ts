@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { expandDebtMin } from "./debtMinSchedule";
+import { buildDebtMinSchedule, expandAvalancheExtra, expandDebtMin, resolutionScheduleLookup } from "./debtMinSchedule";
+import { activeSimDebts } from "./avalancheSim";
 import { debtsTable, recurringItemsTable } from "@workspace/db";
 
 type DebtRow = typeof debtsTable.$inferSelect;
@@ -200,5 +201,34 @@ describe("expandDebtMin", () => {
     );
     expect(events).toHaveLength(1);
     expect(events[0].amount).toBe(-75.5);
+  });
+});
+
+// (F1) A debt linked to a card the owner pays IN FULL: the everyday hook pays
+// the card, so its minimum is never a second outflow.
+
+describe("(F1) in_full cards: no minimum, no schedule, out of the avalanche population", () => {
+  const from = new Date(2026, 9, 1);
+  const to = new Date(2026, 10, 30);
+  it("expandDebtMin emits nothing for an in_full card's debt; the same debt otherwise emits its minimum", () => {
+    expect(expandDebtMin(debt(), null, from, to, { inFull: true })).toEqual([]);
+    expect(expandDebtMin(debt(), null, from, to).map((e) => e.date)).toEqual(["2026-10-15", "2026-11-15"]);
+  });
+  it("buildDebtMinSchedule builds no row for it (the Bills page)", () => {
+    const today = new Date(2026, 9, 14);
+    expect(buildDebtMinSchedule([debt()], [], today, { inFullDebtIds: new Set(["d-1"]) }).rows).toEqual([]);
+    expect(buildDebtMinSchedule([debt()], [], today).rows.map((r) => r.debtId)).toEqual(["d-1"]);
+  });
+  it("resolutionScheduleLookup has no occurrences for it", () => {
+    const lookup = resolutionScheduleLookup([], [debt()], new Map(), { inFullDebtIds: new Set(["d-1"]) });
+    expect(lookup("debt:d-1")?.occurrences(from, to)).toEqual([]);
+  });
+  it("activeSimDebts leaves it out; expandAvalancheExtra's horizon is the other debts'", () => {
+    const other = debt({ id: "d-2", name: "Loan", balance: "100.00", minPayment: "50.00", apr: "0.0500" });
+    expect(activeSimDebts([debt(), other], { exclude: new Set(["d-1"]) }).map((d) => d.id)).toEqual(["d-2"]);
+    const today = new Date(2026, 9, 14);
+    // With the in_full card's $1,000 out, a $100 extra clears the $100 loan this month: one extra, at October's end.
+    expect(expandAvalancheExtra([debt(), other], 100, from, to, today, { inFullDebtIds: new Set(["d-1"]) }).map((e) => e.date)).toEqual(["2026-10-31"]);
+    expect(expandAvalancheExtra([debt(), other], 100, from, to, today).map((e) => e.date)).toEqual(["2026-10-31", "2026-11-30"]);
   });
 });

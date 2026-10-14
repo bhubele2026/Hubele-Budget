@@ -66,6 +66,7 @@ import {
   EXPECTED_OCTOBER,
   NOW,
   OCTOBER_TOTALS,
+  OCTOBER_VARIANCE,
   PLANNED_OCTOBER,
   PLANS,
   ROWS,
@@ -339,6 +340,11 @@ describe("S4 · GET /banking/review — the forecast account", () => {
       });
     }
     expect(r.notInPlan.amountDifference.differenceTotal).toBe("233.40");
+    // (F2) Cash variance per bucket, money in and out apart.
+    for (const b of BUCKETS) {
+      const { varianceIn, varianceOut } = r.notInPlan[b];
+      expect({ varianceIn, varianceOut }, b).toEqual(OCTOBER_VARIANCE[b]);
+    }
     for (const b of ["timingDifference", "confirmedUnplanned", "uncertain", "unmatched"] as const) {
       expect(r.notInPlan[b].differenceTotal).toBeNull();
     }
@@ -434,6 +440,23 @@ describe("S4 · GET /banking/review — the forecast account", () => {
       plan: { label: "Lawn Service", planned: "-75.00", difference: "0.00", dayDelta: 0 },
     });
     expect(byKey.get("spectrum")).toMatchObject({ reason: "needs_review", plan: { label: "Internet", planned: "-70.00" } });
+    // (F2) Direction-aware: each row says which way the money went; each plan its
+    // kind, positive magnitudes, and the variance in CASH terms (row − plan).
+    expect(byKey.get("capone")).toMatchObject({
+      direction: "out",
+      classificationIssue: null,
+      plan: { eventKind: "debt", direction: "out", expected: "40.00", actual: "300.00", variance: "-260.00", varianceKind: "over_planned" },
+    });
+    expect(byKey.get("insurance")).toMatchObject({
+      plan: { eventKind: "bill", direction: "out", expected: "200.00", actual: "150.00", variance: "50.00", varianceKind: "under_planned" },
+    });
+    expect(byKey.get("electric")).toMatchObject({
+      plan: { eventKind: "bill", expected: "120.00", actual: "135.40", variance: "-15.40", varianceKind: "over_planned" },
+    });
+    expect(byKey.get("gym")).toMatchObject({ plan: { variance: "0.00", varianceKind: null } });
+    expect(byKey.get("refund")).toMatchObject({ direction: "in", classificationIssue: null, plan: null });
+    expect(byKey.get("irs")).toMatchObject({ direction: "in", classificationIssue: null });
+    for (const x of all) expect(x.direction, x.id).toBe(cents(x.amount) > 0 ? "in" : "out");
     // Largest first inside a bucket.
     const unmatched = r.notInPlan.unmatched.rows.map((x: Json) => keyOfRow.get(x.id));
     expect(unmatched).toEqual(["toSavings", "irs", "toyota", "amexPayment", "deposit", "target", "kroger", "refund", "starbucks"]);
@@ -459,6 +482,14 @@ describe("S4 · GET /banking/review — the forecast account", () => {
     expect(insurance).toMatchObject({ remainder: "-50.00", onCurve: true, txnOnThisAccount: true });
     const internet = (r.planned as Json[]).find((p) => p.label === "Internet")!;
     expect(internet).toMatchObject({ onCurve: true, txnId: null });
+    // (F2) Each plan's kind and direction; expected / actual are magnitudes and the
+    // variance is signed in cash terms (received more or paid less = positive).
+    const byLabel = new Map((r.planned as Json[]).map((p) => [p.label, p] as const));
+    expect(byLabel.get("Paycheck")).toMatchObject({ eventKind: "income", direction: "in", expected: "2000.00", actual: "2000.00", variance: "0.00", varianceKind: null });
+    expect(byLabel.get("Capital One Platinum minimum")).toMatchObject({ eventKind: "debt", direction: "out", expected: "40.00", actual: "300.00", variance: "-260.00", varianceKind: "over_planned" });
+    expect(byLabel.get("Car Insurance")).toMatchObject({ eventKind: "bill", direction: "out", expected: "200.00", actual: "150.00", variance: "50.00", varianceKind: "under_planned" });
+    expect(byLabel.get("Water Utility")).toMatchObject({ eventKind: "bill", variance: "-8.00", varianceKind: "over_planned" });
+    expect(internet).toMatchObject({ eventKind: "bill", direction: "out", expected: "70.00", actual: null, variance: null, varianceKind: null });
   });
 
   it("the ledger's plan occurrences do not reach the cash-signal output (the golden output is unchanged)", async () => {
@@ -545,6 +576,7 @@ describe("S4 · GET /banking/review — the forecast account", () => {
 
   it("balanceTie: not checked until a Sync stores one; then that check, for this account only", async () => {
     expect((await review("from=2026-10-01&to=2026-10-14")).balanceTie).toEqual({ status: "not_checked", checkedAt: null, unexplained: null });
+    expect((await review("from=2026-10-01&to=2026-10-14")).balanceCheck).toMatchObject({ status: "not_checked", reason: "never", stale: false });
     await db
       .update(forecastSettingsTable)
       .set({ lastBankReconciliation: { checkedAt: "2026-10-14T14:00:00.000Z", accountId: acct.chase.ext, unexplained: "-12.34", status: "drift" } })
@@ -555,8 +587,24 @@ describe("S4 · GET /banking/review — the forecast account", () => {
         checkedAt: "2026-10-14T14:00:00.000Z",
         unexplained: "-12.34",
       });
+      // (F3) A record written before F3 (four fields) still reads in full: off by, with no
+      // figures to compare and nothing to recompute from.
+      expect((await review("from=2026-10-01&to=2026-10-14")).balanceCheck).toMatchObject({
+        status: "off_by",
+        reason: null,
+        checkedAt: "2026-10-14T14:00:00.000Z",
+        bank: null,
+        h2: null,
+        difference: "12.34",
+        direction: "bank_lower",
+        lastDrift: null,
+      });
       // Another account's review never borrows the checking account's tie.
       expect((await review(`account=${acct.savings.rowId}&from=2026-10-01&to=2026-10-14`)).balanceTie.status).toBe("not_checked");
+      expect((await review(`account=${acct.savings.rowId}&from=2026-10-01&to=2026-10-14`)).balanceCheck).toMatchObject({
+        status: "not_checked",
+        reason: "not_forecast_account",
+      });
     } finally {
       await db.update(forecastSettingsTable).set({ lastBankReconciliation: null }).where(eq(forecastSettingsTable.userId, OWNER));
     }

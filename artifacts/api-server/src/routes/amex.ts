@@ -1,11 +1,24 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, settingsTable } from "@workspace/db";
-import { GetAmexSummaryQueryParams } from "@workspace/api-zod";
+import { GetAmexSummaryQueryParams, SetAmexCardPayoffModeBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { computeWeeklyPayoff } from "../lib/amexAnchor";
 import { resolveAmexAnchor } from "../lib/amexAnchorRead";
 import { AmexSummaryError, buildAmexSummary } from "../lib/amexSummary";
+import { loadCardPayoffModes, PAYOFF_MODE_PREF, type CardPayoffModeView } from "../lib/cardPayoffMode";
+
+/** (F1) A card's payoff mode as the API serves it. */
+const payoffModeView = (m: CardPayoffModeView) => ({
+  accountId: m.accountId,
+  name: m.name,
+  mask: m.mask,
+  cadence: m.cadence,
+  mode: m.mode,
+  source: m.source,
+  reason: m.reason,
+  debtId: m.debtId,
+});
 
 const router: IRouter = Router();
 
@@ -153,9 +166,64 @@ router.get("/amex/weekly-payoff", requireAuth, async (req, res): Promise<void> =
   const weekStart =
     typeof weekStartRaw === "string" && weekStartRaw.length > 0 ? weekStartRaw : undefined;
 
-  const payoff = await computeWeeklyPayoff(householdId, weekStart, req.householdOwnerId, { allCoverages: true });
+  const [payoff, modes] = await Promise.all([
+    computeWeeklyPayoff(householdId, weekStart, req.householdOwnerId, { allCoverages: true }),
+    loadCardPayoffModes(householdId, req.householdOwnerId!),
+  ]);
 
-  res.json(payoff);
+  // (F1) Additive: how every card is paid. `cards` and the combined totals are unchanged.
+  res.json({ ...payoff, payoffModes: modes.map(payoffModeView) });
+});
+
+/**
+ * ⭐ (F1) The owner says how one Amex card is paid: `in_full` (the everyday hook
+ * pays its purchases each period) or `debt_plan` (its minimum and the
+ * avalanche extra pay it; its new purchases are never reserved again). `null`
+ * clears the choice: the default from the card's debt row applies. The
+ * household's OWNER only. Stored in `settings.preferences.amexCardPayoffMode`
+ * (server-owned: a settings PUT can neither write nor clear it). Answers the
+ * card's resolved mode.
+ */
+router.put("/amex/cards/:accountId/payoff-mode", requireAuth, async (req, res): Promise<void> => {
+  if (!req.actualUserId || req.actualUserId !== req.householdOwnerId) {
+    res.status(403).json({ error: "owner_only" });
+    return;
+  }
+  const parsed = SetAmexCardPayoffModeBody.strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_mode" });
+    return;
+  }
+  const accountId = String(req.params.accountId ?? "");
+  const householdId = req.householdId!;
+  const ownerId = req.householdOwnerId!;
+  const cards = await loadCardPayoffModes(householdId, ownerId);
+  if (!cards.some((c) => c.accountId === accountId)) {
+    res.status(404).json({ error: "card_not_found" });
+    return;
+  }
+  const mode = parsed.data.mode ?? null;
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, ownerId))
+      .for("update");
+    const prefs = (row?.preferences as Record<string, unknown> | null | undefined) ?? {};
+    const current = prefs[PAYOFF_MODE_PREF];
+    const map: Record<string, unknown> = current && typeof current === "object" && !Array.isArray(current) ? { ...(current as Record<string, unknown>) } : {};
+    if (mode == null) delete map[accountId];
+    else map[accountId] = mode;
+    // (The key spelled out: the server-owned-keys scan reads writes as written.)
+    const next = { ...prefs, amexCardPayoffMode: map };
+    if (row) {
+      await tx.update(settingsTable).set({ preferences: next, updatedAt: new Date() }).where(eq(settingsTable.userId, ownerId));
+    } else {
+      await tx.insert(settingsTable).values({ userId: ownerId, householdId, preferences: next });
+    }
+  });
+  const after = (await loadCardPayoffModes(householdId, ownerId)).find((c) => c.accountId === accountId)!;
+  res.json(payoffModeView(after));
 });
 
 /**

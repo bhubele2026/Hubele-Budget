@@ -59,6 +59,7 @@ import { CARD_OWED } from "./amexAnchor";
 import { resolveAmexAnchor, type AmexAnchorAnswer } from "./amexAnchorRead";
 import { discoverAmexCards, type AmexBrand, type AmexCardRow } from "./amexCardCadence";
 import { avalancheRankOf } from "./avalancheSim";
+import { loadCardPayoffModes, type CardPayoffMode, type PayoffModeReason, type PayoffModeSource } from "./cardPayoffMode";
 import { isCalendarDay } from "./bankLedger";
 import { computeCashSignalDetailed } from "./cashSignal";
 import { loadLatestStatements } from "./debtLedger";
@@ -138,6 +139,12 @@ interface CardView {
   debtId: string | null;
   /** That card's own current balance (`resolveAmexAnchor` per card); null = unknown. */
   owed: string | null;
+  /**
+   * (F1) How the card is paid (`cardPayoffMode.ts`): `mode` null = not chosen
+   * yet (billed by the hook like in_full meanwhile); `source` says whether the
+   * owner chose it or it is the default from the card's debt row.
+   */
+  payoffMode: { mode: CardPayoffMode | null; source: PayoffModeSource; reason: PayoffModeReason };
 }
 
 export type AmexAttentionFlag =
@@ -254,6 +261,8 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
   }
   const scopeIds = scopeRows.map((c) => c.accountId);
   const inScope = new Set(scopeIds);
+  // (F1) How each card is paid — the hooks' own answer.
+  const modeById = new Map((await loadCardPayoffModes(householdId, ownerUserId, { preferences: prefs, roster })).map((m) => [m.accountId, m] as const));
 
   // ── Reads that do not depend on each other.
   const cashRead = computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: POSITION_HORIZON_DAYS });
@@ -349,6 +358,10 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
         debtLinked: debt != null,
         debtId: debt?.id ?? null,
         owed: own.amexEndingBalance == null ? null : money(toCents(own.amexEndingBalance)),
+        payoffMode: (() => {
+          const m = modeById.get(c.accountId);
+          return m ? { mode: m.mode, source: m.source, reason: m.reason } : { mode: null, source: "default" as const, reason: "debt_terms_missing" as const };
+        })(),
       };
     }),
   );
@@ -480,9 +493,17 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
     };
   };
   let planLink: PlanLinkView = NO_PLAN_LINK;
+  // ⭐ (F1) The plan a card answers to follows how it is paid: a card on the
+  // DEBT PLAN answers to its debt; a card paid IN FULL (or not chosen yet)
+  // answers to the hook of its cadence — an archived debt row no longer makes
+  // a card "the debt's" (before F1 any linked row did).
+  const paysInFull = (c: CardView) => c.payoffMode.mode !== "debt_plan";
   if (one) {
-    const debt = one.debtId ? (debts.find((d) => d.id === one.debtId) ?? null) : null;
-    if (debt) {
+    const hooked = paysInFull(one) ? hookLink(one.cadence) : null;
+    const debt = !hooked && one.debtId ? (debts.find((d) => d.id === (modeById.get(one.accountId)?.debtId ?? one.debtId)) ?? null) : null;
+    if (hooked) {
+      planLink = hooked;
+    } else if (debt) {
       const min = centsOf(debt.minPayment);
       planLink = {
         ...NO_PLAN_LINK,
@@ -498,8 +519,8 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
       planLink = hookLink(one.cadence) ?? NO_PLAN_LINK;
     }
   } else {
-    // Every card: the hook that pays the cards the band bills (not debt-linked), weekly first.
-    const billed = cards.filter((c) => !c.debtLinked);
+    // Every card: the hook that pays the cards paid in full (F1: by mode, not by debt link), weekly first.
+    const billed = cards.filter(paysInFull);
     planLink =
       (billed.some((c) => c.cadence === "weekly") ? hookLink("weekly") : null) ??
       (billed.some((c) => c.cadence === "monthly") ? hookLink("monthly") : null) ??

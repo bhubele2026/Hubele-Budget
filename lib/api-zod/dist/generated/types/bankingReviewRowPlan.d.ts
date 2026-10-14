@@ -5,6 +5,9 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BankingReviewDirection } from "./bankingReviewDirection";
+import type { BankingReviewPlanKind } from "./bankingReviewPlanKind";
+import type { BankingReviewVarianceKind } from "./bankingReviewVarianceKind";
 export interface BankingReviewRowPlan {
     key: string;
     label: string;
@@ -15,5 +18,23 @@ export interface BankingReviewRowPlan {
     difference: string | null;
     /** @nullable */
     dayDelta: number | null;
+    eventKind: BankingReviewPlanKind | null;
+    direction: BankingReviewDirection;
+    /**
+     * (F2) |planned|; null when not known
+     * @nullable
+     */
+    expected: string | null;
+    /**
+     * (F2) |row|
+     * @nullable
+     */
+    actual: string | null;
+    /**
+     * (F2) Signed in cash terms: row − planned (positive = more cash than planned)
+     * @nullable
+     */
+    variance: string | null;
+    varianceKind: BankingReviewVarianceKind | null;
 }
 //# sourceMappingURL=bankingReviewRowPlan.d.ts.map

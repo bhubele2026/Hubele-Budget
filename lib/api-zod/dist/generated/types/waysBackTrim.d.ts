@@ -11,9 +11,14 @@ export interface WaysBackTrim {
     /** This week's spend in the category, whole cents: (S6) purchases less refunds, as the week's spent figure and the period breakdown's category amount net them. Always > 0 (a fully refunded category is not a trim). */
     spentWeek: number;
     /**
-     * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts.
+     * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts. (F3) Each week read only to today's weekday (Sunday through usualThrough's weekday): the usual by today.
      * @nullable
      */
     usualWeek: number | null;
+    /**
+     * (F3) The same median over the whole 8 weeks, whole cents; null when no week counts
+     * @nullable
+     */
+    usualFullWeek: number | null;
 }
 //# sourceMappingURL=waysBackTrim.d.ts.map

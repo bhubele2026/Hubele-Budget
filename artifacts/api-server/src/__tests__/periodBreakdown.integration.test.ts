@@ -31,6 +31,11 @@
 //         Chase 10/3 CITY PHARMACY −60 Health · Plat 10/7 SHOE STORE −30 Home
 //         → Home 380 · Health 60 · actual 440 → over the $400 plan by 40.
 //         Usual Home: Jul 0 · Aug 300 · Sep 100 → 100; Health: 0, 0, 0 → 0.
+//         (F3) October is still running (today the 7th), so usual reads each prior
+//         month only through its 7th: Home Jul 0 · Aug 0 (the 300 is on the 12th) ·
+//         Sep 0 (the 100 is on the 10th) → 0, above usual 380; a full month
+//         usually 100 (usualFullPeriod). The week's Groceries rows all fall on a
+//         Sunday or Monday, so read to Wednesday the usual is still 45.
 //
 // Household B — nothing: no plan, no rows (and must see nothing of A's).
 // Household C — a $300 weekly plan and no rows: a quiet week reads "0.00".
@@ -155,12 +160,15 @@ type Breakdown = {
     shareBp: number | null;
     count: number;
     usual: string | null;
+    usualFullPeriod: string | null;
     aboveUsual: string | null;
     rows: Row[];
     truncated: boolean;
   }>;
   needsClassification: { amount: string; count: number; rows: Row[]; truncated: boolean; countsAgainstPlan: boolean };
   refundFloorAdjustment: string;
+  usualBasis: string;
+  usualThrough: string | null;
   beside: {
     unplanned: string;
     weekly: string | null;
@@ -461,9 +469,11 @@ describe("this week — household A, worked by hand", () => {
 
   it("usual = the median of the 8 weeks before; above usual = how far past it", async () => {
     const b = await get<Breakdown>(WEEK);
-    expect(b.categories[0]).toMatchObject({ usual: "45.00", aboveUsual: "111.60" });
+    // (F3) The current week reads each prior week Sunday–Wednesday; every Groceries row is a Sunday or Monday.
+    expect(b).toMatchObject({ usualBasis: "same_days", usualThrough: "2026-10-07" });
+    expect(b.categories[0]).toMatchObject({ usual: "45.00", usualFullPeriod: "45.00", aboveUsual: "111.60" });
     // Gas and Home had no weekly rows before: usual 0 (a week with none counts), never null here.
-    expect(b.categories[1]).toMatchObject({ usual: "0.00", aboveUsual: "92.40" });
+    expect(b.categories[1]).toMatchObject({ usual: "0.00", usualFullPeriod: "0.00", aboveUsual: "92.40" });
   });
 
   it("⭐ actual === /money/position spent, remaining === position === spine; beside === position and spine", async () => {
@@ -551,6 +561,9 @@ describe("this week — household A, worked by hand", () => {
   it("a past week reads the same way: last week's groceries, not current", async () => {
     const b = await get<Breakdown>("/money/period-breakdown?period=week&start=2026-09-27");
     expect(b).toMatchObject({ isCurrent: false, start: "2026-09-27", end: "2026-10-03", actual: "50.00", remaining: "250.00", over: "0.00", withinPlan: true });
+    // (F3) A past week: whole weeks against a whole week, as before.
+    expect(b).toMatchObject({ usualBasis: "full_period", usualThrough: null });
+    expect(b.categories[0]!.usual).toBe(b.categories[0]!.usualFullPeriod);
     expect(b.categories.map((c) => [c.categoryId, c.amount])).toEqual([[cat.Groceries, "50.00"]]);
     expect(b.categories[0]!.rows[0]!.id).toBe(ids.lastWeekHeb);
     expect(groupsPlusFloor(b)).toBe(cents(b.actual));
@@ -578,9 +591,13 @@ describe("this month — the monthly allowance", () => {
       withinPlan: false,
       refundFloorAdjustment: "0.00",
     });
-    expect(b.categories.map((c) => [c.categoryId, c.amount, c.count, c.usual, c.aboveUsual])).toEqual([
-      [cat.Home, "380.00", 3, "100.00", "280.00"],
-      [cat.Health, "60.00", 1, "0.00", "60.00"],
+    // (F3) Deliberately changed: Home's usual was 100.00 (three FULL months against seven days of
+    // October) and above usual 280.00. Read to the 7th of each month it is 0.00 and 380.00; the full
+    // month's 100.00 is kept beside it.
+    expect(b).toMatchObject({ usualBasis: "same_days", usualThrough: "2026-10-07" });
+    expect(b.categories.map((c) => [c.categoryId, c.amount, c.count, c.usual, c.usualFullPeriod, c.aboveUsual])).toEqual([
+      [cat.Home, "380.00", 3, "0.00", "100.00", "380.00"],
+      [cat.Health, "60.00", 1, "0.00", "0.00", "60.00"],
     ]);
     expect(b.categories[0]!.rows.map((r) => r.id)).toEqual([ids.ikea, ids.costco, ids.shoes]);
     expect(b.needsClassification).toMatchObject({ amount: "0.00", count: 0, countsAgainstPlan: false });

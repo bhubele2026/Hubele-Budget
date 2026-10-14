@@ -6,6 +6,7 @@ import { UpdateSettingsBody } from "@workspace/api-zod";
 import { weekBounds } from "@workspace/avalanche-core";
 import { householdTodayISO } from "../lib/householdClock";
 import { mirrorSettingsAllowance } from "../lib/allowancePlanWriter";
+import { planUnsafeBody, planWriteGate } from "../lib/planSafety";
 import {
   dedupeTransactionsAcrossAccountsForUser,
   dedupeTransactionsForUser,
@@ -113,6 +114,10 @@ export const SERVER_OWNED_PREFERENCE_KEYS = [
   // model back to its defaults.
   "autoCategorize",
   "modelAutoCategorize",
+  // (F1) How each Amex card is paid (in_full / debt_plan). Written only by the
+  // owner's PUT /amex/cards/:accountId/payoff-mode; a settings save must never
+  // clear it (the hooks and the plan gate read it).
+  "amexCardPayoffMode",
 ] as const;
 
 /**
@@ -141,6 +146,33 @@ export function keepServerOwnedPreferences(
   return { ...next, ...kept };
 }
 
+/** A per-week overrides map, normalised for comparison: week → cents (missing / not an object = {}). */
+function overridesKey(v: unknown): string {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return "{}";
+  const entries = Object.entries(v as Record<string, unknown>)
+    .map(([week, amount]) => [week, Math.round(Number(amount) * 100)] as const)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return JSON.stringify(entries);
+}
+
+/**
+ * ⭐ (F1) Does this PUT change what a plan reads? The standing weekly / monthly
+ * allowance (mirrored into `allowance_plans` below) or the per-week overrides
+ * (`preferences.weeklyAllowanceOverrides`, read as that week's cap). Only such a
+ * save goes through the plan gate; every other settings save is untouched.
+ */
+export function changesPlanInputs(
+  stored: { weeklyAllowanceAmount: unknown; monthlyAllowanceAmount: unknown; preferences: unknown },
+  body: { weeklyAllowanceAmount?: unknown; monthlyAllowanceAmount?: unknown; preferences?: unknown },
+): boolean {
+  if (body.weeklyAllowanceAmount !== undefined && Number(body.weeklyAllowanceAmount) !== Number(stored.weeklyAllowanceAmount)) return true;
+  if (body.monthlyAllowanceAmount !== undefined && Number(body.monthlyAllowanceAmount) !== Number(stored.monthlyAllowanceAmount)) return true;
+  if (body.preferences === undefined) return false;
+  const overridesOf = (p: unknown) =>
+    p && typeof p === "object" && !Array.isArray(p) ? (p as Record<string, unknown>).weeklyAllowanceOverrides : undefined;
+  return overridesKey(overridesOf(stored.preferences)) !== overridesKey(overridesOf(body.preferences));
+}
+
 router.put("/settings", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateSettingsBody.safeParse(req.body);
   if (!parsed.success) {
@@ -148,7 +180,15 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const ownerUserId = req.householdOwnerId!;
-  await loadOrCreate(ownerUserId, req.householdId!);
+  const stored = await loadOrCreate(ownerUserId, req.householdId!);
+  // ⭐ (F1) A save that changes a plan input waits for the plan gate; nothing is written when it refuses.
+  if (changesPlanInputs(stored, parsed.data)) {
+    const gate = await planWriteGate(req.householdId!, ownerUserId);
+    if (!gate.ok) {
+      res.status(409).json(planUnsafeBody(gate));
+      return;
+    }
+  }
   const { preferences, ...rest } = parsed.data;
   const row = await db.transaction(async (tx) => {
     // A body without `preferences` leaves the column alone, as before.

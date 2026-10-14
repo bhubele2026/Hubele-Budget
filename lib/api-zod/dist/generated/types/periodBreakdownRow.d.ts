@@ -9,6 +9,7 @@ import type { PeriodBreakdownAccount } from "./periodBreakdownAccount";
 import type { PeriodBreakdownReason } from "./periodBreakdownReason";
 import type { PeriodBreakdownRowCategory } from "./periodBreakdownRowCategory";
 import type { PeriodBreakdownSplitPart } from "./periodBreakdownSplitPart";
+import type { RowEvidence } from "./rowEvidence";
 export interface PeriodBreakdownRow {
     /** The transaction id (a split part keeps its parent's) */
     id: string;
@@ -22,5 +23,7 @@ export interface PeriodBreakdownRow {
     category: PeriodBreakdownRowCategory | null;
     reason: PeriodBreakdownReason;
     splitPart: PeriodBreakdownSplitPart | null;
+    /** (F2) The evidence rule's answer for the row; null where it says nothing (a refund, an ordinary deposit) */
+    evidence: RowEvidence | null;
 }
 //# sourceMappingURL=periodBreakdownRow.d.ts.map

@@ -12,6 +12,16 @@ export interface BankingReviewAsPlanned {
     count: number;
     net: string;
     pendingNet: string;
+    /**
+     * (F2) As on a bucket (small: within max($1, 1%))
+     * @nullable
+     */
+    varianceIn: string | null;
+    /**
+     * (F2) As on a bucket
+     * @nullable
+     */
+    varianceOut: string | null;
     /** Confirmed rows whose plan is older than the forecast reads (placed on the household's word) */
     withoutPlanDetail: number;
 }
