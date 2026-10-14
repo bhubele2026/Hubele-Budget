@@ -53,21 +53,6 @@ export default function DashboardHeader() {
   const action = headerActionOf(attention ?? [], { noBank });
   const banks = bankLines(items.data, now);
 
-  // One line of facts, each said only when it is known.
-  const facts: Array<{ key: string; text: string }> = [];
-  if (s) {
-    const p = s.position;
-    if (p.safeToSpendNow != null) {
-      const until = p.horizonKind === "payday" && p.paydayDate ? ` until payday ${weekdayLabel(p.paydayDate)}` : " this week";
-      facts.push({ key: "room", text: `${money(p.safeToSpendNow)} room to spend${until}` });
-    }
-    if (obligations[0]) {
-      facts.push({ key: "next", text: `Next: ${obligationLine(obligations[0])}` });
-    }
-    // (WP6) "N charges to match" left the facts line: Needs attention's own
-    // row says it ("Charges to match to the forecast"), with its link.
-  }
-
   return (
     <header className={cn("span-12", rise(0))} data-testid="dash-header">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
@@ -75,22 +60,6 @@ export default function DashboardHeader() {
           <h1 className="text-display font-semibold text-brand-navy" data-testid="dash-today">
             Today <span className="font-normal text-neutral-500">· {weekdayLabel(today)}</span>
           </h1>
-          {s ? (
-            <p className="mt-1 text-body text-brand-ink" data-testid="dash-facts">
-              {facts.length
-                ? facts.map((f, i) => (
-                    <span key={f.key}>
-                      {i > 0 ? <span aria-hidden className="text-neutral-400"> · </span> : null}
-                      <span data-testid={`dash-fact-${f.key}`}>{f.text}</span>
-                    </span>
-                  ))
-                : noBank
-                  ? "No bank is linked yet. Link checking and your cards, and this page fills in from them."
-                  : "Nothing scheduled and nothing waiting."}
-            </p>
-          ) : spine.state === "failed" ? null : (
-            <div className="skeleton mt-2 h-4 w-72 max-w-full rounded" aria-busy="true" />
-          )}
           {banks.length ? (
             <ul className="mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-micro text-neutral-600" data-testid="dash-bank-fresh">
               {banks.map((b) => (
@@ -108,33 +77,20 @@ export default function DashboardHeader() {
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>
+          {/* ONE action: the most actionable issue. With none, nothing shouts. */}
           {action.kind === "link" ? (
-            <>
-              <Link href={action.href} className={btn} data-testid="dash-link-bank">{action.label}</Link>
-              {/* Parity with the old dashboard: Afford stays reachable; its sheet says what it needs. */}
-              <AffordLauncher className={QUIET} />
-            </>
+            <Link href={action.href} className={btn} data-testid="dash-link-bank">{action.label}</Link>
           ) : action.kind === "short" ? (
-            <>
-              <Link href={action.href} className={btn} data-testid="dash-runs-short">{action.label}</Link>
-              <AffordLauncher className={QUIET} />
-            </>
+            <Link href={action.href} className={btn} data-testid="dash-runs-short">{action.label}</Link>
           ) : action.kind === "reconnect" ? (
-            <>
-              <Link href={action.href} className={btn} data-testid="dash-reconnect">{action.label}</Link>
-              <AffordLauncher className={QUIET} />
-            </>
+            <Link href={action.href} className={btn} data-testid="dash-reconnect">{action.label}</Link>
           ) : action.kind === "wayBack" ? (
-            <>
-              <WaysBackLauncher />
-              <AffordLauncher className={QUIET} />
-            </>
-          ) : (
-            <AffordLauncher className={btnSecondary} />
-          )}
+            <WaysBackLauncher />
+          ) : null}
         </div>
       </div>
-      <div className="mt-2">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <AffordLauncher className={QUIET} />
         <button
           type="button"
           className="text-label font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control"
@@ -143,7 +99,7 @@ export default function DashboardHeader() {
           onClick={() => setRecapOpen((o) => !o)}
           data-testid="dash-recap-toggle"
         >
-          {recapOpen ? "Hide the morning text" : "Preview tomorrow's morning text"}
+          {recapOpen ? "Hide morning text" : "Morning text"}
         </button>
         {recapOpen ? (
           <div id="dash-recap" className="mt-2">

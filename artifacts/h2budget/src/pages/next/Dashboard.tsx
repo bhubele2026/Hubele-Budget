@@ -5,8 +5,7 @@ import { useSpine } from "@/hooks/useSpine";
 import { useLandingWarmup } from "@/hooks/useLandingWarmup";
 import { APP_VERSION } from "@/lib/version";
 import DashboardHeader from "./dashboard/DashboardHeader";
-import SummaryRow from "./dashboard/SummaryRow";
-import AccountsPanel from "./dashboard/AccountsPanel";
+import Tiles from "./dashboard/Tiles";
 import { BelowFoldSkeleton } from "./dashboard/BelowFoldSkeleton";
 import { CompactFold } from "./dashboard/foldDensity";
 import { usePlaidItemsQ } from "./dashboard/queries";
@@ -25,7 +24,6 @@ const loadBelowFold = () =>
     throw e;
   }));
 const ForecastRow = lazy(() => loadBelowFold().then((m) => ({ default: m.ForecastRow })));
-const LowerRows = lazy(() => loadBelowFold().then((m) => ({ default: m.LowerRows })));
 
 /** Start the chunk when the browser is idle after first paint, then show it. */
 export function useBelowFoldReady(): boolean {
@@ -84,21 +82,13 @@ export default function DashboardPage() {
       <PageGrid>
         <DashboardHeader />
         <DashboardRefreshBanner />
-        <SummaryRow />
+        <Tiles />
         {below ? (
           <Suspense fallback={<BelowFoldSkeleton slot="forecast" />}>
             <ForecastRow />
           </Suspense>
         ) : (
           <BelowFoldSkeleton slot="forecast" />
-        )}
-        <AccountsPanel />
-        {below ? (
-          <Suspense fallback={<BelowFoldSkeleton slot="lower" />}>
-            <LowerRows />
-          </Suspense>
-        ) : (
-          <BelowFoldSkeleton slot="lower" />
         )}
         <div data-testid="dash-version" className="span-12 font-mono text-micro tabular-nums text-neutral-500">
           Version {APP_VERSION}

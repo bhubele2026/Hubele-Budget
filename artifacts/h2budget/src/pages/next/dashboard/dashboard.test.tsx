@@ -117,14 +117,11 @@ describe("header", () => {
         { lastSyncErrorCode: "ITEM_LOGIN_REQUIRED", lastSyncError: "login" }),
     ]);
   });
-  it("says the day, one line of facts from the spine, and each bank's freshness", () => {
+  it("says the day and each bank's freshness; no figures of its own (the tiles carry them)", () => {
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-today").textContent).toBe("Today · Thu Oct 8");
-    expect(screen.getByTestId("dash-fact-room").textContent).toBe("$210.00 room to spend until payday Fri Oct 16");
-    expect(screen.getByTestId("dash-fact-next").textContent).toBe("Next: Rent $1,200.00 · Sat Oct 10");
-    // (WP6) "N charges to match" left the facts line: Needs attention's own row says it.
-    expect(screen.queryByTestId("dash-fact-review")).toBeNull();
-    expect(screen.getByTestId("dash-facts").textContent).not.toContain("charges to match");
+    expect(screen.queryByTestId("dash-facts")).toBeNull();
+    expect(screen.getByTestId("dash-header").textContent).not.toMatch(/\$/);
     const banks = screen.getByTestId("dash-bank-fresh").textContent!;
     expect(banks).toContain("Chase · synced 2 h ago");
     expect(banks).toContain("American Express · needs reconnecting");
@@ -156,14 +153,13 @@ describe("header", () => {
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("afford");
     expect(screen.getByTestId("afford-open").textContent).toBe("Can we afford something?");
   });
-  it("no bank linked: the one action is the app's link path, and the facts say why the page is empty", () => {
+  it("no bank linked: the one action is the app's link path", () => {
     h.Q.items = ok([]);
     h.Q.cash = ok({ account: cashAcct, events: [] });
     h.spine.data = spine({ nextBill: null, reviewCount: 0, position: { ...spine().position, safeToSpendNow: null } });
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("link");
     expect(screen.getByTestId("dash-link-bank").getAttribute("href")).toBe("/settings");
-    expect(screen.getByTestId("dash-facts").textContent).toContain("No bank is linked yet");
     // Afford stays reachable as the quiet second control (parity with the old dashboard).
     expect(screen.getByTestId("afford-open").textContent).toBe("Can we afford something?");
   });
@@ -186,43 +182,21 @@ describe("header", () => {
     wrap(<DashboardHeader />);
     expect(screen.queryByTestId("recap-stub")).toBeNull();
     const t = screen.getByTestId("dash-recap-toggle");
-    expect(t.textContent).toBe("Preview tomorrow's morning text");
+    expect(t.textContent).toBe("Morning text");
     expect(t.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(t);
     await waitFor(() => expect(screen.getByTestId("recap-stub")).toBeTruthy());
     expect(t.getAttribute("aria-expanded")).toBe("true");
   });
-  it("leaves out a fact it does not know rather than printing $0", () => {
-    h.Q.cash = ok({ account: cashAcct, events: [] });
-    h.spine.data = spine({ nextBill: null, reviewCount: 0, position: { ...spine().position, safeToSpendNow: null } });
+  it("with nothing to act on there is no action button, only the small links", () => {
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
+    h.spine.data = spine({ forecast: { ...spine().forecast, lowPoint: "1500.00", status: "ready" }, position: { ...spine().position, withinPlan: "yes", remainingWeek: "100.00" } });
     wrap(<DashboardHeader />);
-    expect(screen.getByTestId("dash-facts").textContent).toBe("Nothing scheduled and nothing waiting.");
-  });
-});
-
-describe("morning text words", () => {
-  it("never says TEMPLATE: code-written text says so, and that AI is off", () => {
-    expect(recapSourceWords(null)).toBe("Written from your numbers · AI is off");
-    expect(recapSourceWords({ demo: true })).toBe("Demo draft");
-    expect(recapSourceWords({})).not.toMatch(/template/i);
-  });
-  it("strips the trailing link and keeps the date", () => {
-    expect(cleanRecap("You spent $40.\nhttps://h2budget.onrender.com/?d=2026-10-04")).toEqual({ body: "You spent $40.", forDate: "2026-10-04" });
-    expect(cleanRecap("No link here.").forDate).toBeNull();
-  });
-});
-
-describe("bank freshness lines", () => {
-  it("one line per bank, never per account, synthetic items left out", () => {
-    const now = Date.parse("2026-10-08T17:00:00Z");
-    const lines = bankLines([
-      item("a", "Chase", "chase", [acct("c1", {}), acct("c2", { subtype: "savings" })], { lastSyncedAt: "2026-10-05T12:00:00Z" }),
-      item("n", "Wells", "wells", [], { lastSyncedAt: null }),
-    ] as never, now);
-    expect(lines.map((l) => [l.institution, l.state, l.words])).toEqual([
-      ["Chase", "stale", "out of date · synced 3 d ago"],
-      ["Wells", "never", "not synced yet"],
-    ]);
+    const act = screen.getByTestId("dash-header-action");
+    expect(act.getAttribute("data-kind")).toBe("afford");
+    expect(act.textContent).toBe("");
+    expect(screen.getByTestId("afford-open")).toBeTruthy();
+    expect(screen.getByTestId("dash-recap-toggle")).toBeTruthy();
   });
 });
 
@@ -747,7 +721,7 @@ describe("coming up", () => {
     expect(hook.textContent).toContain("Weekly Spend");
     expect(within(hook).getByTestId("dash-up-hook").textContent).toContain("card payoff (plan $450)");
   });
-  it("⭐ ONE next obligation, ONE amount: header, Needs attention and Coming up read the same hook-aware event", () => {
+  it("⭐ ONE next obligation, ONE amount: Needs attention and Coming up read the same hook-aware event", () => {
     // The hooked Weekly Spend is due TOMORROW and is the first thing to leave checking.
     h.Q.cash = ok({
       account: cashAcct,
@@ -763,7 +737,6 @@ describe("coming up", () => {
     h.Q.txns = ok([]); h.Q.cats = ok([]);
     wrap(<><DashboardHeader /><UpcomingPanel /><AttentionPanel /></>);
     const words = "Weekly Spend · card payoff $477.57 (plan $450)";
-    expect(screen.getByTestId("dash-fact-next").textContent).toBe(`Next: ${words} · Fri Oct 9`);
     const first = screen.getAllByTestId("dash-up-row")[0]!;
     expect(first.getAttribute("data-next")).toBe("true");
     expect(within(first).getByTestId("dash-up-amount").textContent).toBe("$477.57");
@@ -771,8 +744,6 @@ describe("coming up", () => {
     const due = screen.getByTestId("dash-att-bill");
     expect(due.textContent).toContain(words);
     expect(due.textContent).toContain("Due tomorrow");
-    // The stored $450 alone (what the Bills page and morning text quote) appears nowhere as the amount.
-    expect(screen.getByTestId("dash-fact-next").textContent).not.toMatch(/Weekly Spend \$450/);
     // And a regular bill reads its one payment.
     expect(obligationLine(upcomingRows({ signal: { events: [{ date: "2026-10-10", label: "Rent", amount: "-1200.00" }] } as never, today: "2026-10-08" })[0]!)).toBe("Rent $1,200.00 · Sat Oct 10");
   });

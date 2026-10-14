@@ -10,23 +10,10 @@ vi.mock("@/hooks/useSpine", () => ({
 vi.mock("@/hooks/useLandingWarmup", () => ({ useLandingWarmup: () => h.warm() }));
 vi.mock("./dashboard/queries", () => ({ usePlaidItemsQ: () => ({ data: h.items }) }));
 vi.mock("./dashboard/DashboardHeader", () => ({ default: () => <div data-testid="stub-Header" /> }));
-vi.mock("./dashboard/SummaryRow", () => ({ default: () => <div data-testid="stub-Summary" /> }));
-vi.mock("./dashboard/AccountsPanel", () => ({ default: () => <div data-testid="stub-Accounts" /> }));
+vi.mock("./dashboard/Tiles", () => ({ default: () => <div data-testid="stub-Tiles" /> }));
 
 vi.mock("./dashboard/BelowFold", () => ({
-  ForecastRow: () => (
-    <>
-      <div data-testid="stub-Forecast" />
-      <div data-testid="stub-Upcoming" />
-    </>
-  ),
-  LowerRows: () => (
-    <>
-      {["Spending", "Debt", "Attention", "Activity"].map((n) => (
-        <div key={n} data-testid={`stub-${n}`} />
-      ))}
-    </>
-  ),
+  ForecastRow: () => <div data-testid="stub-Forecast" />,
 }));
 
 import DashboardPage from "./Dashboard";
@@ -41,23 +28,15 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("Dashboard page (the landing)", () => {
-  it("renders the owner's order: header, summary, forecast row, accounts, then the lower rows; version; idle warm-up", async () => {
+  it("renders header, the six tiles, then the lazy forecast; version; idle warm-up", async () => {
     render(<DashboardPage />);
-    // Eager: header, summary row, accounts. The rest arrives after first paint behind same-size skeletons.
     expect(screen.getByTestId("stub-Header")).toBeTruthy();
-    expect(screen.getByTestId("stub-Summary")).toBeTruthy();
-    expect(screen.getByTestId("stub-Accounts")).toBeTruthy();
+    expect(screen.getByTestId("stub-Tiles")).toBeTruthy();
     expect(screen.getByTestId("below-fold-skeleton-forecast")).toBeTruthy();
-    expect(screen.getByTestId("below-fold-skeleton-activity")).toBeTruthy();
-    await waitFor(() => expect(screen.getByTestId("stub-Activity")).toBeTruthy());
     await waitFor(() => expect(screen.getByTestId("stub-Forecast")).toBeTruthy());
     expect(screen.queryByTestId("below-fold-skeleton-forecast")).toBeNull();
-    expect(screen.queryByTestId("below-fold-skeleton-activity")).toBeNull();
     const order = Array.from(document.querySelectorAll("[data-testid^='stub-']"), (e) => e.getAttribute("data-testid"));
-    expect(order).toEqual([
-      "stub-Header", "stub-Summary", "stub-Forecast", "stub-Upcoming", "stub-Accounts",
-      "stub-Spending", "stub-Debt", "stub-Attention", "stub-Activity",
-    ]);
+    expect(order).toEqual(["stub-Header", "stub-Tiles", "stub-Forecast"]);
     expect(screen.getByTestId("dash-version").textContent).toMatch(/^Version /);
     expect(h.warm).toHaveBeenCalled();
     expect(screen.queryByTestId("dash-refresh-banner")).toBeNull();
@@ -82,8 +61,7 @@ describe("Dashboard page (the landing)", () => {
   it("the skeleton has the layout's shapes and no numbers at all", () => {
     render(<DashboardSkeleton />);
     const sk = screen.getByTestId("dashboard-skeleton");
-    expect(sk.querySelectorAll(".panel").length).toBeGreaterThanOrEqual(4);
-    expect(sk.querySelector(".kpi-grid")).toBeTruthy();
+    expect(sk.querySelectorAll("[data-testid='dashboard-skeleton-tile']").length).toBe(6);
     expect(sk.textContent).toBe("");
   });
 
@@ -91,21 +69,18 @@ describe("Dashboard page (the landing)", () => {
     const { BELOW_FOLD } = await import("./dashboard/belowFoldSizes");
     render(<DashboardSkeleton />);
     const sk = screen.getByTestId("dashboard-skeleton");
-    for (const [k, v] of Object.entries(BELOW_FOLD)) {
+    for (const [k, v] of Object.entries(BELOW_FOLD).filter(([, v]) => v.slot === "forecast")) {
       const slot = sk.querySelector<HTMLElement>(`[data-testid='below-fold-skeleton-${k}']`);
       expect(slot, k).toBeTruthy();
       expect(slot!.className, k).toContain(`span-${v.span}`);
       if (v.minH) expect(slot!.className, k).toContain(v.minH);
     }
-    const order = Array.from(sk.querySelectorAll("[data-testid^='below-fold-skeleton-'], [data-testid='dashboard-skeleton-accounts']"), (e) => e.getAttribute("data-testid"));
-    expect(order).toEqual([
-      "below-fold-skeleton-forecast", "below-fold-skeleton-upcoming", "dashboard-skeleton-accounts",
-      "below-fold-skeleton-spending", "below-fold-skeleton-debt", "below-fold-skeleton-attention", "below-fold-skeleton-activity",
-    ]);
+    const order = Array.from(sk.querySelectorAll("[data-testid^='below-fold-skeleton-']"), (e) => e.getAttribute("data-testid"));
+    expect(order).toEqual(["below-fold-skeleton-forecast"]);
     // …and the page, before its lazy chunk lands, draws exactly the same slot skeletons.
     cleanup();
     render(<DashboardPage />);
-    for (const [k, v] of Object.entries(BELOW_FOLD)) {
+    for (const [k, v] of Object.entries(BELOW_FOLD).filter(([, v]) => v.slot === "forecast")) {
       const pageSlot = screen.getByTestId(`below-fold-skeleton-${k}`);
       expect(pageSlot.className, k).toContain(`span-${v.span}`);
       if (v.minH) expect(pageSlot.className, k).toContain(v.minH);
@@ -127,10 +102,9 @@ describe("below-the-fold skeletons are the panels' size", () => {
   it("each skeleton carries the same span and minimum height as its panel (one constant feeds both)", async () => {
     const { BELOW_FOLD, slotKeys } = await import("./dashboard/belowFoldSizes");
     const { BelowFoldSkeleton } = await import("./dashboard/BelowFoldSkeleton");
-    expect(slotKeys("forecast")).toEqual(["forecast", "upcoming"]);
-    expect(slotKeys("lower")).toEqual(["spending", "debt", "attention", "activity"]);
-    render(<><BelowFoldSkeleton slot="forecast" /><BelowFoldSkeleton slot="lower" /></>);
-    for (const [k, v] of Object.entries(BELOW_FOLD)) {
+    expect(slotKeys("forecast")).toEqual(["forecast"]);
+    render(<BelowFoldSkeleton slot="forecast" />);
+    for (const [k, v] of Object.entries(BELOW_FOLD).filter(([, v]) => v.slot === "forecast")) {
       const sk = screen.getByTestId(`below-fold-skeleton-${k}`);
       expect(sk.className).toContain(`span-${v.span}`);
       expect(sk.className).toContain(v.minH);
