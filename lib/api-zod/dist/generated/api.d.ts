@@ -16317,7 +16317,7 @@ export declare const RecomputeMetricsResponse: zod.ZodObject<{
     metricsWritten: boolean;
 }>;
 /**
- * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readPeriodAllowance (as GET /money/period-breakdown?period=month) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readMonthAllowance (as GET /money/period-breakdown?period=month: plan, actual, remaining, over) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
 export declare const GetSpineResponse: zod.ZodObject<{
@@ -16556,14 +16556,20 @@ export declare const GetSpineResponse: zod.ZodObject<{
         plan: zod.ZodNullable<zod.ZodString>;
         actual: zod.ZodString;
         status: zod.ZodEnum<["not_set", "within", "over"]>;
+        remaining: zod.ZodNullable<zod.ZodString>;
+        over: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         status: "over" | "not_set" | "within";
         actual: string;
         plan: string | null;
+        over: string | null;
+        remaining: string | null;
     }, {
         status: "over" | "not_set" | "within";
         actual: string;
         plan: string | null;
+        over: string | null;
+        remaining: string | null;
     }>;
 }, "strip", zod.ZodTypeAny, {
     asOf: string;
@@ -16639,6 +16645,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
         status: "over" | "not_set" | "within";
         actual: string;
         plan: string | null;
+        over: string | null;
+        remaining: string | null;
     };
 }, {
     asOf: string;
@@ -16714,6 +16722,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
         status: "over" | "not_set" | "within";
         actual: string;
         plan: string | null;
+        over: string | null;
+        remaining: string | null;
     };
 }>;
 /**
@@ -18446,10 +18456,10 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     period: "month" | "week";
     limitations: string[];
     withinPlan: boolean | null;
+    remaining: string | null;
     carryOver: string | null;
     isCurrent: boolean;
     planScope: "household";
-    remaining: string | null;
     categories: {
         count: number;
         amount: string;
@@ -18553,10 +18563,10 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     period: "month" | "week";
     limitations: string[];
     withinPlan: boolean | null;
+    remaining: string | null;
     carryOver: string | null;
     isCurrent: boolean;
     planScope: "household";
-    remaining: string | null;
     categories: {
         count: number;
         amount: string;
@@ -25670,8 +25680,8 @@ export declare const RunCategorizationResponse: zod.ZodObject<{
     queued: number;
     unreviewed: number;
     ambiguous: number;
-    suggested: number;
     remaining: number;
+    suggested: number;
     decided: number;
     filed: number;
     modelQueued?: number | undefined;
@@ -25679,8 +25689,8 @@ export declare const RunCategorizationResponse: zod.ZodObject<{
     queued: number;
     unreviewed: number;
     ambiguous: number;
-    suggested: number;
     remaining: number;
+    suggested: number;
     decided: number;
     filed: number;
     modelQueued?: number | undefined;

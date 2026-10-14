@@ -2592,8 +2592,8 @@ paths:
         computeCashSignal, spend from buildSpendingFacts, bills from
         buildBillsSummary, payoff from @workspace/avalanche-core, review count
         from computeReviewCount, position from buildMoneyPosition (as GET
-        /money/position), monthAllowance from readPeriodAllowance (as GET
-        /money/period-breakdown?period=month) — and an integration test asserts each one
+        /money/position), monthAllowance from readMonthAllowance (as GET
+        /money/period-breakdown?period=month: plan, actual, remaining, over) — and an integration test asserts each one
         equals the owning endpoint's value to the cent. The debt field carries a
         PERCENTAGE ONLY; this response never contains a balance or an amount
         owed, because it is what the landing page paints.
@@ -5223,13 +5223,25 @@ components:
       type: object
       description: >-
         (S3) This month's monthly allowance — the same function GET
-        /money/period-breakdown?period=month answers with (plan.amount, actual).
-        Never a debt balance, credit or a limit.
-      required: [plan, actual, status]
+        /money/period-breakdown?period=month answers with (plan.amount, actual,
+        and S6: remaining, over — allowancePeriodFigures, the breakdown's own
+        call). A screen quotes remaining / over; it never subtracts plan −
+        actual itself. Never a debt balance, credit or a limit.
+      required: [plan, actual, status, remaining, over]
       properties:
         plan: { type: ["string", "null"], description: The monthly plan; null when not set (never "0.00") }
         actual: { type: string }
         status: { type: string, enum: [not_set, within, over] }
+        remaining:
+          type: ["string", "null"]
+          description: >-
+            (S6) plan − actual (negative when over), two decimals — the
+            breakdown's `remaining`. Null when no plan is set (never "0.00").
+        over:
+          type: ["string", "null"]
+          description: >-
+            (S6) max(0, −remaining), two decimals — the breakdown's `over`.
+            Null when no plan is set.
 
     WaysBackAdjustment:
       type: object

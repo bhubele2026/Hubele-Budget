@@ -66,8 +66,9 @@ const router: IRouter = Router();
  *                                   one ledger
  *   monthAllowance.*              → readMonthAllowance()  [lib/periodBreakdown]
  *                                   (S3; also GET /money/period-breakdown?period=month
- *                                   .plan.amount / .actual), handed this request's
- *                                   own cash-signal read
+ *                                   .plan.amount / .actual, and S6 .remaining / .over
+ *                                   via allowancePeriodFigures), handed this
+ *                                   request's own cash-signal read
  *
  * `spine.integration.test.ts` asserts every one of those equals what the owning
  * endpoint returns, to the cent. If a future change makes two tiles disagree,
@@ -224,9 +225,10 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       weekAdjustment: position.weekAdjustment,
     },
     // ⭐ (S3) This month's monthly allowance: plan (null when not set — never
-    // "0.00"), what counts against it, and a status word. The same read and
-    // helper as GET /money/period-breakdown?period=month. ⚠️ Never a debt
-    // balance, credit or a limit.
+    // "0.00"), what counts against it, and a status word; (S6) what is left and
+    // how far over, so no screen subtracts. The same read and helpers as GET
+    // /money/period-breakdown?period=month. ⚠️ Never a debt balance, credit or
+    // a limit.
     monthAllowance,
   });
 });

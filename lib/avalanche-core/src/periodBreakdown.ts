@@ -267,6 +267,32 @@ function coverageNetCents(rows: readonly AllowanceRow[], coverage: string): numb
 const NO_CATEGORY = "\u0000none";
 const keyOf = (id: string | null): string => id ?? NO_CATEGORY;
 
+/** A period's plan figures: what is left, how far over, and whether within. */
+export interface AllowancePeriodFigures {
+  /** plan + carry-over − actual (negative when over); null with no plan. */
+  remainingCents: number | null;
+  /** max(0, −remaining); null with no plan. */
+  overCents: number | null;
+  /** remaining ≥ 0; null with no plan. */
+  withinPlan: boolean | null;
+}
+
+/**
+ * ⭐ (S6) LEFT / OVER for a period's allowance — the breakdown's own figures
+ * (`periodBreakdown` returns these), and the spine's `monthAllowance` reads
+ * them through this same call, so no screen subtracts plan − actual itself.
+ * No plan (null) is never $0: every figure is null.
+ */
+export function allowancePeriodFigures(
+  planCents: number | null,
+  carryOverCents: number | null,
+  actualCents: number,
+): AllowancePeriodFigures {
+  if (planCents == null) return { remainingCents: null, overCents: null, withinPlan: null };
+  const remainingCents = allowanceRemainingCents(planCents, carryOverCents ?? 0, actualCents);
+  return { remainingCents, overCents: Math.max(0, -remainingCents), withinPlan: remainingCents >= 0 };
+}
+
 /** ⭐ THE BREAKDOWN. See the file header. */
 export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBreakdownCore<T> {
   const rule = RULES[inputs.period];
@@ -351,11 +377,10 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
     throw new Error(`periodBreakdown: groups (${grouped}) exceed the figure (${actualCents})`);
   }
 
-  // ── Plan, carry-over, remaining.
+  // ── Plan, carry-over, remaining (S6: the one left/over helper the spine reads too).
   const planCents = inputs.planCents;
   const carryOverCents = inputs.carryOverCents;
-  const remainingCents =
-    planCents == null ? null : allowanceRemainingCents(planCents, carryOverCents ?? 0, actualCents);
+  const { remainingCents, overCents, withinPlan } = allowancePeriodFigures(planCents, carryOverCents, actualCents);
 
   const totals = allowanceTotals(allowanceRows);
   return {
@@ -364,8 +389,8 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
     carryOverCents,
     actualCents,
     remainingCents,
-    overCents: remainingCents == null ? null : Math.max(0, -remainingCents),
-    withinPlan: remainingCents == null ? null : remainingCents >= 0,
+    overCents,
+    withinPlan,
     categories,
     needsClassification,
     refundFloorAdjustmentCents,

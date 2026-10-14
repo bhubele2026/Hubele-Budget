@@ -7321,7 +7321,7 @@ export const RecomputeMetricsResponse = zod.object({
 });
 
 /**
- * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readPeriodAllowance (as GET /money/period-breakdown?period=month) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readMonthAllowance (as GET /money/period-breakdown?period=month: plan, actual, remaining, over) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
 export const GetSpineResponse = zod.object({
@@ -7592,9 +7592,21 @@ export const GetSpineResponse = zod.object({
         .describe('The monthly plan; null when not set (never \"0.00\")'),
       actual: zod.string(),
       status: zod.enum(["not_set", "within", "over"]),
+      remaining: zod
+        .string()
+        .nullable()
+        .describe(
+          '(S6) plan − actual (negative when over), two decimals — the breakdown\'s `remaining`. Null when no plan is set (never \"0.00\").',
+        ),
+      over: zod
+        .string()
+        .nullable()
+        .describe(
+          "(S6) max(0, −remaining), two decimals — the breakdown's `over`. Null when no plan is set.",
+        ),
     })
     .describe(
-      "(S3) This month's monthly allowance — the same function GET \/money\/period-breakdown?period=month answers with (plan.amount, actual). Never a debt balance, credit or a limit.",
+      "(S3) This month's monthly allowance — the same function GET \/money\/period-breakdown?period=month answers with (plan.amount, actual, and S6: remaining, over — allowancePeriodFigures, the breakdown's own call). A screen quotes remaining \/ over; it never subtracts plan − actual itself. Never a debt balance, credit or a limit.",
     ),
 });
 

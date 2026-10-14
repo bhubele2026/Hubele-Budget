@@ -7,7 +7,7 @@
  */
 import type { SpineMonthAllowanceStatus } from "./spineMonthAllowanceStatus";
 /**
- * (S3) This month's monthly allowance — the same function GET /money/period-breakdown?period=month answers with (plan.amount, actual). Never a debt balance, credit or a limit.
+ * (S3) This month's monthly allowance — the same function GET /money/period-breakdown?period=month answers with (plan.amount, actual, and S6: remaining, over — allowancePeriodFigures, the breakdown's own call). A screen quotes remaining / over; it never subtracts plan − actual itself. Never a debt balance, credit or a limit.
  */
 export interface SpineMonthAllowance {
     /**
@@ -17,5 +17,15 @@ export interface SpineMonthAllowance {
     plan: string | null;
     actual: string;
     status: SpineMonthAllowanceStatus;
+    /**
+     * (S6) plan − actual (negative when over), two decimals — the breakdown's `remaining`. Null when no plan is set (never "0.00").
+     * @nullable
+     */
+    remaining: string | null;
+    /**
+     * (S6) max(0, −remaining), two decimals — the breakdown's `over`. Null when no plan is set.
+     * @nullable
+     */
+    over: string | null;
 }
 //# sourceMappingURL=spineMonthAllowance.d.ts.map
