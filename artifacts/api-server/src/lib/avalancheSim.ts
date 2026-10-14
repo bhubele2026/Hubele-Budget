@@ -97,6 +97,29 @@ export function resolveAvalancheTargetDebt(
 }
 
 /**
+ * (S5) A debt's place in the avalanche order: 1 = the debt the plan attacks
+ * now (`resolveAvalancheTargetDebt`), 2 = the one after it, and so on — the
+ * same `targetIndex` rule applied again to what is left (highest APR first,
+ * ties to the smaller balance). Null for a debt that is not active or carries
+ * no balance (the plan has nothing to attack there). An order, not a figure.
+ */
+export function avalancheRankOf(
+  debts: ReadonlyArray<Pick<DebtRow, "id" | "status" | "balance" | "apr">>,
+  debtId: string,
+): number | null {
+  const left = debts
+    .filter((d) => (d.status ?? "active") === "active" && Number(d.balance) > CENTS)
+    .map((d) => ({ id: d.id, balance: Number(d.balance) || 0, apr: Number(d.apr) || 0 }));
+  for (let rank = 1; left.length > 0; rank += 1) {
+    const idx = targetIndex(left, AVALANCHE);
+    if (idx === -1) return null;
+    if (left[idx]!.id === debtId) return rank;
+    left.splice(idx, 1);
+  }
+  return null;
+}
+
+/**
  * (Fable 5 narrative enrichment) Deterministic payoff facts derived from the
  * shared @workspace/avalanche-core engine — the SAME math the client and the
  * rest of the server use. Feeds the Avalanche narrative prompt with "how long

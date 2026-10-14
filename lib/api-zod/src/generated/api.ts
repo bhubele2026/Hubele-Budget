@@ -5792,6 +5792,334 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
     .describe(
       "The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total",
     ),
+  debtLinkedCards: zod
+    .array(
+      zod.object({
+        accountId: zod.string().describe("The card's Plaid account_id"),
+        name: zod.string().describe("Plaid's name for the card"),
+        mask: zod.string().nullable(),
+        debtId: zod.string(),
+        brand: zod.enum(["blue", "silver", "gold"]),
+        cadence: zod.enum(["weekly", "monthly"]),
+        displayName: zod
+          .string()
+          .nullable()
+          .describe("The household's own name for the card (Settings), if any"),
+      }),
+    )
+    .optional()
+    .describe(
+      "(S5) Additive. The Amex cards tracked as a debt, which `cards` leaves out (they are paid through the payoff plan, not the band), so the Amex page can still list them. Identity only; `cards` and the combined totals are unchanged. Always sent.",
+    ),
+});
+
+/**
+ * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. Read-only.
+ * @summary One Amex card's period (or every Amex card's) — owed, purchases, payments and credits apart, and what was not in the plan
+ */
+export const getAmexSummaryQueryAccountIdMax = 128;
+
+export const getAmexSummaryQueryFromMax = 10;
+
+export const getAmexSummaryQueryToMax = 10;
+
+export const getAmexSummaryQueryRowsPerGroupDefault = 10;
+export const getAmexSummaryQueryRowsPerGroupMax = 50;
+
+export const GetAmexSummaryQueryParams = zod.object({
+  accountId: zod.coerce
+    .string()
+    .min(1)
+    .max(getAmexSummaryQueryAccountIdMax)
+    .describe(
+      'An Amex card\'s Plaid account_id (as on GET \/amex\/weekly-payoff), or \"all\".',
+    ),
+  from: zod.coerce
+    .string()
+    .max(getAmexSummaryQueryFromMax)
+    .describe(
+      "First day, YYYY-MM-DD, inclusive. Not after today; clamped to the tracking start (`limitations`).",
+    ),
+  to: zod.coerce
+    .string()
+    .max(getAmexSummaryQueryToMax)
+    .describe(
+      "Last day, YYYY-MM-DD, inclusive. At most 366 days after `from`.",
+    ),
+  rowsPerGroup: zod.coerce
+    .number()
+    .min(1)
+    .max(getAmexSummaryQueryRowsPerGroupMax)
+    .default(getAmexSummaryQueryRowsPerGroupDefault)
+    .describe(
+      "Rows listed in each needsAttention group, largest first (each group's amount and count still cover every row).",
+    ),
+});
+
+export const GetAmexSummaryResponse = zod.object({
+  scope: zod
+    .object({
+      kind: zod.enum(["card", "all"]),
+      accountId: zod.string().nullable(),
+      name: zod.string().nullable(),
+      mask: zod.string().nullable(),
+      institution: zod.string().nullable(),
+      cards: zod.array(
+        zod.object({
+          accountId: zod.string().describe("The card's Plaid account_id"),
+          name: zod
+            .string()
+            .describe(
+              "The household's name for the card, else its tier word (Blue Cash \/ Platinum), else Plaid's name",
+            ),
+          mask: zod.string().nullable(),
+          institution: zod.string().nullable(),
+          brand: zod.enum(["blue", "silver"]),
+          cadence: zod.enum(["weekly", "monthly"]),
+          debtLinked: zod
+            .boolean()
+            .describe(
+              "A debt row tracks this card (it is paid through the payoff plan)",
+            ),
+          debtId: zod.string().nullable(),
+          owed: zod
+            .string()
+            .nullable()
+            .describe(
+              "This card's own current balance (GET \/amex\/anchor?accountId=); null = unknown, never 0",
+            ),
+        }),
+      ),
+    })
+    .describe(
+      'kind \"card\": one card, named here and as the only entry of `cards`. kind \"all\": every Amex card, debt-linked or not; the top-level identity fields are null.',
+    ),
+  period: zod.object({
+    from: zod
+      .string()
+      .describe("The first day read (after any clamp to the tracking start)"),
+    to: zod.string(),
+    timezone: zod.string(),
+  }),
+  owed: zod.object({
+    current: zod
+      .string()
+      .nullable()
+      .describe("GET \/amex\/anchor's balance; null = unknown, never 0"),
+    statement: zod
+      .string()
+      .nullable()
+      .describe(
+        "The latest statement balance on file for a debt-linked card (one card only); null when none",
+      ),
+    asOf: zod
+      .string()
+      .nullable()
+      .describe(
+        'As GET \/amex\/anchor\'s asOf (an ISO instant, or a bare YYYY-MM-DD for source \"computed\"); null when the balance is unknown.',
+      ),
+    source: zod.enum(["plaid", "debt", "anchor", "computed", "missing"]),
+  }),
+  purchases: zod.object({
+    amount: zod.string(),
+    count: zod.number(),
+    reimbursable: zod.object({
+      amount: zod
+        .string()
+        .describe("Positive dollars (notMine is charges less credits)"),
+      count: zod.number(),
+    }),
+  }),
+  refunds: zod.object({
+    amount: zod
+      .string()
+      .describe("Positive dollars (notMine is charges less credits)"),
+    count: zod.number(),
+  }),
+  payments: zod.object({
+    amount: zod
+      .string()
+      .describe("Positive dollars (notMine is charges less credits)"),
+    count: zod.number(),
+  }),
+  otherCredits: zod.object({
+    amount: zod
+      .string()
+      .describe("Positive dollars (notMine is charges less credits)"),
+    count: zod.number(),
+  }),
+  otherCharges: zod.object({
+    amount: zod
+      .string()
+      .describe("Positive dollars (notMine is charges less credits)"),
+    count: zod.number(),
+  }),
+  notMine: zod.object({
+    amount: zod
+      .string()
+      .describe("Positive dollars (notMine is charges less credits)"),
+    count: zod.number(),
+  }),
+  householdContribution: zod
+    .object({
+      weeklyPlan: zod
+        .string()
+        .describe("Weekly-flagged + unfiled spending (the weekly cap's pool)"),
+      monthlyPlan: zod.string().describe("Monthly-flagged spending"),
+      unfiled: zod
+        .string()
+        .describe("The part of weeklyPlan not filed to an allowance yet"),
+      link: zod
+        .string()
+        .describe(
+          "Where the household week is reviewed: always \/spending\/week",
+        ),
+    })
+    .describe(
+      "What the card(s) added to the HOUSEHOLD's allowances over the period — the household's plan, never this card's budget. Refunds net per account, never below zero.",
+    ),
+  planLink: zod
+    .object({
+      kind: zod.enum(["weekly_hook", "monthly_hook", "debt", "none"]),
+      payoff: zod.string().nullable(),
+      payoffDate: zod.string().nullable(),
+      basis: zod.union([zod.enum(["plan", "stored_amount"]), zod.null()]),
+      debtId: zod.string().nullable(),
+      name: zod.string().nullable(),
+      minimum: zod.string().nullable(),
+      avalancheRank: zod.number().nullable(),
+      status: zod.string().nullable(),
+    })
+    .describe(
+      "Flat: `kind` says which fields mean something. weekly_hook \/ monthly_hook: the everyday hook pays this card — `payoff` is that hook's payoff for the period holding `to` (all the cards it bills plus what is left of the household allowance; null when the forecast has not sized it), on `payoffDate`, sized from the plan or, with no plan set, the item's stored amount (`basis`). debt: the card's debt — `minimum` (null when not reported), `avalancheRank` (1 = the debt the plan attacks now; null when not active or no balance), `status`. none: no card-specific plan.",
+    ),
+  needsAttention: zod.object({
+    unplanned: zod.object({
+      amount: zod
+        .string()
+        .describe("Σ the group's purchases (every row, not only those listed)"),
+      count: zod.number(),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string(),
+          displayName: zod.string().describe("The household's merchant alias"),
+          amount: zod.string().describe("The purchase"),
+          pending: zod.boolean(),
+          category: zod.union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+            }),
+            zod.null(),
+          ]),
+          flags: zod.array(
+            zod.enum([
+              "reimbursable",
+              "unplanned",
+              "unfiled",
+              "uncategorized",
+              "weekly",
+              "monthly",
+              "bill_matched",
+            ]),
+          ),
+          card: zod.object({
+            accountId: zod.string(),
+            name: zod.string(),
+            mask: zod.string().nullable(),
+          }),
+        }),
+      ),
+      truncated: zod.boolean(),
+    }),
+    unfiled: zod.object({
+      amount: zod
+        .string()
+        .describe("Σ the group's purchases (every row, not only those listed)"),
+      count: zod.number(),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string(),
+          displayName: zod.string().describe("The household's merchant alias"),
+          amount: zod.string().describe("The purchase"),
+          pending: zod.boolean(),
+          category: zod.union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+            }),
+            zod.null(),
+          ]),
+          flags: zod.array(
+            zod.enum([
+              "reimbursable",
+              "unplanned",
+              "unfiled",
+              "uncategorized",
+              "weekly",
+              "monthly",
+              "bill_matched",
+            ]),
+          ),
+          card: zod.object({
+            accountId: zod.string(),
+            name: zod.string(),
+            mask: zod.string().nullable(),
+          }),
+        }),
+      ),
+      truncated: zod.boolean(),
+    }),
+    uncategorized: zod.object({
+      amount: zod
+        .string()
+        .describe("Σ the group's purchases (every row, not only those listed)"),
+      count: zod.number(),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string(),
+          displayName: zod.string().describe("The household's merchant alias"),
+          amount: zod.string().describe("The purchase"),
+          pending: zod.boolean(),
+          category: zod.union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+            }),
+            zod.null(),
+          ]),
+          flags: zod.array(
+            zod.enum([
+              "reimbursable",
+              "unplanned",
+              "unfiled",
+              "uncategorized",
+              "weekly",
+              "monthly",
+              "bill_matched",
+            ]),
+          ),
+          card: zod.object({
+            accountId: zod.string(),
+            name: zod.string(),
+            mask: zod.string().nullable(),
+          }),
+        }),
+      ),
+      truncated: zod.boolean(),
+    }),
+    truncated: zod
+      .boolean()
+      .describe("Some group lists fewer rows than it counts"),
+  }),
+  limitations: zod
+    .array(zod.string())
+    .describe(
+      'What the answer cannot see, e.g. \"tracking_start:2026-05-01\" when `from` was clamped.',
+    ),
 });
 
 export const ListDashboardBudgetsQueryParams = zod.object({

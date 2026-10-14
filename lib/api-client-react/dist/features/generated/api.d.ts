@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateAllowancePlanBody, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexSummary, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateAllowancePlanBody, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -367,6 +367,30 @@ export type GetMappingRuleHistoryQueryResult = NonNullable<Awaited<ReturnType<ty
 export type GetMappingRuleHistoryQueryError = ErrorType<unknown>;
 export declare function useGetMappingRuleHistory<TData = Awaited<ReturnType<typeof getMappingRuleHistory>>, TError = ErrorType<unknown>>(id: string, options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getMappingRuleHistory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. Read-only.
+ * @summary One Amex card's period (or every Amex card's) — owed, purchases, payments and credits apart, and what was not in the plan
+ */
+export declare const getGetAmexSummaryUrl: (params: GetAmexSummaryParams) => string;
+export declare const getAmexSummary: (params: GetAmexSummaryParams, options?: RequestInit) => Promise<AmexSummary>;
+export declare const getGetAmexSummaryQueryKey: (params?: GetAmexSummaryParams) => readonly ["/api/amex/summary", ...GetAmexSummaryParams[]];
+export declare const getGetAmexSummaryQueryOptions: <TData = Awaited<ReturnType<typeof getAmexSummary>>, TError = ErrorType<void>>(params: GetAmexSummaryParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAmexSummary>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getAmexSummary>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetAmexSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getAmexSummary>>>;
+export type GetAmexSummaryQueryError = ErrorType<void>;
+/**
+ * @summary One Amex card's period (or every Amex card's) — owed, purchases, payments and credits apart, and what was not in the plan
+ */
+export declare function useGetAmexSummary<TData = Awaited<ReturnType<typeof getAmexSummary>>, TError = ErrorType<void>>(params: GetAmexSummaryParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAmexSummary>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

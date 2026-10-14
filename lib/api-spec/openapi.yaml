@@ -1895,6 +1895,62 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AmexWeeklyPayoff" }
 
+  /amex/summary:
+    get:
+      operationId: getAmexSummary
+      tags: [amex, features]
+      summary: One Amex card's period (or every Amex card's) — owed, purchases, payments and credits apart, and what was not in the plan
+      description: >-
+        (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex
+        card ("all", debt-linked cards included) over [from, to] (household
+        America/Chicago days). `owed` is GET /amex/anchor's own answer (with
+        ?accountId= for one card; the combined anchor for "all") — null when
+        unknown, never 0. Every row on the card(s) dated in the period is in
+        exactly one bucket (`classifyCardCredit`, the rule the weekly payoff
+        bills with): purchases (filed or not; reimbursable ones still count and
+        are flagged), otherCharges, refunds, payments, otherCredits, or notMine
+        (rows the owner marked "not mine", which the payoff leaves out). A
+        pending row its posted row replaced is counted once, on the posted row.
+        For a card's billing window, purchases − refunds = that card's
+        `weekCharges` on GET /amex/weekly-payoff. householdContribution is what
+        the card(s) added to the household's allowances — the read GET
+        /money/period-breakdown uses with `account=` (for a week, weeklyPlan =
+        that breakdown's `actual`); it is the household's plan, not the card's.
+        planLink: the card's debt on the payoff plan, or the everyday hook that
+        pays it (its payoff for the period holding `to`), or none.
+        needsAttention lists the purchases still to resolve, each in one group,
+        first wins: marked unplanned · not filed to an allowance · filed with no
+        category. Read-only.
+      parameters:
+        - in: query
+          name: accountId
+          required: true
+          description: An Amex card's Plaid account_id (as on GET /amex/weekly-payoff), or "all".
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - in: query
+          name: from
+          required: true
+          description: First day, YYYY-MM-DD, inclusive. Not after today; clamped to the tracking start (`limitations`).
+          schema: { type: string, maxLength: 10 }
+        - in: query
+          name: to
+          required: true
+          description: Last day, YYYY-MM-DD, inclusive. At most 366 days after `from`.
+          schema: { type: string, maxLength: 10 }
+        - in: query
+          name: rowsPerGroup
+          required: false
+          description: Rows listed in each needsAttention group, largest first (each group's amount and count still cover every row).
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AmexSummary" }
+        "400": { description: "A bad date, from after to or after today, a period before tracking began or longer than 366 days, or a bad rowsPerGroup" }
+        "404": { description: The card is not one of this household's Amex cards }
+
   /dashboard-budgets:
     get:
       operationId: listDashboardBudgets
@@ -8695,6 +8751,207 @@ components:
             charge on the cards, filed or not, less refunds — the basis the forecast's Saturday
             payoff bills (`allCoverages`), so this plus what is left of the week is that payoff.
         combinedStatementBalance: { type: number, description: "The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total" }
+        debtLinkedCards:
+          type: array
+          description: >-
+            (S5) Additive. The Amex cards tracked as a debt, which `cards` leaves
+            out (they are paid through the payoff plan, not the band), so the
+            Amex page can still list them. Identity only; `cards` and the
+            combined totals are unchanged. Always sent.
+          items: { $ref: "#/components/schemas/AmexDebtLinkedCard" }
+    AmexDebtLinkedCard:
+      type: object
+      required: [accountId, name, mask, debtId, brand, cadence, displayName]
+      properties:
+        accountId: { type: string, description: The card's Plaid account_id }
+        name: { type: string, description: Plaid's name for the card }
+        mask: { type: ["string", "null"] }
+        debtId: { type: string }
+        brand: { type: string, enum: [blue, silver, gold] }
+        cadence: { type: string, enum: [weekly, monthly] }
+        displayName: { type: ["string", "null"], description: "The household's own name for the card (Settings), if any" }
+
+    AmexSummary:
+      type: object
+      required:
+        [scope, period, owed, purchases, refunds, payments, otherCredits, otherCharges, notMine, householdContribution, planLink, needsAttention, limitations]
+      properties:
+        scope: { $ref: "#/components/schemas/AmexSummaryScope" }
+        period: { $ref: "#/components/schemas/AmexSummaryPeriod" }
+        owed: { $ref: "#/components/schemas/AmexSummaryOwed" }
+        purchases: { $ref: "#/components/schemas/AmexSummaryPurchases" }
+        refunds: { $ref: "#/components/schemas/AmexSummaryTotal" }
+        payments: { $ref: "#/components/schemas/AmexSummaryTotal" }
+        otherCredits: { $ref: "#/components/schemas/AmexSummaryTotal" }
+        otherCharges: { $ref: "#/components/schemas/AmexSummaryTotal" }
+        notMine: { $ref: "#/components/schemas/AmexSummaryTotal" }
+        householdContribution: { $ref: "#/components/schemas/AmexSummaryHouseholdContribution" }
+        planLink: { $ref: "#/components/schemas/AmexSummaryPlanLink" }
+        needsAttention: { $ref: "#/components/schemas/AmexSummaryNeedsAttention" }
+        limitations:
+          type: array
+          description: What the answer cannot see, e.g. "tracking_start:2026-05-01" when `from` was clamped.
+          items: { type: string }
+
+    AmexSummaryScope:
+      type: object
+      description: >-
+        kind "card": one card, named here and as the only entry of `cards`.
+        kind "all": every Amex card, debt-linked or not; the top-level
+        identity fields are null.
+      required: [kind, accountId, name, mask, institution, cards]
+      properties:
+        kind: { type: string, enum: [card, all] }
+        accountId: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+        institution: { type: ["string", "null"] }
+        cards:
+          type: array
+          items: { $ref: "#/components/schemas/AmexSummaryCard" }
+
+    AmexSummaryCard:
+      type: object
+      required: [accountId, name, mask, institution, brand, cadence, debtLinked, debtId, owed]
+      properties:
+        accountId: { type: string, description: The card's Plaid account_id }
+        name:
+          type: string
+          description: The household's name for the card, else its tier word (Blue Cash / Platinum), else Plaid's name
+        mask: { type: ["string", "null"] }
+        institution: { type: ["string", "null"] }
+        brand: { type: string, enum: [blue, silver] }
+        cadence: { type: string, enum: [weekly, monthly] }
+        debtLinked: { type: boolean, description: A debt row tracks this card (it is paid through the payoff plan) }
+        debtId: { type: ["string", "null"] }
+        owed: { type: ["string", "null"], description: "This card's own current balance (GET /amex/anchor?accountId=); null = unknown, never 0" }
+
+    AmexSummaryPeriod:
+      type: object
+      required: [from, to, timezone]
+      properties:
+        from: { type: string, description: The first day read (after any clamp to the tracking start) }
+        to: { type: string }
+        timezone: { type: string }
+
+    AmexSummaryOwed:
+      type: object
+      required: [current, statement, asOf, source]
+      properties:
+        current: { type: ["string", "null"], description: "GET /amex/anchor's balance; null = unknown, never 0" }
+        statement:
+          type: ["string", "null"]
+          description: The latest statement balance on file for a debt-linked card (one card only); null when none
+        asOf:
+          type: ["string", "null"]
+          description: >-
+            As GET /amex/anchor's asOf (an ISO instant, or a bare YYYY-MM-DD
+            for source "computed"); null when the balance is unknown.
+        source: { type: string, enum: [plaid, debt, anchor, computed, missing] }
+
+    AmexSummaryTotal:
+      type: object
+      required: [amount, count]
+      properties:
+        amount: { type: string, description: Positive dollars (notMine is charges less credits) }
+        count: { type: integer }
+
+    AmexSummaryPurchases:
+      type: object
+      required: [amount, count, reimbursable]
+      properties:
+        amount: { type: string }
+        count: { type: integer }
+        reimbursable: { $ref: "#/components/schemas/AmexSummaryTotal" }
+
+    AmexSummaryHouseholdContribution:
+      type: object
+      description: >-
+        What the card(s) added to the HOUSEHOLD's allowances over the period —
+        the household's plan, never this card's budget. Refunds net per
+        account, never below zero.
+      required: [weeklyPlan, monthlyPlan, unfiled, link]
+      properties:
+        weeklyPlan: { type: string, description: "Weekly-flagged + unfiled spending (the weekly cap's pool)" }
+        monthlyPlan: { type: string, description: Monthly-flagged spending }
+        unfiled: { type: string, description: The part of weeklyPlan not filed to an allowance yet }
+        link: { type: string, description: "Where the household week is reviewed: always /spending/week" }
+
+    AmexSummaryPlanLink:
+      type: object
+      description: >-
+        Flat: `kind` says which fields mean something. weekly_hook /
+        monthly_hook: the everyday hook pays this card — `payoff` is that
+        hook's payoff for the period holding `to` (all the cards it bills plus
+        what is left of the household allowance; null when the forecast has not
+        sized it), on `payoffDate`, sized from the plan or, with no plan set,
+        the item's stored amount (`basis`). debt: the card's debt — `minimum`
+        (null when not reported), `avalancheRank` (1 = the debt the plan
+        attacks now; null when not active or no balance), `status`. none: no
+        card-specific plan.
+      required: [kind, payoff, payoffDate, basis, debtId, name, minimum, avalancheRank, status]
+      properties:
+        kind: { type: string, enum: [weekly_hook, monthly_hook, debt, none] }
+        payoff: { type: ["string", "null"] }
+        payoffDate: { type: ["string", "null"] }
+        basis:
+          oneOf:
+            - type: string
+              enum: [plan, stored_amount]
+            - type: "null"
+        debtId: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        minimum: { type: ["string", "null"] }
+        avalancheRank: { type: ["integer", "null"] }
+        status: { type: ["string", "null"] }
+
+    AmexSummaryNeedsAttention:
+      type: object
+      required: [unplanned, unfiled, uncategorized, truncated]
+      properties:
+        unplanned: { $ref: "#/components/schemas/AmexSummaryAttentionGroup" }
+        unfiled: { $ref: "#/components/schemas/AmexSummaryAttentionGroup" }
+        uncategorized: { $ref: "#/components/schemas/AmexSummaryAttentionGroup" }
+        truncated: { type: boolean, description: Some group lists fewer rows than it counts }
+
+    AmexSummaryAttentionGroup:
+      type: object
+      required: [amount, count, rows, truncated]
+      properties:
+        amount: { type: string, description: "Σ the group's purchases (every row, not only those listed)" }
+        count: { type: integer }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/AmexSummaryRow" }
+        truncated: { type: boolean }
+
+    AmexSummaryRow:
+      type: object
+      required: [id, date, displayName, amount, pending, category, flags, card]
+      properties:
+        id: { type: string }
+        date: { type: string }
+        displayName: { type: string, description: The household's merchant alias, else the cleaned bank description }
+        amount: { type: string, description: The purchase, positive dollars }
+        pending: { type: boolean }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/PeriodBreakdownRowCategory"
+            - type: "null"
+        flags:
+          type: array
+          items:
+            type: string
+            enum: [reimbursable, unplanned, unfiled, uncategorized, weekly, monthly, bill_matched]
+        card: { $ref: "#/components/schemas/AmexSummaryRowCard" }
+
+    AmexSummaryRowCard:
+      type: object
+      required: [accountId, name, mask]
+      properties:
+        accountId: { type: string }
+        name: { type: string }
+        mask: { type: ["string", "null"] }
 
     DashboardBudget:
       type: object

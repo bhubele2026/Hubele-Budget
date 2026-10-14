@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { AmexDebtLinkedCard } from "./amexDebtLinkedCard";
 import type { AmexWeeklyPayoffCard } from "./amexWeeklyPayoffCard";
 export interface AmexWeeklyPayoff {
     weekStart: string;
@@ -14,5 +15,7 @@ export interface AmexWeeklyPayoff {
     combinedWeekCharges: number;
     /** The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total */
     combinedStatementBalance: number;
+    /** (S5) Additive. The Amex cards tracked as a debt, which `cards` leaves out (they are paid through the payoff plan, not the band), so the Amex page can still list them. Identity only; `cards` and the combined totals are unchanged. Always sent. */
+    debtLinkedCards?: AmexDebtLinkedCard[];
 }
 //# sourceMappingURL=amexWeeklyPayoff.d.ts.map

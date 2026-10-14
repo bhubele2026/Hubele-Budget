@@ -5354,6 +5354,33 @@ export interface AmexWeeklyPayoffCard {
     pctOfStatementThisWeek: number;
     topMerchant: AmexWeeklyPayoffCardTopMerchant;
 }
+export type AmexDebtLinkedCardBrand = (typeof AmexDebtLinkedCardBrand)[keyof typeof AmexDebtLinkedCardBrand];
+export declare const AmexDebtLinkedCardBrand: {
+    readonly blue: "blue";
+    readonly silver: "silver";
+    readonly gold: "gold";
+};
+export type AmexDebtLinkedCardCadence = (typeof AmexDebtLinkedCardCadence)[keyof typeof AmexDebtLinkedCardCadence];
+export declare const AmexDebtLinkedCardCadence: {
+    readonly weekly: "weekly";
+    readonly monthly: "monthly";
+};
+export interface AmexDebtLinkedCard {
+    /** The card's Plaid account_id */
+    accountId: string;
+    /** Plaid's name for the card */
+    name: string;
+    /** @nullable */
+    mask: string | null;
+    debtId: string;
+    brand: AmexDebtLinkedCardBrand;
+    cadence: AmexDebtLinkedCardCadence;
+    /**
+     * The household's own name for the card (Settings), if any
+     * @nullable
+     */
+    displayName: string | null;
+}
 export interface AmexWeeklyPayoff {
     weekStart: string;
     weekEnd: string;
@@ -5362,6 +5389,200 @@ export interface AmexWeeklyPayoff {
     combinedWeekCharges: number;
     /** The band cards' current balances summed (see AmexWeeklyPayoffCard.statementBalance): not a statement total */
     combinedStatementBalance: number;
+    /** (S5) Additive. The Amex cards tracked as a debt, which `cards` leaves out (they are paid through the payoff plan, not the band), so the Amex page can still list them. Identity only; `cards` and the combined totals are unchanged. Always sent. */
+    debtLinkedCards?: AmexDebtLinkedCard[];
+}
+export type AmexSummaryScopeKind = (typeof AmexSummaryScopeKind)[keyof typeof AmexSummaryScopeKind];
+export declare const AmexSummaryScopeKind: {
+    readonly card: "card";
+    readonly all: "all";
+};
+export type AmexSummaryCardBrand = (typeof AmexSummaryCardBrand)[keyof typeof AmexSummaryCardBrand];
+export declare const AmexSummaryCardBrand: {
+    readonly blue: "blue";
+    readonly silver: "silver";
+};
+export type AmexSummaryCardCadence = (typeof AmexSummaryCardCadence)[keyof typeof AmexSummaryCardCadence];
+export declare const AmexSummaryCardCadence: {
+    readonly weekly: "weekly";
+    readonly monthly: "monthly";
+};
+export interface AmexSummaryCard {
+    /** The card's Plaid account_id */
+    accountId: string;
+    /** The household's name for the card, else its tier word (Blue Cash / Platinum), else Plaid's name */
+    name: string;
+    /** @nullable */
+    mask: string | null;
+    /** @nullable */
+    institution: string | null;
+    brand: AmexSummaryCardBrand;
+    cadence: AmexSummaryCardCadence;
+    /** A debt row tracks this card (it is paid through the payoff plan) */
+    debtLinked: boolean;
+    /** @nullable */
+    debtId: string | null;
+    /**
+     * This card's own current balance (GET /amex/anchor?accountId=); null = unknown, never 0
+     * @nullable
+     */
+    owed: string | null;
+}
+/**
+ * kind "card": one card, named here and as the only entry of `cards`. kind "all": every Amex card, debt-linked or not; the top-level identity fields are null.
+ */
+export interface AmexSummaryScope {
+    kind: AmexSummaryScopeKind;
+    /** @nullable */
+    accountId: string | null;
+    /** @nullable */
+    name: string | null;
+    /** @nullable */
+    mask: string | null;
+    /** @nullable */
+    institution: string | null;
+    cards: AmexSummaryCard[];
+}
+export interface AmexSummaryPeriod {
+    /** The first day read (after any clamp to the tracking start) */
+    from: string;
+    to: string;
+    timezone: string;
+}
+export type AmexSummaryOwedSource = (typeof AmexSummaryOwedSource)[keyof typeof AmexSummaryOwedSource];
+export declare const AmexSummaryOwedSource: {
+    readonly plaid: "plaid";
+    readonly debt: "debt";
+    readonly anchor: "anchor";
+    readonly computed: "computed";
+    readonly missing: "missing";
+};
+export interface AmexSummaryOwed {
+    /**
+     * GET /amex/anchor's balance; null = unknown, never 0
+     * @nullable
+     */
+    current: string | null;
+    /**
+     * The latest statement balance on file for a debt-linked card (one card only); null when none
+     * @nullable
+     */
+    statement: string | null;
+    /**
+     * As GET /amex/anchor's asOf (an ISO instant, or a bare YYYY-MM-DD for source "computed"); null when the balance is unknown.
+     * @nullable
+     */
+    asOf: string | null;
+    source: AmexSummaryOwedSource;
+}
+export interface AmexSummaryTotal {
+    /** Positive dollars (notMine is charges less credits) */
+    amount: string;
+    count: number;
+}
+export interface AmexSummaryPurchases {
+    amount: string;
+    count: number;
+    reimbursable: AmexSummaryTotal;
+}
+/**
+ * What the card(s) added to the HOUSEHOLD's allowances over the period — the household's plan, never this card's budget. Refunds net per account, never below zero.
+ */
+export interface AmexSummaryHouseholdContribution {
+    /** Weekly-flagged + unfiled spending (the weekly cap's pool) */
+    weeklyPlan: string;
+    /** Monthly-flagged spending */
+    monthlyPlan: string;
+    /** The part of weeklyPlan not filed to an allowance yet */
+    unfiled: string;
+    /** Where the household week is reviewed: always /spending/week */
+    link: string;
+}
+export type AmexSummaryPlanLinkKind = (typeof AmexSummaryPlanLinkKind)[keyof typeof AmexSummaryPlanLinkKind];
+export declare const AmexSummaryPlanLinkKind: {
+    readonly weekly_hook: "weekly_hook";
+    readonly monthly_hook: "monthly_hook";
+    readonly debt: "debt";
+    readonly none: "none";
+};
+/**
+ * Flat: `kind` says which fields mean something. weekly_hook / monthly_hook: the everyday hook pays this card — `payoff` is that hook's payoff for the period holding `to` (all the cards it bills plus what is left of the household allowance; null when the forecast has not sized it), on `payoffDate`, sized from the plan or, with no plan set, the item's stored amount (`basis`). debt: the card's debt — `minimum` (null when not reported), `avalancheRank` (1 = the debt the plan attacks now; null when not active or no balance), `status`. none: no card-specific plan.
+ */
+export interface AmexSummaryPlanLink {
+    kind: AmexSummaryPlanLinkKind;
+    /** @nullable */
+    payoff: string | null;
+    /** @nullable */
+    payoffDate: string | null;
+    basis: "plan" | "stored_amount" | null;
+    /** @nullable */
+    debtId: string | null;
+    /** @nullable */
+    name: string | null;
+    /** @nullable */
+    minimum: string | null;
+    /** @nullable */
+    avalancheRank: number | null;
+    /** @nullable */
+    status: string | null;
+}
+export type AmexSummaryRowFlagsItem = (typeof AmexSummaryRowFlagsItem)[keyof typeof AmexSummaryRowFlagsItem];
+export declare const AmexSummaryRowFlagsItem: {
+    readonly reimbursable: "reimbursable";
+    readonly unplanned: "unplanned";
+    readonly unfiled: "unfiled";
+    readonly uncategorized: "uncategorized";
+    readonly weekly: "weekly";
+    readonly monthly: "monthly";
+    readonly bill_matched: "bill_matched";
+};
+export interface AmexSummaryRowCard {
+    accountId: string;
+    name: string;
+    /** @nullable */
+    mask: string | null;
+}
+export interface AmexSummaryRow {
+    id: string;
+    date: string;
+    /** The household's merchant alias */
+    displayName: string;
+    /** The purchase */
+    amount: string;
+    pending: boolean;
+    category: PeriodBreakdownRowCategory | null;
+    flags: AmexSummaryRowFlagsItem[];
+    card: AmexSummaryRowCard;
+}
+export interface AmexSummaryAttentionGroup {
+    /** Σ the group's purchases (every row, not only those listed) */
+    amount: string;
+    count: number;
+    rows: AmexSummaryRow[];
+    truncated: boolean;
+}
+export interface AmexSummaryNeedsAttention {
+    unplanned: AmexSummaryAttentionGroup;
+    unfiled: AmexSummaryAttentionGroup;
+    uncategorized: AmexSummaryAttentionGroup;
+    /** Some group lists fewer rows than it counts */
+    truncated: boolean;
+}
+export interface AmexSummary {
+    scope: AmexSummaryScope;
+    period: AmexSummaryPeriod;
+    owed: AmexSummaryOwed;
+    purchases: AmexSummaryPurchases;
+    refunds: AmexSummaryTotal;
+    payments: AmexSummaryTotal;
+    otherCredits: AmexSummaryTotal;
+    otherCharges: AmexSummaryTotal;
+    notMine: AmexSummaryTotal;
+    householdContribution: AmexSummaryHouseholdContribution;
+    planLink: AmexSummaryPlanLink;
+    needsAttention: AmexSummaryNeedsAttention;
+    /** What the answer cannot see, e.g. "tracking_start:2026-05-01" when `from` was clamped. */
+    limitations: string[];
 }
 export interface DashboardBudget {
     id: string;
@@ -6788,6 +7009,30 @@ export type ListRecapHistoryParams = {
      * @maximum 30
      */
     limit?: number;
+};
+export type GetAmexSummaryParams = {
+    /**
+     * An Amex card's Plaid account_id (as on GET /amex/weekly-payoff), or "all".
+     * @minLength 1
+     * @maxLength 128
+     */
+    accountId: string;
+    /**
+     * First day, YYYY-MM-DD, inclusive. Not after today; clamped to the tracking start (`limitations`).
+     * @maxLength 10
+     */
+    from: string;
+    /**
+     * Last day, YYYY-MM-DD, inclusive. At most 366 days after `from`.
+     * @maxLength 10
+     */
+    to: string;
+    /**
+     * Rows listed in each needsAttention group, largest first (each group's amount and count still cover every row).
+     * @minimum 1
+     * @maximum 50
+     */
+    rowsPerGroup?: number;
 };
 export type GetPeriodBreakdownParams = {
     period: GetPeriodBreakdownPeriod;
