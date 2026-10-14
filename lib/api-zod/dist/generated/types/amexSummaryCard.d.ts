@@ -7,6 +7,7 @@
  */
 import type { AmexSummaryCardBrand } from "./amexSummaryCardBrand";
 import type { AmexSummaryCardCadence } from "./amexSummaryCardCadence";
+import type { AmexSummaryTotal } from "./amexSummaryTotal";
 export interface AmexSummaryCard {
     /** The card's Plaid account_id */
     accountId: string;
@@ -27,5 +28,7 @@ export interface AmexSummaryCard {
      * @nullable
      */
     owed: string | null;
+    /** (P3) This card's purchases over the period: the same rows and rule as the top-level `purchases` of this card's own summary (?accountId=<this card>), so the card band needs one "all" call. With "all", the cards' purchases add up to the top-level `purchases`. */
+    purchases: AmexSummaryTotal;
 }
 //# sourceMappingURL=amexSummaryCard.d.ts.map

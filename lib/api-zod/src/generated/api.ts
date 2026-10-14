@@ -5888,6 +5888,16 @@ export const GetAmexSummaryResponse = zod.object({
             .describe(
               "This card's own current balance (GET \/amex\/anchor?accountId=); null = unknown, never 0",
             ),
+          purchases: zod
+            .object({
+              amount: zod
+                .string()
+                .describe("Positive dollars (notMine is charges less credits)"),
+              count: zod.number(),
+            })
+            .describe(
+              '(P3) This card\'s purchases over the period: the same rows and rule as the top-level `purchases` of this card\'s own summary (?accountId=<this card>), so the card band needs one \"all\" call. With \"all\", the cards\' purchases add up to the top-level `purchases`.',
+            ),
         }),
       ),
     })
@@ -10663,6 +10673,18 @@ export const ListCategorizationReviewResponse = zod.object({
     }),
   ),
   total: zod.number(),
+});
+
+/**
+ * (P3) The same `total` GET /categorization/review returns, without listing or flagging any item. Read-only.
+ * @summary How many open decisions wait in the review queue (the nav badge).
+ */
+export const GetCategorizationReviewCountResponse = zod.object({
+  total: zod
+    .number()
+    .describe(
+      "Open decisions (provisional or queued, unresolved, not undone): GET \/categorization\/review's total",
+    ),
 });
 
 export const AcceptCategorizationDecisionParams = zod.object({

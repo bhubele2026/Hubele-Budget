@@ -2464,9 +2464,11 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
         if (!hasLiabilityAcct) return;
         try {
           await fetchLiabilitiesForItem(req.userId!, r.plaidItemRowId);
-          // (WP2) Put what was just cached onto the linked debts Plaid owns,
-          // as GET /debts does: otherwise the fetch time moved (and with it
-          // the pending rule's as-of) while `debts.balance` stayed behind.
+          // (WP2) Put what was just cached onto the linked debts Plaid owns
+          // (`applyLiabilityToDebt`, as a debt's own Refresh): otherwise the
+          // fetch time moved (and with it the pending rule's as-of) while
+          // `debts.balance` stayed behind. (P3) This is the household's
+          // liabilities refresh: GET /debts no longer refreshes on read.
           await applyCachedLiabilitiesToPlaidDebts(req.userId!, req.householdId!, r.plaidItemRowId);
         } catch (liabErr) {
           req.log.warn(

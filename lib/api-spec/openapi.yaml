@@ -3140,6 +3140,21 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ReviewQueue" }
 
+  /categorization/review/count:
+    get:
+      operationId: getCategorizationReviewCount
+      tags: [categorization]
+      summary: How many open decisions wait in the review queue (the nav badge).
+      description: >-
+        (P3) The same `total` GET /categorization/review returns, without
+        listing or flagging any item. Read-only.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewQueueCount" }
+
   /categorization/review/{decisionId}/accept:
     post:
       operationId: acceptCategorizationDecision
@@ -8832,7 +8847,7 @@ components:
 
     AmexSummaryCard:
       type: object
-      required: [accountId, name, mask, institution, brand, cadence, debtLinked, debtId, owed]
+      required: [accountId, name, mask, institution, brand, cadence, debtLinked, debtId, owed, purchases]
       properties:
         accountId: { type: string, description: The card's Plaid account_id }
         name:
@@ -8845,6 +8860,14 @@ components:
         debtLinked: { type: boolean, description: A debt row tracks this card (it is paid through the payoff plan) }
         debtId: { type: ["string", "null"] }
         owed: { type: ["string", "null"], description: "This card's own current balance (GET /amex/anchor?accountId=); null = unknown, never 0" }
+        purchases:
+          $ref: "#/components/schemas/AmexSummaryTotal"
+          description: >-
+            (P3) This card's purchases over the period: the same rows and rule
+            as the top-level `purchases` of this card's own summary
+            (?accountId=<this card>), so the card band needs one "all" call.
+            With "all", the cards' purchases add up to the top-level
+            `purchases`.
 
     AmexSummaryPeriod:
       type: object
@@ -9762,6 +9785,12 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ReviewItem" }
         total: { type: integer }
+
+    ReviewQueueCount:
+      type: object
+      required: [total]
+      properties:
+        total: { type: integer, description: "Open decisions (provisional or queued, unresolved, not undone): GET /categorization/review's total" }
 
     CorrectDecisionInput:
       type: object

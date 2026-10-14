@@ -569,6 +569,7 @@ export * from "./reviewFlags";
 export * from "./reviewItem";
 export * from "./reviewItemBand";
 export * from "./reviewQueue";
+export * from "./reviewQueueCount";
 export * from "./reviewResolution";
 export * from "./reviewResolutionResolution";
 export * from "./ruleAction";

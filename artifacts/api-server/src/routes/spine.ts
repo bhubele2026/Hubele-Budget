@@ -81,10 +81,9 @@ const router: IRouter = Router();
  * balances never have to cross the wire.
  *
  * ⚠️ NO PLAID CALL ON THIS PATH. The debts read below is a plain SELECT, not
- * `GET /debts` — that route opportunistically refreshes stale linked accounts
- * against Plaid's API, which is a fine thing for the Debts page to do on demand
- * and a terrible thing to put in front of first paint. The freshness read is
- * our own tables too: the snapshot, the item behind it, and its sync attempts.
+ * `GET /debts` (which, since P3, never calls Plaid either: liabilities refresh
+ * only on a person's Sync or a debt's own Refresh). The freshness read is our
+ * own tables too: the snapshot, the item behind it, and its sync attempts.
  */
 router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;

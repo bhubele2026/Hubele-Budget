@@ -11964,6 +11964,16 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             debtLinked: zod.ZodBoolean;
             debtId: zod.ZodNullable<zod.ZodString>;
             owed: zod.ZodNullable<zod.ZodString>;
+            purchases: zod.ZodObject<{
+                amount: zod.ZodString;
+                count: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                count: number;
+                amount: string;
+            }, {
+                count: number;
+                amount: string;
+            }>;
         }, "strip", zod.ZodTypeAny, {
             debtId: string | null;
             name: string;
@@ -11974,6 +11984,10 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
+            purchases: {
+                count: number;
+                amount: string;
+            };
         }, {
             debtId: string | null;
             name: string;
@@ -11984,6 +11998,10 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
+            purchases: {
+                count: number;
+                amount: string;
+            };
         }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         kind: "card" | "all";
@@ -12000,6 +12018,10 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
+            purchases: {
+                count: number;
+                amount: string;
+            };
         }[];
         institution: string | null;
     }, {
@@ -12017,6 +12039,10 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
+            purchases: {
+                count: number;
+                amount: string;
+            };
         }[];
         institution: string | null;
     }>;
@@ -12655,6 +12681,14 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
         asOf: string | null;
         current: string | null;
     };
+    purchases: {
+        count: number;
+        amount: string;
+        reimbursable: {
+            count: number;
+            amount: string;
+        };
+    };
     scope: {
         kind: "card" | "all";
         name: string | null;
@@ -12670,6 +12704,10 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
+            purchases: {
+                count: number;
+                amount: string;
+            };
         }[];
         institution: string | null;
     };
@@ -12677,14 +12715,6 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
         timezone: string;
         from: string;
         to: string;
-    };
-    purchases: {
-        count: number;
-        amount: string;
-        reimbursable: {
-            count: number;
-            amount: string;
-        };
     };
     payments: {
         count: number;
@@ -12800,6 +12830,14 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
         asOf: string | null;
         current: string | null;
     };
+    purchases: {
+        count: number;
+        amount: string;
+        reimbursable: {
+            count: number;
+            amount: string;
+        };
+    };
     scope: {
         kind: "card" | "all";
         name: string | null;
@@ -12815,6 +12853,10 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
+            purchases: {
+                count: number;
+                amount: string;
+            };
         }[];
         institution: string | null;
     };
@@ -12822,14 +12864,6 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
         timezone: string;
         from: string;
         to: string;
-    };
-    purchases: {
-        count: number;
-        amount: string;
-        reimbursable: {
-            count: number;
-            amount: string;
-        };
     };
     payments: {
         count: number;
@@ -26586,6 +26620,17 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         suggestedCategoryId: string | null;
         explanation: string;
     }[];
+}>;
+/**
+ * (P3) The same `total` GET /categorization/review returns, without listing or flagging any item. Read-only.
+ * @summary How many open decisions wait in the review queue (the nav badge).
+ */
+export declare const GetCategorizationReviewCountResponse: zod.ZodObject<{
+    total: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    total: number;
+}, {
+    total: number;
 }>;
 export declare const AcceptCategorizationDecisionParams: zod.ZodObject<{
     decisionId: zod.ZodString;
