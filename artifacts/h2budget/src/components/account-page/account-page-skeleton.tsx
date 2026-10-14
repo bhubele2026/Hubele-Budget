@@ -78,3 +78,37 @@ export function AccountPageSkeleton({ tiles = 2 }: { tiles?: number }) {
     </div>
   );
 }
+
+/**
+ * (P4) Just the chart panel and the ledger panel, as grid cells: the account
+ * pages that show their head, band and summary at once use it for the part
+ * that still waits on the month's rows.
+ */
+export function LedgerChartSkeleton() {
+  return (
+    <>
+      <div className="panel span-12" aria-busy="true" data-testid="ledger-chart-skeleton">
+        <div className="panel-head">
+          <Skeleton className="h-4 w-56" />
+        </div>
+        <div className="p-4">
+          <Skeleton className="h-[220px] w-full md:h-[260px]" />
+        </div>
+      </div>
+      <div className="panel span-12" aria-busy="true">
+        <div className="panel-head">
+          <Skeleton className="h-4 w-28" />
+        </div>
+        <div className="divide-y divide-brand-line/70">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="flex min-h-10 items-center gap-3 px-4 py-1">
+              <Skeleton className="h-4 w-4 rounded" />
+              <Skeleton className="h-4 max-w-[220px] flex-1" />
+              <Skeleton className="ml-auto h-5 w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}

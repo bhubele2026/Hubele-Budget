@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useGetSettings, type Spine } from "@workspace/api-client-react";
 import { amexCardLabel } from "@workspace/avalanche-core";
@@ -8,7 +9,7 @@ import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
 import { bankBalanceView } from "@/lib/bankBalance";
 import { cardOwedView, debtForAccount, needsLiability } from "@/lib/cardBalance";
 import { lowPointView } from "@/lib/lowPoint";
-import { prefetchRoute } from "@/lib/routePrefetch";
+import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { useSpine } from "@/hooks/useSpine";
 import { cn } from "@/lib/utils";
 import { useDebtsQ, useLiabilityAccountsQ, useMoneyPositionQ, usePlaidItemsQ } from "./queries";
@@ -53,6 +54,7 @@ function Tile({
   why?: ReactNode;
   index: number;
 }) {
+  const qc = useQueryClient();
   return (
     <div
       data-testid={`tile-${testid}`}
@@ -69,8 +71,7 @@ function Tile({
             <Link
               href={href}
               data-testid={`tile-${testid}-link`}
-              onMouseEnter={() => prefetchRoute(href)}
-              onFocus={() => prefetchRoute(href)}
+              {...warmHandlers((h) => warmRoute(qc, h), href)}
               className="rounded-control after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand-navy/50 focus-visible:after:rounded-[inherit]"
             >
               {title}

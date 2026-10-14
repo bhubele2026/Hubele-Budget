@@ -73,6 +73,8 @@ type SingleSeriesProps = {
   onToggleCollapsed?: () => void;
   /** The account's identity edge on the chart panel. */
   accent?: AccountAccentName;
+  /** A short line under the chart while part of it is still loading. */
+  statusNote?: string;
 };
 
 type MultiSeriesProps = {
@@ -101,6 +103,8 @@ type MultiSeriesProps = {
   onToggleCollapsed?: () => void;
   /** The account's identity edge on the chart panel. */
   accent?: AccountAccentName;
+  /** A short line under the chart while part of it is still loading. */
+  statusNote?: string;
 };
 
 type BalanceTrendChartProps = SingleSeriesProps | MultiSeriesProps;
@@ -119,6 +123,7 @@ function ChartFrame({
   collapsed,
   onToggle,
   accent,
+  note,
   children,
 }: {
   testId: string;
@@ -127,6 +132,7 @@ function ChartFrame({
   collapsed?: boolean;
   onToggle?: () => void;
   accent?: AccountAccentName;
+  note?: string;
   children: ReactNode;
 }) {
   return (
@@ -162,6 +168,9 @@ function ChartFrame({
       }
     >
       {children}
+      {note ? (
+        <p className="text-micro text-neutral-600" role="status" data-testid="trend-status">{note}</p>
+      ) : null}
     </Panel>
   );
 }
@@ -227,6 +236,7 @@ function SingleSeriesBalanceTrendChart({
   collapsed,
   onToggleCollapsed,
   accent,
+  statusNote,
 }: SingleSeriesProps) {
   if (window) {
     // (#809) Render the fixed window (axes, month ticks, today marker)
@@ -242,6 +252,7 @@ function SingleSeriesBalanceTrendChart({
         collapsed={collapsed}
         onToggle={onToggleCollapsed}
         accent={accent}
+        note={statusNote}
       >
           <div className={CHART_BOX}>
             <ResponsiveContainer width="100%" height="100%">
@@ -333,6 +344,7 @@ function SingleSeriesBalanceTrendChart({
       collapsed={collapsed}
       onToggle={onToggleCollapsed}
       accent={accent}
+      note={statusNote}
     >
         <div className={CHART_BOX}>
           <ResponsiveContainer width="100%" height="100%">
@@ -433,6 +445,7 @@ function MultiSeriesBalanceTrendChart({
   collapsed,
   onToggleCollapsed,
   accent,
+  statusNote,
 }: MultiSeriesProps) {
   // Merge the three weekly series into one date-keyed row set. The
   // historical and actual-from-today series are folded into a single
@@ -484,6 +497,7 @@ function MultiSeriesBalanceTrendChart({
       collapsed={collapsed}
       onToggle={onToggleCollapsed}
       accent={accent}
+      note={statusNote}
     >
         {/* The legend says it in words: solid is what happened, dashed is the
             projection. Colour never carries it alone. */}

@@ -19,6 +19,7 @@ import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
 import { SpendingWhy } from "@/pages/next/dashboard/SpendingPanel";
 import { cn, formatCurrency } from "@/lib/utils";
+import { periodParams, PERIOD_MIN } from "./periodParams";
 import { Breakdown } from "./Breakdown";
 import { Details } from "./Details";
 import { PlanPrompt } from "./PlanPrompt";
@@ -38,7 +39,7 @@ const openCodec: UrlCodec<string[]> = {
   write: (v) => (v.length ? v.join(",") : null),
 };
 const NONE: string[] = [];
-const MIN = 60_000;
+const MIN = PERIOD_MIN;
 
 const CELL = "surface rounded-card px-4 py-3 ring-1 ring-brand-line";
 const CELL_LABEL = "text-micro font-semibold uppercase tracking-wide text-neutral-600";
@@ -51,7 +52,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
   const start = resolveStart(view, startParam, today);
   const currentStart = resolveStart(view, "", today);
 
-  const params: GetPeriodBreakdownParams = { period: view, start, rowsPerGroup: 50 };
+  const params: GetPeriodBreakdownParams = periodParams(view, start);
   const q = useGetPeriodBreakdown(params, {
     query: { queryKey: getGetPeriodBreakdownQueryKey(params), staleTime: MIN },
   });

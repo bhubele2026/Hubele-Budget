@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import {
   getForecast,
   getGetForecastQueryKey,
@@ -24,8 +24,8 @@ import { prefetchRoute } from "@/lib/routePrefetch";
  * the same data under two keys. Every entry below calls the same generated
  * builder + fetcher the destination page calls.
  *
- * Timing follows the dashboard's pattern: first stage at 400 ms (after first
- * paint has certainly settled), each subsequent stage 300 ms behind the last.
+ * Timing: the first stage starts once the dashboard's queries have settled and
+ * the browser is idle (see `useLandingWarmup`); each later stage 300 ms behind.
  */
 
 type WarmStage = { href: string; warm: (qc: ReturnType<typeof useQueryClient>) => void };
@@ -88,26 +88,74 @@ const STAGES: WarmStage[] = [
   },
 ];
 
+/** Longest the warm-up waits for a quiet moment before it goes anyway. */
+export const WARMUP_GIVE_UP_MS = 15_000;
+/** How long the dashboard's queries must stay settled before the warm-up starts. */
+export const WARMUP_QUIET_MS = 400;
+
+/**
+ * (P4) Starts only once the dashboard's OWN queries have settled (nothing in
+ * flight for a quiet moment) AND the browser is idle, so the warm-up can never
+ * compete with the open it is meant to make feel fast. A new request in flight
+ * cancels a pending start; the warm-up then waits for the next quiet moment.
+ */
 export function useLandingWarmup(): void {
   const qc = useQueryClient();
+  const inFlight = useIsFetching();
+  const startedRef = useRef(false);
+  const timers = useRef<number[]>([]);
+
+  // Gives up waiting: a poll that never rests must not starve the warm-up for good.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const t = window.setTimeout(() => run(), WARMUP_GIVE_UP_MS);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const idleRef = useRef<{ quiet?: number; idle?: number }>({});
+  const clearPending = () => {
+    const p = idleRef.current;
+    if (p.quiet !== undefined) window.clearTimeout(p.quiet);
+    if (p.idle !== undefined) (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback?.(p.idle);
+    idleRef.current = {};
+  };
+  const run = () => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    STAGES.forEach((stage, i) => {
+      timers.current.push(
+        window.setTimeout(() => {
+          prefetchRoute(stage.href);
+          stage.warm(qc);
+        }, i * 300),
+      );
+    });
+  };
+  function arm() {
+    if (startedRef.current || typeof window === "undefined") return;
+    clearPending();
+    const ric = (window as unknown as {
+      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+    }).requestIdleCallback;
+    idleRef.current.quiet = window.setTimeout(() => {
+      if (typeof ric === "function") idleRef.current.idle = ric(run, { timeout: 2_000 });
+      else run();
+    }, WARMUP_QUIET_MS);
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const timers: number[] = [];
-    const start = () => {
-      STAGES.forEach((stage, i) => {
-        timers.push(
-          window.setTimeout(() => {
-            prefetchRoute(stage.href);
-            stage.warm(qc);
-          }, i * 300),
-        );
-      });
-    };
-    const kickoff = window.setTimeout(start, 400);
-    return () => {
-      window.clearTimeout(kickoff);
-      for (const t of timers) window.clearTimeout(t);
-    };
-  }, [qc]);
+    if (inFlight === 0) arm();
+    else clearPending();
+    return clearPending;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inFlight]);
+
+  useEffect(
+    () => () => {
+      for (const t of timers.current) window.clearTimeout(t);
+    },
+    [],
+  );
 }

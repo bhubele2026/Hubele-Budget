@@ -1,4 +1,8 @@
-import { getListCategorizationReviewQueryKey, useListCategorizationReview } from "@workspace/api-client-react";
+import {
+  getListCategorizationReviewQueryKey,
+  useGetCategorizationReviewCount,
+  useListCategorizationReview,
+} from "@workspace/api-client-react";
 import { reviewParams } from "@/lib/reviewQueue";
 
 /**
@@ -19,8 +23,19 @@ export function useCategorizationQueue(enabled = true) {
   });
 }
 
-/** The queue's total, or null while it has not answered (never a zero). */
+/**
+ * The queue's total for the nav badge, or null while it has not answered (never
+ * a zero). (P4) It asks `GET /categorization/review/count` (one number), not the
+ * 20-row queue. The key sits UNDER the queue's list key, so every invalidation of
+ * the queue still refreshes the badge.
+ */
 export function useCategorizationQueueTotal(): number | null {
-  const { data } = useCategorizationQueue();
+  const { data } = useGetCategorizationReviewCount({
+    query: {
+      queryKey: [...getListCategorizationReviewQueryKey(), "count"],
+      staleTime: 60_000,
+      gcTime: 30 * 60_000,
+    },
+  });
   return data ? data.total : null;
 }

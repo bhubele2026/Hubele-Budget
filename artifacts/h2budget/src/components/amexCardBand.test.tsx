@@ -17,8 +17,13 @@ const SUMMARY: Record<string, { owed: string | null; purchases: string }> = {
 vi.mock("@workspace/api-client-react/features", () => ({
   useGetAmexSummary: (p: { accountId: string; from: string; to: string }) => {
     calls.push(p);
-    const s = SUMMARY[p.accountId];
-    return { data: s ? { owed: { current: s.owed }, purchases: { amount: s.purchases } } : undefined, isError: false };
+    // (P4) ONE all-cards summary carries every card's owed + purchases.
+    if (p.accountId !== "all") return { data: undefined, isError: false };
+    const a = SUMMARY.all;
+    const cards = Object.entries(SUMMARY)
+      .filter(([k]) => k !== "all")
+      .map(([accountId, c]) => ({ accountId, owed: c.owed, purchases: { amount: c.purchases, count: 1 } }));
+    return { data: { owed: { current: a.owed }, purchases: { amount: a.purchases }, scope: { cards } }, isError: false };
   },
   getGetAmexSummaryQueryKey: (p: unknown) => ["/api/amex/summary", p],
 }));
@@ -72,7 +77,8 @@ describe("AmexCardBand figures (W7)", () => {
   it("the band asks for the Summary's own period, by the external account id; the ring is named as the weekly plan's", () => {
     view("hs-amex-blue-2002");
     expect(calls.every((c) => c.from === "2026-10-11" && c.to === "2026-10-17")).toBe(true);
-    expect(calls.map((c) => c.accountId).sort()).toEqual(expect.arrayContaining(["all", "hs-amex-blue-2002", "hs-amex-plat-1001"]));
+    // One call, for "all": no per-card summary queries.
+    expect(new Set(calls.map((c) => c.accountId))).toEqual(new Set(["all"]));
     expect(screen.getByText("cleared this wk")).toBeTruthy();
     expect(screen.getByText("add")).toBeTruthy(); // + Add to avalanche stays
     expect(document.querySelector('[data-account-id="hs-amex-blue-2002"]')!.className).toContain("ring-2");

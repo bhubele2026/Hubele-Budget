@@ -1,5 +1,5 @@
 import React from "react";
-import { render, cleanup, waitFor } from "@testing-library/react";
+import { render, cleanup, waitFor, screen, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -25,6 +25,7 @@ const state = vi.hoisted(() => ({
   empty: [] as any[],
   forecast: undefined as unknown,
   cashSignalParams: [] as unknown[],
+  cashSignalEnabled: [] as Array<boolean | undefined>,
   chartProps: [] as any[],
 }));
 
@@ -52,10 +53,11 @@ vi.mock("@workspace/api-client-react", async (original) => {
     useListMappingRules: () => ({ data: state.empty }),
     useListPlaidItems: () => ({ data: state.empty }),
     useGetForecast: () => ({ data: state.forecast }),
-    useGetForecastCashSignal: (params: unknown) => {
+    useGetForecastCashSignal: (params: unknown, opts?: { query?: { enabled?: boolean } }) => {
       state.cashSignalParams.push(params);
+      state.cashSignalEnabled.push(opts?.query?.enabled);
       return {
-        data: {
+        data: opts?.query?.enabled === false ? undefined : {
           daily: [
             { date: "2026-10-03", balance: "900.00" },
             { date: "2026-10-10", balance: "850.00" },
@@ -127,6 +129,7 @@ beforeEach(() => {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   state.forecast = LINKED_FORECAST;
   state.cashSignalParams = [];
+  state.cashSignalEnabled = [];
   state.chartProps = [];
   server = createFakeLedgerServer({
     today: HOUSEHOLD_TODAY,
@@ -142,6 +145,43 @@ afterEach(() => {
   cleanup();
   qc.clear();
   vi.unstubAllGlobals();
+});
+
+describe("Chase 365-day cash signal waits for the chart (P4)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("is not requested until the chart is near the viewport; the ledger does not wait for it", async () => {
+    const cbs: Array<(e: Array<{ isIntersecting: boolean }>) => void> = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(cb: (e: Array<{ isIntersecting: boolean }>) => void) {
+          cbs.push(cb);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      },
+    );
+    vi.setSystemTime(new Date("2026-10-01T02:00:00Z"));
+    render(
+      <QueryClientProvider client={qc}>
+        <TransactionsPage />
+      </QueryClientProvider>,
+    );
+    // The ledger's rows arrive with the signal still off.
+    await waitFor(() => expect(screen.getAllByText(/LAST DAY OF SEPTEMBER/).length).toBeGreaterThan(0));
+    expect(state.cashSignalEnabled.length).toBeGreaterThan(0);
+    expect(state.cashSignalEnabled.every((e) => e === false)).toBe(true);
+    await waitFor(() => expect(state.chartProps.length).toBeGreaterThan(0));
+    expect(state.chartProps.at(-1).statusNote).toMatch(/Loading the forecast/);
+    act(() => {
+      for (const cb of cbs) cb([{ isIntersecting: true }]);
+    });
+    await waitFor(() => expect(state.cashSignalEnabled.at(-1)).toBe(true));
+  });
 });
 
 describe.each([

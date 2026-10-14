@@ -23,6 +23,7 @@ import {
   getListCategoriesQueryKey,
 } from "@workspace/api-client-react";
 import { prefetchRoute } from "@/lib/routePrefetch";
+import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -103,85 +104,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const queueTotal = useCategorizationQueueTotal();
   const reviewCount = forecastReview == null ? null : badgeCount(queueTotal, forecastReview);
 
-  // (#perf-4) Warm a route's primary, stable-key queries on nav hover/focus so
-  // the page renders from cache on click. Only routes whose query keys are
-  // deterministic (no per-page range/limit params) are prefetched; staleTime
-  // defaults still gate any actual network call.
+  // (P4) Warm a section's REAL first queries on hover, focus and the first touch
+  // of a press (pointer-down / touch-start), so the page renders from cache on
+  // click. The keys come from the pages' own builders (lib/warmRoutes).
   const qc = useQueryClient();
-  const prefetch = (rawHref: string) => {
-    const href = pathOf(rawHref);
-    // Also warm the route's JS chunk (lib/routePrefetch) — the query cache is
-    // useless if the page's code hasn't streamed in yet.
-    prefetchRoute(href);
-    // Then warm that route's ONE primary query so the page renders from cache
-    // on click (stale-while-revalidate; staleTime defaults still gate the
-    // actual network call). Params mirror exactly what each page requests so
-    // the warmed key is the key the page reads.
-    if (href === "/banking") {
-      qc.prefetchQuery({ queryKey: getGetDashboardQueryKey(), queryFn: () => getDashboard() });
-      qc.prefetchQuery({
-        queryKey: getGetForecastQueryKey({ days: 90 }),
-        queryFn: () => getForecast({ days: 90 }),
-      });
-    } else if (href === "/amex") {
-      qc.prefetchQuery({
-        queryKey: getGetAmexWeeklyPayoffQueryKey(),
-        queryFn: () => getAmexWeeklyPayoff(),
-      });
-    } else if (href === "/bills") {
-      qc.prefetchQuery({
-        queryKey: getGetBillsSummaryQueryKey(),
-        queryFn: () => getBillsSummary(),
-      });
-    } else if (
-      href === "/forecast/overview" ||
-      href === "/forecast" ||
-      // Review renders the same ForecastPage in a different mode, reading
-      // the identical bundle — so it warms the same way.
-      href === "/review"
-    ) {
-      qc.prefetchQuery({
-        queryKey: getGetForecastQueryKey({ days: 90 }),
-        queryFn: () => getForecast({ days: 90 }),
-      });
-      qc.prefetchQuery({
-        queryKey: getGetForecastCashSignalQueryKey({ horizonDays: 90 }),
-        queryFn: () => getForecastCashSignal({ horizonDays: 90 }),
-      });
-    } else if (href === "/avalanche" || href === "/debts") {
-      qc.prefetchQuery({
-        queryKey: getListDebtsQueryKey(),
-        queryFn: () => listDebts(),
-      });
-    } else if (href === "/transactions") {
-      // Same generous window + cap the Chase ledger requests (2y back → 1y ahead).
-      const now = new Date();
-      const iso = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-          d.getDate(),
-        ).padStart(2, "0")}`;
-      const params = {
-        from: iso(new Date(now.getFullYear() - 2, now.getMonth(), 1)),
-        to: iso(new Date(now.getFullYear() + 1, now.getMonth() + 1, 0)),
-        limit: 1000,
-      };
-      qc.prefetchQuery({
-        queryKey: getListTransactionsQueryKey(params),
-        queryFn: () => listTransactions(params),
-      });
-    } else if (href === "/budget") {
-      const now = new Date();
-      const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      qc.prefetchQuery({
-        queryKey: getGetBudgetMonthQueryKey(month),
-        queryFn: () => getBudgetMonth(month),
-      });
-      qc.prefetchQuery({
-        queryKey: getListCategoriesQueryKey(),
-        queryFn: () => listCategories(),
-      });
-    }
-  };
+  const prefetch = (rawHref: string) => warmRoute(qc, rawHref);
 
   // (#perf) After first paint, warm the bar's chunks on idle so the very first
   // click into each section is instant even without a prior hover.
@@ -338,8 +265,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             <DropdownMenuItem asChild>
                               <Link
                                 href={item.href}
-                                onMouseEnter={() => prefetch(item.href)}
-                                onFocus={() => prefetch(item.href)}
+                                {...warmHandlers(prefetch, item.href)}
                                 aria-current={current ? "page" : undefined}
                                 className="flex cursor-pointer items-center gap-2.5 aria-[current=page]:font-semibold aria-[current=page]:text-brand-navy"
                                 data-testid={`morenav-${item.href.slice(1)}`}
@@ -358,8 +284,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                 <DropdownMenuItem key={p.href} asChild>
                                   <Link
                                     href={p.href}
-                                    onMouseEnter={() => prefetch("/settings")}
-                                    onFocus={() => prefetch("/settings")}
+                                    {...warmHandlers(prefetch, "/settings")}
                                     aria-current={settingsSub === p.tab ? "page" : undefined}
                                     className="cursor-pointer pl-6 text-label text-muted-foreground aria-[current=page]:font-semibold aria-[current=page]:text-brand-navy"
                                     data-testid={`morenav-${p.testId}`}
@@ -389,8 +314,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               {reviewPillShown && (
                 <Link
                   href={reviewPillHref}
-                  onMouseEnter={() => prefetch(reviewPillHref)}
-                  onFocus={() => prefetch(reviewPillHref)}
+                  {...warmHandlers(prefetch, reviewPillHref)}
                   aria-label={`${reviewCount} items to review`}
                   data-testid="topnav-review-badge"
                   className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink"
@@ -409,8 +333,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 data-testid="header-ask"
                 aria-label="Ask H2"
                 aria-current={location === "/ask" ? "page" : undefined}
-                onMouseEnter={() => prefetch("/ask")}
-                onFocus={() => prefetch("/ask")}
+                {...warmHandlers(prefetch, "/ask")}
                 className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink aria-[current=page]:bg-chrome-press aria-[current=page]:text-chrome-ink"
               >
                 <MessageCircleQuestion className="h-4 w-4" aria-hidden />

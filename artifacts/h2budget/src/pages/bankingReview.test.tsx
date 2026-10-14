@@ -16,18 +16,35 @@ const h = vi.hoisted(() => ({
   error: false,
 }));
 
+function withFirstPages(r: Record<string, unknown>, pages: Record<string, unknown>) {
+  const nip = { ...(r.notInPlan as Record<string, Record<string, unknown>>) };
+  for (const name of Object.keys(nip)) {
+    const first = pages[`${name}||`] as { rows: unknown[]; nextCursor: string | null } | undefined;
+    if (first) nip[name] = { ...nip[name], rows: first.rows, truncated: !!first.nextCursor };
+  }
+  return { ...r, notInPlan: nip };
+}
+
 vi.mock("@workspace/api-client-react", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react")>()),
   useListPlaidItems: () => ({ data: h.items, isError: false, isLoading: false }),
 }));
 vi.mock("@workspace/api-client-react/features", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react/features")>()),
-  useGetBankingReview: (params: Record<string, unknown>) => {
+  getBankingReview: async (params: Record<string, unknown>) => {
+    h.calls.push({ ...params, via: "fetch" });
+    const key = `${params.bucket}|${params.kind ?? ""}|${params.cursor ?? ""}`;
+    return { ...h.review, page: h.pages[key] ?? { bucket: params.bucket, kind: params.kind ?? null, rows: [], nextCursor: null, limit: 25 } };
+  },
+  useGetBankingReview: (params: Record<string, unknown>, opts?: { query?: { enabled?: boolean } }) => {
+    if (opts?.query?.enabled === false) return { data: undefined, isError: false, isLoading: false, refetch: vi.fn() };
     h.calls.push(params);
     if (h.error) return { data: undefined, isError: true, isLoading: false, refetch: vi.fn() };
     const key = params.bucket ? `${params.bucket}|${params.kind ?? ""}|${params.cursor ?? ""}` : "";
     const page = key ? (h.pages[key] ?? { bucket: params.bucket, kind: params.kind ?? null, rows: [], nextCursor: null, limit: 25 }) : null;
-    return { data: h.review && { ...h.review, page }, isError: false, isLoading: false, refetch: vi.fn() };
+    // (P4) The summary carries each bucket's first page, as the server does.
+    const seeded = h.review && !params.bucket ? withFirstPages(h.review, h.pages) : h.review;
+    return { data: seeded && { ...seeded, page }, isError: false, isLoading: false, refetch: vi.fn() };
   },
 }));
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => <button data-testid="own-sync">Sync</button> }));
@@ -317,14 +334,23 @@ describe("Banking review — Not in the plan", () => {
     expect(screen.getByTestId("br-detail").textContent).toContain("Unmatched · Card payment");
   });
 
-  it("pages with the server's cursor", () => {
+  it("first load is ONE review request: the summary carries the default bucket's first page", () => {
+    h.pages["unmatched||"] = { bucket: "unmatched", kind: null, limit: 25, nextCursor: null, rows: [rowOf("one")] };
+    mount();
+    expect(screen.getByTestId("br-row-one")).toBeTruthy();
+    const keys = new Set(h.calls.filter((c) => c.via !== "fetch").map((c) => JSON.stringify(c)));
+    expect(keys.size).toBe(1);
+    expect(h.calls.every((c) => c.bucket === undefined && c.rowsPerBucket === 25)).toBe(true);
+  });
+
+  it("pages with the server's cursor", async () => {
     h.pages["unmatched||"] = { bucket: "unmatched", kind: null, limit: 25, nextCursor: "CUR1", rows: [rowOf("p1")] };
     h.pages["unmatched||CUR1"] = { bucket: "unmatched", kind: null, limit: 25, nextCursor: null, rows: [rowOf("p2")] };
     mount();
     expect(screen.queryByTestId("br-row-p2")).toBeNull();
     fireEvent.click(screen.getByTestId("br-more"));
+    expect(await screen.findByTestId("br-row-p2")).toBeTruthy();
     expect(screen.getByTestId("br-row-p1")).toBeTruthy();
-    expect(screen.getByTestId("br-row-p2")).toBeTruthy();
     expect(screen.queryByTestId("br-more")).toBeNull();
   });
 

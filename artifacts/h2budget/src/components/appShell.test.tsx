@@ -63,6 +63,10 @@ vi.mock("@workspace/api-client-react", () => ({
     data: queueTotal == null ? undefined : { items: [], total: queueTotal },
     isLoading: queueTotal == null,
   }),
+  // (P4) The badge reads the one-number count, not the queue.
+  useGetCategorizationReviewCount: () => ({
+    data: queueTotal == null ? undefined : { total: queueTotal },
+  }),
   getListCategorizationReviewQueryKey: () => ["/api/categorization/review"],
   getSpine: vi.fn(),
   getDashboard: vi.fn(),

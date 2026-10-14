@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { warmHandlers } from "@/lib/warmRoutes";
 import { Link, useLocation } from "wouter";
 
 /**
@@ -152,8 +153,7 @@ export function TabRibbon({
                 data-tabhref={t.href}
                 data-testid={`${testIdPrefix}-${t.href.slice(1)}`}
                 aria-current={on ? "page" : undefined}
-                onMouseEnter={() => onPrefetch?.(t.href)}
-                onFocus={() => onPrefetch?.(t.href)}
+                {...(onPrefetch ? warmHandlers(onPrefetch, t.href) : {})}
                 className={`press relative flex flex-none items-center whitespace-nowrap px-3.5 text-label font-semibold ${
                   light
                     ? on

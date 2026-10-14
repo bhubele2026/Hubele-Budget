@@ -59,12 +59,16 @@ vi.mock("react-plaid-link", () => ({
   },
 }));
 
+const envSpy = vi.fn(async (): Promise<{ configured: boolean; configError?: string | null }> => ({ configured: true }));
+const mintSpy = vi.fn();
+let envData: { configured: boolean } | undefined = { configured: true };
+
 vi.mock("@workspace/api-client-react", () => ({
   // (#706/#710) plaid-link-button reads /plaid/items to gate the
   // fresh-link guard dialog. Default to an empty list so the existing
   // post-link-progress tests below don't trip the guard.
   useListPlaidItems: () => ({ data: [], isFetched: true }),
-  useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreatePlaidLinkToken: () => ({ mutate: mintSpy, isPending: false }),
   useExchangePlaidPublicToken: () => ({
     mutate: (
       _vars: unknown,
@@ -72,7 +76,9 @@ vi.mock("@workspace/api-client-react", () => ({
     ) => opts.onSuccess?.({ id: "item-1" }),
     isPending: false,
   }),
-  useGetPlaidEnvironment: () => ({ data: { configured: true } }),
+  useGetPlaidEnvironment: () => ({ data: envData }),
+  getGetPlaidEnvironmentQueryKey: () => ["/api/plaid/environment"],
+  getPlaidEnvironment: () => envSpy(),
   getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
   getListTransactionsQueryKey: () => ["/api/transactions"],
   getListPlaidLiabilityAccountsQueryKey: () => [
@@ -119,8 +125,39 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  envData = { configured: true };
   cleanup();
   vi.useRealTimers();
+});
+
+describe("PlaidLinkButton environment read", () => {
+  it("does not read /plaid/environment on mount; a press reads it once, then starts Link", async () => {
+    envSpy.mockClear();
+    mintSpy.mockClear();
+    envData = undefined;
+    vi.useRealTimers();
+    renderButton();
+    expect(envSpy).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("button-link-bank"));
+    });
+    expect(envSpy).toHaveBeenCalledTimes(1);
+    expect(mintSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a press on an unconfigured server says so and does not start Link", async () => {
+    envSpy.mockClear();
+    mintSpy.mockClear();
+    envSpy.mockResolvedValueOnce({ configured: false });
+    envData = undefined;
+    vi.useRealTimers();
+    renderButton();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("button-link-bank"));
+    });
+    expect(envSpy).toHaveBeenCalledTimes(1);
+    expect(mintSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("PlaidLinkButton post-link progress panel", () => {

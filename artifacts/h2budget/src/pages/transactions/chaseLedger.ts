@@ -199,3 +199,17 @@ export function ledgerRowLabels(
   }
   return out;
 }
+
+/**
+ * (P4) The register's request for a range: the base filter with the range cut
+ * at today (null when nothing of it is through today). The page and the nav's
+ * hover warm-up both build it here, so they ask for the same key.
+ */
+export function registerFilterFor(
+  range: { from: string; to: string },
+  today: string,
+  base: ChaseListFilter,
+): ChaseListFilter | null {
+  const window = splitAtToday(range, today).register;
+  return window ? { ...base, ...window } : null;
+}

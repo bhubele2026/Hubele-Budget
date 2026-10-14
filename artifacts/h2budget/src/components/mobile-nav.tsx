@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { warmHandlers } from "@/lib/warmRoutes";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { HomeMark } from "@/components/home-mark";
@@ -35,8 +36,7 @@ function DrawerLink({
     <Link
       href={item.href}
       onClick={onNavigate}
-      onMouseEnter={() => onPrefetch(item.href)}
-      onFocus={() => onPrefetch(item.href)}
+      {...warmHandlers(onPrefetch, item.href)}
       aria-current={active ? "page" : undefined}
       data-testid={`mobilenav-${item.testId ?? item.href.slice(1)}`}
       className={cn(
