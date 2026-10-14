@@ -314,7 +314,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <button
                         type="button"
                         className={cn(
-                          "press relative flex items-center whitespace-nowrap px-3.5 text-label font-semibold outline-none",
+                          "press relative flex items-center whitespace-nowrap px-3.5 text-label font-semibold",
                           moreActive
                             ? "text-chrome-ink"
                             : "text-chrome-ink-3 hover:text-chrome-ink-hover",

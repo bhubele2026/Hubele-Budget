@@ -670,6 +670,13 @@ describe("R0 follow-up — the phone drawer closes after you navigate", () => {
   });
 });
 
+describe("the More trigger keeps the global focus ring", () => {
+  it("does not switch the outline off (the other bar items show it)", () => {
+    mount("/home");
+    expect(screen.getByTestId("topnav-more").className).not.toMatch(/outline-none/);
+  });
+});
+
 describe("the mobile page title", () => {
   it("is the section, whatever tab is lit (whole segments)", () => {
     const cases: Array<[string, string]> = [

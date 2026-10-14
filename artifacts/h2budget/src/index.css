@@ -695,7 +695,7 @@
   }
   .chip.ok { color: var(--color-ok); background: var(--color-ok-bg); }
   .chip.warn { color: var(--color-warn); background: var(--color-warn-bg); }
-  .chip.bad { color: var(--color-bad); background: var(--color-bad-bg); }
+  .chip.bad { color: var(--color-bad-ink); background: var(--color-bad-bg); }
   .chip.info { color: var(--color-info); background: var(--color-info-bg); }
   .chip.gray { color: #5d6674; background: #eef0f3; }
 

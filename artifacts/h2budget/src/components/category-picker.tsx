@@ -84,6 +84,7 @@ export function CategoryPicker({
         <Button
           variant="outline"
           role="combobox"
+          aria-label={`Category: ${current}`}
           className={cn("h-8 text-xs w-52 justify-between font-normal", triggerClassName)}
           data-testid={testId ?? "button-category-picker"}
         >

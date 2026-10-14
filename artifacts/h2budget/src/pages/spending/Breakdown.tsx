@@ -55,7 +55,7 @@ function RowList({ rows, count, truncated, routeOf }: {
             <li key={`${r.id}-${i}`} className="px-4 py-2" data-testid="sp-row">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="flex min-w-0 items-baseline gap-2 text-body">
-                  <span className="shrink-0 text-micro text-neutral-500">{shortDate(r.date)}</span>
+                  <span className="shrink-0 text-micro text-neutral-600">{shortDate(r.date)}</span>
                   {route.href ? (
                     <Link href={route.href} className="min-w-0 truncate hover:underline" data-testid="sp-row-link">{merchant}</Link>
                   ) : (
@@ -64,7 +64,7 @@ function RowList({ rows, count, truncated, routeOf }: {
                 </span>
                 <span className="shrink-0 font-mono text-body tabular-nums text-brand-ink" data-testid="sp-row-amount">{formatCurrency(r.amount)}</span>
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-neutral-500">
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-neutral-600">
                 <span className="chip gray" data-testid="sp-row-account">{accountWords(r.account)}</span>
                 {r.pending ? <span className="chip warn">Pending</span> : null}
                 <span>{reasonWords(r)}</span>
@@ -74,7 +74,7 @@ function RowList({ rows, count, truncated, routeOf }: {
         })}
       </ul>
       {truncated ? (
-        <p className="px-4 py-2 text-micro text-neutral-500" data-testid="sp-truncated">
+        <p className="px-4 py-2 text-micro text-neutral-600" data-testid="sp-truncated">
           Showing the largest {rows.length} of {count}.
         </p>
       ) : null}
@@ -105,9 +105,9 @@ function GroupHead({ id, open, onToggle, title, amount, sub, bar, chips }: {
         <span className="min-w-0 truncate text-body font-semibold text-brand-ink">{title}</span>
         <span className="shrink-0 font-mono text-body font-semibold tabular-nums text-brand-ink" data-testid={`sp-group-amount-${id}`}>{amount}</span>
       </span>
-      {sub ? <span className="mt-0.5 block text-micro text-neutral-500">{sub}</span> : null}
+      {sub ? <span className="mt-0.5 block text-micro text-neutral-600">{sub}</span> : null}
       {bar}
-      {chips ? <span className="mt-1 flex flex-wrap items-center gap-2 text-micro text-neutral-500">{chips}</span> : null}
+      {chips ? <span className="mt-1 flex flex-wrap items-center gap-2 text-micro text-neutral-600">{chips}</span> : null}
     </button>
   );
 }
