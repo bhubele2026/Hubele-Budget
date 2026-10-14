@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateAllowancePlanBody, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateAllowancePlanBody, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -573,6 +573,30 @@ export type GetPeriodBreakdownQueryError = ErrorType<void>;
  */
 export declare function useGetPeriodBreakdown<TData = Awaited<ReturnType<typeof getPeriodBreakdown>>, TError = ErrorType<void>>(params: GetPeriodBreakdownParams, options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getPeriodBreakdown>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * (S4) One bank account over [from, to] (household America/Chicago days). balance and cashFlow are the bank register's (GET /transactions/ledger for the same account and range: cashFlow = its totals, balance.end = its balanceEnd, to the cent). Every row the register counts in the range is placed in exactly one place, first rule wins: confirmed by the household (matched / partial) → amountDifference (partial, or off by more than max($1, 1%)), else timingDifference (more than 3 days), else asPlanned; marked not in the plan → confirmedUnplanned; a pair waiting for review → uncertain (needs_review); the forecast counted it as paying a plan → the same split as confirmed; a suggestion only → uncertain (suggested_match); before the comparison window, after today, or an account the forecast does not read → uncertain (not_compared); else unmatched, by kind. "Not this" never decides a row, and the unplanned flag or a missing category is only shown, never a rule. reconciliation.unexplained = (Σ buckets' net + asPlanned.net) − cashFlow.net, always "0.00". A pending row its posted row replaced is not placed (cashFlow.supersededExcluded) and its answer carries to the posted row. With `bucket`, `page` lists that bucket's rows (largest first) from `cursor`. Read-only.
+ * @summary Banking review — one bank account's period, and what was not in the plan
+ */
+export declare const getGetBankingReviewUrl: (params: GetBankingReviewParams) => string;
+export declare const getBankingReview: (params: GetBankingReviewParams, options?: RequestInit) => Promise<BankingReview>;
+export declare const getGetBankingReviewQueryKey: (params?: GetBankingReviewParams) => readonly ["/api/banking/review", ...GetBankingReviewParams[]];
+export declare const getGetBankingReviewQueryOptions: <TData = Awaited<ReturnType<typeof getBankingReview>>, TError = ErrorType<void>>(params: GetBankingReviewParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingReview>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getBankingReview>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetBankingReviewQueryResult = NonNullable<Awaited<ReturnType<typeof getBankingReview>>>;
+export type GetBankingReviewQueryError = ErrorType<void>;
+/**
+ * @summary Banking review — one bank account's period, and what was not in the plan
+ */
+export declare function useGetBankingReview<TData = Awaited<ReturnType<typeof getBankingReview>>, TError = ErrorType<void>>(params: GetBankingReviewParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingReview>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

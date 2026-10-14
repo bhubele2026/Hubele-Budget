@@ -2696,6 +2696,30 @@ export async function syncPlaidItem(
             };
           }
         }
+
+        // ⭐ (S4) KEEP THE ANSWER. The banking review reports the last tie a
+        // manual Sync checked ("ties" / "drift"; "not checked" before any).
+        // Written here, where the answer is final (after any self-heal), on the
+        // owner's forecast settings; nothing else in the sync changes, and a
+        // failed write never fails the sync.
+        try {
+          await db
+            .update(forecastSettingsTable)
+            .set({
+              lastBankReconciliation: {
+                checkedAt: new Date().toISOString(),
+                accountId: checkingPlaidAccountId,
+                unexplained: recon.unexplained.toFixed(2),
+                status: recon.drifted ? "drift" : "ties",
+              },
+            })
+            .where(eq(forecastSettingsTable.userId, ownerUserId));
+        } catch (e) {
+          logger.warn(
+            { userId, itemRowId, err: e },
+            "[plaid-sync] bank reconciliation: could not store the tie (non-fatal)",
+          );
+        }
       }
     }
 

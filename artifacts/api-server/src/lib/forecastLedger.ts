@@ -157,6 +157,64 @@ export type LedgerAssumedPaidPlan = {
   unpaidRemainder: number;
 };
 
+/**
+ * ⭐ (S4) WHAT THE LEDGER DECIDED FOR ONE PLAN OCCURRENCE — recorded where the
+ * plans loop decides it, never re-decided. Internal: `computeCashSignal`'s
+ * output does not carry it (the golden snapshot pins that output); the banking
+ * review (`GET /banking/review`) reads it.
+ *   matched · partial · skipped · missed  the household's answer (a partial keeps
+ *                                         its remainder, `remainder`);
+ *   paid_on_evidence  a bank row the ledger counts as paying it: a tier-1/2 pair
+ *                     (`offCurve`, or overdue evidence), a card payment naming the
+ *                     card, a debt tag, a paycheck that arrived, an everyday hook's
+ *                     payoff paid by an Amex payment;
+ *   suggested         on the curve, with a tier-3 or ambiguous pair in `matches`;
+ *   on_curve          on the curve, no pair;
+ *   overdue_outside   overdue more than 14 days (`overdueOutsideForecast`);
+ *   income_not_arrived  income due on or before today with no deposit;
+ *   outside_window    due before the first of last month (or a hook occurrence
+ *                     too old to size): the ledger does not decide it;
+ *   not_due           dated before its item existed, or nothing to pay ($0).
+ */
+export type LedgerPlanFate =
+  | "matched"
+  | "partial"
+  | "skipped"
+  | "missed"
+  | "paid_on_evidence"
+  | "suggested"
+  | "on_curve"
+  | "overdue_outside"
+  | "income_not_arrived"
+  | "outside_window"
+  | "not_due";
+
+export type LedgerPlanOccurrence = {
+  /** `<itemId>|<occurrenceDate>` — the resolution key. */
+  planKey: string;
+  itemId: string;
+  label: string;
+  eventKind: CashEvent["kind"];
+  occurrenceDate: string;
+  /** The date it was due: after any reschedule, before any drag. */
+  dueDate: string;
+  /** Signed, as planned: the item's amount, or an everyday hook's card payoff (null when the payoff was not sized). */
+  amount: number | null;
+  fate: LedgerPlanFate;
+  /** The bank row behind the fate: the confirmed row (matched / partial), the evidence row, or the suggested row. */
+  txnId: string | null;
+  /** Signed, that row's amount, when known. */
+  txnAmount: number | null;
+  /** Signed, what is still assumed unpaid after a partial or an evidence row (0 when paid in full); null otherwise. */
+  remainder: number | null;
+  /** For paid_on_evidence: the pair's confidence, "card_payment" or "debt_tag" (as `overdueAssumedPaid`). */
+  evidence: string | null;
+  /** The occurrence (or its unpaid remainder) still weighs on the curve. */
+  onCurve: boolean;
+  /** The everyday hook cadence, for a hook occurrence. */
+  hookCadence: HookCadence | null;
+};
+
 export type LedgerItem = LedgerActual | LedgerPlan;
 
 export type ForecastLedger = {
@@ -222,6 +280,18 @@ export type ForecastLedger = {
   incomeNotArrived: LedgerListedPlan[];
   /** (PR6 review) Overdue expenses a bank row is taken to have paid. Sorted by due date. */
   overdueAssumedPaid: LedgerAssumedPaidPlan[];
+  /**
+   * (S4) Every plan occurrence the ledger expanded and what it decided for it
+   * (`LedgerPlanOccurrence`), in expansion order. Internal (not in
+   * `computeCashSignal`'s output).
+   */
+  planOccurrences: LedgerPlanOccurrence[];
+  /**
+   * (S4) The comparison window: bank rows dated from `rowsFromISO` (today−59)
+   * through today are matched to plans, and occurrences due from `plansFromISO`
+   * (the first of last month) are decided (`outside_window` before it).
+   */
+  planComparison: { rowsFromISO: string; plansFromISO: string };
   /**
    * ⭐ (PR-B2, decision 7) The everyday hooks in force, each with its item's
    * stored amount — which the forecast IGNORES: every occurrence is the card
@@ -1147,6 +1217,48 @@ export async function buildForecastLedger(
     }
   }
 
+  // ⭐ (S4) EACH OCCURRENCE'S FATE, recorded at every exit of the loop below —
+  // what that branch already decided, never decided again. A `partial`
+  // occurrence keeps "partial" wherever its remainder lands (`onCurve` says
+  // whether it still weighs).
+  const planOccurrences: LedgerPlanOccurrence[] = [];
+  const pairByPlanKey = new Map(matches.map((m) => [m.planKey, m] as const));
+  const answerByKey = new Map<string, { status: string; txnId: string | null }>();
+  for (const r of resolutionsAll) {
+    if (CLOSING_STATUSES.has(r.status) && r.recurringItemId && r.occurrenceDate) {
+      answerByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, { status: r.status, txnId: r.matchedTxnId ?? null });
+    }
+  }
+  type FateDetail = { txnId?: string | null; txnAmount?: number | null; remainder?: number | null; evidence?: string | null; onCurve?: boolean };
+  const noteFate = (ev: CashEvent, key: string, dueDate: string, fate: LedgerPlanFate, d: FateDetail = {}): void => {
+    const hook = hookCadenceByItem.get(ev.itemId) ?? null;
+    const payoff = hook ? hookPayoffs.get(key) : undefined;
+    planOccurrences.push({
+      planKey: key,
+      itemId: ev.itemId,
+      label: ev.label,
+      eventKind: ev.kind,
+      occurrenceDate: ev.date,
+      dueDate,
+      amount: hook ? (payoff ? -(payoff.amountCents / 100) : null) : ev.amount,
+      fate,
+      txnId: d.txnId ?? null,
+      txnAmount: d.txnAmount ?? null,
+      remainder: d.remainder ?? null,
+      evidence: d.evidence ?? null,
+      onCurve: d.onCurve ?? false,
+      hookCadence: hook,
+    });
+  };
+  /** A closing answer → its fate (`dismissed` reads as missed, as the curve treats it). */
+  const answeredFate = (status: string | undefined): LedgerPlanFate =>
+    status === "matched" ? "matched" : status === "skipped" ? "skipped" : "missed";
+  /** On the curve: "suggested" when `matches` holds a pair for it (one that decided nothing). */
+  const onCurveFate = (key: string): [LedgerPlanFate, FateDetail] => {
+    const m = pairByPlanKey.get(key);
+    return m ? ["suggested", { txnId: m.txnId, txnAmount: m.txnAmount, onCurve: true }] : ["on_curve", { onCurve: true }];
+  };
+
   const plans: LedgerPlan[] = [];
   const overdueOutsideForecast: LedgerListedPlan[] = [];
   const incomeNotArrived: LedgerListedPlan[] = [];
@@ -1156,21 +1268,43 @@ export async function buildForecastLedger(
     const origKey = `${ev.itemId}|${ev.date}`;
     const rawEffectiveDate = rescheduledByKey.get(origKey) ?? ev.date;
     const matched = matchedPlanKeys.has(origKey);
-    if (matched) continue;
+    if (matched) {
+      const txnId = answerByKey.get(origKey)?.txnId ?? null;
+      noteFate(ev, origKey, rawEffectiveDate, "matched", { txnId, txnAmount: txnId ? (resolvedTxnAmount.get(txnId) ?? null) : null });
+      continue;
+    }
     // (#480) Skipped occurrences must NOT contribute to the projection
     // (chart line, lowest, ending balance, expenseEvents markers).
-    if (skippedPlanKeys.has(origKey)) continue;
+    if (skippedPlanKeys.has(origKey)) {
+      noteFate(ev, origKey, rawEffectiveDate, "skipped");
+      continue;
+    }
     // Plans the user explicitly marked missed/dismissed are likewise
     // dropped — the user has acknowledged they won't post.
-    if (missedPlanKeys.has(origKey)) continue;
+    if (missedPlanKeys.has(origKey)) {
+      noteFate(ev, origKey, rawEffectiveDate, "missed");
+      continue;
+    }
     // (PR6) A pre-PR6 Mark missed / Skip / match sent on the moved-to date.
-    if (closedAtMovedDate(ev, rawEffectiveDate)) continue;
+    if (closedAtMovedDate(ev, rawEffectiveDate)) {
+      const answer = answerByKey.get(`${ev.itemId}|${rawEffectiveDate}`);
+      const txnId = answer?.status === "matched" ? answer.txnId : null;
+      noteFate(ev, origKey, rawEffectiveDate, answeredFate(answer?.status), {
+        txnId,
+        txnAmount: txnId ? (resolvedTxnAmount.get(txnId) ?? null) : null,
+      });
+      continue;
+    }
     // ⭐ (PR-B2, decision 7) A hook occurrence is its card payoff; the item's
     // stored amount is never read. A $0 payoff (nothing charged, nothing left to
     // spend) puts nothing on the curve.
     const hookCadence = hookCadenceByItem.get(ev.itemId);
     const baseAmount = hookCadence ? -((hookPayoffs.get(origKey)?.amountCents ?? 0) / 100) : ev.amount;
-    if (hookCadence && baseAmount === 0) continue;
+    if (hookCadence && baseAmount === 0) {
+      // (S4) A sized $0 payoff has nothing to pay; an unsized one is too old to size.
+      noteFate(ev, origKey, rawEffectiveDate, hookPayoffs.has(origKey) ? "not_due" : "outside_window");
+      continue;
+    }
     // (PR5) A partial confirmation leaves only the unpaid remainder scheduled.
     let planAmount = baseAmount;
     const partialTxn = partialTxnByKey.get(origKey);
@@ -1178,16 +1312,38 @@ export async function buildForecastLedger(
       const paid = resolvedTxnAmount.get(partialTxn);
       if (paid != null) {
         const remainder = Math.round((baseAmount - paid) * 100) / 100;
-        if (Math.abs(remainder) <= 1 || Math.sign(remainder) !== Math.sign(baseAmount)) continue;
+        if (Math.abs(remainder) <= 1 || Math.sign(remainder) !== Math.sign(baseAmount)) {
+          noteFate(ev, origKey, rawEffectiveDate, "partial", { txnId: partialTxn, txnAmount: paid, remainder: 0 });
+          continue;
+        }
         planAmount = remainder;
       }
     }
+    // (S4) Every later exit: a partial occurrence stays "partial", its remainder wherever it lands.
+    const decided = (fate: LedgerPlanFate, d: FateDetail = {}): void =>
+      partialTxn
+        ? noteFate(ev, origKey, rawEffectiveDate, "partial", {
+            txnId: partialTxn,
+            txnAmount: resolvedTxnAmount.get(partialTxn) ?? null,
+            remainder: planAmount,
+            onCurve: d.onCurve ?? false,
+          })
+        : noteFate(ev, origKey, rawEffectiveDate, fate, d);
     // (PR5) A plan a bank row probably paid (`offCurve`) is off the curve until the
     // user confirms or rejects the suggestion; the row already counts. This holds
     // for a plan due after today. (PR6 review) A plan already due uses the
     // evidence rule below instead. (PR-B2) Weekly-cadence expenses no longer
     // keep the pre-PR6 rule (`keepsPreSnapshotRule`, deleted).
-    if (rawEffectiveDate > dragCutoffISO && probablyPaidKeys.has(origKey)) continue;
+    if (rawEffectiveDate > dragCutoffISO && probablyPaidKeys.has(origKey)) {
+      const m = pairByPlanKey.get(origKey);
+      decided("paid_on_evidence", {
+        txnId: m?.txnId ?? null,
+        txnAmount: m?.txnAmount ?? null,
+        remainder: 0,
+        evidence: m ? (m.evidence === "debt_tag" ? "debt_tag" : m.confidence) : null,
+      });
+      continue;
+    }
     // ⭐ (PR-B2) A DUE HOOK PAYOFF: paid on evidence (an Amex payment covering it
     // after the occurrence) → off the curve and listed in `overdueAssumedPaid`;
     // otherwise "a closed week not yet paid lands on the next business day" (due
@@ -1196,7 +1352,10 @@ export async function buildForecastLedger(
     // charges are real whenever the hook item was created, so the item's start
     // date does not apply.
     if (hookCadence && rawEffectiveDate <= dragCutoffISO) {
-      if (rawEffectiveDate < dragFloorISO) continue;
+      if (rawEffectiveDate < dragFloorISO) {
+        decided("outside_window");
+        continue;
+      }
       const dueBeforeToday = rawEffectiveDate < todayISO;
       const paidBy = hookPaidBy.get(origKey);
       if (paidBy) {
@@ -1213,6 +1372,7 @@ export async function buildForecastLedger(
           confidence: "card_payment",
           unpaidRemainder: 0,
         });
+        decided("paid_on_evidence", { txnId: paidBy.txnId, txnAmount: paidBy.amount, remainder: 0, evidence: "card_payment" });
         continue;
       }
       plans.push({
@@ -1227,6 +1387,7 @@ export async function buildForecastLedger(
         amountKind: amountKindOf(ev.itemId),
         assumption: dueBeforeToday ? "overdue_assumed_unpaid" : "due_today_not_posted",
       });
+      decided("on_curve", { onCurve: true });
       continue;
     }
     // ⭐ (PR6) DUE ON OR BEFORE TODAY (or the snapshot day, when that is later) AND
@@ -1246,7 +1407,10 @@ export async function buildForecastLedger(
       // minimum starts on the debt's created day, the Avalanche extra on the day
       // its settings were saved). (PR6 review, M2) Nothing due before the first
       // of last month is dragged or listed.
-      if (beforeItemExisted(ev) || rawEffectiveDate < listFromISO) continue;
+      if (beforeItemExisted(ev) || rawEffectiveDate < listFromISO) {
+        decided(beforeItemExisted(ev) ? "not_due" : "outside_window");
+        continue;
+      }
       const daysOverdue = Math.round(
         (todayDateOnly.getTime() - parseISO(rawEffectiveDate).getTime()) / 86_400_000,
       );
@@ -1263,6 +1427,12 @@ export async function buildForecastLedger(
       if (ev.amount >= 0) {
         // (PR6 review, M2) A deposit that paired with the paycheck arrived, name or not.
         if (ev.amount > 0 && dueBeforeToday && !paid) incomeNotArrived.push(listed);
+        // (S4) Due today and not in yet reads "not arrived" too (it is off the curve either way).
+        if (paid) {
+          decided("paid_on_evidence", { txnId: paid.txnId, txnAmount: paid.txnAmount, remainder: 0, evidence: paid.confidence });
+        } else {
+          decided(ev.amount > 0 ? "income_not_arrived" : "not_due");
+        }
         continue;
       }
       if (paid) {
@@ -1300,10 +1470,18 @@ export async function buildForecastLedger(
             assumption: "overdue_remainder_assumed_unpaid",
           });
         }
+        decided("paid_on_evidence", {
+          txnId: paid.txnId,
+          txnAmount: paid.txnAmount,
+          remainder: signedRemainder,
+          evidence: paid.confidence,
+          onCurve: remainder > 1 && rawEffectiveDate >= dragFloorISO,
+        });
         continue;
       }
       if (rawEffectiveDate < dragFloorISO) {
         overdueOutsideForecast.push(listed);
+        decided("overdue_outside");
         continue;
       }
       plans.push({
@@ -1318,6 +1496,7 @@ export async function buildForecastLedger(
         amountKind: amountKindOf(ev.itemId),
         assumption: dueBeforeToday ? "overdue_assumed_unpaid" : "due_today_not_posted",
       });
+      decided(...onCurveFate(origKey));
       continue;
     }
     let effectiveDate = rawEffectiveDate;
@@ -1360,6 +1539,13 @@ export async function buildForecastLedger(
             assumption: "remainder_assumed_unpaid",
           });
         }
+        decided("paid_on_evidence", {
+          txnId: paidFuture.txnId,
+          txnAmount: paidFuture.txnAmount,
+          remainder: signedRemainder,
+          evidence: paidFuture.confidence,
+          onCurve: signedRemainder !== 0,
+        });
         continue;
       }
     }
@@ -1377,6 +1563,7 @@ export async function buildForecastLedger(
         ? { assumption: "pre_window_on_first_day" as const }
         : {}),
     });
+    decided(...onCurveFate(origKey));
   }
 
   // Due date, then label, then key. ⚠️ The key embeds a random item id, so two
@@ -1420,6 +1607,8 @@ export async function buildForecastLedger(
     overdueOutsideForecast,
     incomeNotArrived,
     overdueAssumedPaid,
+    planOccurrences,
+    planComparison: { rowsFromISO: rowMatchFromISO, plansFromISO: listFromISO },
     // (Round 2) The banner names a hook only where its stored amount really is
     // ignored: not when every occurrence sized fell back to it (no allowance at all).
     hookAmountIgnored: hookAmountIgnored.filter((h) => {

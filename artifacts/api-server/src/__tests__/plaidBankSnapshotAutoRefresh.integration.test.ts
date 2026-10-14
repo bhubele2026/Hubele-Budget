@@ -335,6 +335,59 @@ describe("bank reconciliation on a manual Sync (2026-08-25)", () => {
   });
 });
 
+// ⭐ (S4) THE SYNC KEEPS ITS LAST TIE. The banking review reports "ties / drift /
+// not checked"; the Sync stores its answer where it computes it
+// (`forecast_settings.last_bank_reconciliation`) and changes nothing else.
+describe("(S4) a manual Sync stores the bank tie it checked", () => {
+  const storedTie = async () =>
+    (
+      await db
+        .select({ tie: forecastSettingsTable.lastBankReconciliation })
+        .from(forecastSettingsTable)
+        .where(eq(forecastSettingsTable.userId, TEST_USER))
+    )[0]?.tie ?? null;
+  const bankHolds = (externalAccountId: string, available: number) => {
+    accountsBalanceGetMock = async () => ({
+      data: { accounts: [{ account_id: externalAccountId, balances: { available, current: available } }] },
+    });
+  };
+
+  it("drift: the unexplained amount, the account and when, exactly as the Sync reported it", async () => {
+    const { itemRowId, plaidAccountRowId, externalAccountId } = await seedItemAndCheckingAccount({ institutionName: "Chase" });
+    await configureRecentSnapshot({ plaidAccountRowId, balance: "1000.00", daysAgo: 3 });
+    await addBankRow({ externalAccountId, occurredOn: isoDaysAgo(1), amount: "-100.00" });
+    bankHolds(externalAccountId, 1069.9);
+    const before = Date.now();
+    const result = await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
+    expect(result.balanceDrift).toEqual({ bank: "1069.90", ledger: "900.00", unexplained: "169.90" });
+    const tie = await storedTie();
+    expect(tie).toMatchObject({ accountId: externalAccountId, unexplained: "169.90", status: "drift" });
+    expect(Date.parse(tie!.checkedAt)).toBeGreaterThanOrEqual(before - 1000);
+  });
+
+  it("ties: stored as ties, 0.00 — the sync result stays silent as before", async () => {
+    const { itemRowId, plaidAccountRowId, externalAccountId } = await seedItemAndCheckingAccount({ institutionName: "Chase" });
+    await configureRecentSnapshot({ plaidAccountRowId, balance: "1000.00", daysAgo: 3 });
+    await addBankRow({ externalAccountId, occurredOn: isoDaysAgo(1), amount: "-100.00" });
+    bankHolds(externalAccountId, 900);
+    const result = await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
+    expect(result.balanceDrift ?? null).toBeNull();
+    expect(await storedTie()).toMatchObject({ accountId: externalAccountId, unexplained: "0.00", status: "ties" });
+  });
+
+  it("not checked: an anchor too old to compare, or a sync that is not the owner's manual Sync, stores nothing", async () => {
+    const { itemRowId, plaidAccountRowId, externalAccountId } = await seedItemAndCheckingAccount({ institutionName: "Chase" });
+    await configureRecentSnapshot({ plaidAccountRowId, balance: "1000.00", daysAgo: 60 });
+    bankHolds(externalAccountId, 1000);
+    await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
+    expect(await storedTie()).toBeNull();
+    await db.delete(forecastSettingsTable).where(eq(forecastSettingsTable.userId, TEST_USER));
+    await configureRecentSnapshot({ plaidAccountRowId, balance: "1000.00", daysAgo: 3 });
+    await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "webhook" });
+    expect(await storedTie()).toBeNull();
+  });
+});
+
 // ⭐ PR4e — the reconciliation predicts with the ledger's own rule
 // (`classifyCashRows`), from the PRE-sync anchor, over the rows with a Plaid
 // account. A day sum added charges the anchor already held and both halves of an

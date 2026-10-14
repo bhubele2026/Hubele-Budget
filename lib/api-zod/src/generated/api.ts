@@ -8224,6 +8224,1352 @@ export const GetPeriodBreakdownResponse = zod
   );
 
 /**
+ * (S4) One bank account over [from, to] (household America/Chicago days). balance and cashFlow are the bank register's (GET /transactions/ledger for the same account and range: cashFlow = its totals, balance.end = its balanceEnd, to the cent). Every row the register counts in the range is placed in exactly one place, first rule wins: confirmed by the household (matched / partial) → amountDifference (partial, or off by more than max($1, 1%)), else timingDifference (more than 3 days), else asPlanned; marked not in the plan → confirmedUnplanned; a pair waiting for review → uncertain (needs_review); the forecast counted it as paying a plan → the same split as confirmed; a suggestion only → uncertain (suggested_match); before the comparison window, after today, or an account the forecast does not read → uncertain (not_compared); else unmatched, by kind. "Not this" never decides a row, and the unplanned flag or a missing category is only shown, never a rule. reconciliation.unexplained = (Σ buckets' net + asPlanned.net) − cashFlow.net, always "0.00". A pending row its posted row replaced is not placed (cashFlow.supersededExcluded) and its answer carries to the posted row. With `bucket`, `page` lists that bucket's rows (largest first) from `cursor`. Read-only.
+ * @summary Banking review — one bank account's period, and what was not in the plan
+ */
+export const getBankingReviewQueryAccountMax = 64;
+
+export const getBankingReviewQueryFromMax = 10;
+
+export const getBankingReviewQueryToMax = 10;
+
+export const getBankingReviewQueryRowsPerBucketDefault = 10;
+export const getBankingReviewQueryRowsPerBucketMax = 50;
+
+export const getBankingReviewQueryCursorMax = 512;
+
+export const getBankingReviewQueryLimitDefault = 50;
+export const getBankingReviewQueryLimitMax = 100;
+
+export const GetBankingReviewQueryParams = zod.object({
+  account: zod.coerce
+    .string()
+    .max(getBankingReviewQueryAccountMax)
+    .optional()
+    .describe(
+      "`plaid_accounts.id` of a checking or savings account (as on GET \/transactions\/ledger). Optional; defaults to the account the forecast reads. Any other depository account is reviewed without a balance or a plan comparison; a card or a loan is a 400.",
+    ),
+  from: zod.coerce
+    .string()
+    .max(getBankingReviewQueryFromMax)
+    .describe("First day, YYYY-MM-DD, inclusive. Not after today."),
+  to: zod.coerce
+    .string()
+    .max(getBankingReviewQueryToMax)
+    .describe(
+      "Last day, YYYY-MM-DD, inclusive. At most 366 days after `from`.",
+    ),
+  rowsPerBucket: zod.coerce
+    .number()
+    .min(1)
+    .max(getBankingReviewQueryRowsPerBucketMax)
+    .default(getBankingReviewQueryRowsPerBucketDefault)
+    .describe(
+      "Rows listed in each bucket, largest first (each bucket's totals still cover every row).",
+    ),
+  bucket: zod
+    .enum([
+      "amountDifference",
+      "timingDifference",
+      "confirmedUnplanned",
+      "uncertain",
+      "unmatched",
+    ])
+    .optional()
+    .describe("Page one bucket's rows (`page`)."),
+  kind: zod
+    .enum([
+      "spending",
+      "card_payment",
+      "debt_payment",
+      "transfer",
+      "income",
+      "refund",
+      "other",
+    ])
+    .optional()
+    .describe("With bucket=unmatched, only rows of this kind."),
+  cursor: zod.coerce
+    .string()
+    .max(getBankingReviewQueryCursorMax)
+    .optional()
+    .describe("The `page.nextCursor` of the previous page."),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getBankingReviewQueryLimitMax)
+    .default(getBankingReviewQueryLimitDefault)
+    .describe("Rows per page of `bucket`, 1 to 100."),
+});
+
+export const GetBankingReviewResponse = zod
+  .object({
+    account: zod.object({
+      id: zod
+        .string()
+        .nullable()
+        .describe(
+          "plaid_accounts.id; null when the forecast reads manual rows only",
+        ),
+      institution: zod.string().nullable(),
+      name: zod.string().nullable(),
+      mask: zod.string().nullable(),
+      isForecastAccount: zod
+        .boolean()
+        .describe(
+          "The account the forecast and the bank balance read (or its twin)",
+        ),
+      lastSyncedAt: zod
+        .string()
+        .nullable()
+        .describe("The last successful sync of its bank connection"),
+    }),
+    period: zod.object({
+      from: zod.string(),
+      to: zod.string(),
+      today: zod.string().describe("The household's today"),
+      timezone: zod.enum(["America/Chicago"]),
+    }),
+    balance: zod
+      .object({
+        today: zod.string().nullable().describe("The spine's bank balance"),
+        asOf: zod
+          .string()
+          .nullable()
+          .describe("When the bank snapshot was read"),
+        start: zod.string().nullable().describe("End of the day before `from`"),
+        end: zod
+          .string()
+          .nullable()
+          .describe("End of `to` (= GET \/transactions\/ledger balanceEnd)"),
+        unavailableReason: zod
+          .union([
+            zod.literal("no_snapshot"),
+            zod.literal("not_snapshot_account"),
+            zod.literal(null),
+          ])
+          .nullable(),
+      })
+      .describe(
+        "The bank register's balances (null without a snapshot, for another account, or for a day after today)",
+      ),
+    freshness: zod
+      .union([
+        zod.object({
+          source: zod
+            .union([
+              zod.literal("plaid"),
+              zod.literal("manual"),
+              zod.literal(null),
+            ])
+            .nullable(),
+          lastContactAt: zod.string().nullable(),
+          lastFailureAt: zod.string().nullable(),
+          stale: zod.boolean(),
+          staleReason: zod
+            .union([
+              zod.literal("refresh_failed"),
+              zod.literal("old"),
+              zod.literal("manual_old"),
+              zod.literal(null),
+            ])
+            .nullable(),
+        }),
+        zod.null(),
+      ])
+      .describe(
+        "The forecast account's bank freshness (as on the spine); null for another account",
+      ),
+    cashFlow: zod
+      .object({
+        moneyIn: zod.string(),
+        moneyOut: zod.string(),
+        net: zod.string(),
+        count: zod.number(),
+        pendingNet: zod.string().describe("What the counted pending rows add"),
+        supersededExcluded: zod.number(),
+        otherExcluded: zod.number(),
+      })
+      .describe(
+        "GET \/transactions\/ledger's totals for the same account and range, to the cent. count covers every row in the range; supersededExcluded and otherExcluded are the rows the register moves by 0 (a pending row its posted row replaced; a repeated Plaid id, a mask-twin row or a logged payment a bank row confirmed).",
+      ),
+    planComparison: zod.object({
+      available: zod.boolean(),
+      reason: zod
+        .union([zod.literal("not_forecast_account"), zod.literal(null)])
+        .nullable()
+        .describe("Why there is no comparison"),
+      comparedFrom: zod
+        .string()
+        .nullable()
+        .describe(
+          "Rows dated from this day (today − 59) through today are compared with the plan",
+        ),
+      plansFrom: zod
+        .string()
+        .nullable()
+        .describe(
+          "Plan occurrences due from this day (the first of last month) are decided",
+        ),
+      through: zod.string().nullable().describe("The household's today"),
+    }),
+    planned: zod
+      .array(
+        zod.object({
+          key: zod
+            .string()
+            .describe("<itemId>|<occurrenceDate>, the resolution key"),
+          itemId: zod.string(),
+          label: zod.string(),
+          scheduledDate: zod.string().describe("The due date"),
+          occurrenceDate: zod.string(),
+          planned: zod
+            .string()
+            .nullable()
+            .describe(
+              "Signed; an everyday hook's card payoff; null when not sized",
+            ),
+          fate: zod.enum([
+            "matched",
+            "partial",
+            "skipped",
+            "missed",
+            "paid_on_evidence",
+            "suggested",
+            "on_curve",
+            "overdue_outside",
+            "income_not_arrived",
+            "outside_window",
+            "not_due",
+          ]),
+          txnId: zod
+            .string()
+            .nullable()
+            .describe("The row behind the fate (confirmed"),
+          txnDate: zod.string().nullable(),
+          txnAmount: zod.string().nullable(),
+          txnOnThisAccount: zod.boolean(),
+          difference: zod
+            .string()
+            .nullable()
+            .describe("|row| − |plan| (positive: more than planned)"),
+          dayDelta: zod
+            .number()
+            .nullable()
+            .describe("Row date − due date, in days (negative: early)"),
+          remainder: zod
+            .string()
+            .nullable()
+            .describe(
+              "Signed, still assumed unpaid after a partial or an evidence row",
+            ),
+          onCurve: zod
+            .boolean()
+            .describe("It (or its remainder) still weighs on the forecast"),
+          hook: zod
+            .union([
+              zod.literal("weekly"),
+              zod.literal("monthly"),
+              zod.literal(null),
+            ])
+            .nullable()
+            .describe("An everyday hook (its card payoff)"),
+        }),
+      )
+      .describe(
+        "Plan occurrences due in the period (forecast account only), by due date",
+      ),
+    notInPlan: zod.object({
+      amountDifference: zod.object({
+        count: zod.number(),
+        moneyIn: zod.string(),
+        moneyOut: zod.string(),
+        net: zod.string(),
+        pendingNet: zod.string(),
+        rows: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              date: zod.string(),
+              displayName: zod
+                .string()
+                .describe("The household's merchant alias"),
+              description: zod.string(),
+              amount: zod.string().describe("Signed: negative is money out"),
+              pending: zod.boolean(),
+              manual: zod.boolean().describe("Typed in (no bank connection)"),
+              category: zod.union([
+                zod.object({
+                  id: zod.string(),
+                  name: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "Null when the category is no longer the household's",
+                    ),
+                }),
+                zod.null(),
+              ]),
+              flags: zod
+                .object({
+                  unplannedAllowance: zod.boolean(),
+                  weeklyAllowance: zod.boolean(),
+                  monthlyAllowance: zod.boolean(),
+                  reimbursable: zod.boolean(),
+                  transfer: zod.boolean(),
+                  cardPayment: zod.boolean(),
+                })
+                .describe("The row's own marks — shown, never a rule"),
+              kind: zod.enum([
+                "spending",
+                "card_payment",
+                "debt_payment",
+                "transfer",
+                "income",
+                "refund",
+                "other",
+              ]),
+              reason: zod
+                .enum([
+                  "partial",
+                  "amount",
+                  "timing",
+                  "as_planned",
+                  "marked_unplanned",
+                  "ignored_unforecasted",
+                  "needs_review",
+                  "suggested_match",
+                  "not_compared",
+                  "no_plan",
+                ])
+                .describe(
+                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                ),
+              evidence: zod
+                .union([
+                  zod.literal("confirmed"),
+                  zod.literal("automatic"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe("Who tied the row to its plan"),
+              plan: zod.union([
+                zod.object({
+                  key: zod.string(),
+                  label: zod.string(),
+                  scheduledDate: zod.string(),
+                  planned: zod.string().nullable(),
+                  difference: zod.string().nullable(),
+                  dayDelta: zod.number().nullable(),
+                }),
+                zod.null(),
+              ]),
+            }),
+          )
+          .describe("Largest first, at most rowsPerBucket"),
+        truncated: zod.boolean().describe("More rows than listed"),
+        differenceTotal: zod
+          .string()
+          .nullable()
+          .describe(
+            "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        byKind: zod
+          .union([
+            zod.object({
+              spending: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              card_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              debt_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              transfer: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              income: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              refund: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              other: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe("(unmatched) The rows by kind; null for the other buckets"),
+        byReason: zod
+          .union([
+            zod.object({
+              needs_review: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              suggested_match: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe(
+            "(uncertain) The rows by reason; null for the other buckets",
+          ),
+      }),
+      timingDifference: zod.object({
+        count: zod.number(),
+        moneyIn: zod.string(),
+        moneyOut: zod.string(),
+        net: zod.string(),
+        pendingNet: zod.string(),
+        rows: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              date: zod.string(),
+              displayName: zod
+                .string()
+                .describe("The household's merchant alias"),
+              description: zod.string(),
+              amount: zod.string().describe("Signed: negative is money out"),
+              pending: zod.boolean(),
+              manual: zod.boolean().describe("Typed in (no bank connection)"),
+              category: zod.union([
+                zod.object({
+                  id: zod.string(),
+                  name: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "Null when the category is no longer the household's",
+                    ),
+                }),
+                zod.null(),
+              ]),
+              flags: zod
+                .object({
+                  unplannedAllowance: zod.boolean(),
+                  weeklyAllowance: zod.boolean(),
+                  monthlyAllowance: zod.boolean(),
+                  reimbursable: zod.boolean(),
+                  transfer: zod.boolean(),
+                  cardPayment: zod.boolean(),
+                })
+                .describe("The row's own marks — shown, never a rule"),
+              kind: zod.enum([
+                "spending",
+                "card_payment",
+                "debt_payment",
+                "transfer",
+                "income",
+                "refund",
+                "other",
+              ]),
+              reason: zod
+                .enum([
+                  "partial",
+                  "amount",
+                  "timing",
+                  "as_planned",
+                  "marked_unplanned",
+                  "ignored_unforecasted",
+                  "needs_review",
+                  "suggested_match",
+                  "not_compared",
+                  "no_plan",
+                ])
+                .describe(
+                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                ),
+              evidence: zod
+                .union([
+                  zod.literal("confirmed"),
+                  zod.literal("automatic"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe("Who tied the row to its plan"),
+              plan: zod.union([
+                zod.object({
+                  key: zod.string(),
+                  label: zod.string(),
+                  scheduledDate: zod.string(),
+                  planned: zod.string().nullable(),
+                  difference: zod.string().nullable(),
+                  dayDelta: zod.number().nullable(),
+                }),
+                zod.null(),
+              ]),
+            }),
+          )
+          .describe("Largest first, at most rowsPerBucket"),
+        truncated: zod.boolean().describe("More rows than listed"),
+        differenceTotal: zod
+          .string()
+          .nullable()
+          .describe(
+            "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        byKind: zod
+          .union([
+            zod.object({
+              spending: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              card_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              debt_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              transfer: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              income: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              refund: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              other: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe("(unmatched) The rows by kind; null for the other buckets"),
+        byReason: zod
+          .union([
+            zod.object({
+              needs_review: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              suggested_match: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe(
+            "(uncertain) The rows by reason; null for the other buckets",
+          ),
+      }),
+      confirmedUnplanned: zod.object({
+        count: zod.number(),
+        moneyIn: zod.string(),
+        moneyOut: zod.string(),
+        net: zod.string(),
+        pendingNet: zod.string(),
+        rows: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              date: zod.string(),
+              displayName: zod
+                .string()
+                .describe("The household's merchant alias"),
+              description: zod.string(),
+              amount: zod.string().describe("Signed: negative is money out"),
+              pending: zod.boolean(),
+              manual: zod.boolean().describe("Typed in (no bank connection)"),
+              category: zod.union([
+                zod.object({
+                  id: zod.string(),
+                  name: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "Null when the category is no longer the household's",
+                    ),
+                }),
+                zod.null(),
+              ]),
+              flags: zod
+                .object({
+                  unplannedAllowance: zod.boolean(),
+                  weeklyAllowance: zod.boolean(),
+                  monthlyAllowance: zod.boolean(),
+                  reimbursable: zod.boolean(),
+                  transfer: zod.boolean(),
+                  cardPayment: zod.boolean(),
+                })
+                .describe("The row's own marks — shown, never a rule"),
+              kind: zod.enum([
+                "spending",
+                "card_payment",
+                "debt_payment",
+                "transfer",
+                "income",
+                "refund",
+                "other",
+              ]),
+              reason: zod
+                .enum([
+                  "partial",
+                  "amount",
+                  "timing",
+                  "as_planned",
+                  "marked_unplanned",
+                  "ignored_unforecasted",
+                  "needs_review",
+                  "suggested_match",
+                  "not_compared",
+                  "no_plan",
+                ])
+                .describe(
+                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                ),
+              evidence: zod
+                .union([
+                  zod.literal("confirmed"),
+                  zod.literal("automatic"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe("Who tied the row to its plan"),
+              plan: zod.union([
+                zod.object({
+                  key: zod.string(),
+                  label: zod.string(),
+                  scheduledDate: zod.string(),
+                  planned: zod.string().nullable(),
+                  difference: zod.string().nullable(),
+                  dayDelta: zod.number().nullable(),
+                }),
+                zod.null(),
+              ]),
+            }),
+          )
+          .describe("Largest first, at most rowsPerBucket"),
+        truncated: zod.boolean().describe("More rows than listed"),
+        differenceTotal: zod
+          .string()
+          .nullable()
+          .describe(
+            "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        byKind: zod
+          .union([
+            zod.object({
+              spending: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              card_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              debt_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              transfer: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              income: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              refund: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              other: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe("(unmatched) The rows by kind; null for the other buckets"),
+        byReason: zod
+          .union([
+            zod.object({
+              needs_review: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              suggested_match: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe(
+            "(uncertain) The rows by reason; null for the other buckets",
+          ),
+      }),
+      uncertain: zod.object({
+        count: zod.number(),
+        moneyIn: zod.string(),
+        moneyOut: zod.string(),
+        net: zod.string(),
+        pendingNet: zod.string(),
+        rows: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              date: zod.string(),
+              displayName: zod
+                .string()
+                .describe("The household's merchant alias"),
+              description: zod.string(),
+              amount: zod.string().describe("Signed: negative is money out"),
+              pending: zod.boolean(),
+              manual: zod.boolean().describe("Typed in (no bank connection)"),
+              category: zod.union([
+                zod.object({
+                  id: zod.string(),
+                  name: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "Null when the category is no longer the household's",
+                    ),
+                }),
+                zod.null(),
+              ]),
+              flags: zod
+                .object({
+                  unplannedAllowance: zod.boolean(),
+                  weeklyAllowance: zod.boolean(),
+                  monthlyAllowance: zod.boolean(),
+                  reimbursable: zod.boolean(),
+                  transfer: zod.boolean(),
+                  cardPayment: zod.boolean(),
+                })
+                .describe("The row's own marks — shown, never a rule"),
+              kind: zod.enum([
+                "spending",
+                "card_payment",
+                "debt_payment",
+                "transfer",
+                "income",
+                "refund",
+                "other",
+              ]),
+              reason: zod
+                .enum([
+                  "partial",
+                  "amount",
+                  "timing",
+                  "as_planned",
+                  "marked_unplanned",
+                  "ignored_unforecasted",
+                  "needs_review",
+                  "suggested_match",
+                  "not_compared",
+                  "no_plan",
+                ])
+                .describe(
+                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                ),
+              evidence: zod
+                .union([
+                  zod.literal("confirmed"),
+                  zod.literal("automatic"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe("Who tied the row to its plan"),
+              plan: zod.union([
+                zod.object({
+                  key: zod.string(),
+                  label: zod.string(),
+                  scheduledDate: zod.string(),
+                  planned: zod.string().nullable(),
+                  difference: zod.string().nullable(),
+                  dayDelta: zod.number().nullable(),
+                }),
+                zod.null(),
+              ]),
+            }),
+          )
+          .describe("Largest first, at most rowsPerBucket"),
+        truncated: zod.boolean().describe("More rows than listed"),
+        differenceTotal: zod
+          .string()
+          .nullable()
+          .describe(
+            "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        byKind: zod
+          .union([
+            zod.object({
+              spending: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              card_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              debt_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              transfer: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              income: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              refund: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              other: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe("(unmatched) The rows by kind; null for the other buckets"),
+        byReason: zod
+          .union([
+            zod.object({
+              needs_review: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              suggested_match: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe(
+            "(uncertain) The rows by reason; null for the other buckets",
+          ),
+      }),
+      unmatched: zod.object({
+        count: zod.number(),
+        moneyIn: zod.string(),
+        moneyOut: zod.string(),
+        net: zod.string(),
+        pendingNet: zod.string(),
+        rows: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              date: zod.string(),
+              displayName: zod
+                .string()
+                .describe("The household's merchant alias"),
+              description: zod.string(),
+              amount: zod.string().describe("Signed: negative is money out"),
+              pending: zod.boolean(),
+              manual: zod.boolean().describe("Typed in (no bank connection)"),
+              category: zod.union([
+                zod.object({
+                  id: zod.string(),
+                  name: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "Null when the category is no longer the household's",
+                    ),
+                }),
+                zod.null(),
+              ]),
+              flags: zod
+                .object({
+                  unplannedAllowance: zod.boolean(),
+                  weeklyAllowance: zod.boolean(),
+                  monthlyAllowance: zod.boolean(),
+                  reimbursable: zod.boolean(),
+                  transfer: zod.boolean(),
+                  cardPayment: zod.boolean(),
+                })
+                .describe("The row's own marks — shown, never a rule"),
+              kind: zod.enum([
+                "spending",
+                "card_payment",
+                "debt_payment",
+                "transfer",
+                "income",
+                "refund",
+                "other",
+              ]),
+              reason: zod
+                .enum([
+                  "partial",
+                  "amount",
+                  "timing",
+                  "as_planned",
+                  "marked_unplanned",
+                  "ignored_unforecasted",
+                  "needs_review",
+                  "suggested_match",
+                  "not_compared",
+                  "no_plan",
+                ])
+                .describe(
+                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                ),
+              evidence: zod
+                .union([
+                  zod.literal("confirmed"),
+                  zod.literal("automatic"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe("Who tied the row to its plan"),
+              plan: zod.union([
+                zod.object({
+                  key: zod.string(),
+                  label: zod.string(),
+                  scheduledDate: zod.string(),
+                  planned: zod.string().nullable(),
+                  difference: zod.string().nullable(),
+                  dayDelta: zod.number().nullable(),
+                }),
+                zod.null(),
+              ]),
+            }),
+          )
+          .describe("Largest first, at most rowsPerBucket"),
+        truncated: zod.boolean().describe("More rows than listed"),
+        differenceTotal: zod
+          .string()
+          .nullable()
+          .describe(
+            "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets",
+          ),
+        byKind: zod
+          .union([
+            zod.object({
+              spending: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              card_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              debt_payment: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              transfer: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              income: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              refund: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              other: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe("(unmatched) The rows by kind; null for the other buckets"),
+        byReason: zod
+          .union([
+            zod.object({
+              needs_review: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              suggested_match: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+              not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string(),
+                moneyOut: zod.string(),
+                net: zod.string(),
+                pendingNet: zod.string(),
+              }),
+            }),
+            zod.null(),
+          ])
+          .describe(
+            "(uncertain) The rows by reason; null for the other buckets",
+          ),
+      }),
+    }),
+    asPlanned: zod
+      .object({
+        count: zod.number(),
+        net: zod.string(),
+        pendingNet: zod.string(),
+        withoutPlanDetail: zod
+          .number()
+          .describe(
+            "Confirmed rows whose plan is older than the forecast reads (placed on the household's word)",
+          ),
+      })
+      .describe("Rows that paid their plan cleanly — totals only"),
+    reconciliation: zod.object({
+      rowsPlaced: zod.number(),
+      rowsUnexplained: zod
+        .number()
+        .describe("cashFlow.count − rowsPlaced − excluded rows; always 0"),
+      unexplained: zod
+        .string()
+        .describe(
+          '(Σ buckets\' net + asPlanned.net) − cashFlow.net; always \"0.00\"',
+        ),
+    }),
+    reviewInbox: zod.object({
+      unresolvedInRange: zod
+        .number()
+        .describe("Rows placed here (dated through today"),
+      badgeCount: zod.number().describe("The Review badge (spine.reviewCount)"),
+      badgeScope: zod.enum(["this calendar month, forecast account"]),
+    }),
+    balanceTie: zod
+      .object({
+        status: zod.enum(["ties", "drift", "not_checked"]),
+        checkedAt: zod.string().nullable(),
+        unexplained: zod
+          .string()
+          .nullable()
+          .describe("bank − ledger at that check"),
+      })
+      .describe(
+        "The last check of the bank's own balance against the ledger (a manual Sync), for this account",
+      ),
+    household: zod
+      .union([
+        zod.object({
+          scope: zod.enum(["all accounts · this week"]),
+          weekStart: zod.string(),
+          weekEnd: zod.string(),
+          spentWeek: zod
+            .string()
+            .describe("GET \/money\/position spentWeekDiscretionary"),
+          weekPlan: zod
+            .string()
+            .nullable()
+            .describe(
+              "GET \/money\/position weekCap; null when the plan is not set",
+            ),
+          remainingWeek: zod
+            .string()
+            .nullable()
+            .describe(
+              "GET \/money\/position remainingWeek; null when the plan is not set",
+            ),
+        }),
+        zod.null(),
+      ])
+      .describe(
+        "Secondary and labelled — all accounts, this week (the money position's figures); null when not read",
+      ),
+    page: zod
+      .union([
+        zod.object({
+          bucket: zod.enum([
+            "amountDifference",
+            "timingDifference",
+            "confirmedUnplanned",
+            "uncertain",
+            "unmatched",
+          ]),
+          kind: zod.union([
+            zod.enum([
+              "spending",
+              "card_payment",
+              "debt_payment",
+              "transfer",
+              "income",
+              "refund",
+              "other",
+            ]),
+            zod.null(),
+          ]),
+          rows: zod.array(
+            zod.object({
+              id: zod.string(),
+              date: zod.string(),
+              displayName: zod
+                .string()
+                .describe("The household's merchant alias"),
+              description: zod.string(),
+              amount: zod.string().describe("Signed: negative is money out"),
+              pending: zod.boolean(),
+              manual: zod.boolean().describe("Typed in (no bank connection)"),
+              category: zod.union([
+                zod.object({
+                  id: zod.string(),
+                  name: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "Null when the category is no longer the household's",
+                    ),
+                }),
+                zod.null(),
+              ]),
+              flags: zod
+                .object({
+                  unplannedAllowance: zod.boolean(),
+                  weeklyAllowance: zod.boolean(),
+                  monthlyAllowance: zod.boolean(),
+                  reimbursable: zod.boolean(),
+                  transfer: zod.boolean(),
+                  cardPayment: zod.boolean(),
+                })
+                .describe("The row's own marks — shown, never a rule"),
+              kind: zod.enum([
+                "spending",
+                "card_payment",
+                "debt_payment",
+                "transfer",
+                "income",
+                "refund",
+                "other",
+              ]),
+              reason: zod
+                .enum([
+                  "partial",
+                  "amount",
+                  "timing",
+                  "as_planned",
+                  "marked_unplanned",
+                  "ignored_unforecasted",
+                  "needs_review",
+                  "suggested_match",
+                  "not_compared",
+                  "no_plan",
+                ])
+                .describe(
+                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                ),
+              evidence: zod
+                .union([
+                  zod.literal("confirmed"),
+                  zod.literal("automatic"),
+                  zod.literal(null),
+                ])
+                .nullable()
+                .describe("Who tied the row to its plan"),
+              plan: zod.union([
+                zod.object({
+                  key: zod.string(),
+                  label: zod.string(),
+                  scheduledDate: zod.string(),
+                  planned: zod.string().nullable(),
+                  difference: zod.string().nullable(),
+                  dayDelta: zod.number().nullable(),
+                }),
+                zod.null(),
+              ]),
+            }),
+          ),
+          nextCursor: zod.string().nullable(),
+          limit: zod.number(),
+        }),
+        zod.null(),
+      ])
+      .describe(
+        "With `bucket`, one page of that bucket's rows; null otherwise",
+      ),
+  })
+  .describe(
+    '(S4) One bank account\'s period: balance, cash in and out, the plan occurrences due in it, and every counted row placed exactly once — in one of the five \"not in the plan\" buckets or as planned. Money is a two-decimal string, signed (negative is money out) unless named in \/ out. See GET \/banking\/review for the rules.',
+  );
+
+/**
  * Upserts the household's carry-over for one week (unique on household, week and kind). amountCents is whole cents and must be negative: an adjustment can only LOWER a week. weekStart must be a Sunday, this week or later. The money position subtracts it from that week's remainingWeek.
  * @summary Start a week lower — carry an overage into it (household owner only)
  */

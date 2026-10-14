@@ -6,6 +6,7 @@ import {
   recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
+import { resolutionResolvesRow } from "@workspace/avalanche-core";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdTodayISO, monthBounds } from "./householdClock";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
@@ -91,11 +92,11 @@ export async function computeReviewCount(
   // row; the row itself is still unreviewed.
   // (One-time bill move) Neither does a pair an edit put in question
   // (`needs_review`, `needs_review_partial`): the row waits for the user's answer.
+  // (S4) The rule is avalanche-core's `resolutionResolvesRow`, moved verbatim,
+  // so the banking review's "unresolved" count reads the same answer.
   const resolvedTxnIds = new Set(
     resolutions
-      .filter(
-        (r) => r.status !== "not_match" && r.status !== "needs_review" && r.status !== "needs_review_partial",
-      )
+      .filter((r) => resolutionResolvesRow(r.status))
       .map((r) => r.matchedTxnId)
       .filter(Boolean),
   );

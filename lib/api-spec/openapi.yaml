@@ -46,6 +46,8 @@ tags:
     description: (AI-2) The wish list and its waiting period.
   - name: goals
     description: (PR-C) Savings, buffer, sinking and debt-payoff goals, and the money a goal holds back in checking.
+  - name: banking
+    description: (S4) The banking review — one bank account's period and what was not in the plan.
   - name: features
     description: >-
       (C0) The fold-in operations (parity review F1-F10, plus the money position and allowance plans they read).
@@ -2739,6 +2741,89 @@ paths:
         "400": { description: "A bad period or start (not a Sunday / the 1st, a future period, before tracking began), or a bad account or rowsPerGroup" }
         "404": { description: The account is not this household's }
 
+  /banking/review:
+    get:
+      operationId: getBankingReview
+      tags: [banking, features]
+      summary: Banking review — one bank account's period, and what was not in the plan
+      description: >-
+        (S4) One bank account over [from, to] (household America/Chicago days).
+        balance and cashFlow are the bank register's (GET /transactions/ledger
+        for the same account and range: cashFlow = its totals, balance.end = its
+        balanceEnd, to the cent). Every row the register counts in the range is
+        placed in exactly one place, first rule wins: confirmed by the household
+        (matched / partial) → amountDifference (partial, or off by more than
+        max($1, 1%)), else timingDifference (more than 3 days), else asPlanned;
+        marked not in the plan → confirmedUnplanned; a pair waiting for review →
+        uncertain (needs_review); the forecast counted it as paying a plan →
+        the same split as confirmed; a suggestion only → uncertain
+        (suggested_match); before the comparison window, after today, or an
+        account the forecast does not read → uncertain (not_compared); else
+        unmatched, by kind. "Not this" never decides a row, and the unplanned
+        flag or a missing category is only shown, never a rule.
+        reconciliation.unexplained = (Σ buckets' net + asPlanned.net) −
+        cashFlow.net, always "0.00". A pending row its posted row replaced is
+        not placed (cashFlow.supersededExcluded) and its answer carries to the
+        posted row. With `bucket`, `page` lists that bucket's rows (largest
+        first) from `cursor`. Read-only.
+      parameters:
+        - in: query
+          name: account
+          required: false
+          description: >-
+            `plaid_accounts.id` of a checking or savings account (as on GET
+            /transactions/ledger). Optional; defaults to the account the
+            forecast reads. Any other depository account is reviewed without a
+            balance or a plan comparison; a card or a loan is a 400.
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: from
+          required: true
+          description: First day, YYYY-MM-DD, inclusive. Not after today.
+          schema: { type: string, maxLength: 10 }
+        - in: query
+          name: to
+          required: true
+          description: Last day, YYYY-MM-DD, inclusive. At most 366 days after `from`.
+          schema: { type: string, maxLength: 10 }
+        - in: query
+          name: rowsPerBucket
+          required: false
+          description: Rows listed in each bucket, largest first (each bucket's totals still cover every row).
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+        - in: query
+          name: bucket
+          required: false
+          description: Page one bucket's rows (`page`).
+          schema: { $ref: "#/components/schemas/BankingReviewBucketName" }
+        - in: query
+          name: kind
+          required: false
+          description: With bucket=unmatched, only rows of this kind.
+          schema: { $ref: "#/components/schemas/BankingReviewKind" }
+        - in: query
+          name: cursor
+          required: false
+          description: The `page.nextCursor` of the previous page.
+          schema: { type: string, maxLength: 512 }
+        - in: query
+          name: limit
+          required: false
+          description: Rows per page of `bucket`, 1 to 100.
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankingReview" }
+        "400":
+          description: >-
+            A bad or missing from / to (not a date, from after to, from after
+            today, more than 366 days), a bad account (not this household's
+            checking or savings account), rowsPerBucket, bucket, kind (without
+            bucket=unmatched), cursor or limit, or a NUL byte in any value
+
   /money/week-adjustments:
     post:
       operationId: createWeekAdjustment
@@ -4734,6 +4819,348 @@ components:
           description: >-
             Every purchase on any account over the period (buildSpendingFacts —
             for the current week, the spine's spentWeek); null for one account
+
+    BankingReview:
+      type: object
+      description: >-
+        (S4) One bank account's period: balance, cash in and out, the plan
+        occurrences due in it, and every counted row placed exactly once —
+        in one of the five "not in the plan" buckets or as planned. Money is a
+        two-decimal string, signed (negative is money out) unless named in /
+        out. See GET /banking/review for the rules.
+      required:
+        [account, period, balance, freshness, cashFlow, planComparison, planned, notInPlan, asPlanned,
+         reconciliation, reviewInbox, balanceTie, household, page]
+      properties:
+        account: { $ref: "#/components/schemas/BankingReviewAccount" }
+        period: { $ref: "#/components/schemas/BankingReviewPeriod" }
+        balance: { $ref: "#/components/schemas/BankingReviewBalance" }
+        freshness:
+          description: The forecast account's bank freshness (as on the spine); null for another account
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewFreshness"
+            - type: "null"
+        cashFlow: { $ref: "#/components/schemas/BankingReviewCashFlow" }
+        planComparison: { $ref: "#/components/schemas/BankingReviewPlanComparison" }
+        planned:
+          type: array
+          description: Plan occurrences due in the period (forecast account only), by due date
+          items: { $ref: "#/components/schemas/BankingReviewPlanned" }
+        notInPlan: { $ref: "#/components/schemas/BankingReviewNotInPlan" }
+        asPlanned: { $ref: "#/components/schemas/BankingReviewAsPlanned" }
+        reconciliation: { $ref: "#/components/schemas/BankingReviewReconciliation" }
+        reviewInbox: { $ref: "#/components/schemas/BankingReviewInbox" }
+        balanceTie: { $ref: "#/components/schemas/BankingReviewBalanceTie" }
+        household:
+          description: Secondary and labelled — all accounts, this week (the money position's figures); null when not read
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewHousehold"
+            - type: "null"
+        page:
+          description: With `bucket`, one page of that bucket's rows; null otherwise
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewPage"
+            - type: "null"
+
+    BankingReviewAccount:
+      type: object
+      required: [id, institution, name, mask, isForecastAccount, lastSyncedAt]
+      properties:
+        id: { type: ["string", "null"], description: "plaid_accounts.id; null when the forecast reads manual rows only" }
+        institution: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+        isForecastAccount: { type: boolean, description: The account the forecast and the bank balance read (or its twin) }
+        lastSyncedAt: { type: ["string", "null"], description: The last successful sync of its bank connection }
+
+    BankingReviewPeriod:
+      type: object
+      required: [from, to, today, timezone]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        today: { type: string, description: The household's today }
+        timezone: { type: string, enum: [America/Chicago] }
+
+    BankingReviewBalance:
+      type: object
+      description: The bank register's balances (null without a snapshot, for another account, or for a day after today)
+      required: [today, asOf, start, end, unavailableReason]
+      properties:
+        today: { type: ["string", "null"], description: The spine's bank balance }
+        asOf: { type: ["string", "null"], description: When the bank snapshot was read }
+        start: { type: ["string", "null"], description: End of the day before `from` }
+        end: { type: ["string", "null"], description: End of `to` (= GET /transactions/ledger balanceEnd) }
+        unavailableReason: { type: ["string", "null"], enum: [no_snapshot, not_snapshot_account, null] }
+
+    BankingReviewFreshness:
+      type: object
+      required: [source, lastContactAt, lastFailureAt, stale, staleReason]
+      properties:
+        source: { type: ["string", "null"], enum: [plaid, manual, null] }
+        lastContactAt: { type: ["string", "null"] }
+        lastFailureAt: { type: ["string", "null"] }
+        stale: { type: boolean }
+        staleReason: { type: ["string", "null"], enum: [refresh_failed, old, manual_old, null] }
+
+    BankingReviewCashFlow:
+      type: object
+      description: >-
+        GET /transactions/ledger's totals for the same account and range, to the
+        cent. count covers every row in the range; supersededExcluded and
+        otherExcluded are the rows the register moves by 0 (a pending row its
+        posted row replaced; a repeated Plaid id, a mask-twin row or a logged
+        payment a bank row confirmed).
+      required: [moneyIn, moneyOut, net, count, pendingNet, supersededExcluded, otherExcluded]
+      properties:
+        moneyIn: { type: string }
+        moneyOut: { type: string }
+        net: { type: string }
+        count: { type: integer }
+        pendingNet: { type: string, description: What the counted pending rows add }
+        supersededExcluded: { type: integer }
+        otherExcluded: { type: integer }
+
+    BankingReviewPlanComparison:
+      type: object
+      required: [available, reason, comparedFrom, plansFrom, through]
+      properties:
+        available: { type: boolean }
+        reason: { type: ["string", "null"], enum: [not_forecast_account, null], description: Why there is no comparison }
+        comparedFrom: { type: ["string", "null"], description: "Rows dated from this day (today − 59) through today are compared with the plan" }
+        plansFrom: { type: ["string", "null"], description: "Plan occurrences due from this day (the first of last month) are decided" }
+        through: { type: ["string", "null"], description: The household's today }
+
+    BankingReviewPlanned:
+      type: object
+      required:
+        [key, itemId, label, scheduledDate, occurrenceDate, planned, fate, txnId, txnDate, txnAmount,
+         txnOnThisAccount, difference, dayDelta, remainder, onCurve, hook]
+      properties:
+        key: { type: string, description: "<itemId>|<occurrenceDate>, the resolution key" }
+        itemId: { type: string }
+        label: { type: string }
+        scheduledDate: { type: string, description: The due date, after any reschedule }
+        occurrenceDate: { type: string }
+        planned: { type: ["string", "null"], description: "Signed; an everyday hook's card payoff; null when not sized" }
+        fate: { $ref: "#/components/schemas/BankingReviewPlanFate" }
+        txnId: { type: ["string", "null"], description: The row behind the fate (confirmed, evidence or suggested) }
+        txnDate: { type: ["string", "null"] }
+        txnAmount: { type: ["string", "null"] }
+        txnOnThisAccount: { type: boolean }
+        difference: { type: ["string", "null"], description: "|row| − |plan| (positive: more than planned)" }
+        dayDelta: { type: ["integer", "null"], description: "Row date − due date, in days (negative: early)" }
+        remainder: { type: ["string", "null"], description: "Signed, still assumed unpaid after a partial or an evidence row" }
+        onCurve: { type: boolean, description: It (or its remainder) still weighs on the forecast }
+        hook: { type: ["string", "null"], enum: [weekly, monthly, null], description: An everyday hook (its card payoff) }
+
+    BankingReviewPlanFate:
+      type: string
+      enum:
+        [matched, partial, skipped, missed, paid_on_evidence, suggested, on_curve, overdue_outside,
+         income_not_arrived, outside_window, not_due]
+
+    BankingReviewBucketName:
+      type: string
+      enum: [amountDifference, timingDifference, confirmedUnplanned, uncertain, unmatched]
+
+    BankingReviewKind:
+      type: string
+      enum: [spending, card_payment, debt_payment, transfer, income, refund, other]
+
+    BankingReviewReason:
+      type: string
+      description: >-
+        Why a row is where it is: partial / amount (amountDifference), timing
+        (timingDifference), marked_unplanned / ignored_unforecasted
+        (confirmedUnplanned), needs_review / suggested_match / not_compared
+        (uncertain), no_plan (unmatched)
+      enum:
+        [partial, amount, timing, as_planned, marked_unplanned, ignored_unforecasted, needs_review,
+         suggested_match, not_compared, no_plan]
+
+    BankingReviewTotals:
+      type: object
+      required: [count, moneyIn, moneyOut, net, pendingNet]
+      properties:
+        count: { type: integer }
+        moneyIn: { type: string }
+        moneyOut: { type: string }
+        net: { type: string }
+        pendingNet: { type: string }
+
+    BankingReviewKindTotals:
+      type: object
+      required: [spending, card_payment, debt_payment, transfer, income, refund, other]
+      properties:
+        spending: { $ref: "#/components/schemas/BankingReviewTotals" }
+        card_payment: { $ref: "#/components/schemas/BankingReviewTotals" }
+        debt_payment: { $ref: "#/components/schemas/BankingReviewTotals" }
+        transfer: { $ref: "#/components/schemas/BankingReviewTotals" }
+        income: { $ref: "#/components/schemas/BankingReviewTotals" }
+        refund: { $ref: "#/components/schemas/BankingReviewTotals" }
+        other: { $ref: "#/components/schemas/BankingReviewTotals" }
+
+    BankingReviewUncertainTotals:
+      type: object
+      required: [needs_review, suggested_match, not_compared]
+      properties:
+        needs_review: { $ref: "#/components/schemas/BankingReviewTotals" }
+        suggested_match: { $ref: "#/components/schemas/BankingReviewTotals" }
+        not_compared: { $ref: "#/components/schemas/BankingReviewTotals" }
+
+    BankingReviewBucket:
+      type: object
+      required: [count, moneyIn, moneyOut, net, pendingNet, rows, truncated, differenceTotal, byKind, byReason]
+      properties:
+        count: { type: integer }
+        moneyIn: { type: string }
+        moneyOut: { type: string }
+        net: { type: string }
+        pendingNet: { type: string }
+        rows:
+          type: array
+          description: Largest first, at most rowsPerBucket
+          items: { $ref: "#/components/schemas/BankingReviewRow" }
+        truncated: { type: boolean, description: More rows than listed }
+        differenceTotal:
+          type: ["string", "null"]
+          description: "(amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets"
+        byKind:
+          description: (unmatched) The rows by kind; null for the other buckets
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewKindTotals"
+            - type: "null"
+        byReason:
+          description: (uncertain) The rows by reason; null for the other buckets
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewUncertainTotals"
+            - type: "null"
+
+    BankingReviewRow:
+      type: object
+      required: [id, date, displayName, description, amount, pending, manual, category, flags, kind, reason, evidence, plan]
+      properties:
+        id: { type: string }
+        date: { type: string }
+        displayName: { type: string, description: The household's merchant alias, else the cleaned bank description }
+        description: { type: string }
+        amount: { type: string, description: "Signed: negative is money out" }
+        pending: { type: boolean }
+        manual: { type: boolean, description: Typed in (no bank connection) }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewRowCategory"
+            - type: "null"
+        flags: { $ref: "#/components/schemas/BankingReviewRowFlags" }
+        kind: { $ref: "#/components/schemas/BankingReviewKind" }
+        reason: { $ref: "#/components/schemas/BankingReviewReason" }
+        evidence: { type: ["string", "null"], enum: [confirmed, automatic, null], description: Who tied the row to its plan }
+        plan:
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewRowPlan"
+            - type: "null"
+
+    BankingReviewRowCategory:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: ["string", "null"], description: Null when the category is no longer the household's }
+
+    BankingReviewRowFlags:
+      type: object
+      description: The row's own marks — shown, never a rule
+      required: [unplannedAllowance, weeklyAllowance, monthlyAllowance, reimbursable, transfer, cardPayment]
+      properties:
+        unplannedAllowance: { type: boolean }
+        weeklyAllowance: { type: boolean }
+        monthlyAllowance: { type: boolean }
+        reimbursable: { type: boolean }
+        transfer: { type: boolean }
+        cardPayment: { type: boolean }
+
+    BankingReviewRowPlan:
+      type: object
+      required: [key, label, scheduledDate, planned, difference, dayDelta]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        scheduledDate: { type: string }
+        planned: { type: ["string", "null"] }
+        difference: { type: ["string", "null"] }
+        dayDelta: { type: ["integer", "null"] }
+
+    BankingReviewNotInPlan:
+      type: object
+      required: [amountDifference, timingDifference, confirmedUnplanned, uncertain, unmatched]
+      properties:
+        amountDifference: { $ref: "#/components/schemas/BankingReviewBucket" }
+        timingDifference: { $ref: "#/components/schemas/BankingReviewBucket" }
+        confirmedUnplanned: { $ref: "#/components/schemas/BankingReviewBucket" }
+        uncertain: { $ref: "#/components/schemas/BankingReviewBucket" }
+        unmatched: { $ref: "#/components/schemas/BankingReviewBucket" }
+
+    BankingReviewAsPlanned:
+      type: object
+      description: Rows that paid their plan cleanly — totals only
+      required: [count, net, pendingNet, withoutPlanDetail]
+      properties:
+        count: { type: integer }
+        net: { type: string }
+        pendingNet: { type: string }
+        withoutPlanDetail: { type: integer, description: Confirmed rows whose plan is older than the forecast reads (placed on the household's word) }
+
+    BankingReviewReconciliation:
+      type: object
+      required: [rowsPlaced, rowsUnexplained, unexplained]
+      properties:
+        rowsPlaced: { type: integer }
+        rowsUnexplained: { type: integer, description: "cashFlow.count − rowsPlaced − excluded rows; always 0" }
+        unexplained: { type: string, description: "(Σ buckets' net + asPlanned.net) − cashFlow.net; always \"0.00\"" }
+
+    BankingReviewInbox:
+      type: object
+      required: [unresolvedInRange, badgeCount, badgeScope]
+      properties:
+        unresolvedInRange: { type: integer, description: Rows placed here (dated through today, or flagged for the forecast) that no answer decides yet }
+        badgeCount: { type: integer, description: "The Review badge (spine.reviewCount)" }
+        badgeScope: { type: string, enum: ["this calendar month, forecast account"] }
+
+    BankingReviewBalanceTie:
+      type: object
+      description: The last check of the bank's own balance against the ledger (a manual Sync), for this account
+      required: [status, checkedAt, unexplained]
+      properties:
+        status: { type: string, enum: [ties, drift, not_checked] }
+        checkedAt: { type: ["string", "null"] }
+        unexplained: { type: ["string", "null"], description: "bank − ledger at that check" }
+
+    BankingReviewHousehold:
+      type: object
+      required: [scope, weekStart, weekEnd, spentWeek, weekPlan, remainingWeek]
+      properties:
+        scope: { type: string, enum: ["all accounts · this week"] }
+        weekStart: { type: string }
+        weekEnd: { type: string }
+        spentWeek: { type: string, description: "GET /money/position spentWeekDiscretionary" }
+        weekPlan: { type: ["string", "null"], description: "GET /money/position weekCap; null when the plan is not set" }
+        remainingWeek: { type: ["string", "null"], description: "GET /money/position remainingWeek; null when the plan is not set" }
+
+    BankingReviewPage:
+      type: object
+      required: [bucket, kind, rows, nextCursor, limit]
+      properties:
+        bucket: { $ref: "#/components/schemas/BankingReviewBucketName" }
+        kind:
+          oneOf:
+            - $ref: "#/components/schemas/BankingReviewKind"
+            - type: "null"
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/BankingReviewRow" }
+        nextCursor: { type: ["string", "null"] }
+        limit: { type: integer }
 
     SpineMonthAllowance:
       type: object

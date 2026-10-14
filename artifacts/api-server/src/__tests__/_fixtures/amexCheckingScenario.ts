@@ -84,6 +84,15 @@ export type Observed = {
   forecast: { hookEvents: string[]; otherExpenses: string[]; curve: Record<string, string | null>; assumedPaid: string[] };
   /** GET /categorization/review: "description | source | band | suggestion". */
   queue: string[];
+  /**
+   * (S4) GET /banking/review?from=2026-10-01&to=<today> for the checking
+   * account: every row "not in the plan" as "<bucket> <reason> <kind> |
+   * <description> <amount>[ | plan <label> <due> <planned> diff <difference>
+   * <days>d]", the plan occurrences due ("<due> <label> <fate> <planned>"),
+   * the cash flow's net, how many rows paid their plan cleanly, and what the
+   * reconciliation cannot explain (always "0.00").
+   */
+  banking: { rows: string[]; planned: string[]; net: string; asPlanned: number; unexplained: string };
 };
 
 /**
@@ -116,6 +125,7 @@ export const EXPECTED: Record<StepId, Observed> = {
       assumedPaid: [],
     },
     queue: [],
+    banking: { rows: [], planned: [], net: "0.00", asPlanned: 0, unexplained: "0.00" },
   },
   S1: {} as Observed,
   S2: {} as Observed,
@@ -160,6 +170,8 @@ EXPECTED.S2 = {
   reviewCount: 1,
   position: { ...EXPECTED.S1.position, remainingWeek: "171.57", needsClassificationWeek: "128.43", safeToSpendNow: "171.57" },
   forecast: { ...EXPECTED.S1.forecast, hookEvents: ["2026-10-10 -257.90", "2026-10-17 -300.00"] },
+  // (S4) The checking purchase was not in any plan: unmatched spending, never a bill.
+  banking: { ...EXPECTED.S1.banking, rows: ["unmatched no_plan spending | KROGER #442 -42.10"], net: "-42.10" },
 };
 
 // S3a · Tue 10/6 — a person files the pending Amex charge as Groceries. No figure
@@ -236,6 +248,19 @@ EXPECTED.S5 = {
     assumedPaid: ["Weekly Spend 2026-10-10 plan -66.33 ← AMERICAN EXPRESS ACH PMT M2481 -100.00"],
   },
   queue: ["AMERICAN EXPRESS ACH PMT M2481 | heuristic | queue | —", "KROGER #442 REFUND | refund | queue | Groceries"],
+  // (S4) The card payment paid the closed week's payoff (the forecast's own
+  // evidence): planned, but $33.67 more than the plan, 2 days after it — never
+  // discretionary spending.
+  banking: {
+    rows: [
+      "amountDifference amount card_payment | AMERICAN EXPRESS ACH PMT M2481 -100.00 | plan Weekly Spend 2026-10-10 -66.33 diff 33.67 2d",
+      "unmatched no_plan spending | KROGER #442 -42.10",
+    ],
+    planned: ["2026-10-10 Weekly Spend paid_on_evidence -66.33"],
+    net: "-142.10",
+    asPlanned: 0,
+    unexplained: "0.00",
+  },
 };
 
 /** When each step happens. */

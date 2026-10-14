@@ -17582,6 +17582,6588 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     limitations: string[];
 }>;
 /**
+ * (S4) One bank account over [from, to] (household America/Chicago days). balance and cashFlow are the bank register's (GET /transactions/ledger for the same account and range: cashFlow = its totals, balance.end = its balanceEnd, to the cent). Every row the register counts in the range is placed in exactly one place, first rule wins: confirmed by the household (matched / partial) → amountDifference (partial, or off by more than max($1, 1%)), else timingDifference (more than 3 days), else asPlanned; marked not in the plan → confirmedUnplanned; a pair waiting for review → uncertain (needs_review); the forecast counted it as paying a plan → the same split as confirmed; a suggestion only → uncertain (suggested_match); before the comparison window, after today, or an account the forecast does not read → uncertain (not_compared); else unmatched, by kind. "Not this" never decides a row, and the unplanned flag or a missing category is only shown, never a rule. reconciliation.unexplained = (Σ buckets' net + asPlanned.net) − cashFlow.net, always "0.00". A pending row its posted row replaced is not placed (cashFlow.supersededExcluded) and its answer carries to the posted row. With `bucket`, `page` lists that bucket's rows (largest first) from `cursor`. Read-only.
+ * @summary Banking review — one bank account's period, and what was not in the plan
+ */
+export declare const getBankingReviewQueryAccountMax = 64;
+export declare const getBankingReviewQueryFromMax = 10;
+export declare const getBankingReviewQueryToMax = 10;
+export declare const getBankingReviewQueryRowsPerBucketDefault = 10;
+export declare const getBankingReviewQueryRowsPerBucketMax = 50;
+export declare const getBankingReviewQueryCursorMax = 512;
+export declare const getBankingReviewQueryLimitDefault = 50;
+export declare const getBankingReviewQueryLimitMax = 100;
+export declare const GetBankingReviewQueryParams: zod.ZodObject<{
+    account: zod.ZodOptional<zod.ZodString>;
+    from: zod.ZodString;
+    to: zod.ZodString;
+    rowsPerBucket: zod.ZodDefault<zod.ZodNumber>;
+    bucket: zod.ZodOptional<zod.ZodEnum<["amountDifference", "timingDifference", "confirmedUnplanned", "uncertain", "unmatched"]>>;
+    kind: zod.ZodOptional<zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>>;
+    cursor: zod.ZodOptional<zod.ZodString>;
+    limit: zod.ZodDefault<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    limit: number;
+    from: string;
+    to: string;
+    rowsPerBucket: number;
+    kind?: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | undefined;
+    account?: string | undefined;
+    cursor?: string | undefined;
+    bucket?: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched" | undefined;
+}, {
+    from: string;
+    to: string;
+    limit?: number | undefined;
+    kind?: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | undefined;
+    account?: string | undefined;
+    cursor?: string | undefined;
+    bucket?: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched" | undefined;
+    rowsPerBucket?: number | undefined;
+}>;
+export declare const GetBankingReviewResponse: zod.ZodObject<{
+    account: zod.ZodObject<{
+        id: zod.ZodNullable<zod.ZodString>;
+        institution: zod.ZodNullable<zod.ZodString>;
+        name: zod.ZodNullable<zod.ZodString>;
+        mask: zod.ZodNullable<zod.ZodString>;
+        isForecastAccount: zod.ZodBoolean;
+        lastSyncedAt: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string | null;
+        name: string | null;
+        mask: string | null;
+        lastSyncedAt: string | null;
+        institution: string | null;
+        isForecastAccount: boolean;
+    }, {
+        id: string | null;
+        name: string | null;
+        mask: string | null;
+        lastSyncedAt: string | null;
+        institution: string | null;
+        isForecastAccount: boolean;
+    }>;
+    period: zod.ZodObject<{
+        from: zod.ZodString;
+        to: zod.ZodString;
+        today: zod.ZodString;
+        timezone: zod.ZodEnum<["America/Chicago"]>;
+    }, "strip", zod.ZodTypeAny, {
+        timezone: "America/Chicago";
+        from: string;
+        to: string;
+        today: string;
+    }, {
+        timezone: "America/Chicago";
+        from: string;
+        to: string;
+        today: string;
+    }>;
+    balance: zod.ZodObject<{
+        today: zod.ZodNullable<zod.ZodString>;
+        asOf: zod.ZodNullable<zod.ZodString>;
+        start: zod.ZodNullable<zod.ZodString>;
+        end: zod.ZodNullable<zod.ZodString>;
+        unavailableReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"no_snapshot">, zod.ZodLiteral<"not_snapshot_account">, zod.ZodLiteral<null>]>>;
+    }, "strip", zod.ZodTypeAny, {
+        today: string | null;
+        asOf: string | null;
+        start: string | null;
+        end: string | null;
+        unavailableReason: "no_snapshot" | "not_snapshot_account" | null;
+    }, {
+        today: string | null;
+        asOf: string | null;
+        start: string | null;
+        end: string | null;
+        unavailableReason: "no_snapshot" | "not_snapshot_account" | null;
+    }>;
+    freshness: zod.ZodUnion<[zod.ZodObject<{
+        source: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"plaid">, zod.ZodLiteral<"manual">, zod.ZodLiteral<null>]>>;
+        lastContactAt: zod.ZodNullable<zod.ZodString>;
+        lastFailureAt: zod.ZodNullable<zod.ZodString>;
+        stale: zod.ZodBoolean;
+        staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "plaid" | "manual" | null;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }, {
+        source: "plaid" | "manual" | null;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }>, zod.ZodNull]>;
+    cashFlow: zod.ZodObject<{
+        moneyIn: zod.ZodString;
+        moneyOut: zod.ZodString;
+        net: zod.ZodString;
+        count: zod.ZodNumber;
+        pendingNet: zod.ZodString;
+        supersededExcluded: zod.ZodNumber;
+        otherExcluded: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        count: number;
+        moneyIn: string;
+        moneyOut: string;
+        net: string;
+        pendingNet: string;
+        supersededExcluded: number;
+        otherExcluded: number;
+    }, {
+        count: number;
+        moneyIn: string;
+        moneyOut: string;
+        net: string;
+        pendingNet: string;
+        supersededExcluded: number;
+        otherExcluded: number;
+    }>;
+    planComparison: zod.ZodObject<{
+        available: zod.ZodBoolean;
+        reason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"not_forecast_account">, zod.ZodLiteral<null>]>>;
+        comparedFrom: zod.ZodNullable<zod.ZodString>;
+        plansFrom: zod.ZodNullable<zod.ZodString>;
+        through: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        through: string | null;
+        reason: "not_forecast_account" | null;
+        available: boolean;
+        comparedFrom: string | null;
+        plansFrom: string | null;
+    }, {
+        through: string | null;
+        reason: "not_forecast_account" | null;
+        available: boolean;
+        comparedFrom: string | null;
+        plansFrom: string | null;
+    }>;
+    planned: zod.ZodArray<zod.ZodObject<{
+        key: zod.ZodString;
+        itemId: zod.ZodString;
+        label: zod.ZodString;
+        scheduledDate: zod.ZodString;
+        occurrenceDate: zod.ZodString;
+        planned: zod.ZodNullable<zod.ZodString>;
+        fate: zod.ZodEnum<["matched", "partial", "skipped", "missed", "paid_on_evidence", "suggested", "on_curve", "overdue_outside", "income_not_arrived", "outside_window", "not_due"]>;
+        txnId: zod.ZodNullable<zod.ZodString>;
+        txnDate: zod.ZodNullable<zod.ZodString>;
+        txnAmount: zod.ZodNullable<zod.ZodString>;
+        txnOnThisAccount: zod.ZodBoolean;
+        difference: zod.ZodNullable<zod.ZodString>;
+        dayDelta: zod.ZodNullable<zod.ZodNumber>;
+        remainder: zod.ZodNullable<zod.ZodString>;
+        onCurve: zod.ZodBoolean;
+        hook: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"weekly">, zod.ZodLiteral<"monthly">, zod.ZodLiteral<null>]>>;
+    }, "strip", zod.ZodTypeAny, {
+        itemId: string;
+        planned: string | null;
+        difference: string | null;
+        label: string;
+        occurrenceDate: string;
+        txnDate: string | null;
+        txnAmount: string | null;
+        hook: "weekly" | "monthly" | null;
+        txnId: string | null;
+        dayDelta: number | null;
+        key: string;
+        scheduledDate: string;
+        fate: "skipped" | "matched" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
+        txnOnThisAccount: boolean;
+        remainder: string | null;
+        onCurve: boolean;
+    }, {
+        itemId: string;
+        planned: string | null;
+        difference: string | null;
+        label: string;
+        occurrenceDate: string;
+        txnDate: string | null;
+        txnAmount: string | null;
+        hook: "weekly" | "monthly" | null;
+        txnId: string | null;
+        dayDelta: number | null;
+        key: string;
+        scheduledDate: string;
+        fate: "skipped" | "matched" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
+        txnOnThisAccount: boolean;
+        remainder: string | null;
+        onCurve: boolean;
+    }>, "many">;
+    notInPlan: zod.ZodObject<{
+        amountDifference: zod.ZodObject<{
+            count: zod.ZodNumber;
+            moneyIn: zod.ZodString;
+            moneyOut: zod.ZodString;
+            net: zod.ZodString;
+            pendingNet: zod.ZodString;
+            rows: zod.ZodArray<zod.ZodObject<{
+                id: zod.ZodString;
+                date: zod.ZodString;
+                displayName: zod.ZodString;
+                description: zod.ZodString;
+                amount: zod.ZodString;
+                pending: zod.ZodBoolean;
+                manual: zod.ZodBoolean;
+                category: zod.ZodUnion<[zod.ZodObject<{
+                    id: zod.ZodString;
+                    name: zod.ZodNullable<zod.ZodString>;
+                }, "strip", zod.ZodTypeAny, {
+                    id: string;
+                    name: string | null;
+                }, {
+                    id: string;
+                    name: string | null;
+                }>, zod.ZodNull]>;
+                flags: zod.ZodObject<{
+                    unplannedAllowance: zod.ZodBoolean;
+                    weeklyAllowance: zod.ZodBoolean;
+                    monthlyAllowance: zod.ZodBoolean;
+                    reimbursable: zod.ZodBoolean;
+                    transfer: zod.ZodBoolean;
+                    cardPayment: zod.ZodBoolean;
+                }, "strip", zod.ZodTypeAny, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }>;
+                kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                plan: zod.ZodUnion<[zod.ZodObject<{
+                    key: zod.ZodString;
+                    label: zod.ZodString;
+                    scheduledDate: zod.ZodString;
+                    planned: zod.ZodNullable<zod.ZodString>;
+                    difference: zod.ZodNullable<zod.ZodString>;
+                    dayDelta: zod.ZodNullable<zod.ZodNumber>;
+                }, "strip", zod.ZodTypeAny, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }>, zod.ZodNull]>;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }>, "many">;
+            truncated: zod.ZodBoolean;
+            differenceTotal: zod.ZodNullable<zod.ZodString>;
+            byKind: zod.ZodUnion<[zod.ZodObject<{
+                spending: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                card_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                debt_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                transfer: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                income: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                refund: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                other: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+            byReason: zod.ZodUnion<[zod.ZodObject<{
+                needs_review: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                suggested_match: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                not_compared: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }>;
+        timingDifference: zod.ZodObject<{
+            count: zod.ZodNumber;
+            moneyIn: zod.ZodString;
+            moneyOut: zod.ZodString;
+            net: zod.ZodString;
+            pendingNet: zod.ZodString;
+            rows: zod.ZodArray<zod.ZodObject<{
+                id: zod.ZodString;
+                date: zod.ZodString;
+                displayName: zod.ZodString;
+                description: zod.ZodString;
+                amount: zod.ZodString;
+                pending: zod.ZodBoolean;
+                manual: zod.ZodBoolean;
+                category: zod.ZodUnion<[zod.ZodObject<{
+                    id: zod.ZodString;
+                    name: zod.ZodNullable<zod.ZodString>;
+                }, "strip", zod.ZodTypeAny, {
+                    id: string;
+                    name: string | null;
+                }, {
+                    id: string;
+                    name: string | null;
+                }>, zod.ZodNull]>;
+                flags: zod.ZodObject<{
+                    unplannedAllowance: zod.ZodBoolean;
+                    weeklyAllowance: zod.ZodBoolean;
+                    monthlyAllowance: zod.ZodBoolean;
+                    reimbursable: zod.ZodBoolean;
+                    transfer: zod.ZodBoolean;
+                    cardPayment: zod.ZodBoolean;
+                }, "strip", zod.ZodTypeAny, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }>;
+                kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                plan: zod.ZodUnion<[zod.ZodObject<{
+                    key: zod.ZodString;
+                    label: zod.ZodString;
+                    scheduledDate: zod.ZodString;
+                    planned: zod.ZodNullable<zod.ZodString>;
+                    difference: zod.ZodNullable<zod.ZodString>;
+                    dayDelta: zod.ZodNullable<zod.ZodNumber>;
+                }, "strip", zod.ZodTypeAny, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }>, zod.ZodNull]>;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }>, "many">;
+            truncated: zod.ZodBoolean;
+            differenceTotal: zod.ZodNullable<zod.ZodString>;
+            byKind: zod.ZodUnion<[zod.ZodObject<{
+                spending: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                card_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                debt_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                transfer: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                income: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                refund: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                other: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+            byReason: zod.ZodUnion<[zod.ZodObject<{
+                needs_review: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                suggested_match: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                not_compared: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }>;
+        confirmedUnplanned: zod.ZodObject<{
+            count: zod.ZodNumber;
+            moneyIn: zod.ZodString;
+            moneyOut: zod.ZodString;
+            net: zod.ZodString;
+            pendingNet: zod.ZodString;
+            rows: zod.ZodArray<zod.ZodObject<{
+                id: zod.ZodString;
+                date: zod.ZodString;
+                displayName: zod.ZodString;
+                description: zod.ZodString;
+                amount: zod.ZodString;
+                pending: zod.ZodBoolean;
+                manual: zod.ZodBoolean;
+                category: zod.ZodUnion<[zod.ZodObject<{
+                    id: zod.ZodString;
+                    name: zod.ZodNullable<zod.ZodString>;
+                }, "strip", zod.ZodTypeAny, {
+                    id: string;
+                    name: string | null;
+                }, {
+                    id: string;
+                    name: string | null;
+                }>, zod.ZodNull]>;
+                flags: zod.ZodObject<{
+                    unplannedAllowance: zod.ZodBoolean;
+                    weeklyAllowance: zod.ZodBoolean;
+                    monthlyAllowance: zod.ZodBoolean;
+                    reimbursable: zod.ZodBoolean;
+                    transfer: zod.ZodBoolean;
+                    cardPayment: zod.ZodBoolean;
+                }, "strip", zod.ZodTypeAny, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }>;
+                kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                plan: zod.ZodUnion<[zod.ZodObject<{
+                    key: zod.ZodString;
+                    label: zod.ZodString;
+                    scheduledDate: zod.ZodString;
+                    planned: zod.ZodNullable<zod.ZodString>;
+                    difference: zod.ZodNullable<zod.ZodString>;
+                    dayDelta: zod.ZodNullable<zod.ZodNumber>;
+                }, "strip", zod.ZodTypeAny, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }>, zod.ZodNull]>;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }>, "many">;
+            truncated: zod.ZodBoolean;
+            differenceTotal: zod.ZodNullable<zod.ZodString>;
+            byKind: zod.ZodUnion<[zod.ZodObject<{
+                spending: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                card_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                debt_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                transfer: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                income: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                refund: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                other: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+            byReason: zod.ZodUnion<[zod.ZodObject<{
+                needs_review: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                suggested_match: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                not_compared: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }>;
+        uncertain: zod.ZodObject<{
+            count: zod.ZodNumber;
+            moneyIn: zod.ZodString;
+            moneyOut: zod.ZodString;
+            net: zod.ZodString;
+            pendingNet: zod.ZodString;
+            rows: zod.ZodArray<zod.ZodObject<{
+                id: zod.ZodString;
+                date: zod.ZodString;
+                displayName: zod.ZodString;
+                description: zod.ZodString;
+                amount: zod.ZodString;
+                pending: zod.ZodBoolean;
+                manual: zod.ZodBoolean;
+                category: zod.ZodUnion<[zod.ZodObject<{
+                    id: zod.ZodString;
+                    name: zod.ZodNullable<zod.ZodString>;
+                }, "strip", zod.ZodTypeAny, {
+                    id: string;
+                    name: string | null;
+                }, {
+                    id: string;
+                    name: string | null;
+                }>, zod.ZodNull]>;
+                flags: zod.ZodObject<{
+                    unplannedAllowance: zod.ZodBoolean;
+                    weeklyAllowance: zod.ZodBoolean;
+                    monthlyAllowance: zod.ZodBoolean;
+                    reimbursable: zod.ZodBoolean;
+                    transfer: zod.ZodBoolean;
+                    cardPayment: zod.ZodBoolean;
+                }, "strip", zod.ZodTypeAny, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }>;
+                kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                plan: zod.ZodUnion<[zod.ZodObject<{
+                    key: zod.ZodString;
+                    label: zod.ZodString;
+                    scheduledDate: zod.ZodString;
+                    planned: zod.ZodNullable<zod.ZodString>;
+                    difference: zod.ZodNullable<zod.ZodString>;
+                    dayDelta: zod.ZodNullable<zod.ZodNumber>;
+                }, "strip", zod.ZodTypeAny, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }>, zod.ZodNull]>;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }>, "many">;
+            truncated: zod.ZodBoolean;
+            differenceTotal: zod.ZodNullable<zod.ZodString>;
+            byKind: zod.ZodUnion<[zod.ZodObject<{
+                spending: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                card_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                debt_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                transfer: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                income: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                refund: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                other: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+            byReason: zod.ZodUnion<[zod.ZodObject<{
+                needs_review: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                suggested_match: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                not_compared: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }>;
+        unmatched: zod.ZodObject<{
+            count: zod.ZodNumber;
+            moneyIn: zod.ZodString;
+            moneyOut: zod.ZodString;
+            net: zod.ZodString;
+            pendingNet: zod.ZodString;
+            rows: zod.ZodArray<zod.ZodObject<{
+                id: zod.ZodString;
+                date: zod.ZodString;
+                displayName: zod.ZodString;
+                description: zod.ZodString;
+                amount: zod.ZodString;
+                pending: zod.ZodBoolean;
+                manual: zod.ZodBoolean;
+                category: zod.ZodUnion<[zod.ZodObject<{
+                    id: zod.ZodString;
+                    name: zod.ZodNullable<zod.ZodString>;
+                }, "strip", zod.ZodTypeAny, {
+                    id: string;
+                    name: string | null;
+                }, {
+                    id: string;
+                    name: string | null;
+                }>, zod.ZodNull]>;
+                flags: zod.ZodObject<{
+                    unplannedAllowance: zod.ZodBoolean;
+                    weeklyAllowance: zod.ZodBoolean;
+                    monthlyAllowance: zod.ZodBoolean;
+                    reimbursable: zod.ZodBoolean;
+                    transfer: zod.ZodBoolean;
+                    cardPayment: zod.ZodBoolean;
+                }, "strip", zod.ZodTypeAny, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }, {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                }>;
+                kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                plan: zod.ZodUnion<[zod.ZodObject<{
+                    key: zod.ZodString;
+                    label: zod.ZodString;
+                    scheduledDate: zod.ZodString;
+                    planned: zod.ZodNullable<zod.ZodString>;
+                    difference: zod.ZodNullable<zod.ZodString>;
+                    dayDelta: zod.ZodNullable<zod.ZodNumber>;
+                }, "strip", zod.ZodTypeAny, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }, {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                }>, zod.ZodNull]>;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }, {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }>, "many">;
+            truncated: zod.ZodBoolean;
+            differenceTotal: zod.ZodNullable<zod.ZodString>;
+            byKind: zod.ZodUnion<[zod.ZodObject<{
+                spending: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                card_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                debt_payment: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                transfer: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                income: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                refund: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                other: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+            byReason: zod.ZodUnion<[zod.ZodObject<{
+                needs_review: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                suggested_match: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+                not_compared: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
+            }, "strip", zod.ZodTypeAny, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }, {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }, {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        amountDifference: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        timingDifference: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        confirmedUnplanned: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        uncertain: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        unmatched: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+    }, {
+        amountDifference: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        timingDifference: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        confirmedUnplanned: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        uncertain: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        unmatched: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+    }>;
+    asPlanned: zod.ZodObject<{
+        count: zod.ZodNumber;
+        net: zod.ZodString;
+        pendingNet: zod.ZodString;
+        withoutPlanDetail: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        count: number;
+        net: string;
+        pendingNet: string;
+        withoutPlanDetail: number;
+    }, {
+        count: number;
+        net: string;
+        pendingNet: string;
+        withoutPlanDetail: number;
+    }>;
+    reconciliation: zod.ZodObject<{
+        rowsPlaced: zod.ZodNumber;
+        rowsUnexplained: zod.ZodNumber;
+        unexplained: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        unexplained: string;
+        rowsPlaced: number;
+        rowsUnexplained: number;
+    }, {
+        unexplained: string;
+        rowsPlaced: number;
+        rowsUnexplained: number;
+    }>;
+    reviewInbox: zod.ZodObject<{
+        unresolvedInRange: zod.ZodNumber;
+        badgeCount: zod.ZodNumber;
+        badgeScope: zod.ZodEnum<["this calendar month, forecast account"]>;
+    }, "strip", zod.ZodTypeAny, {
+        unresolvedInRange: number;
+        badgeCount: number;
+        badgeScope: "this calendar month, forecast account";
+    }, {
+        unresolvedInRange: number;
+        badgeCount: number;
+        badgeScope: "this calendar month, forecast account";
+    }>;
+    balanceTie: zod.ZodObject<{
+        status: zod.ZodEnum<["ties", "drift", "not_checked"]>;
+        checkedAt: zod.ZodNullable<zod.ZodString>;
+        unexplained: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        status: "ties" | "drift" | "not_checked";
+        unexplained: string | null;
+        checkedAt: string | null;
+    }, {
+        status: "ties" | "drift" | "not_checked";
+        unexplained: string | null;
+        checkedAt: string | null;
+    }>;
+    household: zod.ZodUnion<[zod.ZodObject<{
+        scope: zod.ZodEnum<["all accounts · this week"]>;
+        weekStart: zod.ZodString;
+        weekEnd: zod.ZodString;
+        spentWeek: zod.ZodString;
+        weekPlan: zod.ZodNullable<zod.ZodString>;
+        remainingWeek: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        weekStart: string;
+        weekEnd: string;
+        spentWeek: string;
+        remainingWeek: string | null;
+        scope: "all accounts · this week";
+        weekPlan: string | null;
+    }, {
+        weekStart: string;
+        weekEnd: string;
+        spentWeek: string;
+        remainingWeek: string | null;
+        scope: "all accounts · this week";
+        weekPlan: string | null;
+    }>, zod.ZodNull]>;
+    page: zod.ZodUnion<[zod.ZodObject<{
+        bucket: zod.ZodEnum<["amountDifference", "timingDifference", "confirmedUnplanned", "uncertain", "unmatched"]>;
+        kind: zod.ZodUnion<[zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>, zod.ZodNull]>;
+        rows: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            date: zod.ZodString;
+            displayName: zod.ZodString;
+            description: zod.ZodString;
+            amount: zod.ZodString;
+            pending: zod.ZodBoolean;
+            manual: zod.ZodBoolean;
+            category: zod.ZodUnion<[zod.ZodObject<{
+                id: zod.ZodString;
+                name: zod.ZodNullable<zod.ZodString>;
+            }, "strip", zod.ZodTypeAny, {
+                id: string;
+                name: string | null;
+            }, {
+                id: string;
+                name: string | null;
+            }>, zod.ZodNull]>;
+            flags: zod.ZodObject<{
+                unplannedAllowance: zod.ZodBoolean;
+                weeklyAllowance: zod.ZodBoolean;
+                monthlyAllowance: zod.ZodBoolean;
+                reimbursable: zod.ZodBoolean;
+                transfer: zod.ZodBoolean;
+                cardPayment: zod.ZodBoolean;
+            }, "strip", zod.ZodTypeAny, {
+                weeklyAllowance: boolean;
+                monthlyAllowance: boolean;
+                unplannedAllowance: boolean;
+                reimbursable: boolean;
+                transfer: boolean;
+                cardPayment: boolean;
+            }, {
+                weeklyAllowance: boolean;
+                monthlyAllowance: boolean;
+                unplannedAllowance: boolean;
+                reimbursable: boolean;
+                transfer: boolean;
+                cardPayment: boolean;
+            }>;
+            kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
+            reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+            evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+            plan: zod.ZodUnion<[zod.ZodObject<{
+                key: zod.ZodString;
+                label: zod.ZodString;
+                scheduledDate: zod.ZodString;
+                planned: zod.ZodNullable<zod.ZodString>;
+                difference: zod.ZodNullable<zod.ZodString>;
+                dayDelta: zod.ZodNullable<zod.ZodNumber>;
+            }, "strip", zod.ZodTypeAny, {
+                planned: string | null;
+                difference: string | null;
+                label: string;
+                dayDelta: number | null;
+                key: string;
+                scheduledDate: string;
+            }, {
+                planned: string | null;
+                difference: string | null;
+                label: string;
+                dayDelta: number | null;
+                key: string;
+                scheduledDate: string;
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            id: string;
+            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            description: string;
+            amount: string;
+            pending: boolean;
+            displayName: string;
+            manual: boolean;
+            category: {
+                id: string;
+                name: string | null;
+            } | null;
+            plan: {
+                planned: string | null;
+                difference: string | null;
+                label: string;
+                dayDelta: number | null;
+                key: string;
+                scheduledDate: string;
+            } | null;
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            flags: {
+                weeklyAllowance: boolean;
+                monthlyAllowance: boolean;
+                unplannedAllowance: boolean;
+                reimbursable: boolean;
+                transfer: boolean;
+                cardPayment: boolean;
+            };
+            evidence: "confirmed" | "automatic" | null;
+        }, {
+            date: string;
+            id: string;
+            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            description: string;
+            amount: string;
+            pending: boolean;
+            displayName: string;
+            manual: boolean;
+            category: {
+                id: string;
+                name: string | null;
+            } | null;
+            plan: {
+                planned: string | null;
+                difference: string | null;
+                label: string;
+                dayDelta: number | null;
+                key: string;
+                scheduledDate: string;
+            } | null;
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            flags: {
+                weeklyAllowance: boolean;
+                monthlyAllowance: boolean;
+                unplannedAllowance: boolean;
+                reimbursable: boolean;
+                transfer: boolean;
+                cardPayment: boolean;
+            };
+            evidence: "confirmed" | "automatic" | null;
+        }>, "many">;
+        nextCursor: zod.ZodNullable<zod.ZodString>;
+        limit: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        limit: number;
+        kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | null;
+        rows: {
+            date: string;
+            id: string;
+            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            description: string;
+            amount: string;
+            pending: boolean;
+            displayName: string;
+            manual: boolean;
+            category: {
+                id: string;
+                name: string | null;
+            } | null;
+            plan: {
+                planned: string | null;
+                difference: string | null;
+                label: string;
+                dayDelta: number | null;
+                key: string;
+                scheduledDate: string;
+            } | null;
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            flags: {
+                weeklyAllowance: boolean;
+                monthlyAllowance: boolean;
+                unplannedAllowance: boolean;
+                reimbursable: boolean;
+                transfer: boolean;
+                cardPayment: boolean;
+            };
+            evidence: "confirmed" | "automatic" | null;
+        }[];
+        nextCursor: string | null;
+        bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
+    }, {
+        limit: number;
+        kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | null;
+        rows: {
+            date: string;
+            id: string;
+            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            description: string;
+            amount: string;
+            pending: boolean;
+            displayName: string;
+            manual: boolean;
+            category: {
+                id: string;
+                name: string | null;
+            } | null;
+            plan: {
+                planned: string | null;
+                difference: string | null;
+                label: string;
+                dayDelta: number | null;
+                key: string;
+                scheduledDate: string;
+            } | null;
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            flags: {
+                weeklyAllowance: boolean;
+                monthlyAllowance: boolean;
+                unplannedAllowance: boolean;
+                reimbursable: boolean;
+                transfer: boolean;
+                cardPayment: boolean;
+            };
+            evidence: "confirmed" | "automatic" | null;
+        }[];
+        nextCursor: string | null;
+        bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
+    }>, zod.ZodNull]>;
+}, "strip", zod.ZodTypeAny, {
+    account: {
+        id: string | null;
+        name: string | null;
+        mask: string | null;
+        lastSyncedAt: string | null;
+        institution: string | null;
+        isForecastAccount: boolean;
+    };
+    balance: {
+        today: string | null;
+        asOf: string | null;
+        start: string | null;
+        end: string | null;
+        unavailableReason: "no_snapshot" | "not_snapshot_account" | null;
+    };
+    planned: {
+        itemId: string;
+        planned: string | null;
+        difference: string | null;
+        label: string;
+        occurrenceDate: string;
+        txnDate: string | null;
+        txnAmount: string | null;
+        hook: "weekly" | "monthly" | null;
+        txnId: string | null;
+        dayDelta: number | null;
+        key: string;
+        scheduledDate: string;
+        fate: "skipped" | "matched" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
+        txnOnThisAccount: boolean;
+        remainder: string | null;
+        onCurve: boolean;
+    }[];
+    freshness: {
+        source: "plaid" | "manual" | null;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | null;
+    period: {
+        timezone: "America/Chicago";
+        from: string;
+        to: string;
+        today: string;
+    };
+    household: {
+        weekStart: string;
+        weekEnd: string;
+        spentWeek: string;
+        remainingWeek: string | null;
+        scope: "all accounts · this week";
+        weekPlan: string | null;
+    } | null;
+    cashFlow: {
+        count: number;
+        moneyIn: string;
+        moneyOut: string;
+        net: string;
+        pendingNet: string;
+        supersededExcluded: number;
+        otherExcluded: number;
+    };
+    planComparison: {
+        through: string | null;
+        reason: "not_forecast_account" | null;
+        available: boolean;
+        comparedFrom: string | null;
+        plansFrom: string | null;
+    };
+    notInPlan: {
+        amountDifference: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        timingDifference: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        confirmedUnplanned: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        uncertain: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        unmatched: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+    };
+    asPlanned: {
+        count: number;
+        net: string;
+        pendingNet: string;
+        withoutPlanDetail: number;
+    };
+    reconciliation: {
+        unexplained: string;
+        rowsPlaced: number;
+        rowsUnexplained: number;
+    };
+    reviewInbox: {
+        unresolvedInRange: number;
+        badgeCount: number;
+        badgeScope: "this calendar month, forecast account";
+    };
+    balanceTie: {
+        status: "ties" | "drift" | "not_checked";
+        unexplained: string | null;
+        checkedAt: string | null;
+    };
+    page: {
+        limit: number;
+        kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | null;
+        rows: {
+            date: string;
+            id: string;
+            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            description: string;
+            amount: string;
+            pending: boolean;
+            displayName: string;
+            manual: boolean;
+            category: {
+                id: string;
+                name: string | null;
+            } | null;
+            plan: {
+                planned: string | null;
+                difference: string | null;
+                label: string;
+                dayDelta: number | null;
+                key: string;
+                scheduledDate: string;
+            } | null;
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            flags: {
+                weeklyAllowance: boolean;
+                monthlyAllowance: boolean;
+                unplannedAllowance: boolean;
+                reimbursable: boolean;
+                transfer: boolean;
+                cardPayment: boolean;
+            };
+            evidence: "confirmed" | "automatic" | null;
+        }[];
+        nextCursor: string | null;
+        bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
+    } | null;
+}, {
+    account: {
+        id: string | null;
+        name: string | null;
+        mask: string | null;
+        lastSyncedAt: string | null;
+        institution: string | null;
+        isForecastAccount: boolean;
+    };
+    balance: {
+        today: string | null;
+        asOf: string | null;
+        start: string | null;
+        end: string | null;
+        unavailableReason: "no_snapshot" | "not_snapshot_account" | null;
+    };
+    planned: {
+        itemId: string;
+        planned: string | null;
+        difference: string | null;
+        label: string;
+        occurrenceDate: string;
+        txnDate: string | null;
+        txnAmount: string | null;
+        hook: "weekly" | "monthly" | null;
+        txnId: string | null;
+        dayDelta: number | null;
+        key: string;
+        scheduledDate: string;
+        fate: "skipped" | "matched" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
+        txnOnThisAccount: boolean;
+        remainder: string | null;
+        onCurve: boolean;
+    }[];
+    freshness: {
+        source: "plaid" | "manual" | null;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | null;
+    period: {
+        timezone: "America/Chicago";
+        from: string;
+        to: string;
+        today: string;
+    };
+    household: {
+        weekStart: string;
+        weekEnd: string;
+        spentWeek: string;
+        remainingWeek: string | null;
+        scope: "all accounts · this week";
+        weekPlan: string | null;
+    } | null;
+    cashFlow: {
+        count: number;
+        moneyIn: string;
+        moneyOut: string;
+        net: string;
+        pendingNet: string;
+        supersededExcluded: number;
+        otherExcluded: number;
+    };
+    planComparison: {
+        through: string | null;
+        reason: "not_forecast_account" | null;
+        available: boolean;
+        comparedFrom: string | null;
+        plansFrom: string | null;
+    };
+    notInPlan: {
+        amountDifference: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        timingDifference: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        confirmedUnplanned: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        uncertain: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+        unmatched: {
+            count: number;
+            rows: {
+                date: string;
+                id: string;
+                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                description: string;
+                amount: string;
+                pending: boolean;
+                displayName: string;
+                manual: boolean;
+                category: {
+                    id: string;
+                    name: string | null;
+                } | null;
+                plan: {
+                    planned: string | null;
+                    difference: string | null;
+                    label: string;
+                    dayDelta: number | null;
+                    key: string;
+                    scheduledDate: string;
+                } | null;
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                flags: {
+                    weeklyAllowance: boolean;
+                    monthlyAllowance: boolean;
+                    unplannedAllowance: boolean;
+                    reimbursable: boolean;
+                    transfer: boolean;
+                    cardPayment: boolean;
+                };
+                evidence: "confirmed" | "automatic" | null;
+            }[];
+            moneyIn: string;
+            moneyOut: string;
+            net: string;
+            truncated: boolean;
+            pendingNet: string;
+            differenceTotal: string | null;
+            byKind: {
+                income: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                transfer: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                debt_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                card_payment: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                refund: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                spending: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+            byReason: {
+                needs_review: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                suggested_match: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+            } | null;
+        };
+    };
+    asPlanned: {
+        count: number;
+        net: string;
+        pendingNet: string;
+        withoutPlanDetail: number;
+    };
+    reconciliation: {
+        unexplained: string;
+        rowsPlaced: number;
+        rowsUnexplained: number;
+    };
+    reviewInbox: {
+        unresolvedInRange: number;
+        badgeCount: number;
+        badgeScope: "this calendar month, forecast account";
+    };
+    balanceTie: {
+        status: "ties" | "drift" | "not_checked";
+        unexplained: string | null;
+        checkedAt: string | null;
+    };
+    page: {
+        limit: number;
+        kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | null;
+        rows: {
+            date: string;
+            id: string;
+            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            description: string;
+            amount: string;
+            pending: boolean;
+            displayName: string;
+            manual: boolean;
+            category: {
+                id: string;
+                name: string | null;
+            } | null;
+            plan: {
+                planned: string | null;
+                difference: string | null;
+                label: string;
+                dayDelta: number | null;
+                key: string;
+                scheduledDate: string;
+            } | null;
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            flags: {
+                weeklyAllowance: boolean;
+                monthlyAllowance: boolean;
+                unplannedAllowance: boolean;
+                reimbursable: boolean;
+                transfer: boolean;
+                cardPayment: boolean;
+            };
+            evidence: "confirmed" | "automatic" | null;
+        }[];
+        nextCursor: string | null;
+        bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
+    } | null;
+}>;
+/**
  * Upserts the household's carry-over for one week (unique on household, week and kind). amountCents is whole cents and must be negative: an adjustment can only LOWER a week. weekStart must be a Sunday, this week or later. The money position subtracts it from that week's remainingWeek.
  * @summary Start a week lower — carry an overage into it (household owner only)
  */
@@ -18864,15 +25446,15 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         decisionId: string;
         transactionId: string;
         confidence: number;
-        band: "queue" | "provisional";
-        currentCategoryId: string | null;
-        suggestedCategoryId: string | null;
-        explanation: string;
         flags: {
             novelMerchant: boolean;
             amountAnomaly: boolean;
             splitNeedsRebalance: boolean;
         };
+        band: "queue" | "provisional";
+        currentCategoryId: string | null;
+        suggestedCategoryId: string | null;
+        explanation: string;
     }, {
         createdAt: Date;
         source: string;
@@ -18883,15 +25465,15 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         decisionId: string;
         transactionId: string;
         confidence: number;
-        band: "queue" | "provisional";
-        currentCategoryId: string | null;
-        suggestedCategoryId: string | null;
-        explanation: string;
         flags: {
             novelMerchant: boolean;
             amountAnomaly: boolean;
             splitNeedsRebalance: boolean;
         };
+        band: "queue" | "provisional";
+        currentCategoryId: string | null;
+        suggestedCategoryId: string | null;
+        explanation: string;
     }>, "many">;
     total: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
@@ -18906,15 +25488,15 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         decisionId: string;
         transactionId: string;
         confidence: number;
-        band: "queue" | "provisional";
-        currentCategoryId: string | null;
-        suggestedCategoryId: string | null;
-        explanation: string;
         flags: {
             novelMerchant: boolean;
             amountAnomaly: boolean;
             splitNeedsRebalance: boolean;
         };
+        band: "queue" | "provisional";
+        currentCategoryId: string | null;
+        suggestedCategoryId: string | null;
+        explanation: string;
     }[];
 }, {
     total: number;
@@ -18928,15 +25510,15 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         decisionId: string;
         transactionId: string;
         confidence: number;
-        band: "queue" | "provisional";
-        currentCategoryId: string | null;
-        suggestedCategoryId: string | null;
-        explanation: string;
         flags: {
             novelMerchant: boolean;
             amountAnomaly: boolean;
             splitNeedsRebalance: boolean;
         };
+        band: "queue" | "provisional";
+        currentCategoryId: string | null;
+        suggestedCategoryId: string | null;
+        explanation: string;
     }[];
 }>;
 export declare const AcceptCategorizationDecisionParams: zod.ZodObject<{
@@ -20073,7 +26655,7 @@ export declare const ListMemoryResponse: zod.ZodObject<{
         updatedAt: Date;
         key: string;
         memberUserId: string | null;
-        scope: "debt" | "categorization" | "spending" | "general";
+        scope: "debt" | "spending" | "categorization" | "general";
         createdByKind: "user" | "agent";
     }, {
         value: Record<string, unknown>;
@@ -20082,7 +26664,7 @@ export declare const ListMemoryResponse: zod.ZodObject<{
         updatedAt: Date;
         key: string;
         memberUserId: string | null;
-        scope: "debt" | "categorization" | "spending" | "general";
+        scope: "debt" | "spending" | "categorization" | "general";
         createdByKind: "user" | "agent";
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
@@ -20093,7 +26675,7 @@ export declare const ListMemoryResponse: zod.ZodObject<{
         updatedAt: Date;
         key: string;
         memberUserId: string | null;
-        scope: "debt" | "categorization" | "spending" | "general";
+        scope: "debt" | "spending" | "categorization" | "general";
         createdByKind: "user" | "agent";
     }[];
 }, {
@@ -20104,7 +26686,7 @@ export declare const ListMemoryResponse: zod.ZodObject<{
         updatedAt: Date;
         key: string;
         memberUserId: string | null;
-        scope: "debt" | "categorization" | "spending" | "general";
+        scope: "debt" | "spending" | "categorization" | "general";
         createdByKind: "user" | "agent";
     }[];
 }>;
@@ -20117,10 +26699,10 @@ export declare const PutMemoryParams: zod.ZodObject<{
     key: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     key: string;
-    scope: "debt" | "categorization" | "spending" | "general";
+    scope: "debt" | "spending" | "categorization" | "general";
 }, {
     key: string;
-    scope: "debt" | "categorization" | "spending" | "general";
+    scope: "debt" | "spending" | "categorization" | "general";
 }>;
 export declare const putMemoryBodyValueMax = 300;
 export declare const putMemoryBodyMineDefault = false;
@@ -20150,7 +26732,7 @@ export declare const PutMemoryResponse: zod.ZodObject<{
     updatedAt: Date;
     key: string;
     memberUserId: string | null;
-    scope: "debt" | "categorization" | "spending" | "general";
+    scope: "debt" | "spending" | "categorization" | "general";
     createdByKind: "user" | "agent";
 }, {
     value: Record<string, unknown>;
@@ -20159,7 +26741,7 @@ export declare const PutMemoryResponse: zod.ZodObject<{
     updatedAt: Date;
     key: string;
     memberUserId: string | null;
-    scope: "debt" | "categorization" | "spending" | "general";
+    scope: "debt" | "spending" | "categorization" | "general";
     createdByKind: "user" | "agent";
 }>;
 /**

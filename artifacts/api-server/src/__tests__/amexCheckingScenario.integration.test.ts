@@ -106,6 +106,8 @@ import spineRouter from "../routes/spine";
 import moneyRouter from "../routes/money";
 import categorizationRouter from "../routes/categorization";
 import plaidRouter from "../routes/plaid";
+import bankingRouter from "../routes/banking";
+import { householdTodayISO } from "../lib/householdClock";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import {
   ACCOUNTS,
@@ -140,6 +142,7 @@ for (const r of [
   moneyRouter,
   categorizationRouter,
   plaidRouter,
+  bankingRouter,
 ]) {
   app.use(r);
 }
@@ -207,7 +210,8 @@ type Txn = Record<string, unknown> & {
 
 /** ⭐ Every figure of one step, read through the routes. */
 async function observe(): Promise<Observed & { _raw: Record<string, unknown> }> {
-  const [spine, pos, sig, forecast, txns, items, ledger, balances, anchor, payoff, queue] = await Promise.all([
+  const today = householdTodayISO();
+  const [spine, pos, sig, forecast, txns, items, ledger, balances, anchor, payoff, queue, review, monthLedger] = await Promise.all([
     get<Record<string, any>>("/spine"),
     get<Record<string, any>>("/money/position"),
     get<Record<string, any>>("/forecast/cash-signal"),
@@ -219,6 +223,8 @@ async function observe(): Promise<Observed & { _raw: Record<string, unknown> }> 
     get<Record<string, any>>("/amex/anchor"),
     get<Record<string, any>>("/amex/weekly-payoff?weekStart=2026-10-04"),
     get<{ total: number; items: Array<Record<string, any>> }>("/categorization/review?limit=50"),
+    get<Record<string, any>>(`/banking/review?from=2026-10-01&to=${today}&rowsPerBucket=50`),
+    get<Record<string, any>>(`/transactions/ledger?from=2026-10-01&to=${today}&limit=1`),
   ]);
   // The client's account label: GET /transactions carries `plaidAccountId`;
   // the institution and mask come from GET /plaid/items.
@@ -294,7 +300,19 @@ async function observe(): Promise<Observed & { _raw: Record<string, unknown> }> 
     queue: queue.items
       .map((q) => `${q.description} | ${q.source} | ${q.band} | ${q.suggestedCategoryId ? (catName.get(q.suggestedCategoryId) ?? "?") : "—"}`)
       .sort(),
-    _raw: { spine, pos, sig, forecast, txns, ledger, anchor, payoff, queue },
+    banking: {
+      rows: (["amountDifference", "timingDifference", "confirmedUnplanned", "uncertain", "unmatched"] as const)
+        .flatMap((b) => (review.notInPlan[b].rows as Array<Record<string, any>>).map((r) => {
+          const head = `${b} ${r.reason} ${r.kind} | ${r.description} ${r.amount}`;
+          const p = r.plan;
+          return p ? `${head} | plan ${p.label} ${p.scheduledDate} ${p.planned} diff ${p.difference} ${p.dayDelta}d` : head;
+        })),
+      planned: (review.planned as Array<Record<string, any>>).map((p) => `${p.scheduledDate} ${p.label} ${p.fate} ${p.planned}`),
+      net: review.cashFlow.net,
+      asPlanned: review.asPlanned.count,
+      unexplained: review.reconciliation.unexplained,
+    },
+    _raw: { spine, pos, sig, forecast, txns, ledger, anchor, payoff, queue, review, monthLedger },
   };
 }
 
@@ -319,6 +337,15 @@ async function expectStep(id: StepId): Promise<Observed & { _raw: Record<string,
   expect((_raw.forecast as Record<string, any>).cashSignal, `${id} /forecast cashSignal`).toEqual(_raw.sig);
   // The Chase page's "today" is the spine's bank balance.
   expect(o.chase.balanceToday, `${id} Chase register today = spine cash`).toBe(o.cash);
+  // (S4) The banking review's cash flow and balances are the register's, to the cent.
+  const review = _raw.review as Record<string, any>;
+  const monthLedger = _raw.monthLedger as Record<string, any>;
+  for (const k of ["moneyIn", "moneyOut", "net", "count"]) {
+    expect(review.cashFlow[k], `${id} banking cashFlow.${k}`).toBe(monthLedger.totals[k]);
+  }
+  expect(review.balance.end, `${id} banking balance.end`).toBe(monthLedger.balanceEnd);
+  expect(review.balance.today, `${id} banking balance.today = spine cash`).toBe(o.cash);
+  expect(review.reviewInbox.badgeCount, `${id} banking badge = spine reviewCount`).toBe(o.reviewCount);
   return o;
 }
 
