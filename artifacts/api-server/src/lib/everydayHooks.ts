@@ -156,8 +156,10 @@ export async function loadHookPayoffs(args: {
   const open = started.filter((p) => p.end >= todayISO);
 
   // Charges, for the periods that have started (future periods owe nothing yet).
+  // ⭐ (P2) Read at once with what the open periods spent (below): neither read
+  // depends on the other (they used to run one after the other).
   const charges = new Map<string, number>();
-  await Promise.all(
+  const chargesRead = Promise.all(
     started.map(async (p) => {
       // A weekly period is its Sunday; a monthly one is read through a day whose
       // Sunday is inside the month (the 7th), so the engine bills that month.
@@ -173,7 +175,8 @@ export async function loadHookPayoffs(args: {
 
   // What the open periods have already spent from their allowance.
   const spent = new Map<string, number>();
-  if (open.length > 0) {
+  const spentRead = (async (): Promise<void> => {
+    if (open.length === 0) return;
     const from = open.reduce((m, p) => (p.start < m ? p.start : m), open[0]!.start);
     const to = open.reduce((m, p) => (p.end > m ? p.end : m), open[0]!.end);
     const rangeStart = from < TRACKING_START ? TRACKING_START : from;
@@ -192,7 +195,8 @@ export async function loadHookPayoffs(args: {
       const inPeriod = classified.filter((r) => r.date >= lo && r.date <= p.end).map((r) => r.row);
       spent.set(`${p.cadence}|${p.start}`, allowanceSpentCents(inPeriod, p.cadence));
     }
-  }
+  })();
+  await Promise.all([chargesRead, spentRead]);
 
   for (const o of occurrences) {
     const p = hookPeriodOf(o.cadence, o.occurrenceDate);
