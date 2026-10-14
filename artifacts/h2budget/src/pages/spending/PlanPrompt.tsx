@@ -117,7 +117,7 @@ export function PlanPrompt({
           Different amount
         </button>
       </div>
-      {primary ? <p className="text-micro text-neutral-500">{primary.label}</p> : null}
+      {primary ? <p className="text-micro text-neutral-600">{primary.label}</p> : null}
 
       <Dialog open={pick != null} onOpenChange={(o) => (o ? null : close())}>
         <DialogContent data-testid="plan-confirm">

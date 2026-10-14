@@ -48,6 +48,8 @@ export type WindowConfig = {
   monthTicks: number[];
   todayMs: number;
   subtitle: string;
+  /** "May 2026" when the months before it have no data; the chart says so quietly. */
+  noHistoryBefore?: string | null;
 };
 
 /** A single weekly (Sun–Sat) balance sample keyed by ISO date. */
@@ -313,6 +315,11 @@ function SingleSeriesBalanceTrendChart({
               </LineChart>
             </ResponsiveContainer>
           </div>
+          {window.noHistoryBefore ? (
+            <p className="mt-1 text-micro text-neutral-600" data-testid="trend-no-history">
+              No history before {window.noHistoryBefore}
+            </p>
+          ) : null}
       </ChartFrame>
     );
   }

@@ -175,6 +175,7 @@ const ROWS = () => [
   makeTxn({ id: "g1", description: "GOLDROW", source: "plaid", plaidAccountId: "ext-gold", amount: "-25.00" }),
 ];
 
+const CARD_SCOPE = { kind: "card", accountId: "ext-plat", name: "Platinum", mask: "1001", institution: "American Express", cards: [] };
 const total = (amount: string, count: number) => ({ amount, count });
 function summaryFixture(over: Record<string, unknown> = {}) {
   return {
@@ -288,23 +289,31 @@ describe("Amex page — summary first (W4)", () => {
     expect(owed.textContent).toContain("Not known yet");
   });
 
-  it("plan line by kind: Saturday payoff → Forecast, debt → Debt, none → no line", async () => {
+  it("plan line by kind (a card tab): Saturday payoff → Forecast, debt → Debt, none → no line", async () => {
+    state.summary = summaryFixture({ scope: CARD_SCOPE });
     render(tree());
     await ready();
     expect(screen.getByTestId("amex-plan-line").textContent).toContain("Saturday payoff $600.00");
     expect(within(screen.getByTestId("amex-plan-line")).getByRole("link").getAttribute("href")).toBe("/forecast");
     cleanup();
-    state.summary = summaryFixture({ planLink: { kind: "debt", payoff: null, payoffDate: null, basis: null, debtId: "d", name: "Gold", minimum: "35.00", avalancheRank: 1, status: "active" } });
+    state.summary = summaryFixture({ scope: CARD_SCOPE, planLink: { kind: "debt", payoff: null, payoffDate: null, basis: null, debtId: "d", name: "Gold", minimum: "35.00", avalancheRank: 1, status: "active" } });
     render(tree());
     await ready();
     expect(screen.getByTestId("amex-plan-line").textContent).toContain("On the payoff plan: minimum $35.00");
     expect(within(screen.getByTestId("amex-plan-line")).getByRole("link").getAttribute("href")).toBe("/debts");
     cleanup();
-    state.summary = summaryFixture({ planLink: { kind: "none", payoff: null, payoffDate: null, basis: null, debtId: null, name: null, minimum: null, avalancheRank: null, status: null } });
+    state.summary = summaryFixture({ scope: CARD_SCOPE, planLink: { kind: "none", payoff: null, payoffDate: null, basis: null, debtId: null, name: null, minimum: null, avalancheRank: null, status: null } });
     render(tree());
     await ready();
     expect(screen.queryByTestId("amex-plan-line")).toBeNull();
     // The household line is there in every case.
+    expect(screen.getByTestId("amex-household-line")).toBeTruthy();
+  });
+
+  it("All cards quotes no single plan line (it would read as every card's plan)", async () => {
+    render(tree());
+    await ready();
+    expect(screen.queryByTestId("amex-plan-line")).toBeNull();
     expect(screen.getByTestId("amex-household-line")).toBeTruthy();
   });
 

@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import { Link } from "wouter";
-import type { Spine } from "@workspace/api-client-react";
+import { useGetSettings, type Spine } from "@workspace/api-client-react";
+import { amexCardLabel } from "@workspace/avalanche-core";
 import { FreshnessLine } from "@/components/data-state";
 import { isSyntheticPlaidItem } from "@/lib/plaidReauth";
 import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
@@ -160,6 +161,7 @@ export interface AmexTileProps {
 function AmexTile({ weekCharges }: AmexTileProps) {
   const items = usePlaidItemsQ();
   const debts = useDebtsQ();
+  const { data: settings } = useGetSettings();
   const cards = useMemo(() => {
     const flat = (items.data ?? []).filter((it) => !isSyntheticPlaidItem(it)).flatMap((it) =>
       it.accounts.map((a) => ({
@@ -170,9 +172,19 @@ function AmexTile({ weekCharges }: AmexTileProps) {
     const cardOrder = cardOrderOf(flat);
     return flat.flatMap((a) => {
       const id = identityOf(a, { cardOrder });
-      return id.isCard ? [{ id: a.id, label: `${id.label}${id.mask4 ? ` ••${id.mask4}` : ""}` }] : [];
+      // Amex cards only: other credit cards stay under Banking › Accounts and Debt.
+      if (id.kind !== "amex") return [];
+      // The Amex page's name for the card (household name, else tier word, else Plaid's).
+      const name = amexCardLabel({
+        accountId: a.accountId,
+        serverBrand: /blue/i.test(`${a.name ?? ""} ${a.mask ?? ""}`) ? "blue" : "silver",
+        plaidName: a.name,
+        names: settings?.preferences?.amexCardNames as Record<string, string> | undefined,
+        brands: settings?.preferences?.amexCardBrands as Record<string, string> | undefined,
+      });
+      return [{ id: a.id, label: `${name}${id.mask4 ? ` ••${id.mask4}` : ""}` }];
     });
-  }, [items.data]);
+  }, [items.data, settings]);
   // Asked only when a card is off the plan (the Accounts read, same key).
   const needLiab = debts.data !== undefined && cards.some((c) => needsLiability(debtForAccount(debts.data, c)));
   const liab = useLiabilityAccountsQ(needLiab);
@@ -241,9 +253,7 @@ function WeekTile({ s }: { s: Spine | undefined }) {
           <Fig label="Plan" value={money(pos.data?.weekCap)} testid="tile-week-plan" />
           <div className={cn("font-mono text-body font-semibold tabular-nums", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-week-left">{lo!.text}</div>
         </>
-      ) : (
-        <p className="text-label text-neutral-600" data-testid="tile-week-noplan">Plan not set</p>
-      )}
+      ) : null /* the chip already says "Plan not set" */}
     </Tile>
   );
 }

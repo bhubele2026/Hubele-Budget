@@ -216,7 +216,7 @@ export default function BankingReviewPage() {
             ))}
           </div>
           {syncedWords ? (
-            <span className="text-micro text-neutral-500" data-testid="br-fresh">
+            <span className="text-micro text-neutral-600" data-testid="br-fresh">
               {syncedWords}
               {d?.freshness?.stale ? " · may be out of date" : ""}
             </span>

@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   Q: {} as Record<string, unknown>,
   spine: { data: undefined as unknown, state: "loaded", refetch: () => {} },
   prefetch: vi.fn(),
+  settings: undefined as unknown,
 }));
 const ok = (data: unknown) => ({ data, isError: false, isLoading: false, refetch: () => {} });
 const loading = { data: undefined, isError: false, isLoading: true, refetch: () => {} };
@@ -17,6 +18,10 @@ vi.mock("./queries", () => ({
   useMoneyPositionQ: () => get("pos"),
   useLiabilityAccountsQ: () => get("liab"),
   useCashSignalQ: () => get("cash"),
+}));
+vi.mock("@workspace/api-client-react", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  useGetSettings: () => ({ data: h.settings }),
 }));
 vi.mock("@/hooks/useSpine", () => ({ useSpine: () => h.spine }));
 vi.mock("@/components/data-state", () => ({ FreshnessLine: () => <span>fresh</span> }));
@@ -52,14 +57,14 @@ const debt = (id: string, plaidAccountId: string, balance: string) => ({ id, nam
 function setup(spineOver: Record<string, unknown> = {}, pos: Record<string, unknown> = {}, props: Record<string, unknown> = {}) {
   h.spine.data = spine(spineOver);
   h.Q.pos = ok({ spentWeekDiscretionary: "140.00", weekCap: "200.00", ...pos });
-  h.Q.items = ok([item("a", [acct("c1", { name: "Total Checking", mask: "5526" }), card("x1", "Platinum", "1005"), card("x2", "Gold", "2002")])]);
+  h.Q.items = ok([item("a", [acct("c1", { name: "Total Checking", mask: "5526" }), card("v1", "Summit Visa", "3303")]), { ...item("b", [card("x1", "Amex Platinum", "1005"), card("x2", "Amex Gold", "2002")]), institutionName: "American Express", institutionSlug: "amex" }]);
   h.Q.debts = ok([debt("d1", "x1", "1500.00"), debt("d2", "x2", "800.00")]);
   const mem = memoryLocation({ path: "/home", record: true });
   render(<Router hook={mem.hook}><Tiles {...props} /></Router>);
   return mem;
 }
 
-beforeEach(() => { h.Q = {}; h.prefetch.mockClear(); h.spine = { data: undefined, state: "loaded", refetch: () => {} }; });
+beforeEach(() => { h.Q = {}; h.settings = undefined; h.prefetch.mockClear(); h.spine = { data: undefined, state: "loaded", refetch: () => {} }; });
 afterEach(() => cleanup());
 
 describe("six tiles", () => {
@@ -117,7 +122,9 @@ describe("this week and this month", () => {
     setup({ position: { ...spine().position, remainingWeek: null, withinPlan: null } }, { weekCap: null });
     const t = screen.getByTestId("tile-week");
     expect(within(t).getByTestId("tile-week-status").textContent).toBe("Plan not set");
-    expect(within(t).getByTestId("tile-week-noplan")).toBeTruthy();
+    // said once: the chip, not the body
+    expect(within(t).queryByTestId("tile-week-noplan")).toBeNull();
+    expect(t.textContent!.split("Plan not set").length - 1).toBe(1);
     expect(t.textContent).not.toMatch(/Over/);
     expect(within(t).getByTestId("tile-week-spent").textContent).toBe("$140.00");
     expect(t.textContent).not.toContain("$0.00");
@@ -154,8 +161,15 @@ describe("amex tile", () => {
   it("each card as name ••last4 with its owed; no week-charges row when the slot is absent", () => {
     setup();
     const rows = screen.getAllByTestId("tile-amex-card");
-    expect(rows.map((r) => r.textContent)).toEqual(["Bank Platinum ••1005$1,500.00", "Bank Gold ••2002$800.00"]);
+    // Amex cards only (the bank's Visa is not here), named the way the Amex page names them.
+    expect(rows.map((r) => r.textContent)).toEqual(["Platinum ••1005$1,500.00", "Platinum ••2002$800.00"]);
+    expect(screen.getByTestId("tile-amex").textContent).not.toMatch(/Visa|3303|American Express/);
     expect(screen.queryByTestId("tile-amex-weekcharges")).toBeNull();
+  });
+  it("the household's own card name wins", () => {
+    h.settings = { preferences: { amexCardNames: { "p-x1": "Travel card" } } };
+    setup();
+    expect(screen.getAllByTestId("tile-amex-card")[0]!.textContent).toBe("Travel card ••1005$1,500.00");
   });
   it("the weekCharges slot renders only when given", () => {
     setup({}, {}, { weekCharges: <span>This week $50.00</span> });

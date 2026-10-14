@@ -41,7 +41,7 @@ const NONE: string[] = [];
 const MIN = 60_000;
 
 const CELL = "surface rounded-card px-4 py-3 ring-1 ring-brand-line";
-const CELL_LABEL = "text-micro font-semibold uppercase tracking-wide text-neutral-500";
+const CELL_LABEL = "text-micro font-semibold uppercase tracking-wide text-neutral-600";
 const CELL_VALUE = "mt-1 font-mono text-display font-semibold tabular-nums";
 
 export function PeriodView({ view }: { view: PeriodView }) {
@@ -134,7 +134,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
               {d.remaining == null ? (
                 <>
                   <div className={CELL_LABEL}>Left</div>
-                  <div className="mt-1 text-title text-neutral-500" data-testid="sp-left">—</div>
+                  <div className="mt-1 text-title text-neutral-600" data-testid="sp-left">—</div>
                 </>
               ) : over ? (
                 <>
@@ -160,9 +160,9 @@ export function PeriodView({ view }: { view: PeriodView }) {
           {view === "month" ? (
             <section className="surface rounded-card px-4 py-3 ring-1 ring-brand-line" data-testid="sp-household-budget">
               <h2 className="text-title font-semibold text-brand-navy">Household budget</h2>
-              <p className="text-micro text-neutral-500">Separate from the monthly allowance · includes debt payments</p>
+              <p className="text-micro text-neutral-600">Separate from the monthly allowance · includes debt payments</p>
               {budget.data === undefined ? (
-                <p className="mt-2 text-label text-neutral-500">{budget.isError ? "The budget did not load." : "Loading…"}</p>
+                <p className="mt-2 text-label text-neutral-600">{budget.isError ? "The budget did not load." : "Loading…"}</p>
               ) : (
                 <>
                   <dl className="mt-2 space-y-1 text-body">
@@ -181,7 +181,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
           ) : null}
 
           {d.plan.status === "not_set" && !d.isCurrent ? (
-            <p className="text-micro text-neutral-500">A plan starts this {view}. Earlier {view === "week" ? "weeks" : "months"} stay as they were.</p>
+            <p className="text-micro text-neutral-600">A plan starts this {view}. Earlier {view === "week" ? "weeks" : "months"} stay as they were.</p>
           ) : null}
         </>
       )}

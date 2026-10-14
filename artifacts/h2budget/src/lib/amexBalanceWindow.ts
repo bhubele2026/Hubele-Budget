@@ -95,6 +95,32 @@ export function buildBalanceWindow(
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const todayDay = dayStr(now);
 
+  // (W6) No flat line where there is no data. `balanceAtEndOf` carries the
+  // anchored balance backwards, so months before the card has history would
+  // plot a flat line at that balance. The series starts at the first real
+  // week: no earlier than the tracking start (May 1, 2026), and for a card
+  // whose first transaction is later, the Saturday just before it (its
+  // opening balance). Earlier months stay empty; nothing is invented.
+  let firstDay = "2026-05-01";
+  let firstTxn: string | null = null;
+  for (const t of transactions) {
+    const d = t.occurredOn.slice(0, 10);
+    if (firstTxn === null || d < firstTxn) firstTxn = d;
+  }
+  if (firstTxn !== null) {
+    const [fy, fm, fd] = firstTxn.split("-").map(Number);
+    const first = new Date(fy!, fm! - 1, fd!);
+    const opening = dayStr(addDays(first, -(first.getDay() + 1)));
+    if (opening > firstDay) firstDay = opening;
+  }
+  const noHistoryBefore =
+    firstDay > dayStr(windowStart)
+      ? new Date(+firstDay.slice(0, 4), +firstDay.slice(5, 7) - 1, 1).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        })
+      : null;
+
   const series: WindowPoint[] = [];
   // First bucket: the Saturday that closes the week containing the
   // window start. Normalize to local midnight so its X position lines
@@ -106,6 +132,10 @@ export function buildBalanceWindow(
     const satDay = dayStr(sat);
     // Omit weeks ending after today.
     if (satDay > todayDay) break;
+    if (satDay < firstDay) {
+      sat = addDays(sat, 7);
+      continue;
+    }
     const satMk: MonthKey = {
       year: sat.getFullYear(),
       month: sat.getMonth(),
@@ -153,6 +183,7 @@ export function buildBalanceWindow(
   const todayMidMs = todayMid.getTime();
   if (
     todayMidMs >= windowStart.getTime() &&
+    todayDay >= firstDay &&
     (series.length === 0 || series[series.length - 1].x !== todayMidMs)
   ) {
     const todayMk: MonthKey = {
@@ -191,5 +222,6 @@ export function buildBalanceWindow(
     // anchored on local midnight.
     todayMs: todayMidMs,
     subtitle,
+    noHistoryBefore,
   };
 }

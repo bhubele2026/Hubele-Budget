@@ -275,3 +275,30 @@ describe("(W4) buildBalanceWindow is the last 12 months, ending today", () => {
     expect(w.series[0]!.x).toBeGreaterThanOrEqual(localMidnightMs(2026, 4, 1));
   });
 });
+
+// (W6) No flat line where there is no data.
+describe("(W6) the series starts at the first real week", () => {
+  const now = new Date(2026, 9, 14, 12);
+  const build = (transactions: Array<{ occurredOn: string; amount: number }>) =>
+    buildBalanceWindow({
+      anchorPresent: true,
+      currentMonth: monthKeyOf(now),
+      balanceAtEndOf: constBalanceAtEndOf(1000),
+      transactions,
+      now,
+    })!;
+
+  it("keeps the 12-month axis but plots nothing before the tracking start", () => {
+    const w = build([{ occurredOn: "2026-05-05", amount: 10 }]);
+    expect(w.subtitle).toBe("Nov 2025 – Oct 2026");
+    expect(w.domain[0]).toBe(localMidnightMs(2025, 10, 1));
+    expect(w.series[0]!.x).toBe(localMidnightMs(2026, 4, 2)); // the Saturday before the first transaction
+    expect(w.series.every((p) => p.x >= localMidnightMs(2026, 4, 1))).toBe(true);
+    expect(w.noHistoryBefore).toBe("May 2026");
+  });
+  it("a card whose first transaction is later starts later", () => {
+    const w = build([{ occurredOn: "2026-08-12", amount: 10 }]); // a Wednesday
+    expect(w.series[0]!.x).toBe(localMidnightMs(2026, 7, 8));
+    expect(w.noHistoryBefore).toBe("August 2026");
+  });
+});

@@ -670,19 +670,37 @@ describe("R0 follow-up — the phone drawer closes after you navigate", () => {
   });
 });
 
-describe("the mobile page title", () => {
-  it("names the page on a phone by whole segments", () => {
-    mount("/bills/all");
-    expect(screen.getByTestId("mobile-page-title").textContent).toBe("Bills");
-    cleanup();
-    mount("/transactions");
-    expect(screen.getByTestId("mobile-page-title").textContent).toBe("Chase register");
-    cleanup();
-    mount("/settings");
-    expect(screen.getByTestId("mobile-page-title").textContent).toBe("Settings");
-    cleanup();
+describe("the More trigger keeps the global focus ring", () => {
+  it("does not switch the outline off (the other bar items show it)", () => {
     mount("/home");
-    expect(screen.getByTestId("mobile-page-title").textContent).toBe("Dashboard");
+    expect(screen.getByTestId("topnav-more").className).not.toMatch(/outline-none/);
+  });
+});
+
+describe("the mobile page title", () => {
+  it("is the section, whatever tab is lit (whole segments)", () => {
+    const cases: Array<[string, string]> = [
+      ["/home", "Dashboard"],
+      ["/banking", "Banking"],
+      ["/transactions", "Banking"],
+      ["/next/accounts", "Banking"],
+      ["/amex", "Amex"],
+      ["/spending/week", "Spending"],
+      ["/budget", "Spending"],
+      ["/forecast/overview", "Forecast"],
+      ["/bills/all", "Forecast"],
+      ["/review", "Forecast"],
+      ["/avalanche", "Debt"],
+      ["/reports/debt", "Debt"],
+      ["/settings", "Settings"],
+      ["/ask", "Ask"],
+      ["/review/categories", "Categories"],
+    ];
+    for (const [path, title] of cases) {
+      mount(path);
+      expect(screen.getByTestId("mobile-page-title").textContent, path).toBe(title);
+      cleanup();
+    }
   });
 });
 

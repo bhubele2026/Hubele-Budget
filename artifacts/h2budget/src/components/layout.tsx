@@ -91,9 +91,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const sectionTabs = section ? tabsOf(section, amexCards) : [];
   const litTab = litTabOf(section, sectionTabs, location, search);
   const moreItem = section?.id === "more" ? moreItemOf(location) : null;
-  // The active tab's own label makes the best mobile page title — it covers
-  // every mapped route, section sub-pages included.
-  const currentTitle = litTab?.name ?? moreItem?.name ?? section?.name ?? "H2 Budget";
+  // The phone title is the SECTION you are in (the word the bar lights), never
+  // a tab's name ("Review" read as the old area name). More shows its own page.
+  const currentTitle = section?.id === "more" ? (moreItem?.name ?? section.name) : (section?.name ?? "H2 Budget");
   const trail = crumbsFor(location, section, litTab);
   const back = backLinkFor(section, litTab);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -314,7 +314,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <button
                         type="button"
                         className={cn(
-                          "press relative flex items-center whitespace-nowrap px-3.5 text-label font-semibold outline-none",
+                          "press relative flex items-center whitespace-nowrap px-3.5 text-label font-semibold",
                           moreActive
                             ? "text-chrome-ink"
                             : "text-chrome-ink-3 hover:text-chrome-ink-hover",
