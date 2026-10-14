@@ -28,6 +28,8 @@ const spendCtx: SpendContext = {
 const filingCtx = { uncategorizedIds: new Set([CAT.uncategorized]) };
 // Every Budget line that is not income (the system Uncategorized has no line).
 const expenseLineIds = new Set([CAT.groceries, CAT.misc, CAT.debtLine, CAT.ignore]);
+/** (S6) No Plaid credit accounts in this fixture: only an Amex source is a card. */
+const NO_CARDS: ReadonlySet<string> = new Set();
 
 let n = 0;
 const row = (o: Partial<ReconcileRow>): ReconcileRow => ({
@@ -86,7 +88,7 @@ const splitParts = new Map([
 ]);
 
 describe("reconcileMonthSpend — Budget actual vs household spending to date", () => {
-  const r = reconcileMonthSpend(ROWS, supersede, filingCtx, spendCtx, splitParts, { today: TODAY, expenseLineIds });
+  const r = reconcileMonthSpend(ROWS, supersede, filingCtx, spendCtx, splitParts, { today: TODAY, expenseLineIds, cardAccountIds: NO_CARDS });
 
   it("the fixture's rows are what their names say, by the one spending rule", () => {
     expect(classifyOutflow(cardPayment, spendCtx).kind).toBe("card_payment");
@@ -131,17 +133,35 @@ describe("reconcileMonthSpend — Budget actual vs household spending to date", 
     const x = reconcileMonthSpend([bigRefund, smallBuy], { replacedIds: new Set<string>(), replacedBy: new Map<string, ReplacedPending>() }, filingCtx, spendCtx, new Map(), {
       today: TODAY,
       expenseLineIds,
+      cardAccountIds: NO_CARDS,
     });
     expect(x.householdSpendToDate).toBe(0);
     expect(x.terms.refundsNetted).toBe(10000);
     expect(explainedByTerms(x.terms) + x.unexplained).toBe(x.difference);
   });
 
+  it("(S6) a return on a Chase credit card nets B on that card, exactly as householdSpend nets it; the identity still closes", () => {
+    const CARD = "acct-chase-card";
+    const buy = row({ description: "TARGET T-1234", amount: "-80.00", plaidAccountId: CARD });
+    const back = row({ description: "TARGET T-1234", amount: "30.00", plaidAccountId: CARD, occurredOn: "2026-10-03" });
+    const pay = row({ description: "Payment Thank You-Mobile", amount: "200.00", plaidAccountId: CARD, categoryId: null, occurredOn: "2026-10-04" });
+    const none = { replacedIds: new Set<string>(), replacedBy: new Map<string, ReplacedPending>() };
+    const run = (cardAccountIds: ReadonlySet<string>) =>
+      reconcileMonthSpend([buy, back, pay], none, filingCtx, spendCtx, new Map(), { today: TODAY, expenseLineIds, cardAccountIds });
+    // Before S6 (the card not known as one): the return netted nothing.
+    expect(run(NO_CARDS)).toMatchObject({ householdSpendToDate: 8000, terms: { refundsNetted: 0 } });
+    const x = run(new Set([CARD]));
+    expect(x.householdSpendToDate).toBe(5000);
+    expect(x.terms.refundsNetted).toBe(3000);
+    expect(explainedByTerms(x.terms) + x.unexplained).toBe(x.difference);
+    expect(x.unexplained).toBe(0);
+  });
+
   it("a past month: nothing is future-dated; a future month: everything is", () => {
-    const past = reconcileMonthSpend(ROWS, supersede, filingCtx, spendCtx, splitParts, { today: "2026-11-15", expenseLineIds });
+    const past = reconcileMonthSpend(ROWS, supersede, filingCtx, spendCtx, splitParts, { today: "2026-11-15", expenseLineIds, cardAccountIds: NO_CARDS });
     expect(past.terms.futureDated).toBe(0);
     expect(explainedByTerms(past.terms) + past.unexplained).toBe(past.difference);
-    const future = reconcileMonthSpend(ROWS, supersede, filingCtx, spendCtx, splitParts, { today: "2026-09-30", expenseLineIds });
+    const future = reconcileMonthSpend(ROWS, supersede, filingCtx, spendCtx, splitParts, { today: "2026-09-30", expenseLineIds, cardAccountIds: NO_CARDS });
     expect(future.householdSpendToDate).toBe(0);
     expect(future.terms.futureDated).toBe(future.budgetActual);
     expect(future.unexplained).toBe(0);

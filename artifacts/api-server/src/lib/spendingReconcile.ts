@@ -12,7 +12,8 @@
 //      `buildSpendingFacts(monthStart, today).householdSpend`): every purchase
 //      the one spending rule calls spend (`classifyOutflow` rule 10), through
 //      TODAY, categorized or not, less the refunds on the same account (never
-//      below zero per account).
+//      below zero per account). (S6) A refund is `classifyRefund`'s, with the
+//      household's credit cards (`opts.cardAccountIds`) — as householdSpend.
 //
 // The identity, to the cent:
 //   A − B = futureDated + cardPayments + debtPayments + excludedNames
@@ -50,6 +51,7 @@ import {
   creditAmount,
   isRealIncome,
   netAccountOf,
+  onCardAccount,
   type SpendContext,
 } from "./spendingFilter";
 
@@ -87,7 +89,8 @@ const centsOf = (amount: string): number => Math.round((parseFloat(amount) || 0)
  * ⭐ The reconciliation of one month (see the file header). `rows` are the
  * month's rows (the Budget month's query); `today` is the household's today
  * (the spine's clock); `expenseLineIds` are the category ids of the month's
- * expense lines (every Budget line whose kind is not income).
+ * expense lines (every Budget line whose kind is not income); (S6)
+ * `cardAccountIds` the household's credit accounts (`loadCardAccountIds`).
  */
 export function reconcileMonthSpend(
   rows: readonly ReconcileRow[],
@@ -95,9 +98,9 @@ export function reconcileMonthSpend(
   filingCtx: FilingContext,
   spendCtx: SpendContext,
   splitParts: ReadonlyMap<string, readonly { categoryId: string; amount: string }[]>,
-  opts: { today: string; expenseLineIds: ReadonlySet<string> },
+  opts: { today: string; expenseLineIds: ReadonlySet<string>; cardAccountIds: ReadonlySet<string> },
 ): MonthSpendReconciliation {
-  const { today, expenseLineIds } = opts;
+  const { today, expenseLineIds, cardAccountIds } = opts;
   const terms: Record<ReconcileTerm, number> = {
     futureDated: 0,
     cardPayments: 0,
@@ -174,7 +177,11 @@ export function reconcileMonthSpend(
       case "not_outflow": {
         // A counts these only through split parts in an expense line.
         terms.splitsOutsideLines += inLines;
-        if (c.kind === "not_outflow" && !isRealIncome(t, spendCtx) && classifyRefund(t, spendCtx)) {
+        if (
+          c.kind === "not_outflow" &&
+          !isRealIncome(t, spendCtx) &&
+          classifyRefund(t, spendCtx, { isCardAccount: onCardAccount(t, cardAccountIds) })
+        ) {
           add(refundByAcct, netAccountOf(t), Math.round(creditAmount(t) * 100));
         }
         break;

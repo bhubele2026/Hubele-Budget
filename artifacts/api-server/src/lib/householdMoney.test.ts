@@ -24,6 +24,8 @@ import {
 } from "@workspace/avalanche-core";
 
 const CHECKING = "chase-ext";
+/** (S6) Another issuer's credit card (a Plaid credit account, not an Amex source). */
+const CHASE_CARD = "chase-card-ext";
 
 function ctx(overrides: Partial<MovementContext> = {}): MovementContext {
   return {
@@ -31,6 +33,7 @@ function ctx(overrides: Partial<MovementContext> = {}): MovementContext {
     debtCategoryIds: new Set(),
     checkingAccountExternalId: CHECKING,
     matchedTxnIds: new Set(),
+    cardAccountIds: new Set(),
     ...overrides,
   };
 }
@@ -328,7 +331,9 @@ function specClassification(r: MovementRow, c: MovementContext): MovementClassif
   if (core.kind === "not_outflow") {
     if (isRealIncome(r, c)) return { coverage: "income", timing };
     // (B6) A refund nets the coverage steps 2-7 give a purchase with its flags.
-    if (classifyRefund(r, c, { reimbursableIsSpend: true })) {
+    // (S6) "On a card": an Amex source, or one of the household's credit accounts.
+    const onCreditAccount = r.plaidAccountId != null && c.cardAccountIds.has(r.plaidAccountId);
+    if (classifyRefund(r, c, { reimbursableIsSpend: true, isCardAccount: onCreditAccount })) {
       return { coverage: "refund", timing, nets: specPlace(r, c).coverage as MovementClassification["nets"] };
     }
     return { coverage: "excluded", timing };
@@ -416,6 +421,13 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       r.plaidAccountId = "amex-ext";
       r.amount = Math.abs(Number(r.amount));
     },
+    // (S6) Money back on another issuer's card: a refund when the context lists
+    // that account as a credit account, otherwise an unexplained credit.
+    (r) => {
+      r.source = "plaid:chase";
+      r.plaidAccountId = CHASE_CARD;
+      r.amount = Math.abs(Number(r.amount));
+    },
   ];
 
   it(`${N} seeded rows: each equals the spec model, and every precedence path is reached at least ${MIN_HITS} times`, () => {
@@ -454,6 +466,7 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
         checkingAccountExternalId: bool(0.8) ? CHECKING : null,
         matchedTxnIds: matched ? new Set([r.id]) : new Set(),
         tier2PairedTxnIds: tier2 ? new Set([r.id]) : bool(0.5) ? new Set(["someone-else"]) : undefined,
+        cardAccountIds: bool(0.8) ? new Set([CHASE_CARD]) : new Set(),
       });
 
       const got = classifyMovement(r, c);
@@ -468,6 +481,7 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       if (core.kind === "not_outflow") {
         hit(`step1:inflow->${got.coverage}`);
         if (got.coverage === "refund") hit(`step1:refund-nets:${got.nets}`);
+        if (r.plaidAccountId === CHASE_CARD) hit(`step1:chase-card-credit->${got.coverage}${c.cardAccountIds.has(CHASE_CARD) ? "" : ":unlisted"}`);
       }
       else if (core.kind !== "spend") {
         hit(`step1:${core.kind}`);
@@ -503,6 +517,8 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       "step1:inflow->excluded",
       // (B6) A credit on the card is a refund.
       "step1:inflow->refund",
+      // (S6) …on any issuer's credit account the context lists; not on one it does not.
+      "step1:chase-card-credit->refund",
       "step2:confirmed",
       "step2:confirmed+flag_ignored_matched",
       "step2:confirmed+unplanned_on_matched",
@@ -531,6 +547,9 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
     for (const nets of ["bill_matched", "unplanned", "allowance_monthly", "allowance_weekly", "reimbursable", "needs_classification"]) {
       expect(hits.get(`step1:refund-nets:${nets}`) ?? 0, `refund nets ${nets}`).toBeGreaterThanOrEqual(10);
     }
+    // (S6) The same credit on an account the context does not list as a card nets nothing.
+    expect(hits.get("step1:chase-card-credit->excluded:unlisted") ?? 0).toBeGreaterThanOrEqual(10);
+    expect(hits.get("step1:chase-card-credit->refund:unlisted") ?? 0).toBe(0);
   });
 });
 

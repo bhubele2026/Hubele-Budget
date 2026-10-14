@@ -54,7 +54,8 @@
 // An inflow (`classifyOutflow`'s "not_outflow": the row is not an outflow at
 // all) is not covered by the outflow rule, so it is decided on its own
 // footing: real income (`isRealIncome`) is `income`; (B6) a refund
-// (`classifyRefund`, with `reimbursableIsSpend: true`) is `refund`, and
+// (`classifyRefund`, with `reimbursableIsSpend: true` and, S6, `isCardAccount`
+// from `ctx.cardAccountIds`) is `refund`, and
 // `nets` names the coverage it takes money off — placed by steps 2-7 below
 // exactly as a purchase with the same flags would be; every other inflow (a
 // transfer in, a debt draw, an unmarked deposit) is `excluded`, as before.
@@ -90,6 +91,7 @@ import {
   classifyRefund,
   creditAmount,
   isRealIncome,
+  onCardAccount,
   spendAmount,
   type OutflowRule,
   type SpendContext,
@@ -231,6 +233,15 @@ export interface MovementContext extends SpendContext {
    * from the match tiers. Omitted = empty.
    */
   tier2PairedTxnIds?: ReadonlySet<string>;
+  /**
+   * (S6) The household's Plaid CREDIT accounts, by external id
+   * (`plaid_accounts.account_id` where `type = 'credit'`, any issuer). A credit
+   * on one is money back on a card (`classifyRefund`'s card-credit rule, via
+   * `onCardAccount`), exactly as on an Amex ledger source. Required, like every
+   * row field: a context that forgot it would quietly stop netting returns on
+   * those cards.
+   */
+  cardAccountIds: ReadonlySet<string>;
 }
 
 function timingOf(row: MovementRow, ctx: MovementContext): MovementTiming {
@@ -285,7 +296,8 @@ export function classifyMovement(
     case "not_outflow": {
       if (isRealIncome(row, ctx)) return said({ coverage: "income", timing }, "income", core.rule);
       // (B6) A refund nets the coverage a purchase with its flags would have.
-      if (classifyRefund(row, ctx, { reimbursableIsSpend: true })) {
+      // (S6) On any issuer's credit account, not only an Amex source.
+      if (classifyRefund(row, ctx, { reimbursableIsSpend: true, isCardAccount: onCardAccount(row, ctx.cardAccountIds) })) {
         const place = placeOf(row, ctx);
         return said({ coverage: "refund", timing, nets: place.coverage }, place.rule, core.rule);
       }

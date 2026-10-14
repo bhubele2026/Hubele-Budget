@@ -439,6 +439,7 @@ describe("classifierHouseholdSpend — what each coverage adds, and 'today' is t
     debtCategoryIds: new Set(),
     checkingAccountExternalId: null,
     matchedTxnIds: new Set(["matched"]),
+    cardAccountIds: new Set(),
   };
   const r = (id: string, dollars: number, extra: Partial<MovementRow> = {}): MovementRow => ({
     id,

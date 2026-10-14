@@ -43,6 +43,7 @@ function ctx(overrides: Partial<MovementContext> = {}): MovementContext {
     debtCategoryIds: new Set(["cat-debt"]),
     checkingAccountExternalId: CHECKING,
     matchedTxnIds: new Set(),
+    cardAccountIds: new Set(),
     ...overrides,
   };
 }

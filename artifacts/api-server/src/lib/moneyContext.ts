@@ -23,7 +23,9 @@
 //     (`resolveLedgerAccounts` — never reimplemented here either);
 //   - the Amex per-card billing-cadence map (`amexCardCadence.ts`'s
 //     `discoverAmexCards`, shared with `computeWeeklyPayoff` so the two can
-//     never disagree on a card's cadence).
+//     never disagree on a card's cadence);
+//   - (S6) the household's credit-card accounts (`loadCardAccountIds`), so a
+//     return on any issuer's card nets its purchase (`classifyRefund`).
 //
 // ⭐ (PR-B1) ITS FIRST PRODUCTION CALLER is the money position
 // (`moneyPosition.ts`: `GET /money/position` and the spine's `position`), which
@@ -61,6 +63,7 @@ import { resolveLedgerAccounts } from "./bankLedger";
 import { findSupersededPendingForRange, type SupersededPending } from "./supersededPending";
 import { effectiveFiling, uncategorizedCategoryIds, type FilingContext } from "./pendingFiling";
 import { discoverAmexCards, type AmexCardCadence } from "./amexCardCadence";
+import { loadCardAccountIds } from "./cardAccounts";
 import { addDaysISO } from "./householdClock";
 
 export interface MoneyContextRange {
@@ -101,6 +104,8 @@ export interface MoneyContext extends MovementContext {
   checkingAccountExternalId: string | null;
   /** External Amex account id -> billing cadence. */
   amexCardCadence: ReadonlyMap<string, "weekly" | "monthly">;
+  /** (S6) External ids of the household's Plaid credit accounts (`loadCardAccountIds`). */
+  cardAccountIds: ReadonlySet<string>;
 }
 
 export interface LoadMoneyContextOptions {
@@ -241,7 +246,7 @@ export async function loadMoneyContext(
         .where(eq(settingsTable.userId, ownerUserId))
     : Promise.resolve([]);
 
-  const [settingsRow, matchRows, supersede, ledgerAccounts, cardCadence, cats] =
+  const [settingsRow, matchRows, supersede, ledgerAccounts, cardCadence, cats, cardAccountIds] =
     await Promise.all([
       settingsRead,
       loadConfirmedMatchRows(householdId, range),
@@ -266,6 +271,7 @@ export async function loadMoneyContext(
         })
         .from(budgetCategoriesTable)
         .where(eq(budgetCategoriesTable.householdId, householdId)),
+      loadCardAccountIds(householdId),
     ]);
 
   const s = settingsRow[0];
@@ -297,6 +303,7 @@ export async function loadMoneyContext(
     filingCtx: { uncategorizedIds: uncategorizedCategoryIds(cats) },
     checkingAccountExternalId: ledgerAccounts?.accountExternalId ?? null,
     amexCardCadence: cadenceMapFrom(cardCadence),
+    cardAccountIds,
   };
 }
 

@@ -7,7 +7,8 @@
 // Everything else is surfaced under `excluded` for transparency.
 //
 // (B6) A refund (`classifyRefund`: money back on an account the household buys
-// on) nets the range's spending on ITS OWN account, never below zero there,
+// on — S6: on any issuer's credit card, `loadCardAccountIds`) nets the range's
+// spending on ITS OWN account, never below zero there,
 // and — when it is filed to a category — that category's spending on that
 // account too (`realSpend`, `byCategory`). The breakdowns by merchant, day,
 // weekday and month stay purchases. `refunds` reports what was netted:
@@ -24,6 +25,7 @@ import {
   isRealIncome,
   incomeAmount,
   netAccountOf,
+  onCardAccount,
   spendAmount,
   type MovementContext,
   type MovementRow,
@@ -41,6 +43,7 @@ import {
 } from "./pendingFiling";
 import { addDaysISO, householdTodayISO } from "./householdClock";
 import { expandSplits, loadSplitsByTxn } from "./categorizer/splits";
+import { loadCardAccountIds } from "./cardAccounts";
 
 // The household only started tracking transactions on this date; ranges that
 // reach further back are clamped so day/total math is not diluted by empty
@@ -187,16 +190,19 @@ export async function buildSpendingFacts(
     ) + 1;
   const daysCovered = Number.isFinite(spanDays) ? Math.max(1, spanDays) : 1;
 
-  // --- Context: categories + debt linkage --------------------------------
-  const cats = await db
-    .select({
-      id: budgetCategoriesTable.id,
-      name: budgetCategoriesTable.name,
-      debtId: budgetCategoriesTable.debtId,
-      kind: budgetCategoriesTable.kind,
-    })
-    .from(budgetCategoriesTable)
-    .where(eq(budgetCategoriesTable.householdId, householdId));
+  // --- Context: categories + debt linkage; (S6) the household's cards ------
+  const [cats, cardAccountIds] = await Promise.all([
+    db
+      .select({
+        id: budgetCategoriesTable.id,
+        name: budgetCategoriesTable.name,
+        debtId: budgetCategoriesTable.debtId,
+        kind: budgetCategoriesTable.kind,
+      })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.householdId, householdId)),
+    loadCardAccountIds(householdId),
+  ]);
 
   const categoriesById = new Map<
     string,
@@ -351,7 +357,8 @@ export async function buildSpendingFacts(
         dailyIncome.set(t.occurredOn, (dailyIncome.get(t.occurredOn) ?? 0) + inc);
       } else {
         // (B6) A refund nets its account's spending (and its category's), below.
-        const rf = classifyRefund(tx, ctx);
+        // (S6) Money back on any issuer's credit card, not only an Amex source.
+        const rf = classifyRefund(tx, ctx, { isCardAccount: onCardAccount(t, cardAccountIds) });
         if (rf) {
           const acct = netAccountOf(t);
           refundCount += 1;

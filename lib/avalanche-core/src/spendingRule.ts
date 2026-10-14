@@ -631,9 +631,13 @@ export function isRealIncome(
 //
 // ⚠️ "The forecast may read low, never high." Netting a refund raises the room
 // left, so a credit counts as a refund only on evidence:
-//   - on a CARD's own ledger (`CARD_LEDGER_SOURCES`) every credit that nothing
-//     below rules out is money back on the card — what the card owes drops by
-//     exactly that much;
+//   - on a CARD's own ledger every credit that nothing below rules out is
+//     money back on the card — what the card owes drops by exactly that much.
+//     (S6) A card is `isCardLedgerRow`'s card: a card ledger source
+//     (`CARD_LEDGER_SOURCES`, the Amex rows) OR a Plaid credit account of any
+//     issuer (`RefundOptions.isCardAccount`, which the caller reads from
+//     `plaid_accounts.type`). Before S6 only the Amex sources counted, so a
+//     return on a Chase card with no REFUND word never offset its purchase;
 //   - on any OTHER account (checking, a manual row) the description must say so:
 //     a whole word REFUND / REFUNDS / REFUNDED / RFND, and no tax word (TAX,
 //     IRS, TREAS — a tax refund is not money back from a purchase). An
@@ -734,23 +738,53 @@ export interface RefundClassification {
   categorized: boolean;
 }
 
+/** (S6) `classifyRefund`'s options: `classifyOutflow`'s, plus whose ledger the row is on. */
+export interface RefundOptions extends ClassifyOptions {
+  /**
+   * The row's Plaid account is a credit account (`plaid_accounts.type ===
+   * "credit"`, any issuer) — `isCardLedgerRow`'s account test, read by the
+   * caller (`onCardAccount` over the household's credit account ids). A card
+   * ledger source (`CARD_LEDGER_SOURCES`) is a card whatever this says.
+   * Omitted: only the source decides.
+   */
+  isCardAccount?: boolean;
+}
+
 /**
  * ⭐ (B6) Is this credit a refund — money back that nets spending? Null when it
  * is not. See the section header for every rule. `reimbursableIsSpend`
  * mirrors `classifyOutflow`'s option: what the CARD owes (the payoff) nets a
  * reimbursable refund; household spending never does, because it never
  * counted the reimbursable charge.
+ *
+ * (S6) "On a card" is `isCardLedgerRow`'s test — a card ledger source, or
+ * `opts.isCardAccount` — so a return on any issuer's card nets its purchase.
+ * A payment to the card never does (`isRefundCandidate`: the payment flag, a
+ * Plaid LOAN_PAYMENTS category, an issuer phrase, payment words).
  */
 export function classifyRefund(
   tx: SpendTxn,
   ctx: SpendContext,
-  opts: ClassifyOptions = {},
+  opts: RefundOptions = {},
 ): RefundClassification | null {
   if (!isRefundCandidate(tx, ctx, opts)) return null;
   const categorized = !!(tx.categoryId && ctx.categoriesById.get(tx.categoryId));
-  if (CARD_SOURCES.has((tx.source ?? "").toLowerCase())) return { rule: "card-credit", categorized };
+  if (isCardLedgerRow(tx.source, opts.isCardAccount === true ? "credit" : null)) return { rule: "card-credit", categorized };
   if (hasRefundMarker(tx.description)) return { rule: "refund-marker", categorized };
   return null;
+}
+
+/**
+ * (S6) Is the row on one of the household's Plaid credit accounts?
+ * `cardAccountIds` are those accounts' external ids (`plaid_accounts.account_id`
+ * where `type = 'credit'`; the server's `loadCardAccountIds`). A row with no
+ * Plaid account (manual, the Amex workbook) is never one — its source decides.
+ */
+export function onCardAccount(
+  row: { plaidAccountId: string | null },
+  cardAccountIds: ReadonlySet<string>,
+): boolean {
+  return row.plaidAccountId != null && cardAccountIds.has(row.plaidAccountId);
 }
 
 // ── (S5) A CARD ROW, BY WHAT IT DID TO THE CARD ─────────────────────────────
@@ -779,9 +813,12 @@ export function classifyRefund(
 // "PYMT", "AUTOPAY", "THANK YOU"). A refund is never a payment: every one of
 // those rules a credit out as a refund first.
 //
-// ⚠️ The card-ledger refund rule recognises Amex sources only
-// (`CARD_LEDGER_SOURCES`); a credit on another bank's card with no REFUND word
-// is `other_credit` here, as it nets nothing elsewhere. Unchanged on purpose.
+// (S6) The card-ledger refund rule is `isCardLedgerRow`'s: an Amex source, or
+// `opts.isCardAccount` for a row on any other issuer's Plaid credit account.
+// Every caller today reads Amex rows only (the payoff, the Amex summary), whose
+// source already says "card", so their answers are unchanged; a caller reading
+// another bank's card passes `isCardAccount` and its credits read `refund`
+// exactly where household spending nets them.
 
 export type CardRowKind = "purchase" | "other_charge" | "refund" | "payment" | "other_credit";
 
@@ -804,7 +841,7 @@ function isCardPaymentCredit(tx: SpendTxn, ctx: SpendContext): boolean {
 export function classifyCardCredit(
   tx: SpendTxn,
   ctx: SpendContext,
-  opts: ClassifyOptions = {},
+  opts: RefundOptions = {},
 ): CardRowKind | null {
   if (spendAmount(tx) > 0) return classifyOutflow(tx, ctx, opts).kind === "spend" ? "purchase" : "other_charge";
   if (creditAmount(tx) <= 0) return null;

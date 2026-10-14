@@ -121,6 +121,7 @@ export {
   matchesCardPaymentPattern,
   matchesTransferPattern,
   normalizeDescription,
+  onCardAccount,
   spendAmount,
   type CardRowKind,
   type ClassifyOptions,
@@ -130,6 +131,7 @@ export {
   type OutflowKind,
   type OutflowRule,
   type RefundClassification,
+  type RefundOptions,
   type SpendContext,
   type SpendTxn,
 } from "./spendingRule";

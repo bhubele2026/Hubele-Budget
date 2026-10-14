@@ -57,6 +57,7 @@ import { planSourceOf, rollUpPlanBySource } from "../lib/budgetPlanSource";
 import { buildAllowanceRollup } from "../lib/budgetAllowance";
 import { monthEndExclusive, daysInMonth } from "../lib/monthBounds";
 import { syncAutoDebtCategories } from "../lib/budgetDebtSync";
+import { loadCardAccountIds } from "../lib/cardAccounts";
 import {
   SEED_ACTOR,
   SYSTEM_ACTOR,
@@ -2176,6 +2177,8 @@ router.get(
         {
           today: todayISO,
           expenseLineIds: new Set(responseLines.filter((l) => l.kind !== "income").map((l) => l.categoryId)),
+          // (S6) A return on any credit card nets, as householdSpend nets it.
+          cardAccountIds: await loadCardAccountIds(householdId),
         },
       );
       if (recon.unexplained !== 0) {
