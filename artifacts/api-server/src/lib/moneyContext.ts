@@ -44,6 +44,8 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import {
   SUPERSEDE_MAX_DAYS,
+  classifyMovement,
+  type MovementClassification,
   type MovementContext,
   type MovementRow,
 } from "@workspace/avalanche-core";
@@ -299,6 +301,15 @@ export async function loadMoneyContext(
 }
 
 /**
+ * (S3) A row as `loadMovementRows` reads it: what `classifyMovement` needs,
+ * plus `pending`, which a screen shows beside the row (it decides nothing here:
+ * a replaced pending row is already left out).
+ */
+export interface MovementRowRead extends MovementRow {
+  pending: boolean;
+}
+
+/**
  * (PR-B1; moved from the PR-H test helper `__tests__/_helpers/classifierSpend.ts`,
  * unchanged) The range's rows as `classifyMovement` must see them, prepared
  * exactly as `buildSpendingFacts` prepares its own: every row of the household
@@ -311,7 +322,7 @@ export async function loadMovementRows(
   start: string,
   end: string,
   money: Pick<MoneyContext, "supersede" | "filingCtx">,
-): Promise<MovementRow[]> {
+): Promise<MovementRowRead[]> {
   const txns = await db
     .select({
       id: transactionsTable.id,
@@ -331,6 +342,7 @@ export async function loadMovementRows(
       weeklyBucket: transactionsTable.weeklyBucket,
       isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
       plaidAccountId: transactionsTable.plaidAccountId,
+      pending: transactionsTable.pending,
     })
     .from(transactionsTable)
     .where(
@@ -340,10 +352,35 @@ export async function loadMovementRows(
         lte(transactionsTable.occurredOn, end),
       ),
     );
-  const rows: MovementRow[] = [];
+  const rows: MovementRowRead[] = [];
   for (const row of txns) {
     if (money.supersede.replacedIds.has(row.id)) continue;
     rows.push(effectiveFiling(row, money.supersede.replacedBy.get(row.id), money.filingCtx));
   }
   return rows;
+}
+
+/** (S3) One row of a window and how `classifyMovement` placed it (with its rule). */
+export interface ClassifiedMovement {
+  row: MovementRowRead;
+  m: MovementClassification;
+}
+
+/**
+ * ⭐ (S3) ONE WINDOW OF CLASSIFIED ROWS — the read every allowance figure sits
+ * on: `loadMoneyContext` for the range, `loadMovementRows` for its rows, and
+ * `classifyMovement` (with `explain`, so each row says which rule placed it —
+ * the coverage is the same either way). The money position's week
+ * (`loadPositionInputs`), the Monthly Spend hook (`loadHookPayoffs`) and the
+ * period breakdown all read through this one function, so a figure and the
+ * rows behind it can never come from two different reads.
+ */
+export async function loadAllowanceWindow(
+  householdId: string,
+  range: MoneyContextRange,
+  opts: LoadMoneyContextOptions = {},
+): Promise<{ money: MoneyContext; movement: ClassifiedMovement[] }> {
+  const money = await loadMoneyContext(householdId, range, opts);
+  const rows = await loadMovementRows(householdId, range.start, range.end, money);
+  return { money, movement: rows.map((row) => ({ row, m: classifyMovement(row, money, { explain: true }) })) };
 }

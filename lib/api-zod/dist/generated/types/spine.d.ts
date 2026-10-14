@@ -8,6 +8,7 @@
 import type { SpineBank } from "./spineBank";
 import type { SpineDebt } from "./spineDebt";
 import type { SpineForecast } from "./spineForecast";
+import type { SpineMonthAllowance } from "./spineMonthAllowance";
 import type { SpineNextBill } from "./spineNextBill";
 import type { SpinePosition } from "./spinePosition";
 export interface Spine {
@@ -27,5 +28,6 @@ export interface Spine {
     /** computeReviewCount() — unmatched forecast-flagged bank txns this month */
     reviewCount: number;
     position: SpinePosition;
+    monthAllowance: SpineMonthAllowance;
 }
 //# sourceMappingURL=spine.d.ts.map

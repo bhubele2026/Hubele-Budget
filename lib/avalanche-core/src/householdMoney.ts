@@ -91,6 +91,7 @@ import {
   creditAmount,
   isRealIncome,
   spendAmount,
+  type OutflowRule,
   type SpendContext,
   type SpendTxn,
 } from "./spendingRule";
@@ -134,6 +135,38 @@ export type MovementTiming =
   | { kind: "card"; accountId: string; date: string }
   | { kind: "none" };
 
+/**
+ * (S3) Which rule placed a row — said, never re-derived. One per precedence
+ * step above:
+ *   step 1 (the core spending rule): transfer · bank_noise · debt_payment ·
+ *     card_payment · excluded_category · income_category (an outflow filed to
+ *     an income category); and for an inflow: income (real income) ·
+ *     inflow_other (a transfer in, a debt draw, an unmarked deposit);
+ *   steps 2-7 (where a purchase is placed): bill_match_confirmed ·
+ *     bill_match_tier2 · reimbursable · unplanned_flag · monthly_flag ·
+ *     weekly_flag · unfiled.
+ * A refund carries the placement rule of the coverage it nets (its own
+ * coverage, `refund`, already says it is money back).
+ */
+export const MOVEMENT_RULES = [
+  "transfer",
+  "bank_noise",
+  "debt_payment",
+  "card_payment",
+  "excluded_category",
+  "income_category",
+  "income",
+  "inflow_other",
+  "bill_match_confirmed",
+  "bill_match_tier2",
+  "reimbursable",
+  "unplanned_flag",
+  "monthly_flag",
+  "weekly_flag",
+  "unfiled",
+] as const;
+export type MovementRule = (typeof MOVEMENT_RULES)[number];
+
 export interface MovementClassification {
   coverage: MovementCoverage;
   timing: MovementTiming;
@@ -141,6 +174,20 @@ export interface MovementClassification {
   conflict?: MovementConflict;
   /** (B6) Present only on a `refund`: the coverage it takes money off. */
   nets?: RefundNets;
+  /**
+   * (S3) Which rule placed the row (`MovementRule`). Present only when the
+   * caller asks (`classifyMovement(row, ctx, { explain: true })`); it never
+   * changes `coverage`, `timing`, `conflict` or `nets`.
+   */
+  rule?: MovementRule;
+  /** (S3) The core spending rule's own rule name (`classifyOutflow`), beside `rule`. */
+  outflowRule?: OutflowRule;
+}
+
+/** (S3) `classifyMovement`'s options. */
+export interface ClassifyMovementOptions {
+  /** Also say which rule placed the row (`rule`, `outflowRule`). Off by default. */
+  explain?: boolean;
 }
 
 /**
@@ -200,12 +247,20 @@ function timingOf(row: MovementRow, ctx: MovementContext): MovementTiming {
 /**
  * ⭐ THE ONE ROW CLASSIFIER. See the file header for the full precedence and
  * timing rules. Exactly one `coverage`, exactly one `timing`, every time.
+ * (S3) With `{ explain: true }` it also says which rule placed the row
+ * (`rule`, `outflowRule`); every other field is the same either way.
  */
 export function classifyMovement(
   row: MovementRow,
   ctx: MovementContext,
+  opts: ClassifyMovementOptions = {},
 ): MovementClassification {
   const timing = timingOf(row, ctx);
+  const said = (
+    m: MovementClassification,
+    rule: MovementRule,
+    outflowRule: OutflowRule,
+  ): MovementClassification => (opts.explain ? { ...m, rule, outflowRule } : m);
 
   // Step 1: the core spending rule — `reimbursableIsSpend: true` so its OWN
   // rule 7 (reimbursable, which fires before its card-pattern rules 8-9)
@@ -216,59 +271,69 @@ export function classifyMovement(
   const core = classifyOutflow(row, ctx, { reimbursableIsSpend: true });
   switch (core.kind) {
     case "transfer":
+      return said({ coverage: "transfer", timing }, "transfer", core.rule);
     case "bank_noise": // folds into "transfer" — exactly how the Spending report already buckets bank noise
-      return { coverage: "transfer", timing };
+      return said({ coverage: "transfer", timing }, "bank_noise", core.rule);
     case "debt_payment":
-      return { coverage: "debt_payment", timing };
+      return said({ coverage: "debt_payment", timing }, "debt_payment", core.rule);
     case "card_payment":
-      return { coverage: "card_payment", timing };
+      return said({ coverage: "card_payment", timing }, "card_payment", core.rule);
     case "excluded_category":
-      return { coverage: "excluded", timing };
+      return said({ coverage: "excluded", timing }, "excluded_category", core.rule);
     case "income":
-      return { coverage: "income", timing };
-    case "not_outflow":
-      if (isRealIncome(row, ctx)) return { coverage: "income", timing };
+      return said({ coverage: "income", timing }, "income_category", core.rule);
+    case "not_outflow": {
+      if (isRealIncome(row, ctx)) return said({ coverage: "income", timing }, "income", core.rule);
       // (B6) A refund nets the coverage a purchase with its flags would have.
       if (classifyRefund(row, ctx, { reimbursableIsSpend: true })) {
-        return { coverage: "refund", timing, nets: placeOf(row, ctx).coverage };
+        const place = placeOf(row, ctx);
+        return said({ coverage: "refund", timing, nets: place.coverage }, place.rule, core.rule);
       }
-      return { coverage: "excluded", timing };
+      return said({ coverage: "excluded", timing }, "inflow_other", core.rule);
+    }
     case "reimbursable": // unreachable: reimbursableIsSpend suppresses this
     case "spend":
       break;
   }
-  return { ...placeOf(row, ctx), timing };
+  const place = placeOf(row, ctx);
+  return said(
+    place.conflict
+      ? { coverage: place.coverage, conflict: place.conflict, timing }
+      : { coverage: place.coverage, timing },
+    place.rule,
+    core.rule,
+  );
 }
 
-/** Steps 2-7: where a purchase (or, B6, the refund of one) is placed. */
+/** Steps 2-7: where a purchase (or, B6, the refund of one) is placed, and (S3) by which rule. */
 function placeOf(
   row: MovementRow,
   ctx: MovementContext,
-): { coverage: RefundNets; conflict?: MovementConflict } {
+): { coverage: RefundNets; conflict?: MovementConflict; rule: MovementRule } {
   // Step 2: a confirmed match beats every flag, and says which one it beat.
   if (ctx.matchedTxnIds.has(row.id)) {
     if (row.unplannedAllowance) {
-      return { coverage: "bill_matched", conflict: "unplanned_on_matched" };
+      return { coverage: "bill_matched", conflict: "unplanned_on_matched", rule: "bill_match_confirmed" };
     }
     if (row.monthlyAllowance || row.weeklyAllowance) {
-      return { coverage: "bill_matched", conflict: "flag_ignored_matched" };
+      return { coverage: "bill_matched", conflict: "flag_ignored_matched", rule: "bill_match_confirmed" };
     }
-    return { coverage: "bill_matched" };
+    return { coverage: "bill_matched", rule: "bill_match_confirmed" };
   }
   // …a tier-2 pair only where the household put no flag.
   const flagged = row.unplannedAllowance || row.monthlyAllowance || row.weeklyAllowance;
   if (!flagged && ctx.tier2PairedTxnIds?.has(row.id)) {
-    return { coverage: "bill_matched" };
+    return { coverage: "bill_matched", rule: "bill_match_tier2" };
   }
   // ⭐ (PR-B2, the owner's rule of 2026-09-15) A REIMBURSABLE CHARGE IS ITS OWN ROW:
   // it comes ahead of every allowance flag, as `classifyOutflow`'s own rule 7 and
   // today's Spending report and Budget card already treat it. Before PR-B2 a
   // reimbursable row the household also flagged weekly counted against the week.
-  if (row.reimbursable) return { coverage: "reimbursable" };
-  if (row.unplannedAllowance) return { coverage: "unplanned" };
-  if (row.monthlyAllowance) return { coverage: "allowance_monthly" };
-  if (row.weeklyAllowance) return { coverage: "allowance_weekly" };
-  return { coverage: "needs_classification" };
+  if (row.reimbursable) return { coverage: "reimbursable", rule: "reimbursable" };
+  if (row.unplannedAllowance) return { coverage: "unplanned", rule: "unplanned_flag" };
+  if (row.monthlyAllowance) return { coverage: "allowance_monthly", rule: "monthly_flag" };
+  if (row.weeklyAllowance) return { coverage: "allowance_weekly", rule: "weekly_flag" };
+  return { coverage: "needs_classification", rule: "unfiled" };
 }
 
 // ── (B6) Refunds net: per account, inside a window, never below zero ───────
@@ -363,6 +428,29 @@ export function allowanceTotals(rows: readonly AllowanceRow[]): AllowanceTotals 
   return out;
 }
 
+/**
+ * ⭐ (S3) THE FIGURE A PERIOD'S ALLOWANCE IS MEASURED AGAINST — one helper for
+ * every reader, so the Monthly Spend hook's reserve (`loadHookPayoffs`) and the
+ * period breakdown (`GET /money/period-breakdown`) can never drift:
+ *   weekly  → the cap's pool: weekly-flagged + unfiled (`discretionaryCents`);
+ *   monthly → monthly-flagged (`monthlyCents`).
+ * Refunds netted per account, never below zero (`allowanceTotals`).
+ */
+export function allowanceSpentCents(rows: readonly AllowanceRow[], cadence: "weekly" | "monthly"): number {
+  const t = allowanceTotals(rows);
+  return cadence === "weekly" ? t.discretionaryCents : t.monthlyCents;
+}
+
+/**
+ * ⭐ (S3) What is left of a period's allowance: cap + carry-over − spent, in
+ * cents (negative when over; the carry-over is ≤ 0). The money position's
+ * `remainingWeek` (`computePosition`) and the period breakdown are this one
+ * call, so the two never disagree.
+ */
+export function allowanceRemainingCents(capCents: number, adjustmentCents: number, spentCents: number): number {
+  return capCents + adjustmentCents - spentCents;
+}
+
 // ── The everyday plan (owner decision 7) ────────────────────────────────────
 
 export interface AllowanceAmountSettings {
@@ -454,15 +542,15 @@ export interface AllowancePlanRow {
  * mirror uses the current week's Sunday), so a row never governs a week
  * before it was written.
  */
-export function allowancePlanInEffect(
+export function allowancePlanInEffect<T extends AllowancePlanRow>(
   periodStartSunday: string,
-  plans: readonly AllowancePlanRow[],
+  plans: readonly T[],
   period: "weekly" | "monthly",
-): AllowancePlanRow | null {
+): T | null {
   const weekEnd = /^\d{4}-\d{2}-\d{2}$/.test(periodStartSunday)
     ? weekBounds(periodStartSunday).end
     : periodStartSunday;
-  let best: AllowancePlanRow | null = null;
+  let best: T | null = null;
   for (const p of plans) {
     if (p.memberUserId != null || p.period !== period || p.effectiveFrom > weekEnd) continue;
     if (!best || p.effectiveFrom > best.effectiveFrom) best = p;
@@ -510,4 +598,19 @@ export function everydayPlanFromRows(
     weeklySource: override != null ? "override" : weeklyPlan ? "plan" : "none",
     monthlySource: monthlyPlan ? "plan" : "none",
   };
+}
+
+/**
+ * ⭐ (S3) THE CAP A PLAN SETS, or null — one rule for every reader. (Lead's
+ * ruling on PR-B1 Q2) A $0 week — no plan, a $0 plan, or a $0 override — means
+ * no cap was set: null, never a $0 cap. The money position reads this week's
+ * and next week's cap through it; the period breakdown reads any week's.
+ */
+export function weeklyCapCents(plan: EverydayPlanFromRows): number | null {
+  return plan.weeklySource === "none" || plan.weeklyCents === 0 ? null : plan.weeklyCents;
+}
+
+/** (S3) The monthly allowance's cap, or null: no plan row in effect (or a $0 one) is no cap — never $0. */
+export function monthlyCapCents(plan: EverydayPlanFromRows): number | null {
+  return plan.monthlySource === "none" || plan.monthlyCents === 0 ? null : plan.monthlyCents;
 }

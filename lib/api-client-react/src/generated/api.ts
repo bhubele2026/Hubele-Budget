@@ -109,6 +109,7 @@ import type {
   GetForecastCashSignalParams,
   GetForecastParams,
   GetMetricsParams,
+  GetPeriodBreakdownParams,
   GetReportsBehaviorFactsParams,
   GetReportsBudgetFactsParams,
   GetReportsSpendingFactsParams,
@@ -152,6 +153,7 @@ import type {
   MoneyPosition,
   OpsJobRetryResult,
   OpsJobsReport,
+  PeriodBreakdown,
   PinBudgetLineInput,
   PinBudgetMonthInput,
   PinResult,
@@ -10920,7 +10922,7 @@ export const useRecomputeMetrics = <
 };
 
 /**
- * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readPeriodAllowance (as GET /money/period-breakdown?period=month) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
 export const getGetSpineUrl = () => {
@@ -11376,6 +11378,104 @@ export function useGetWaysBack<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetWaysBackQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * week = the weekly allowance (the cap's pool: weekly-flagged + unfiled spending — exactly GET /money/position's spentWeekDiscretionary, and for the current week built from the very rows the position counted). month = the monthly allowance (monthly-flagged spending over the calendar month — exactly what the Monthly Spend hook counts). Refunds net per account and never below zero; `refundFloorAdjustment` is what that floor added, so Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, to the cent. With no plan in effect (or a $0 one) the plan is "not_set" and remaining, over and withinPlan are null — never $0. Household America/Chicago dates. Read-only.
+ * @summary Why over? One week's or month's allowance — plan, spent, left or over, and the rows behind it by category
+ */
+export const getGetPeriodBreakdownUrl = (params: GetPeriodBreakdownParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/money/period-breakdown?${stringifiedParams}`
+    : `/api/money/period-breakdown`;
+};
+
+export const getPeriodBreakdown = async (
+  params: GetPeriodBreakdownParams,
+  options?: RequestInit,
+): Promise<PeriodBreakdown> => {
+  return customFetch<PeriodBreakdown>(getGetPeriodBreakdownUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPeriodBreakdownQueryKey = (
+  params?: GetPeriodBreakdownParams,
+) => {
+  return [`/api/money/period-breakdown`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetPeriodBreakdownQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPeriodBreakdown>>,
+  TError = ErrorType<void>,
+>(
+  params: GetPeriodBreakdownParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPeriodBreakdown>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPeriodBreakdownQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPeriodBreakdown>>
+  > = ({ signal }) => getPeriodBreakdown(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPeriodBreakdown>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPeriodBreakdownQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPeriodBreakdown>>
+>;
+export type GetPeriodBreakdownQueryError = ErrorType<void>;
+
+/**
+ * @summary Why over? One week's or month's allowance — plan, spent, left or over, and the rows behind it by category
+ */
+
+export function useGetPeriodBreakdown<
+  TData = Awaited<ReturnType<typeof getPeriodBreakdown>>,
+  TError = ErrorType<void>,
+>(
+  params: GetPeriodBreakdownParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPeriodBreakdown>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPeriodBreakdownQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

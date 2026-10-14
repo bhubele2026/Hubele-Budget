@@ -2534,7 +2534,8 @@ paths:
         computeCashSignal, spend from buildSpendingFacts, bills from
         buildBillsSummary, payoff from @workspace/avalanche-core, review count
         from computeReviewCount, position from buildMoneyPosition (as GET
-        /money/position) — and an integration test asserts each one
+        /money/position), monthAllowance from readPeriodAllowance (as GET
+        /money/period-breakdown?period=month) — and an integration test asserts each one
         equals the owning endpoint's value to the cent. The debt field carries a
         PERCENTAGE ONLY; this response never contains a balance or an amount
         owed, because it is what the landing page paints.
@@ -2651,6 +2652,55 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WaysBack" }
+
+  # ── (S3) "Why are we over?" — one period's allowance, broken down ─────────
+  /money/period-breakdown:
+    get:
+      operationId: getPeriodBreakdown
+      tags: [money, features]
+      summary: Why over? One week's or month's allowance — plan, spent, left or over, and the rows behind it by category
+      description: >-
+        week = the weekly allowance (the cap's pool: weekly-flagged + unfiled
+        spending — exactly GET /money/position's spentWeekDiscretionary, and for
+        the current week built from the very rows the position counted). month =
+        the monthly allowance (monthly-flagged spending over the calendar month —
+        exactly what the Monthly Spend hook counts). Refunds net per account and
+        never below zero; `refundFloorAdjustment` is what that floor added, so
+        Σ categories.amount + needsClassification.amount + refundFloorAdjustment
+        = actual, to the cent. With no plan in effect (or a $0 one) the plan is
+        "not_set" and remaining, over and withinPlan are null — never $0.
+        Household America/Chicago dates. Read-only.
+      parameters:
+        - in: query
+          name: period
+          required: true
+          schema: { type: string, enum: [week, month] }
+        - in: query
+          name: start
+          required: true
+          description: The period's first day (YYYY-MM-DD) — a Sunday for a week, the 1st for a month. Not a future period.
+          schema: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        - in: query
+          name: account
+          required: false
+          description: >-
+            `plaid_accounts.id` — that account's contribution only (exact: the
+            figures net per account). The plan stays the household's
+            (`planScope`).
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: rowsPerGroup
+          required: false
+          description: Rows listed per group, largest first (each group's amount and count still cover every row).
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PeriodBreakdown" }
+        "400": { description: "A bad period or start (not a Sunday / the 1st, a future period, before tracking began), or a bad account or rowsPerGroup" }
+        "404": { description: The account is not this household's }
 
   /money/week-adjustments:
     post:
@@ -4119,7 +4169,7 @@ components:
     Spine:
       type: object
       required:
-        [asOf, bank, spentMonth, spentWeek, nextBill, billsDueCount, forecast, debt, reviewCount, position]
+        [asOf, bank, spentMonth, spentWeek, nextBill, billsDueCount, forecast, debt, reviewCount, position, monthAllowance]
       properties:
         asOf: { type: string, description: ISO timestamp the snapshot was read }
         bank:
@@ -4225,6 +4275,7 @@ components:
                 /debt-plan .newChargesMtd.
         reviewCount: { type: integer, description: computeReviewCount() — unmatched forecast-flagged bank txns this month }
         position: { $ref: "#/components/schemas/SpinePosition" }
+        monthAllowance: { $ref: "#/components/schemas/SpineMonthAllowance" }
 
     SpineBankSnapshot:
       type: object
@@ -4458,6 +4509,206 @@ components:
           items: { type: string }
         degraded: { type: boolean }
         degradedReason: { type: ["string", "null"], enum: [refresh_failed, old, manual_old, null] }
+
+    PeriodBreakdown:
+      type: object
+      description: >-
+        (S3) One period's allowance, broken down. Money is a two-decimal string.
+        actual: week → weekly-flagged + unfiled spending (the weekly cap's pool),
+        month → monthly-flagged spending; refunds netted per account, never
+        below zero. remaining = plan + carryOver − actual (negative when over);
+        over = max(0, −remaining); both null with no plan. Σ categories.amount +
+        needsClassification.amount + refundFloorAdjustment = actual, exactly.
+      required:
+        [period, basis, start, end, isCurrent, timezone, scope, planScope, plan, carryOver, actual, remaining, over,
+         withinPlan, categories, needsClassification, refundFloorAdjustment, beside, limitations]
+      properties:
+        period: { type: string, enum: [week, month] }
+        basis: { type: string, enum: [weekly_allowance, monthly_allowance] }
+        start: { type: string, description: "First day (YYYY-MM-DD)" }
+        end: { type: string, description: "Last day (YYYY-MM-DD), inclusive" }
+        isCurrent: { type: boolean, description: The household's current week / month }
+        timezone: { type: string, enum: [America/Chicago] }
+        scope: { $ref: "#/components/schemas/PeriodBreakdownScope" }
+        planScope: { type: string, enum: [household], description: The plan is always the household's, even for one account }
+        plan: { $ref: "#/components/schemas/PeriodBreakdownPlan" }
+        carryOver:
+          type: ["string", "null"]
+          description: (week) The household's carry-over for the week, signed (never positive); null when none (and always for a month)
+        actual: { type: string, description: What counts against the plan (see the schema description); "0.00" for a quiet period }
+        remaining: { type: ["string", "null"], description: "plan + carryOver − actual; negative when over; null when the plan is not set" }
+        over: { type: ["string", "null"], description: "max(0, −remaining); null when the plan is not set" }
+        withinPlan: { type: ["boolean", "null"], description: "remaining ≥ 0; null when the plan is not set" }
+        categories:
+          type: array
+          description: The rows filed to this plan (weekly / monthly flag), by category, largest first
+          items: { $ref: "#/components/schemas/PeriodBreakdownCategory" }
+        needsClassification: { $ref: "#/components/schemas/PeriodBreakdownGroup" }
+        refundFloorAdjustment:
+          type: string
+          description: "actual − Σ groups (≥ 0): non-zero only where an account's refunds outran its purchases and its pool floored at 0"
+        beside: { $ref: "#/components/schemas/PeriodBreakdownBeside" }
+        limitations:
+          type: array
+          items: { type: string }
+          description: >-
+            What the answer cannot see, as codes: "tier2_pairs_only_since:<date>"
+            (a past period: bill pairs the forecast suggests are known only from
+            that day, so an unfiled bill payment before it reads as unfiled);
+            "tracking_start:<date>" (the period began before tracking did; rows
+            before that day are not read); "usual_periods:<n>" (usual reads n
+            prior periods, fewer than the full 8 weeks / 3 months).
+
+    PeriodBreakdownScope:
+      type: object
+      description: Household, or one account (its identity). The plan is the household's either way.
+      required: [kind, id, institution, name, mask]
+      properties:
+        kind: { type: string, enum: [household, account] }
+        id: { type: ["string", "null"], description: "plaid_accounts.id; null for the household" }
+        institution: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+
+    PeriodBreakdownPlan:
+      type: object
+      required: [status, amount, source, planId, effectiveFrom]
+      properties:
+        status: { type: string, enum: [set, not_set], description: "not_set: no plan in effect, or a $0 one — never a $0 cap" }
+        amount: { type: ["string", "null"], description: The cap; null when not set }
+        source: { type: string, enum: [override, plan, none], description: "The week's own override, an allowance_plans row, or nothing" }
+        planId: { type: ["string", "null"], description: The allowance_plans row in effect when source is plan }
+        effectiveFrom: { type: ["string", "null"], description: That row's start when source is plan }
+
+    PeriodBreakdownCategory:
+      type: object
+      required: [categoryId, name, amount, shareBp, count, usual, aboveUsual, rows, truncated]
+      properties:
+        categoryId: { type: ["string", "null"], description: Null for rows with no category (or one that is no longer the household's) }
+        name: { type: ["string", "null"] }
+        amount: { type: string, description: "Signed: purchases less refunds filed here (can be negative)" }
+        shareBp: { type: ["integer", "null"], description: "amount ÷ actual in basis points (rounded); null when actual is 0" }
+        count: { type: integer, description: Rows (split parts count one each) }
+        usual:
+          type: ["string", "null"]
+          description: >-
+            Median of the category's amount over the prior 8 weeks (3 months); a
+            period with none counts as 0, periods before tracking began are left
+            out; null when none is left
+        aboveUsual: { type: ["string", "null"], description: "max(0, amount − usual); null when usual is null" }
+        rows:
+          type: array
+          description: Largest first, at most rowsPerGroup
+          items: { $ref: "#/components/schemas/PeriodBreakdownRow" }
+        truncated: { type: boolean, description: More rows than listed }
+
+    PeriodBreakdownGroup:
+      type: object
+      description: >-
+        Spending not filed to any allowance yet. It counts against the WEEKLY cap
+        until it is filed (countsAgainstPlan true for a week); it never counts
+        against the monthly plan, so for a month the group is empty.
+      required: [amount, count, rows, truncated, countsAgainstPlan]
+      properties:
+        amount: { type: string }
+        count: { type: integer }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/PeriodBreakdownRow" }
+        truncated: { type: boolean }
+        countsAgainstPlan: { type: boolean }
+
+    PeriodBreakdownRow:
+      type: object
+      required: [id, date, displayName, amount, account, pending, category, reason, splitPart]
+      properties:
+        id: { type: string, description: The transaction id (a split part keeps its parent's) }
+        date: { type: string }
+        displayName: { type: string, description: The household's merchant alias, else the cleaned bank description }
+        amount: { type: string, description: "What the row adds to its group: + a purchase, − a refund" }
+        account: { $ref: "#/components/schemas/PeriodBreakdownAccount" }
+        pending: { type: boolean }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/PeriodBreakdownRowCategory"
+            - type: "null"
+        reason: { $ref: "#/components/schemas/PeriodBreakdownReason" }
+        splitPart:
+          oneOf:
+            - $ref: "#/components/schemas/PeriodBreakdownSplitPart"
+            - type: "null"
+
+    PeriodBreakdownAccount:
+      type: object
+      description: The account the row is on (a split part keeps its parent's); all null for a row with no linked account
+      required: [id, institution, name, mask]
+      properties:
+        id: { type: ["string", "null"], description: plaid_accounts.id }
+        institution: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+
+    PeriodBreakdownRowCategory:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+
+    PeriodBreakdownReason:
+      type: object
+      description: Why the row counts where it does — classifyMovement's own answer
+      required: [coverage, nets, rule]
+      properties:
+        coverage:
+          type: string
+          enum: [transfer, debt_payment, card_payment, bill_matched, unplanned, allowance_monthly, allowance_weekly, reimbursable, needs_classification, income, excluded, refund]
+        nets:
+          type: ["string", "null"]
+          description: For a refund, the coverage it takes money off; null otherwise
+        rule:
+          type: string
+          enum:
+            [transfer, bank_noise, debt_payment, card_payment, excluded_category, income_category, income, inflow_other,
+             bill_match_confirmed, bill_match_tier2, reimbursable, unplanned_flag, monthly_flag, weekly_flag, unfiled]
+
+    PeriodBreakdownSplitPart:
+      type: object
+      required: [index, count, parentAmount]
+      properties:
+        index: { type: integer, description: "0-based" }
+        count: { type: integer }
+        parentAmount: { type: string, description: What the whole row adds; the parts add up to it }
+
+    PeriodBreakdownBeside:
+      type: object
+      description: >-
+        The period's other spending, netted the same way, in the same scope — it
+        does not count against this plan.
+      required: [unplanned, weekly, monthly, billMatched, reimbursable, householdSpend]
+      properties:
+        unplanned: { type: string }
+        weekly: { type: ["string", "null"], description: "The weekly pool (weekly-flagged + unfiled); null for a week (it is `actual`)" }
+        monthly: { type: ["string", "null"], description: "Monthly-flagged; null for a month (it is `actual`)" }
+        billMatched: { type: string, description: Rows paired to a bill already in the plan }
+        reimbursable: { type: string }
+        householdSpend:
+          type: ["string", "null"]
+          description: >-
+            Every purchase on any account over the period (buildSpendingFacts —
+            for the current week, the spine's spentWeek); null for one account
+
+    SpineMonthAllowance:
+      type: object
+      description: >-
+        (S3) This month's monthly allowance — the same function GET
+        /money/period-breakdown?period=month answers with (plan.amount, actual).
+        Never a debt balance, credit or a limit.
+      required: [plan, actual, status]
+      properties:
+        plan: { type: ["string", "null"], description: The monthly plan; null when not set (never "0.00") }
+        actual: { type: string }
+        status: { type: string, enum: [not_set, within, over] }
 
     WaysBackAdjustment:
       type: object

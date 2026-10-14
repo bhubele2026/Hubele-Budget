@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlan, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlan, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -520,6 +520,30 @@ export type GetWaysBackQueryError = ErrorType<unknown>;
  */
 export declare function useGetWaysBack<TData = Awaited<ReturnType<typeof getWaysBack>>, TError = ErrorType<unknown>>(options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getWaysBack>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * week = the weekly allowance (the cap's pool: weekly-flagged + unfiled spending — exactly GET /money/position's spentWeekDiscretionary, and for the current week built from the very rows the position counted). month = the monthly allowance (monthly-flagged spending over the calendar month — exactly what the Monthly Spend hook counts). Refunds net per account and never below zero; `refundFloorAdjustment` is what that floor added, so Σ categories.amount + needsClassification.amount + refundFloorAdjustment = actual, to the cent. With no plan in effect (or a $0 one) the plan is "not_set" and remaining, over and withinPlan are null — never $0. Household America/Chicago dates. Read-only.
+ * @summary Why over? One week's or month's allowance — plan, spent, left or over, and the rows behind it by category
+ */
+export declare const getGetPeriodBreakdownUrl: (params: GetPeriodBreakdownParams) => string;
+export declare const getPeriodBreakdown: (params: GetPeriodBreakdownParams, options?: RequestInit) => Promise<PeriodBreakdown>;
+export declare const getGetPeriodBreakdownQueryKey: (params?: GetPeriodBreakdownParams) => readonly ["/api/money/period-breakdown", ...GetPeriodBreakdownParams[]];
+export declare const getGetPeriodBreakdownQueryOptions: <TData = Awaited<ReturnType<typeof getPeriodBreakdown>>, TError = ErrorType<void>>(params: GetPeriodBreakdownParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getPeriodBreakdown>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getPeriodBreakdown>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetPeriodBreakdownQueryResult = NonNullable<Awaited<ReturnType<typeof getPeriodBreakdown>>>;
+export type GetPeriodBreakdownQueryError = ErrorType<void>;
+/**
+ * @summary Why over? One week's or month's allowance — plan, spent, left or over, and the rows behind it by category
+ */
+export declare function useGetPeriodBreakdown<TData = Awaited<ReturnType<typeof getPeriodBreakdown>>, TError = ErrorType<void>>(params: GetPeriodBreakdownParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getPeriodBreakdown>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

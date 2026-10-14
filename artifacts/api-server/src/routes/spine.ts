@@ -12,6 +12,7 @@ import {
   fmtISO,
 } from "../lib/cashSignal";
 import { buildMoneyPosition } from "../lib/moneyPosition";
+import { readMonthAllowance } from "../lib/periodBreakdown";
 import { buildSpendingFacts } from "../lib/spendingFacts";
 import { findSupersededPendingForRange } from "../lib/supersededPending";
 import { buildBillsSummary, pickNextBill, todayDate } from "../lib/billsSummary";
@@ -63,6 +64,10 @@ const router: IRouter = Router();
  *                                   request's own cash-signal, freshness and
  *                                   pending-pair reads so one request builds
  *                                   one ledger
+ *   monthAllowance.*              → readMonthAllowance()  [lib/periodBreakdown]
+ *                                   (S3; also GET /money/period-breakdown?period=month
+ *                                   .plan.amount / .actual), handed this request's
+ *                                   own cash-signal read
  *
  * `spine.integration.test.ts` asserts every one of those equals what the owning
  * endpoint returns, to the cent. If a future change makes two tiles disagree,
@@ -110,7 +115,7 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   // fields below quote.
   const cashPromise = computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: 90 });
   const freshnessPromise = computeBankFreshness(householdId, ownerUserId);
-  const [cash, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness, position] =
+  const [cash, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness, position, monthAllowance] =
     await Promise.all([
       cashPromise,
       supersedePromise.then((supersede) =>
@@ -128,6 +133,7 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
         freshness: freshnessPromise,
         supersede: supersedePromise,
       }),
+      readMonthAllowance(householdId, ownerUserId, { cash: cashPromise }),
     ]);
   const signal = cash.signal;
   // (WP1) The snapshot and what the roll adds since, from the very ledger that
@@ -217,6 +223,11 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       // (V5) The household's own carry-over for this week, or null.
       weekAdjustment: position.weekAdjustment,
     },
+    // ⭐ (S3) This month's monthly allowance: plan (null when not set — never
+    // "0.00"), what counts against it, and a status word. The same read and
+    // helper as GET /money/period-breakdown?period=month. ⚠️ Never a debt
+    // balance, credit or a limit.
+    monthAllowance,
   });
 });
 

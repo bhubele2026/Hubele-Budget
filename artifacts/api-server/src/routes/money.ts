@@ -5,6 +5,7 @@ import {
   DeleteWeekAdjustmentParams,
   EvaluateAffordBody,
   EvaluateWishlistItemParams,
+  GetPeriodBreakdownQueryParams,
   UpdateAllowancePlanBody,
   UpdateAllowancePlanParams,
 } from "@workspace/api-zod";
@@ -22,6 +23,7 @@ import { buildAffordBaseline } from "../lib/afford";
 import { evaluateWishlist } from "../jobs/handlers/wishlistEvaluate";
 import { buildWaysBack, deleteCarryOver, upsertCarryOver, WeekAdjustmentError } from "../lib/weekAdjustments";
 import { householdTodayISO } from "../lib/householdClock";
+import { buildPeriodBreakdown, PeriodBreakdownError } from "../lib/periodBreakdown";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -149,6 +151,48 @@ const isCalendarDate = (iso: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(iso)
  */
 router.get("/money/ways-back", requireAuth, async (req, res): Promise<void> => {
   res.json(await buildWaysBack(req.householdId!, req.householdOwnerId!));
+});
+
+/**
+ * ⭐ (S3) "WHY ARE WE OVER?" — one week's or month's allowance: the plan, what
+ * counts against it, left or over, and the rows behind it by category, largest
+ * first. `buildPeriodBreakdown` reads (for the current week, the money
+ * position's own read) and avalanche-core's `periodBreakdown` does every sum.
+ * Household-scoped; an account of another household is "Not found". Read-only.
+ */
+router.get("/money/period-breakdown", requireAuth, async (req, res): Promise<void> => {
+  // `zod.coerce.number()` would also take "1e1" or "0x10": rowsPerGroup is plain digits.
+  const rawRows = (req.query as Record<string, unknown>).rowsPerGroup;
+  if (rawRows !== undefined && !(typeof rawRows === "string" && /^[0-9]{1,3}$/.test(rawRows))) {
+    res.status(400).json({ error: "invalid_rows_per_group" });
+    return;
+  }
+  const q = GetPeriodBreakdownQueryParams.safeParse(req.query);
+  if (!q.success) {
+    res.status(400).json({ error: q.error.message });
+    return;
+  }
+  const { period, start, account, rowsPerGroup } = q.data;
+  if (!isCalendarDate(start)) {
+    res.status(400).json({ error: "start is not a calendar date" });
+    return;
+  }
+  try {
+    res.json(
+      await buildPeriodBreakdown(req.householdId!, req.householdOwnerId!, {
+        period,
+        start,
+        account: account === undefined || account === "" ? undefined : account,
+        rowsPerGroup,
+      }),
+    );
+  } catch (err) {
+    if (err instanceof PeriodBreakdownError) {
+      res.status(err.status).json({ error: err.code });
+      return;
+    }
+    throw err;
+  }
 });
 
 /**

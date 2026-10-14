@@ -511,6 +511,16 @@ beforeAll(async () => {
     effectiveFrom: "2026-05-01",
     source: "owner",
   });
+  // ── (S3) A monthly plan, so `monthAllowance` is not "not_set". No hook reads
+  // it here (this household has no everyday hooks), so no other figure moves.
+  await db.insert(allowancePlansTable).values({
+    householdId: TEST_HOUSEHOLD_ID,
+    memberUserId: null,
+    period: "monthly",
+    amount: "400.00",
+    effectiveFrom: "2026-05-01",
+    source: "owner",
+  });
 
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -580,6 +590,7 @@ type Spine = {
     degraded: boolean;
     weekAdjustment: { amount: string; reason: string | null; weekStart: string } | null;
   };
+  monthAllowance: { plan: string | null; actual: string; status: "not_set" | "within" | "over" };
 };
 
 type MoneyPosition = {
@@ -1185,6 +1196,33 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(pos.availableUntilPayday).not.toBeNull();
     expect(pos.remainingWeek).not.toBeNull();
     expect(pos.weekCap).toBe("250.00");
+  });
+
+  it("⭐ (S3) monthAllowance matches GET /money/period-breakdown?period=month for this month, to the cent", async () => {
+    const spine = await get<Spine>("/spine");
+    const b = await get<{ plan: { amount: string | null }; actual: string; over: string | null; isCurrent: boolean }>(
+      `/money/period-breakdown?period=month&start=${MONTH_START_ISO}`,
+    );
+    expect(b.isCurrent).toBe(true);
+    expect(spine.monthAllowance.plan).toBe(b.plan.amount);
+    expect(spine.monthAllowance.actual).toBe(b.actual);
+    expect(cents(spine.monthAllowance.actual)).toBe(cents(b.actual));
+    expect(spine.monthAllowance.status).toBe(b.plan.amount == null ? "not_set" : cents(b.over ?? "0") > 0 ? "over" : "within");
+    // The three fields and nothing else; not vacuous: the fixture has a $400 monthly plan.
+    expect(Object.keys(spine.monthAllowance).sort()).toEqual(["actual", "plan", "status"]);
+    expect(spine.monthAllowance.plan).toBe("400.00");
+  });
+
+  it("⭐ (S3) the week's breakdown is the position's week: actual = spentWeekDiscretionary, remaining = spine.position.remainingWeek", async () => {
+    const spine = await get<Spine>("/spine");
+    const pos = await get<MoneyPosition>("/money/position");
+    const b = await get<{ actual: string; remaining: string | null; isCurrent: boolean }>(
+      `/money/period-breakdown?period=week&start=${pos.weekStart}`,
+    );
+    expect(b.isCurrent).toBe(true);
+    expect(b.actual).toBe(pos.spentWeekDiscretionary);
+    expect(b.remaining).toBe(pos.remainingWeek);
+    expect(b.remaining).toBe(spine.position.remainingWeek);
   });
 
   it("(PR-B1) position sits on the spine's own curve, week and buffer", async () => {
