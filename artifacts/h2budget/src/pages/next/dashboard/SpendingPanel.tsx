@@ -42,7 +42,7 @@ const signed = (v: number) => `${v < 0 ? "−" : "+"}${formatCurrency(Math.abs(v
  * budget month the meter already read). An unexplained remainder is said,
  * never hidden.
  */
-function SpendingWhy({ r, month }: { r: SpendingReconciliation; month: string }) {
+export function SpendingWhy({ r, month }: { r: SpendingReconciliation; month: string }) {
   const lines = TERMS.map((t) => ({ ...t, v: Number(r.terms[t.key]) })).filter((t) => Number.isFinite(t.v) && Math.abs(t.v) >= 0.005);
   const unexplained = Number(r.unexplained);
   return (
