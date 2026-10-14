@@ -531,12 +531,16 @@ describe("S4 · GET /banking/review — the forecast account", () => {
     expect(r.reviewInbox.badgeCount).toBe((await get("/forecast/review-count")).count);
     expect(r.reviewInbox.badgeScope).toBe("this calendar month, forecast account");
     // 23 October rows; answered: Verizon, Electric, Car Insurance, Gym, Cash App,
-    // Venmo, the Shell pending row → the badge counts 16 (the posted Shell row too).
-    expect(badge).toBe(16);
+    // Venmo, the Shell pending row. (S6) The badge reads the same pairs as the
+    // review: the replaced pending row is out and its answer carries to the
+    // posted Shell row → 15 (it was 16: the posted Shell row was asked again).
+    expect(badge).toBe(15);
     // The review places 22 rows (the replaced pending row is out) and the Shell
     // answer carries to its posted row → 15. "Not this" (Kroger) and the pair
     // waiting for review (Spectrum) still wait.
     expect(r.reviewInbox.unresolvedInRange).toBe(15);
+    // Over the same days (10/01 – today) the badge and the review now agree.
+    expect(r.reviewInbox.unresolvedInRange).toBe(badge);
   });
 
   it("balanceTie: not checked until a Sync stores one; then that check, for this account only", async () => {
@@ -632,7 +636,7 @@ describe("S4 · GET /banking/review — another account", () => {
     expect(r.notInPlan.uncertain).toMatchObject({ count: 2, moneyIn: "501.20", net: "501.20" });
     expect(r.notInPlan.uncertain.rows.map((x: Json) => x.reason)).toEqual(["not_compared", "not_compared"]);
     expect(r.cashFlow).toMatchObject({ count: 2, net: "501.20" });
-    // The badge is the household's, whatever account is reviewed.
-    expect(r.reviewInbox.badgeCount).toBe(16);
+    // The badge is the household's, whatever account is reviewed. (S6: 16 → 15, the Shell pair once.)
+    expect(r.reviewInbox.badgeCount).toBe(15);
   });
 });

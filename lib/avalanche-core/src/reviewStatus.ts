@@ -36,6 +36,25 @@ export function resolutionResolvesRow(status: string): boolean {
 }
 
 /**
+ * ⭐ (S6) Is a bank row decided — counting the pending row it replaced? A posted
+ * row the sync never linked to its pending row (the pairs
+ * `findSupersededPendingForRange` reads, the same ones spending and the bank
+ * register use) carries the answers on that pending row when it has none of its
+ * own: an answer given while the charge was pending belongs to the charge. "Not
+ * this" (`not_match`) is not an answer about the row, so it neither decides nor
+ * blocks the carry. The Review badge (`computeReviewCount`) and the banking
+ * review's "unresolved" count (`GET /banking/review`) both read this.
+ *
+ * `own` are the statuses of the answers naming the row; `replacedPending` those
+ * naming the pending row it replaced (empty when it replaced none).
+ */
+export function rowAnswersResolve(own: readonly string[], replacedPending: readonly string[] = []): boolean {
+  const ownAnswers = own.filter((s) => s !== "not_match");
+  const deciding = ownAnswers.length > 0 ? ownAnswers : replacedPending.filter((s) => s !== "not_match");
+  return deciding.some(resolutionResolvesRow);
+}
+
+/**
  * The bank line's status from the answer that decides it (the register's rule,
  * moved from `buildRegister`): a match or a partial payment is "matched"; marked
  * not in the plan ("ignored_unforecasted", or the older "unplanned") is

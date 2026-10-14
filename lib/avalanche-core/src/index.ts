@@ -59,6 +59,7 @@ export {
   bankLineStatusOf,
   isNeedsReviewResolution,
   resolutionResolvesRow,
+  rowAnswersResolve,
   type BankLineStatus,
 } from "./reviewStatus";
 export {

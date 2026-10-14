@@ -17,7 +17,7 @@ import {
   pairDayDelta,
   pairDifference,
   placeBankReviewRow,
-  resolutionResolvesRow,
+  rowAnswersResolve,
   summarizeBankReview,
   type BankReviewBucket,
   type BankReviewKind,
@@ -71,7 +71,7 @@ import type { LedgerPlanFate, LedgerPlanOccurrence } from "./forecastLedger";
  *                  the rows behind plans it took as paid; and the row's kind
  *                  (`classifyMovement`, the one spending rule).
  *   reconciliation (Σ buckets + as planned) − cashFlow.net — always "0.00".
- *   reviewInbox    the rows here no answer decides (`resolutionResolvesRow`,
+ *   reviewInbox    the rows here no answer decides (`rowAnswersResolve`,
  *                  the badge's own rule) beside the badge (`computeReviewCount`)
  *                  and its real scope.
  *   balanceTie     the last manual Sync's check of the bank's own balance
@@ -597,7 +597,9 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
   const balanceStart = register.openingCents === null ? null : balanceAtEndOf(register, addDaysISO(q.from, -1));
   const tie = settingsRows[0]?.tie ?? null;
   const tieApplies = !!tie && scope.snapshotAccount && scope.plaidAccountIds.includes(tie.accountId);
-  const resolved = (id: string): boolean => answersOf(id).some((a) => resolutionResolvesRow(a.status));
+  // (S6) The badge's own rule, shared: a posted row carries its replaced pending row's answers.
+  const statusesOf = (id: string | null): string[] => (id ? (answers.get(id) ?? []).map((a) => a.status) : []);
+  const resolved = (id: string): boolean => rowAnswersResolve(statusesOf(id), statusesOf(replacedOf(id)));
   const unresolvedInRange = counted.filter((r) => inForecast(r, today) && !resolved(r.id)).length;
   const placedNet = summary.netCents;
 
