@@ -15,7 +15,10 @@ import {
   type RepointedRule,
   type BulkUpdateTransactionsInput,
 } from "@workspace/api-client-react";
-import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
+import { LedgerChartSkeleton } from "@/components/account-page/account-page-skeleton";
+import { Panel } from "@/components/next/Panel";
+import { useNearViewport } from "@/hooks/useNearViewport";
+import { AMEX_MONTH_LIMIT, amexAllScope, amexMonthParams, amexSummaryParams } from "./amexQueries";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { RowDateControls } from "@/components/row-date-controls";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
@@ -79,7 +82,6 @@ import { useListPlaidItems } from "@workspace/api-client-react";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
-import { AMEX_SOURCES } from "@/lib/amexSources";
 import { accountPageHref } from "@/lib/accountPage";
 import { currentRowDeepLink, rowDeepLinkStatus } from "@/lib/rowDeepLink";
 import { replaceUrlParam, useUrlState } from "@/hooks/useUrlState";
@@ -142,6 +144,13 @@ const ACCENT_DOT: Record<AccountAccentName, string> = {
 // never told it has no ledger.
 
 /** The household calendar day (America/Chicago) of an instant — never the UTC date. */
+/** `GET /amex/anchor`'s answer, and the shape the summary's `owed` is read into. */
+type AnchorResp = {
+  amexEndingBalance: number | null;
+  asOf: string;
+  source: "debt" | "anchor" | "computed" | "plaid" | "missing";
+};
+
 function ymd(d: Date) {
   return householdToday(d);
 }
@@ -389,17 +398,16 @@ export default function AmexPage({
     () => amexSummaryPeriod(rangeMode, selectedMonth),
     [rangeMode, selectedMonth],
   );
-  const summaryParams = {
-    accountId: cardFilter,
-    from: summaryPeriod?.from ?? "",
-    to: summaryPeriod?.to ?? "",
-  };
+  const summaryParams = amexSummaryParams(cardFilter, summaryPeriod);
   const summaryQ = useGetAmexSummary(summaryParams, {
     query: {
       queryKey: getGetAmexSummaryQueryKey(summaryParams),
       enabled: !embedded && summaryPeriod != null,
     },
   });
+  // (P4) The summary answers the anchor question while it is enabled and has
+  // not failed; embedded (summary off) or failed, the anchor is asked directly.
+  const summaryAnswersAnchor = !embedded && summaryPeriod != null && !summaryQ.isError;
 
   // Task #168 — apply `?category=<name>` once categories load. Mirrors the
   // Transactions page implementation: matches by category name (the deep
@@ -415,7 +423,7 @@ export default function AmexPage({
   //      chart needs, plus the rolling ending-balance computation
   //      (`netChangeByMonth`) and Plaid-item scoping. Hydrates after
   //      the list so it never blocks the first paint.
-  const MONTH_LIMIT = 1000;
+  const MONTH_LIMIT = AMEX_MONTH_LIMIT;
   // ⭐ (WP8b) Why the trend is ONE read of up to 5,000 rows — the size CLAUDE.md
   // §2 bans for list views. The forward chart (`buildBalanceWindow`) and the
   // balance roll-forward to the selected month (`makeAmexBalanceAtEndOf`) need
@@ -430,7 +438,7 @@ export default function AmexPage({
     () =>
       sourceFilter && sourceFilter !== "all"
         ? sourceFilter
-        : AMEX_SOURCES.join(","),
+        : (amexAllScope() as { source: string }).source,
     [sourceFilter],
   );
   // (WP7) Embedded for one card (`/next/accounts/:id`), the page asks for that
@@ -443,12 +451,7 @@ export default function AmexPage({
     [embedded, accountId, sourceParam],
   );
   const monthQueryParams = useMemo(
-    () => ({
-      limit: MONTH_LIMIT,
-      from: monthFirstISO(selectedMonth),
-      to: monthLastISO(selectedMonth),
-      ...scopeParams,
-    }),
+    () => amexMonthParams(selectedMonth, scopeParams),
     [scopeParams, selectedMonth],
   );
   const trendQueryParams = useMemo(() => {
@@ -483,8 +486,6 @@ export default function AmexPage({
       // key, so always-refetch only re-pulled a large payload per mount.
     },
   });
-  // Lower-priority — page renders as soon as the month query resolves.
-  const { data: wideTxns } = useListTransactions(trendQueryParams);
   const { data: categories } = useListCategories();
   const { data: debts, isError: debtsFailed } = useListDebts();
   // Combined statement balance across the live Amex cards — used as the
@@ -495,18 +496,17 @@ export default function AmexPage({
   // Server-provided Amex anchor: fallback used when the Amex debt row is
   // missing or renamed.
   const {
-    data: amexAnchorResp,
-    isLoading: amexAnchorLoading,
+    data: amexAnchorQ,
+    isLoading: amexAnchorQLoading,
     isError: amexAnchorError,
-    fetchStatus: amexAnchorFetchStatus,
-  } = useQuery<{
-    amexEndingBalance: number | null;
-    asOf: string;
-    source: "debt" | "anchor" | "computed" | "plaid" | "missing";
-  }>({
+    fetchStatus: amexAnchorQFetchStatus,
+  } = useQuery<AnchorResp>({
     queryKey: ["/api/amex/anchor"],
     queryFn: () => customFetch("/api/amex/anchor", { method: "GET" }),
     staleTime: 60_000,
+    // (P4) Where the summary is enabled, its `owed` IS this answer (the same
+    // call), so the page asks once. Disabled only while the summary can answer.
+    enabled: !(summaryAnswersAnchor && cardFilter === "all"),
   });
   // (#748) Per-card anchor query. Only fires when the user picks a
   // specific card chip — the combined `amexAnchorResp` above keeps
@@ -514,22 +514,60 @@ export default function AmexPage({
   // switching chips doesn't blow away the combined cache (or vice
   // versa).
   const {
-    data: amexAnchorPerCardResp,
-    fetchStatus: amexAnchorPerCardFetchStatus,
+    data: amexAnchorPerCardQ,
+    fetchStatus: amexAnchorPerCardQFetchStatus,
     isError: amexAnchorPerCardFailed,
-  } = useQuery<{
-    amexEndingBalance: number | null;
-    asOf: string;
-    source: "debt" | "anchor" | "computed" | "plaid" | "missing";
-  }>({
+  } = useQuery<AnchorResp>({
     queryKey: ["/api/amex/anchor", cardFilter],
     queryFn: () =>
       customFetch(
         `/api/amex/anchor?accountId=${encodeURIComponent(cardFilter)}`,
         { method: "GET" },
       ),
-    enabled: cardFilter !== "all",
+    enabled: cardFilter !== "all" && !summaryAnswersAnchor,
     staleTime: 60_000,
+  });
+  // (P4) The summary's `owed` is the anchor's own answer (same call, same
+  // card), so where the summary is on, the anchor comes from it. The last
+  // answer for THIS card is kept across month changes (owed is the card's
+  // current balance, not the period's), so the figure never blinks.
+  const owedRef = useRef<{ card: string; owed: NonNullable<typeof summaryQ.data>["owed"] } | null>(null);
+  if (summaryQ.data) owedRef.current = { card: cardFilter, owed: summaryQ.data.owed };
+  const owedHere = owedRef.current?.card === cardFilter ? owedRef.current.owed : null;
+  const anchorFromSummary: AnchorResp | undefined =
+    summaryAnswersAnchor && owedHere
+      ? {
+          amexEndingBalance: owedHere.current == null ? null : Number(owedHere.current),
+          asOf: owedHere.asOf ?? "",
+          source: owedHere.source,
+        }
+      : undefined;
+  // Waiting on the summary is "fetching", exactly as waiting on the anchor was.
+  const waitingOnSummary = summaryAnswersAnchor && !owedHere;
+  const amexAnchorResp = amexAnchorQ ?? (cardFilter === "all" ? anchorFromSummary : undefined);
+  const amexAnchorPerCardResp = amexAnchorPerCardQ ?? (cardFilter !== "all" ? anchorFromSummary : undefined);
+  const amexAnchorLoading = amexAnchorQLoading || (waitingOnSummary && cardFilter === "all");
+  const amexAnchorFetchStatus = waitingOnSummary && cardFilter === "all" ? "fetching" : amexAnchorQFetchStatus;
+  const amexAnchorPerCardFetchStatus =
+    waitingOnSummary && cardFilter !== "all" ? "fetching" : amexAnchorPerCardQFetchStatus;
+
+  // (P4) The 12-month trend (up to 5,000 rows) feeds the balance chart, the
+  // running balances of a PAST month, and the first-load jump to the latest
+  // month. It starts when the chart is near the viewport, or at once when one
+  // of those needs it, so no figure on the page changes — only WHEN it loads.
+  const [trendSlotRef, chartNear] = useNearViewport();
+  const anchorNeedsRows =
+    amexAnchorError ||
+    amexAnchorResp?.source === "computed" ||
+    amexAnchorResp?.source === "missing";
+  const trendNeeded =
+    chartNear ||
+    cardFilter !== "all" ||
+    compareMonth(selectedMonth, currentMonth) !== 0 ||
+    (!monthPinnedFromUrlRef.current && monthTxns !== undefined && monthTxns.length === 0) ||
+    anchorNeedsRows;
+  const { data: wideTxns, isError: trendFailed } = useListTransactions(trendQueryParams, {
+    query: { queryKey: getListTransactionsQueryKey(trendQueryParams), enabled: trendNeeded },
   });
   const updateTx = useUpdateTransaction();
   const bulkUpdateTx = useBulkUpdateTransactions();
@@ -1986,9 +2024,9 @@ export default function AmexPage({
   // load (no cached rows yet). Once any month's rows exist, keepPreviousData
   // holds them on screen while the focused-month query revalidates, so the
   // page never blanks between visits.
-  if (isLoading && !monthTxns) {
-    return <AccountPageSkeleton />;
-  }
+  // (P4) Only the chart and the ledger wait for the month's rows: the head, the
+  // card band and the summary render as soon as their own answers arrive.
+  const ledgerPending = isLoading && !monthTxns;
 
   const todayKey = ymd(new Date());
 
@@ -2163,14 +2201,29 @@ export default function AmexPage({
           </>
         ) : null}
 
-        <BalanceTrendChart
-          caption="Balance history · last 12 months"
-          window={balanceWindow ?? undefined}
-          color="hsl(var(--chart-1))"
-          valueLabel="Actual balance"
-          accent="amex"
-        />
+        {ledgerPending ? (
+          <LedgerChartSkeleton />
+        ) : wideTxns === undefined && !trendFailed ? (
+          // (P4) The 12-month pull has not started (the chart is still far
+          // down the page) or is on its way: the chart says so.
+          <div ref={trendSlotRef} className="span-12" data-testid="amex-trend-pending">
+            <Panel title="Balance history · last 12 months" span={12} variant="static" accent="amex">
+              <p className="flex h-[220px] items-center justify-center text-label text-neutral-600 md:h-[260px]" role="status">
+                Loading the last 12 months…
+              </p>
+            </Panel>
+          </div>
+        ) : (
+          <BalanceTrendChart
+            caption="Balance history · last 12 months"
+            window={balanceWindow ?? undefined}
+            color="hsl(var(--chart-1))"
+            valueLabel="Actual balance"
+            accent="amex"
+          />
+        )}
 
+        {ledgerPending ? null : (
         <LedgerPanel
           title="Activity"
           accent="amex"
@@ -2718,6 +2771,7 @@ export default function AmexPage({
         }}
       />
         </LedgerPanel>
+        )}
       </PageGrid>
       <datalist id={owedByListId}>
         {knownPayers.map((p) => (

@@ -5,6 +5,8 @@ import {
   useCreatePlaidLinkToken,
   useExchangePlaidPublicToken,
   useGetPlaidEnvironment,
+  getGetPlaidEnvironmentQueryKey,
+  getPlaidEnvironment,
   useListPlaidItems,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
@@ -214,7 +216,11 @@ export function PlaidLinkButton({
   const setPostLinkStatus = setPostLinkProgress;
   const createLinkToken = useCreatePlaidLinkToken();
   const exchange = useExchangePlaidPublicToken();
-  const { data: plaidEnv } = useGetPlaidEnvironment();
+  // (P4) The environment is read when the button is pressed, not on every
+  // page that shows it: `enabled: false` only subscribes to what a press loads.
+  const { data: plaidEnv } = useGetPlaidEnvironment({
+    query: { queryKey: getGetPlaidEnvironmentQueryKey(), enabled: false },
+  });
   const qc = useQueryClient();
   const { toast } = useToast();
   const { runSync } = usePlaidSync();
@@ -655,10 +661,37 @@ export function PlaidLinkButton({
       ? "Plaid is not configured. Set PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV in Secrets."
       : null;
 
+  // (P4) A press loads the environment first (once), then starts Link — or says
+  // why it cannot, in the words the disabled button used to carry.
+  const onPress = async () => {
+    let env = plaidEnv;
+    if (!env) {
+      try {
+        env = await qc.fetchQuery({
+          queryKey: getGetPlaidEnvironmentQueryKey(),
+          queryFn: () => getPlaidEnvironment(),
+          staleTime: 60_000,
+        });
+      } catch {
+        env = undefined;
+      }
+    }
+    const reason = env?.configError
+      ? env.configError
+      : env && !env.configured
+        ? "Plaid is not configured. Set PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV in Secrets."
+        : null;
+    if (reason) {
+      toast({ title: "Plaid is not ready", description: reason, variant: "destructive" });
+      return;
+    }
+    fetchToken();
+  };
+
   return (
     <>
       <Button
-        onClick={fetchToken}
+        onClick={() => void onPress()}
         disabled={busy || notConfigured || hasConfigError || !itemsFetched}
         title={disabledReason ?? undefined}
         data-testid="button-link-bank"

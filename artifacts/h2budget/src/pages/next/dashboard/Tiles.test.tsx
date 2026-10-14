@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { Router } from "wouter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { memoryLocation } from "wouter/memory-location";
 
 const h = vi.hoisted(() => ({
@@ -60,7 +61,8 @@ function setup(spineOver: Record<string, unknown> = {}, pos: Record<string, unkn
   h.Q.items = ok([item("a", [acct("c1", { name: "Total Checking", mask: "5526" }), card("v1", "Summit Visa", "3303")]), { ...item("b", [card("x1", "Amex Platinum", "1005"), card("x2", "Amex Gold", "2002")]), institutionName: "American Express", institutionSlug: "amex" }]);
   h.Q.debts = ok([debt("d1", "x1", "1500.00"), debt("d2", "x2", "800.00")]);
   const mem = memoryLocation({ path: "/home", record: true });
-  render(<Router hook={mem.hook}><Tiles {...props} /></Router>);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={qc}><Router hook={mem.hook}><Tiles {...props} /></Router></QueryClientProvider>);
   return mem;
 }
 
@@ -79,6 +81,15 @@ describe("six tiles", () => {
       expect(link.tagName).toBe("A");
       expect(link.getAttribute("tabindex")).not.toBe("-1");
     }
+  });
+  it("pointer-down and touch-start warm the route too (the press itself starts the warm-up)", () => {
+    setup();
+    const link = screen.getByTestId("tile-banking-link");
+    fireEvent.pointerDown(link);
+    expect(h.prefetch).toHaveBeenCalledWith("/banking");
+    h.prefetch.mockClear();
+    fireEvent.touchStart(link);
+    expect(h.prefetch).toHaveBeenCalledWith("/banking");
   });
   it("hover and focus prefetch the route; activating the focused link navigates (Enter is the anchor's native click)", () => {
     const mem = setup();
@@ -111,7 +122,7 @@ describe("six tiles", () => {
   });
   it("loading draws skeletons and no $0", () => {
     h.spine.data = undefined;
-    render(<Router hook={memoryLocation({ path: "/home" }).hook}><Tiles /></Router>);
+    render(<QueryClientProvider client={new QueryClient()}><Router hook={memoryLocation({ path: "/home" }).hook}><Tiles /></Router></QueryClientProvider>);
     expect(screen.queryAllByText(/\$0/)).toHaveLength(0);
     expect(document.querySelectorAll("[aria-busy='true']").length).toBeGreaterThanOrEqual(5);
   });

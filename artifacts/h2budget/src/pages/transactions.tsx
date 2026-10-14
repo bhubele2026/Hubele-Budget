@@ -19,6 +19,7 @@ import {
   getGetBudgetMonthQueryKey,
   useListPlaidItems,
   useGetForecastCashSignal,
+  getGetForecastCashSignalQueryKey,
   type Transaction,
   type LedgerRow,
   type RepointedRule,
@@ -86,6 +87,7 @@ import {
   getGetTransactionsLedgerQueryKey,
 } from "@workspace/api-client-react/ledger";
 import { useSpine } from "@/hooks/useSpine";
+import { useNearViewport } from "@/hooks/useNearViewport";
 import { FreshnessLine } from "@/components/data-state";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
@@ -136,6 +138,7 @@ import {
   moneyOrNull,
   sampleDays,
   splitAtToday,
+  registerFilterFor,
   sumCounted,
   toBulkFilter,
   toLedgerParams,
@@ -239,9 +242,13 @@ export default function TransactionsPage({
   // chart's dashed line. Sourced from the SAME cash-signal daily series
   // the /forecast page's projected-balance chart consumes (`proj.daily`),
   // requested over a 12-month horizon from today.
-  const { data: cashProjection } = useGetForecastCashSignal({
-    horizonDays: 365,
-    fromDate: todayISO,
+  // (P4) The 365-day pull feeds ONLY the chart's dashed line, so it starts
+  // when the chart is near the viewport; the ledger and the week view never
+  // wait for it.
+  const [chartRef, chartNear] = useNearViewport();
+  const cashSignalParams = { horizonDays: 365, fromDate: todayISO };
+  const { data: cashProjection } = useGetForecastCashSignal(cashSignalParams, {
+    query: { queryKey: getGetForecastCashSignalQueryKey(cashSignalParams), enabled: chartNear },
   });
   const refreshBank = useRefreshForecastBank();
   const queryClient = useQueryClient();
@@ -576,9 +583,7 @@ export default function TransactionsPage({
   };
   // The register: the range through today. Its counts, totals and balances are
   // the page's.
-  const registerFilter: ChaseListFilter | null = registerWindow
-    ? { ...baseFilter, ...registerWindow }
-    : null;
+  const registerFilter: ChaseListFilter | null = registerFilterFor(range, ledgerToday, baseFilter);
   const register = useChaseLedger(registerFilter);
   // (#728) Pending is live money still settling, so the pinned group lists ALL of
   // it for this account whatever the range: Plaid restamps a pending row's date,
@@ -2755,8 +2760,10 @@ export default function TransactionsPage({
         )}
 
         {balanceTrend && (
+          <div ref={chartRef} className="span-12" data-testid="chase-chart-slot">
           <BalanceTrendChart
             caption="Checking balance — actual vs forecast"
+            statusNote={cashProjection === undefined ? "Loading the forecast line…" : undefined}
             subtitle={balanceTrend.subtitle}
             historicalActual={balanceTrend.historicalActual}
             forecastFromToday={balanceTrend.forecastFromToday}
@@ -2766,6 +2773,7 @@ export default function TransactionsPage({
             valueLabel="Balance"
             accent="checking"
           />
+          </div>
         )}
 
         <LedgerPanel

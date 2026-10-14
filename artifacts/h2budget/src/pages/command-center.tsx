@@ -18,6 +18,7 @@ import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { Help, input } from "@/ui";
 import { BucketRows } from "./banking/BucketRows";
 import { PRESETS, isDay, presetOf, presetRange, rangeWords, sanitizeRange } from "./banking/reviewDates";
+import { bankingBase, bankingSummaryParams } from "./banking/reviewParams";
 import { BUCKETS, KIND_ORDER, KIND_WORDS, dayWords, fateWords, isBucketName, isKind } from "./banking/words";
 
 /**
@@ -109,13 +110,10 @@ export default function BankingReviewPage() {
   const [rowsKey, setRowsKey] = useState("");
 
   const range = sanitizeRange(fromParam, toParam, today);
-  const base: GetBankingReviewParams = {
-    ...(accountParam ? { account: accountParam } : {}),
-    from: range.from,
-    to: range.to,
-    rowsPerBucket: 1,
-  };
-  const q = useGetBankingReview(base, { query: { queryKey: getGetBankingReviewQueryKey(base), staleTime: MIN } });
+  const base: GetBankingReviewParams = bankingBase(accountParam, range);
+  // ONE first call: the summary also carries each bucket's first page.
+  const summaryParams = bankingSummaryParams(base);
+  const q = useGetBankingReview(summaryParams, { query: { queryKey: getGetBankingReviewQueryKey(summaryParams), staleTime: MIN } });
   const d = q.data;
 
   const items = useListPlaidItems({ query: { staleTime: MIN } as never });
@@ -347,6 +345,7 @@ export default function BankingReviewPage() {
                   onMore={(c) => setCursors((cur) => [...cur, c])}
                   hrefOf={hrefOf}
                   empty={selCount === 0}
+                  seed={selBucket ? { rows: selBucket.rows, truncated: selBucket.truncated } : null}
                 />
               </section>
             </div>

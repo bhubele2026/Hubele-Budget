@@ -5,9 +5,11 @@ import type {
   BankingReviewRow,
   GetBankingReviewParams,
 } from "@workspace/api-client-react/features";
-import { getGetBankingReviewQueryKey, useGetBankingReview } from "@workspace/api-client-react/features";
+import { useQueryClient } from "@tanstack/react-query";
+import { getBankingReview, getGetBankingReviewQueryKey, useGetBankingReview } from "@workspace/api-client-react/features";
 import { emptyNote } from "@/ui";
 import { formatCurrency } from "@/lib/utils";
+import { BANKING_MIN as MIN, BANKING_PAGE as PAGE } from "./reviewParams";
 import { dayWords, planLine, REASON_WORDS } from "./words";
 
 /**
@@ -16,8 +18,6 @@ import { dayWords, planLine, REASON_WORDS } from "./words";
  * adds a figure up. A row opens its register (`href` from the one route rule)
  * with the account, month and transaction in the address.
  */
-const PAGE = 25;
-const MIN = 60_000;
 
 const chip = "chip gray";
 
@@ -63,6 +63,7 @@ function Chunk({
   onMore,
   hrefOf,
   bucket,
+  seed,
 }: {
   base: GetBankingReviewParams;
   cursor: string | undefined;
@@ -70,10 +71,38 @@ function Chunk({
   onMore: (cursor: string) => void;
   hrefOf: (row: BankingReviewRow) => string | null;
   bucket: BankingReviewBucketName;
+  seed?: BucketSeed | null;
 }) {
+  const qc = useQueryClient();
   const params: GetBankingReviewParams = { ...base, limit: PAGE, ...(cursor ? { cursor } : {}) };
-  const q = useGetBankingReview(params, { query: { queryKey: getGetBankingReviewQueryKey(params), staleTime: MIN } });
+  // (P4) The first page rides in the summary: no second review on first load.
+  // Its "Show more" needs the server's cursor, which only the paged request
+  // returns, so that one request is made when the owner reaches for it.
+  const seeded = !!seed && cursor === undefined;
+  const q = useGetBankingReview(params, { query: { queryKey: getGetBankingReviewQueryKey(params), staleTime: MIN, enabled: !seeded } });
   const page = q.data?.page ?? null;
+  const cursorOf = () => qc.fetchQuery({ queryKey: getGetBankingReviewQueryKey(params), queryFn: () => getBankingReview(params), staleTime: MIN });
+  if (seeded && seed) {
+    return (
+      <>
+        {seed.rows.map((r) => <RowLine key={r.id} row={r} href={hrefOf(r)} bucket={bucket} />)}
+        {last && seed.truncated ? (
+          <li className="px-4 py-3">
+            <button
+              type="button"
+              className="press rounded-control px-3 py-1.5 text-label font-semibold text-brand-navy ring-1 ring-brand-line hover:bg-neutral-50"
+              onPointerEnter={() => void cursorOf().catch(() => {})}
+              onFocus={() => void cursorOf().catch(() => {})}
+              onClick={() => void cursorOf().then((r) => r.page?.nextCursor && onMore(r.page.nextCursor)).catch(() => {})}
+              data-testid="br-more"
+            >
+              Show more
+            </button>
+          </li>
+        ) : null}
+      </>
+    );
+  }
   if (!q.data) {
     return q.isError ? (
       <li className="px-4 py-3 text-body text-neutral-700" role="alert">
@@ -103,6 +132,9 @@ function Chunk({
   );
 }
 
+/** One bucket's first page, as the summary already returned it. */
+export type BucketSeed = { rows: BankingReviewRow[]; truncated: boolean };
+
 export function BucketRows({
   base,
   bucket,
@@ -111,6 +143,7 @@ export function BucketRows({
   onMore,
   hrefOf,
   empty,
+  seed,
 }: {
   base: GetBankingReviewParams;
   bucket: BankingReviewBucketName;
@@ -120,6 +153,8 @@ export function BucketRows({
   hrefOf: (row: BankingReviewRow) => string | null;
   /** True when the bucket holds no rows at all. */
   empty: boolean;
+  /** The summary's own rows for this bucket; used for the first page when no kind is chosen. */
+  seed?: BucketSeed | null;
 }) {
   if (empty) return <div className={emptyNote} data-testid="br-empty">Nothing here for this range.</div>;
   const pageBase: GetBankingReviewParams = { ...base, bucket, ...(kind ? { kind } : {}) };
@@ -127,7 +162,7 @@ export function BucketRows({
   return (
     <ul className="divide-y divide-brand-line/70" data-testid="br-rows">
       {all.map((c, i) => (
-        <Chunk key={c ?? "first"} base={pageBase} cursor={c} last={i === all.length - 1} onMore={onMore} hrefOf={hrefOf} bucket={bucket} />
+        <Chunk key={c ?? "first"} base={pageBase} cursor={c} last={i === all.length - 1} onMore={onMore} hrefOf={hrefOf} bucket={bucket} seed={kind ? null : seed} />
       ))}
     </ul>
   );
