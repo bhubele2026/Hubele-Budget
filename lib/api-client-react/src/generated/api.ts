@@ -36,6 +36,7 @@ import type {
   AllowancePlans,
   AmexAnchor,
   AmexAnchorInput,
+  AmexSummary,
   AmexWeeklyPayoff,
   ApplyLearnedRuleRetroactivelyParams,
   ApplyRetroactivelyResult,
@@ -106,6 +107,7 @@ import type {
   ForecastResolutionInput,
   ForecastSettings,
   ForecastSettingsInput,
+  GetAmexSummaryParams,
   GetAmexWeeklyPayoffParams,
   GetBankingReviewParams,
   GetBillsSummaryParams,
@@ -7931,6 +7933,101 @@ export function useGetAmexWeeklyPayoff<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetAmexWeeklyPayoffQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. Read-only.
+ * @summary One Amex card's period (or every Amex card's) — owed, purchases, payments and credits apart, and what was not in the plan
+ */
+export const getGetAmexSummaryUrl = (params: GetAmexSummaryParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/amex/summary?${stringifiedParams}`
+    : `/api/amex/summary`;
+};
+
+export const getAmexSummary = async (
+  params: GetAmexSummaryParams,
+  options?: RequestInit,
+): Promise<AmexSummary> => {
+  return customFetch<AmexSummary>(getGetAmexSummaryUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAmexSummaryQueryKey = (params?: GetAmexSummaryParams) => {
+  return [`/api/amex/summary`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAmexSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAmexSummary>>,
+  TError = ErrorType<void>,
+>(
+  params: GetAmexSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAmexSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAmexSummaryQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAmexSummary>>> = ({
+    signal,
+  }) => getAmexSummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAmexSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAmexSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAmexSummary>>
+>;
+export type GetAmexSummaryQueryError = ErrorType<void>;
+
+/**
+ * @summary One Amex card's period (or every Amex card's) — owed, purchases, payments and credits apart, and what was not in the plan
+ */
+
+export function useGetAmexSummary<
+  TData = Awaited<ReturnType<typeof getAmexSummary>>,
+  TError = ErrorType<void>,
+>(
+  params: GetAmexSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAmexSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAmexSummaryQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -301,18 +301,35 @@ async function breakdownRowsOf(
   }));
 }
 
+/**
+ * A row's name on screen: the household's merchant alias, else the cleaned bank
+ * description. (S5) Exported so the Amex summary's rows read the same name.
+ */
+export function displayNameOf(description: string, aliases: ReadonlyMap<string, string>): string {
+  const sig = merchantSignature(description);
+  const alias = sig ? aliases.get(sig) : undefined;
+  return alias ?? cleanMerchant(description);
+}
+
+/** The household's merchant aliases, by signature. */
+export async function loadMerchantAliases(householdId: string): Promise<Map<string, string>> {
+  const rows = await db
+    .select({ signature: merchantAliasesTable.signature, alias: merchantAliasesTable.alias })
+    .from(merchantAliasesTable)
+    .where(eq(merchantAliasesTable.householdId, householdId));
+  return new Map(rows.map((a) => [a.signature, a.alias]));
+}
+
 /** The view of one grouped row. */
 function rowView(
   e: BreakdownEntry<RowItem>,
   ctx: { categoryNames: ReadonlyMap<string, string>; accounts: ReadonlyMap<string, AccountIdentity>; aliases: ReadonlyMap<string, string> },
 ) {
   const { row, m } = e.item;
-  const sig = merchantSignature(row.description);
-  const alias = sig ? ctx.aliases.get(sig) : undefined;
   return {
     id: row.id,
     date: row.occurredOn,
-    displayName: alias ?? cleanMerchant(row.description),
+    displayName: displayNameOf(row.description, ctx.aliases),
     amount: money(e.cents),
     account: (row.plaidAccountId ? ctx.accounts.get(row.plaidAccountId) : undefined) ?? NO_ACCOUNT,
     pending: row.pending,
@@ -371,10 +388,7 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
       ? historyRead.then((h) => breakdownRowsOf(householdId, period, h.movement, inScope))
       : Promise.resolve([] as BreakdownRowInput<RowItem>[]),
     loadAccountIdentities(householdId),
-    db
-      .select({ signature: merchantAliasesTable.signature, alias: merchantAliasesTable.alias })
-      .from(merchantAliasesTable)
-      .where(eq(merchantAliasesTable.householdId, householdId)),
+    loadMerchantAliases(householdId),
     // Household spending over the same days — the spine's own call for its week.
     scopeAccount ? Promise.resolve(null) : buildSpendingFacts(householdId, start, end),
   ]);
@@ -398,7 +412,7 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
   const view = {
     categoryNames,
     accounts,
-    aliases: new Map(aliasRows.map((a) => [a.signature, a.alias])),
+    aliases: aliasRows,
   };
 
   // ── What the answer cannot see.

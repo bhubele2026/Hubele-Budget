@@ -16,7 +16,7 @@ import { loadSupersededPendingIds } from "./supersededPending";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
-import { classifyOutflow, classifyRefund, creditAmount, normalizeCardAmount } from "@workspace/avalanche-core";
+import { classifyCardCredit, creditAmount, normalizeCardAmount } from "@workspace/avalanche-core";
 import {
   classifyAmexBrand,
   discoverAmexCards,
@@ -277,13 +277,33 @@ export interface AmexWeeklyPayoffCard {
   topMerchant: { name: string; amount: number } | null;
 }
 
+/**
+ * (S5) An Amex card tracked as a debt: left out of `cards` (it is paid through
+ * the payoff plan, not the weekly band), listed here so the Amex page can still
+ * offer it. Identity only — no figure.
+ */
+export interface AmexDebtLinkedCard {
+  accountId: string; // external Plaid account_id
+  name: string;
+  mask: string | null;
+  debtId: string;
+  brand: AmexBrand;
+  cadence: "weekly" | "monthly";
+  displayName: string | null;
+}
+
 export interface AmexWeeklyPayoff {
   weekStart: string;
   weekEnd: string;
   cards: AmexWeeklyPayoffCard[];
   combinedWeekCharges: number;
   combinedStatementBalance: number;
+  /** (S5) Additive: the debt-linked cards `cards` leaves out. `cards` and the combined totals are unchanged. */
+  debtLinkedCards: AmexDebtLinkedCard[];
 }
+
+/** (S5) What the card's payoff and summary ask of the one spending rule: a reimbursable charge is still owed to the card. */
+export const CARD_OWED = { reimbursableIsSpend: true } as const;
 
 /** Default `weekStart` = the Sunday of the last fully-completed Sun–Sat week. */
 export function lastCompletedWeekStart(today: Date = householdTodayDate()): string {
@@ -357,6 +377,7 @@ export async function computeWeeklyPayoff(
       cards: [],
       combinedWeekCharges: 0,
       combinedStatementBalance: 0,
+      debtLinkedCards: [],
     };
   }
 
@@ -457,12 +478,15 @@ export async function computeWeeklyPayoff(
     if (replacedPendingIds.has(t.id)) continue;
     // (PR7) The one spending rule, with one exception: a reimbursable charge
     // is still owed to Amex, so it stays in what to pay this card.
-    const owed = opts.allCoverages
-      ? classifyOutflow(t, ctx, { reimbursableIsSpend: true }).kind === "spend"
-      : isRealSpend(t, ctx, { reimbursableIsSpend: true });
+    // (S5) Through `classifyCardCredit`, the card summary's own rule:
+    // "purchase" is `classifyOutflow(…).kind === "spend"` and "refund" is
+    // `classifyRefund`, exactly as before — so GET /amex/summary's purchases −
+    // refunds for a card's billing window IS its `weekCharges` (before the floor).
+    const kind = classifyCardCredit(t, ctx, CARD_OWED);
+    const owed = opts.allCoverages ? kind === "purchase" : isRealSpend(t, ctx, CARD_OWED);
     if (!owed) {
       // (B6) Money back on the card, filed or not, on the page and the payoff alike.
-      if (classifyRefund(t, ctx, { reimbursableIsSpend: true })) agg.refunds += creditAmount(t);
+      if (kind === "refund") agg.refunds += creditAmount(t);
       continue;
     }
     const amt = spendAmount(t);
@@ -534,11 +558,27 @@ export async function computeWeeklyPayoff(
   const combinedStatementBalance =
     Math.round(bandCards.reduce((s, c) => s + c.statementBalance, 0) * 100) / 100;
 
+  // (S5) The cards `bandCards` dropped, by identity only, so the Amex page can
+  // still list them. Nothing above reads this; `cards` and the totals are as before.
+  const maskOf = new Map(cardRows.map((c) => [c.accountId, c.mask ?? null]));
+  const debtLinkedCards: AmexDebtLinkedCard[] = cards
+    .filter((c): c is AmexWeeklyPayoffCard & { debtId: string } => c.debtId != null)
+    .map((c) => ({
+      accountId: c.accountId,
+      name: c.name,
+      mask: maskOf.get(c.accountId) ?? null,
+      debtId: c.debtId,
+      brand: c.brand,
+      cadence: c.cadence,
+      displayName: c.displayName,
+    }));
+
   return {
     weekStart,
     weekEnd,
     cards: bandCards,
     combinedWeekCharges,
     combinedStatementBalance,
+    debtLinkedCards,
   };
 }

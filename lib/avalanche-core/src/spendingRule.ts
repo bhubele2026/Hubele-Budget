@@ -753,6 +753,65 @@ export function classifyRefund(
   return null;
 }
 
+// ── (S5) A CARD ROW, BY WHAT IT DID TO THE CARD ─────────────────────────────
+//
+// The owner, on the Amex page: "review a card and immediately see what wasn't
+// in the plan" — purchases, and the payments and credits SEPARATELY. Every row
+// on a card's own ledger is one of:
+//
+//   purchase      an outflow the one spending rule calls spend
+//                 (`classifyOutflow(…).kind === "spend"`, filed or not)
+//   other_charge  an outflow it does not (a transfer, a debt row, an excluded
+//                 category such as Ignore, bank noise, a card-payment pattern)
+//   refund        a credit `classifyRefund` calls money back
+//   payment       a credit that is a payment to the card (below)
+//   other_credit  any other credit (a transfer in, an excluded or income
+//                 category, a Plaid transfer/income category)
+//   null          a $0.00 row
+//
+// ⭐ BUILT ONLY FROM THE EXISTING RULES. `purchase` and `refund` are exactly the
+// payoff's own tests (`computeWeeklyPayoff`, which calls this), so a card's
+// purchases − refunds in its billing window IS its `weekCharges` (before the
+// zero floor). `payment` is the part of `isRefundCandidate`'s exclusions that
+// names a payment: the user's card-payment flag, a debt tag or debt category,
+// a Plaid LOAN_PAYMENTS category, an issuer payment phrase
+// (`matchesCardPaymentPattern`) or payment words (`readsAsPayment`: "PAYMENT",
+// "PYMT", "AUTOPAY", "THANK YOU"). A refund is never a payment: every one of
+// those rules a credit out as a refund first.
+//
+// ⚠️ The card-ledger refund rule recognises Amex sources only
+// (`CARD_LEDGER_SOURCES`); a credit on another bank's card with no REFUND word
+// is `other_credit` here, as it nets nothing elsewhere. Unchanged on purpose.
+
+export type CardRowKind = "purchase" | "other_charge" | "refund" | "payment" | "other_credit";
+
+/** Is this credit a payment to the card? (The payment half of `isRefundCandidate`'s exclusions.) */
+function isCardPaymentCredit(tx: SpendTxn, ctx: SpendContext): boolean {
+  if (tx.isExternalCardPayment === true) return true;
+  if (tx.debtId) return true;
+  if (isDebtCategory(tx, ctx)) return true;
+  if (/^LOAN_PAYMENTS/.test((tx.pfcDetailed ?? "").toUpperCase())) return true;
+  if (matchesCardPaymentPattern(tx.description)) return true;
+  return readsAsPayment(tx.description);
+}
+
+/**
+ * ⭐ (S5) What one row on a card's own ledger did to the card — see the section
+ * header. `opts` is `classifyOutflow`'s and `classifyRefund`'s: the card's
+ * payoff and summary pass `reimbursableIsSpend` (a reimbursable charge is
+ * still owed to the card). Pure.
+ */
+export function classifyCardCredit(
+  tx: SpendTxn,
+  ctx: SpendContext,
+  opts: ClassifyOptions = {},
+): CardRowKind | null {
+  if (spendAmount(tx) > 0) return classifyOutflow(tx, ctx, opts).kind === "spend" ? "purchase" : "other_charge";
+  if (creditAmount(tx) <= 0) return null;
+  if (classifyRefund(tx, ctx, opts)) return "refund";
+  return isCardPaymentCredit(tx, ctx) ? "payment" : "other_credit";
+}
+
 // ── (WP5c) DIRECTION ─────────────────────────────────────────────────────────
 //
 // A category has a direction. An EXPENSE category is where money going OUT is

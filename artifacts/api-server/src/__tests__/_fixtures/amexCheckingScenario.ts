@@ -93,6 +93,29 @@ export type Observed = {
    * reconciliation cannot explain (always "0.00").
    */
   banking: { rows: string[]; planned: string[]; net: string; asPlanned: number; unexplained: string };
+  /**
+   * (S5) GET /amex/summary. `week`: the card (accountId) over the payoff week
+   * 10/04 – 10/10 — owed, "amount/count" for purchases, refunds, payments and
+   * "<otherCharges> <otherCredits> <notMine>", what it added to the household
+   * week (`weeklyPlan`, `unfiled`), the plan it answers to ("<kind> <payoff>
+   * <payoffDate> <basis>") and the purchases to resolve ("<group> |
+   * <displayName> | <amount> | pending/posted | <category or —> | <flags>").
+   * `month`: every Amex card ("all") from 10/01 to today.
+   */
+  amexSummary: {
+    week: {
+      owed: string | null;
+      purchases: string;
+      refunds: string;
+      payments: string;
+      other: string;
+      weeklyPlan: string;
+      unfiled: string;
+      plan: string;
+      attention: string[];
+    };
+    month: { owed: string | null; purchases: string; refunds: string; payments: string };
+  };
 };
 
 /**
@@ -126,6 +149,23 @@ export const EXPECTED: Record<StepId, Observed> = {
     },
     queue: [],
     banking: { rows: [], planned: [], net: "0.00", asPlanned: 0, unexplained: "0.00" },
+    // (S5) The card has no Plaid balance and no debt row of its own (the debt is
+    // matched by name), so ITS owed is unknown — null, never 0.00 — while the
+    // combined anchor ("all") is the debt's 500.00. The hook pays the card.
+    amexSummary: {
+      week: {
+        owed: null,
+        purchases: "0.00/0",
+        refunds: "0.00/0",
+        payments: "0.00/0",
+        other: "0.00/0 0.00/0 0.00/0",
+        weeklyPlan: "0.00",
+        unfiled: "0.00",
+        plan: "weekly_hook 300.00 2026-10-10 plan",
+        attention: [],
+      },
+      month: { owed: "500.00", purchases: "0.00/0", refunds: "0.00/0", payments: "0.00/0" },
+    },
   },
   S1: {} as Observed,
   S2: {} as Observed,
@@ -154,6 +194,17 @@ EXPECTED.S1 = {
   spentMonth: "86.33",
   debt: { ...EXPECTED.S0.debt, payoffPct: "41.367" },
   position: { ...EXPECTED.S0.position, remainingWeek: "213.67", needsClassificationWeek: "86.33", safeToSpendNow: "213.67" },
+  // (S5) One unfiled purchase: in the card's purchases, in the household week, to resolve.
+  amexSummary: {
+    week: {
+      ...EXPECTED.S0.amexSummary.week,
+      purchases: "86.33/1",
+      weeklyPlan: "86.33",
+      unfiled: "86.33",
+      attention: ["unfiled | Kroger #442 | 86.33 | pending | — | unfiled uncategorized"],
+    },
+    month: { ...EXPECTED.S0.amexSummary.month, owed: "586.33", purchases: "86.33/1" },
+  },
 };
 
 // S2 · Mon 10/5 — the checking charge posts. It already left the bank, so the
@@ -172,6 +223,8 @@ EXPECTED.S2 = {
   forecast: { ...EXPECTED.S1.forecast, hookEvents: ["2026-10-10 -257.90", "2026-10-17 -300.00"] },
   // (S4) The checking purchase was not in any plan: unmatched spending, never a bill.
   banking: { ...EXPECTED.S1.banking, rows: ["unmatched no_plan spending | KROGER #442 -42.10"], net: "-42.10" },
+  // (S5) The Chase purchase is not the card's; only the hook's payoff moves.
+  amexSummary: { ...EXPECTED.S1.amexSummary, week: { ...EXPECTED.S1.amexSummary.week, plan: "weekly_hook 257.90 2026-10-10 plan" } },
 };
 
 // S3a · Tue 10/6 — a person files the pending Amex charge as Groceries. No figure
@@ -183,6 +236,11 @@ EXPECTED.S3a = {
   rows: [AMEX_PENDING_FILED, CHASE_KROGER, HIST],
   chaseEndOfDay: ["2500.00", "2457.90", "2457.90", null, null, null, null, null, null],
   amex: { ...EXPECTED.S2.amex, weekCharges: "86.33", chargeCount: 1, combinedWeekCharges: "86.33" },
+  // (S5) Categorized, still not filed to an allowance: still to resolve.
+  amexSummary: {
+    ...EXPECTED.S2.amexSummary,
+    week: { ...EXPECTED.S2.amexSummary.week, attention: ["unfiled | Kroger #442 | 86.33 | pending | Groceries | unfiled"] },
+  },
 };
 
 // S3b · Wed 10/7 — the charge posts under a new id (same amount, dated 10/6). The
@@ -192,6 +250,11 @@ EXPECTED.S3b = {
   ...EXPECTED.S3a,
   rows: [AMEX_POSTED, CHASE_KROGER, HIST],
   chaseEndOfDay: ["2500.00", "2457.90", "2457.90", "2457.90", null, null, null, null, null],
+  // (S5) Posted: the same purchase, once.
+  amexSummary: {
+    ...EXPECTED.S3a.amexSummary,
+    week: { ...EXPECTED.S3a.amexSummary.week, attention: ["unfiled | Kroger #442 | 86.33 | posted | Groceries | unfiled"] },
+  },
 };
 
 // S4 · Thu 10/8 — a $20.00 refund on the card. The brief: refunds net (spend
@@ -209,6 +272,12 @@ EXPECTED.S4 = {
   debt: { ...EXPECTED.S3b.debt, payoffPct: "43.367" },
   position: { ...EXPECTED.S3b.position, remainingWeek: "191.57", needsClassificationWeek: "108.43", safeToSpendNow: "191.57" },
   queue: ["KROGER #442 REFUND | refund | queue | Groceries"],
+  // (S5) The refund is its own bucket: purchases − refunds = 66.33 = the card's weekCharges.
+  // The household week nets it (66.33); the purchase to resolve is still the 86.33 charge.
+  amexSummary: {
+    week: { ...EXPECTED.S3b.amexSummary.week, refunds: "20.00/1", weeklyPlan: "66.33", unfiled: "66.33" },
+    month: { ...EXPECTED.S3b.amexSummary.month, owed: "566.33", refunds: "20.00/1" },
+  },
 };
 
 // S5 · Mon 10/12 — $100.00 from checking to the card. The closed week owes its
@@ -260,6 +329,12 @@ EXPECTED.S5 = {
     net: "-142.10",
     asPlanned: 0,
     unexplained: "0.00",
+  },
+  // (S5) The week closed: its payoff is its charges alone (66.33). The card's
+  // payment lands in the month's payments — never a purchase, never a refund.
+  amexSummary: {
+    week: { ...EXPECTED.S4.amexSummary.week, plan: "weekly_hook 66.33 2026-10-10 plan" },
+    month: { ...EXPECTED.S4.amexSummary.month, owed: "466.33", payments: "100.00/1" },
   },
 };
 
@@ -330,3 +405,139 @@ export function expectedToday(step: StepId): Observed {
   }
   return out;
 }
+
+// ── (S5) THREE AMEX CARDS, ONE OF THEM A DEBT — the Amex summary's household ──
+//
+// A second household, seeded directly (no Plaid), Thu 2026-10-08 12:00 Central.
+// The week is Sun 10/4 – Sat 10/10. Every name, amount and number is made up.
+//
+//   Chase Total Checking ••4321 — the forecast's account (snapshot $3,000.00).
+//   Amex "Platinum Card" ••1001 — weekly, not a debt; Plaid balance $842.10;
+//        the household named it "Everyday Plat".
+//   Amex "Gold Card"     ••2002 — weekly, TRACKED AS A DEBT ("Amex Gold",
+//        24.99%, minimum $35.00, statement $1,100.00); Plaid balance $1,234.56.
+//   Amex "Blue Cash Everyday" ••3003 — monthly, not a debt, no balance known.
+//   A Car Loan (6%, $5,000.00) so the Gold card has a place in the avalanche order.
+//   Plans: weekly $1,000.00 (from 2026-05-01); no monthly plan.
+//   Hooks: Weekly Spend $450 (Saturdays from 10/10), Monthly Spend $200 (the 28th).
+//
+// Week, Platinum (signed as stored: − a charge, + a credit):
+//   purchases   WHOLE FOODS 60 (weekly, Groceries) · SHELL 40 (posted; its pending
+//               twin replaced, hand-filed Gas, carried over) · BEST BUY 120 (UN) ·
+//               TARGET 30 (reimbursable, Home) · UBER EATS 25 (nothing) ·
+//               COSTCO 80 (weekly, no category; alias "Costco") · TRADER JOE'S 70 (weekly, split
+//               Groceries 50 / Home 20)  = 425.00 / 7, reimbursable 30.00 / 1
+//   refunds     WHOLE FOODS +15                                   = 15.00 / 1
+//   payments    ONLINE PAYMENT - THANK YOU +200                   = 200.00 / 1
+//   other       credit: BALANCE ADJUSTMENT +10 (transfer) · charge: MEMBERSHIP FEE
+//               −5 (Ignore) · not mine: AIRLINE TICKET −300
+//   weekCharges 425 − 15 = 410.00 (the payoff's own figure)
+//   household   weekly 60 + 80 + 70 = 210; unfiled 40 + 25 + 300 − 15 = 350
+//               (the position does not read "not mine") → weeklyPlan 560.00,
+//               unfiled 350.00
+//   attention   unplanned BEST BUY 120 · unfiled SHELL 40 (Gas), UBER EATS 25 ·
+//               uncategorized COSTCO 80
+// Week, Gold: DELTA AIR −250 (Travel, unfiled) · AMEX EPAYMENT +100 (payment).
+// Month, Blue: AMAZON −45 (monthly, Home) on 10/2.
+// The Saturday payoff (10/10): Platinum's 410.00 + what is left of the $1,000.00
+//   week (1000 − 560 − 250 = 190) = 600.00. The Monthly Spend hook has no plan:
+//   its stored $200.00.
+// Spending facts for the week: Platinum 695 − 15 = 680 (reimbursable out, "not
+//   mine" in) + Gold 250 = 930.00.
+export const S5_NOW = at("2026-10-08T12:00:00");
+export const S5_WEEK = { from: "2026-10-04", to: "2026-10-10" } as const;
+
+export const S5_ACCOUNTS = {
+  chase: { accountId: "s5-chase-chk-4321", mask: "4321", name: "Total Checking", institution: "Chase", slug: "chase", type: "depository", subtype: "checking", liability: null },
+  plat: { accountId: "s5-amex-plat-1001", mask: "1001", name: "Platinum Card", institution: "American Express", slug: "amex", type: "credit", subtype: "credit card", liability: "842.10" },
+  gold: { accountId: "s5-amex-gold-2002", mask: "2002", name: "Gold Card", institution: "American Express", slug: "amex", type: "credit", subtype: "credit card", liability: "1234.56" },
+  blue: { accountId: "s5-amex-blue-3003", mask: "3003", name: "Blue Cash Everyday", institution: "American Express", slug: "amex", type: "credit", subtype: "credit card", liability: null },
+} as const;
+export type S5AccountKey = keyof typeof S5_ACCOUNTS;
+
+export const S5_DEBTS = {
+  gold: { name: "Amex Gold", balance: "1234.56", apr: "0.2499", minPayment: "35.00", statement: { date: "2026-09-28", balance: "1100.00" } },
+  car: { name: "Car Loan", balance: "5000.00", apr: "0.0600", minPayment: "250.00" },
+} as const;
+
+export const S5_CATEGORIES = ["Groceries", "Gas", "Electronics", "Home", "Travel", "Ignore"] as const;
+
+export type S5Row = {
+  key: string;
+  account: S5AccountKey;
+  on: string;
+  desc: string;
+  amount: string;
+  category?: (typeof S5_CATEGORIES)[number];
+  weekly?: boolean;
+  monthly?: boolean;
+  unplanned?: boolean;
+  reimbursable?: boolean;
+  transfer?: boolean;
+  pending?: boolean;
+  /** Filed by a person (`isTransferUserOverridden`, `categoryLockedByUser`). */
+  byHand?: boolean;
+  pfc?: string;
+  /** Category parts (`transaction_splits`): [category, amount]. */
+  splits?: Array<[(typeof S5_CATEGORIES)[number], string]>;
+};
+
+export const S5_ROWS: readonly S5Row[] = [
+  { key: "wholeFoods", account: "plat", on: "2026-10-05", desc: "WHOLE FOODS #123", amount: "-60.00", category: "Groceries", weekly: true },
+  { key: "shellPending", account: "plat", on: "2026-10-05", desc: "SHELL OIL 123", amount: "-40.00", category: "Gas", pending: true, byHand: true },
+  { key: "shellPosted", account: "plat", on: "2026-10-06", desc: "SHELL OIL 123", amount: "-40.00" },
+  { key: "bestBuy", account: "plat", on: "2026-10-06", desc: "BEST BUY 88", amount: "-120.00", category: "Electronics", unplanned: true },
+  { key: "fee", account: "plat", on: "2026-10-06", desc: "MEMBERSHIP FEE", amount: "-5.00", category: "Ignore" },
+  { key: "notMine", account: "plat", on: "2026-10-06", desc: "AIRLINE TICKET", amount: "-300.00" },
+  { key: "target", account: "plat", on: "2026-10-07", desc: "TARGET 55", amount: "-30.00", category: "Home", reimbursable: true },
+  { key: "uberEats", account: "plat", on: "2026-10-07", desc: "UBER EATS", amount: "-25.00" },
+  { key: "costco", account: "plat", on: "2026-10-07", desc: "COSTCO WHSE", amount: "-80.00", weekly: true },
+  { key: "traderJoes", account: "plat", on: "2026-10-07", desc: "TRADER JOE S #712", amount: "-70.00", category: "Groceries", weekly: true, splits: [["Groceries", "-50.00"], ["Home", "-20.00"]] },
+  { key: "wfRefund", account: "plat", on: "2026-10-08", desc: "WHOLE FOODS #123", amount: "15.00" },
+  { key: "platPayment", account: "plat", on: "2026-10-08", desc: "ONLINE PAYMENT - THANK YOU", amount: "200.00", pfc: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" },
+  { key: "adjustment", account: "plat", on: "2026-10-08", desc: "BALANCE ADJUSTMENT", amount: "10.00", transfer: true },
+  { key: "delta", account: "gold", on: "2026-10-05", desc: "DELTA AIR 006", amount: "-250.00", category: "Travel" },
+  { key: "goldPayment", account: "gold", on: "2026-10-07", desc: "AMEX EPAYMENT ACH PMT", amount: "100.00" },
+  { key: "amazon", account: "blue", on: "2026-10-02", desc: "AMAZON MKTPL", amount: "-45.00", category: "Home", monthly: true },
+  { key: "chasePayment", account: "chase", on: "2026-10-08", desc: "AMERICAN EXPRESS ACH PMT", amount: "-200.00", pfc: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" },
+];
+
+/** Hand-worked figures (see the block above). "amount/count". */
+export const S5_EXPECTED = {
+  plat: {
+    purchases: "425.00/7",
+    reimbursable: "30.00/1",
+    refunds: "15.00/1",
+    payments: "200.00/1",
+    otherCredits: "10.00/1",
+    otherCharges: "5.00/1",
+    notMine: "300.00/1",
+    weekCharges: 410,
+    owed: "842.10",
+    household: { weeklyPlan: "560.00", monthlyPlan: "0.00", unfiled: "350.00" },
+    plan: "weekly_hook 600.00 2026-10-10 plan",
+    attention: {
+      unplanned: ["Best Buy 88 120.00 Electronics unplanned"],
+      unfiled: ["Shell Oil 123 40.00 Gas unfiled", "Uber Eats 25.00 — unfiled uncategorized"],
+      uncategorized: ["Costco 80.00 — weekly uncategorized"],
+    },
+  },
+  gold: {
+    purchases: "250.00/1",
+    payments: "100.00/1",
+    owed: "1234.56",
+    statement: "1100.00",
+    plan: { kind: "debt", name: "Amex Gold", minimum: "35.00", avalancheRank: 1, status: "active" },
+  },
+  blueMonth: { purchases: "45.00/1", monthlyPlan: "45.00", plan: "monthly_hook 200.00 2026-10-28 stored_amount" },
+  all: {
+    purchases: "675.00/8",
+    refunds: "15.00/1",
+    payments: "300.00/2",
+    owed: "2076.66",
+    household: { weeklyPlan: "810.00", monthlyPlan: "0.00", unfiled: "600.00" },
+    unfiled: "315.00/3",
+  },
+  spendingFactsWeek: 930,
+  combinedWeekCharges: 410,
+} as const;

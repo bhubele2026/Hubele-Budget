@@ -151,7 +151,7 @@ let server: Server;
 let baseUrl = "";
 
 // Ids created in setup and carried across steps.
-const item = { chase: "", amex: "", chaseToken: `access-sandbox-b4-chase-${RUN}`, amexToken: `access-sandbox-b4-amex-${RUN}` };
+const item = { chase: "", amex: "", amexAccountRow: "", chaseToken: `access-sandbox-b4-chase-${RUN}`, amexToken: `access-sandbox-b4-amex-${RUN}` };
 const cat: Record<string, string> = {};
 const plan: Record<string, string> = {};
 const catName = new Map<string, string>();
@@ -211,7 +211,7 @@ type Txn = Record<string, unknown> & {
 /** ⭐ Every figure of one step, read through the routes. */
 async function observe(): Promise<Observed & { _raw: Record<string, unknown> }> {
   const today = householdTodayISO();
-  const [spine, pos, sig, forecast, txns, items, ledger, balances, anchor, payoff, queue, review, monthLedger] = await Promise.all([
+  const [spine, pos, sig, forecast, txns, items, ledger, balances, anchor, payoff, queue, review, monthLedger, amexWeek, amexMonth, cardWeek] = await Promise.all([
     get<Record<string, any>>("/spine"),
     get<Record<string, any>>("/money/position"),
     get<Record<string, any>>("/forecast/cash-signal"),
@@ -225,7 +225,12 @@ async function observe(): Promise<Observed & { _raw: Record<string, unknown> }> 
     get<{ total: number; items: Array<Record<string, any>> }>("/categorization/review?limit=50"),
     get<Record<string, any>>(`/banking/review?from=2026-10-01&to=${today}&rowsPerBucket=50`),
     get<Record<string, any>>(`/transactions/ledger?from=2026-10-01&to=${today}&limit=1`),
+    get<Record<string, any>>(`/amex/summary?accountId=${acct("amex")}&from=2026-10-04&to=2026-10-10`),
+    get<Record<string, any>>(`/amex/summary?accountId=all&from=2026-10-01&to=${today}`),
+    get<Record<string, any>>(`/money/period-breakdown?period=week&start=2026-10-04&account=${item.amexAccountRow}`),
   ]);
+  const ac = (t: { amount: string; count: number }) => `${t.amount}/${t.count}`;
+  const pl = amexWeek.planLink as Record<string, any>;
   // The client's account label: GET /transactions carries `plaidAccountId`;
   // the institution and mask come from GET /plaid/items.
   const label = new Map<string, string>();
@@ -312,7 +317,30 @@ async function observe(): Promise<Observed & { _raw: Record<string, unknown> }> 
       asPlanned: review.asPlanned.count,
       unexplained: review.reconciliation.unexplained,
     },
-    _raw: { spine, pos, sig, forecast, txns, ledger, anchor, payoff, queue, review, monthLedger },
+    amexSummary: {
+      week: {
+        owed: amexWeek.owed.current,
+        purchases: ac(amexWeek.purchases),
+        refunds: ac(amexWeek.refunds),
+        payments: ac(amexWeek.payments),
+        other: [amexWeek.otherCharges, amexWeek.otherCredits, amexWeek.notMine].map(ac).join(" "),
+        weeklyPlan: amexWeek.householdContribution.weeklyPlan,
+        unfiled: amexWeek.householdContribution.unfiled,
+        plan: [pl.kind, pl.payoff, pl.payoffDate, pl.basis].filter((x) => x != null).join(" "),
+        attention: (["unplanned", "unfiled", "uncategorized"] as const).flatMap((g) =>
+          (amexWeek.needsAttention[g].rows as Array<Record<string, any>>).map((r) =>
+            [g, r.displayName, r.amount, r.pending ? "pending" : "posted", r.category?.name ?? "—", (r.flags as string[]).join(" ")].join(" | "),
+          ),
+        ),
+      },
+      month: {
+        owed: amexMonth.owed.current,
+        purchases: ac(amexMonth.purchases),
+        refunds: ac(amexMonth.refunds),
+        payments: ac(amexMonth.payments),
+      },
+    },
+    _raw: { spine, pos, sig, forecast, txns, ledger, anchor, payoff, queue, review, monthLedger, amexWeek, amexMonth, cardWeek },
   };
 }
 
@@ -346,6 +374,18 @@ async function expectStep(id: StepId): Promise<Observed & { _raw: Record<string,
   expect(review.balance.end, `${id} banking balance.end`).toBe(monthLedger.balanceEnd);
   expect(review.balance.today, `${id} banking balance.today = spine cash`).toBe(o.cash);
   expect(review.reviewInbox.badgeCount, `${id} banking badge = spine reviewCount`).toBe(o.reviewCount);
+  // (S5) The Amex summary is the payoff's and the breakdown's, to the cent.
+  const amexWeek = _raw.amexWeek as Record<string, any>;
+  const amexMonth = _raw.amexMonth as Record<string, any>;
+  const cardWeek = _raw.cardWeek as Record<string, any>;
+  const c = (v: string) => Math.round(Number(v) * 100);
+  expect(c(amexWeek.purchases.amount) - c(amexWeek.refunds.amount), `${id} amex purchases − refunds = the card's weekCharges`).toBe(
+    c(o.amex.weekCharges),
+  );
+  expect(amexWeek.householdContribution.weeklyPlan, `${id} amex weeklyPlan = breakdown account actual`).toBe(cardWeek.actual);
+  expect(amexMonth.owed.current, `${id} amex "all" owed = GET /amex/anchor`).toBe(o.amex.endingBalance);
+  expect(amexWeek.scope, `${id} amex scope`).toMatchObject({ kind: "card", accountId: acct("amex"), name: "Platinum", mask: "1005", institution: "American Express" });
+  expect(amexMonth.scope.cards.map((x: Record<string, any>) => [x.accountId, x.debtLinked]), `${id} amex all cards`).toEqual([[acct("amex"), false]]);
   return o;
 }
 
@@ -390,9 +430,11 @@ beforeAll(async () => {
     .insert(plaidAccountsTable)
     .values({ ...owned, itemId: item.chase, accountId: acct("chase"), mask: ACCOUNTS.chase.mask, name: ACCOUNTS.chase.name, type: "depository", subtype: "checking", firstSyncCompletedAt: linked })
     .returning();
-  await db
+  const [amexAcct] = await db
     .insert(plaidAccountsTable)
-    .values({ ...owned, itemId: item.amex, accountId: acct("amex"), mask: ACCOUNTS.amex.mask, name: ACCOUNTS.amex.name, type: "credit", subtype: "credit card", firstSyncCompletedAt: linked });
+    .values({ ...owned, itemId: item.amex, accountId: acct("amex"), mask: ACCOUNTS.amex.mask, name: ACCOUNTS.amex.name, type: "credit", subtype: "credit card", firstSyncCompletedAt: linked })
+    .returning();
+  item.amexAccountRow = amexAcct!.id;
 
   // ── The bank snapshot on the checking account.
   await db.insert(forecastSettingsTable).values({
