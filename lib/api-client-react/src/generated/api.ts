@@ -46,6 +46,7 @@ import type {
   BadgeCount,
   BankBalanceExplain,
   BankSnapshot,
+  BankingReview,
   BehaviorFacts,
   BillsSummary,
   BudgetFacts,
@@ -105,6 +106,7 @@ import type {
   ForecastSettings,
   ForecastSettingsInput,
   GetAmexWeeklyPayoffParams,
+  GetBankingReviewParams,
   GetBillsSummaryParams,
   GetForecastCashSignalParams,
   GetForecastParams,
@@ -11476,6 +11478,104 @@ export function useGetPeriodBreakdown<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetPeriodBreakdownQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * (S4) One bank account over [from, to] (household America/Chicago days). balance and cashFlow are the bank register's (GET /transactions/ledger for the same account and range: cashFlow = its totals, balance.end = its balanceEnd, to the cent). Every row the register counts in the range is placed in exactly one place, first rule wins: confirmed by the household (matched / partial) → amountDifference (partial, or off by more than max($1, 1%)), else timingDifference (more than 3 days), else asPlanned; marked not in the plan → confirmedUnplanned; a pair waiting for review → uncertain (needs_review); the forecast counted it as paying a plan → the same split as confirmed; a suggestion only → uncertain (suggested_match); before the comparison window, after today, or an account the forecast does not read → uncertain (not_compared); else unmatched, by kind. "Not this" never decides a row, and the unplanned flag or a missing category is only shown, never a rule. reconciliation.unexplained = (Σ buckets' net + asPlanned.net) − cashFlow.net, always "0.00". A pending row its posted row replaced is not placed (cashFlow.supersededExcluded) and its answer carries to the posted row. With `bucket`, `page` lists that bucket's rows (largest first) from `cursor`. Read-only.
+ * @summary Banking review — one bank account's period, and what was not in the plan
+ */
+export const getGetBankingReviewUrl = (params: GetBankingReviewParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/banking/review?${stringifiedParams}`
+    : `/api/banking/review`;
+};
+
+export const getBankingReview = async (
+  params: GetBankingReviewParams,
+  options?: RequestInit,
+): Promise<BankingReview> => {
+  return customFetch<BankingReview>(getGetBankingReviewUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBankingReviewQueryKey = (
+  params?: GetBankingReviewParams,
+) => {
+  return [`/api/banking/review`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetBankingReviewQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBankingReview>>,
+  TError = ErrorType<void>,
+>(
+  params: GetBankingReviewParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBankingReview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBankingReviewQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBankingReview>>
+  > = ({ signal }) => getBankingReview(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingReview>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBankingReviewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBankingReview>>
+>;
+export type GetBankingReviewQueryError = ErrorType<void>;
+
+/**
+ * @summary Banking review — one bank account's period, and what was not in the plan
+ */
+
+export function useGetBankingReview<
+  TData = Awaited<ReturnType<typeof getBankingReview>>,
+  TError = ErrorType<void>,
+>(
+  params: GetBankingReviewParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBankingReview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBankingReviewQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

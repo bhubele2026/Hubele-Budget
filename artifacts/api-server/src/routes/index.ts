@@ -34,6 +34,7 @@ import categorizationSettingsRouter from "./categorizationSettings";
 import learnedRulesRouter from "./learnedRules";
 import aiRouter from "./ai";
 import goalsRouter from "./goals";
+import bankingRouter from "./banking";
 
 const router: IRouter = Router();
 
@@ -72,5 +73,6 @@ router.use(categorizationSettingsRouter);
 router.use(learnedRulesRouter);
 router.use(aiRouter);
 router.use(goalsRouter);
+router.use(bankingRouter);
 
 export default router;

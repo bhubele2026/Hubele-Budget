@@ -1504,6 +1504,456 @@ export interface PeriodBreakdown {
     /** What the answer cannot see, as codes: "tier2_pairs_only_since:<date>" (a past period: bill pairs the forecast suggests are known only from that day, so an unfiled bill payment before it reads as unfiled); "tracking_start:<date>" (the period began before tracking did; rows before that day are not read); "usual_periods:<n>" (usual reads n prior periods, fewer than the full 8 weeks / 3 months). */
     limitations: string[];
 }
+export interface BankingReviewAccount {
+    /**
+     * plaid_accounts.id; null when the forecast reads manual rows only
+     * @nullable
+     */
+    id: string | null;
+    /** @nullable */
+    institution: string | null;
+    /** @nullable */
+    name: string | null;
+    /** @nullable */
+    mask: string | null;
+    /** The account the forecast and the bank balance read (or its twin) */
+    isForecastAccount: boolean;
+    /**
+     * The last successful sync of its bank connection
+     * @nullable
+     */
+    lastSyncedAt: string | null;
+}
+export type BankingReviewPeriodTimezone = (typeof BankingReviewPeriodTimezone)[keyof typeof BankingReviewPeriodTimezone];
+export declare const BankingReviewPeriodTimezone: {
+    readonly "America/Chicago": "America/Chicago";
+};
+export interface BankingReviewPeriod {
+    from: string;
+    to: string;
+    /** The household's today */
+    today: string;
+    timezone: BankingReviewPeriodTimezone;
+}
+/**
+ * @nullable
+ */
+export type BankingReviewBalanceUnavailableReason = (typeof BankingReviewBalanceUnavailableReason)[keyof typeof BankingReviewBalanceUnavailableReason] | null;
+export declare const BankingReviewBalanceUnavailableReason: {
+    readonly no_snapshot: "no_snapshot";
+    readonly not_snapshot_account: "not_snapshot_account";
+};
+/**
+ * The bank register's balances (null without a snapshot, for another account, or for a day after today)
+ */
+export interface BankingReviewBalance {
+    /**
+     * The spine's bank balance
+     * @nullable
+     */
+    today: string | null;
+    /**
+     * When the bank snapshot was read
+     * @nullable
+     */
+    asOf: string | null;
+    /**
+     * End of the day before `from`
+     * @nullable
+     */
+    start: string | null;
+    /**
+     * End of `to` (= GET /transactions/ledger balanceEnd)
+     * @nullable
+     */
+    end: string | null;
+    /** @nullable */
+    unavailableReason: BankingReviewBalanceUnavailableReason;
+}
+/**
+ * @nullable
+ */
+export type BankingReviewFreshnessSource = (typeof BankingReviewFreshnessSource)[keyof typeof BankingReviewFreshnessSource] | null;
+export declare const BankingReviewFreshnessSource: {
+    readonly plaid: "plaid";
+    readonly manual: "manual";
+};
+/**
+ * @nullable
+ */
+export type BankingReviewFreshnessStaleReason = (typeof BankingReviewFreshnessStaleReason)[keyof typeof BankingReviewFreshnessStaleReason] | null;
+export declare const BankingReviewFreshnessStaleReason: {
+    readonly refresh_failed: "refresh_failed";
+    readonly old: "old";
+    readonly manual_old: "manual_old";
+};
+export interface BankingReviewFreshness {
+    /** @nullable */
+    source: BankingReviewFreshnessSource;
+    /** @nullable */
+    lastContactAt: string | null;
+    /** @nullable */
+    lastFailureAt: string | null;
+    stale: boolean;
+    /** @nullable */
+    staleReason: BankingReviewFreshnessStaleReason;
+}
+/**
+ * GET /transactions/ledger's totals for the same account and range, to the cent. count covers every row in the range; supersededExcluded and otherExcluded are the rows the register moves by 0 (a pending row its posted row replaced; a repeated Plaid id, a mask-twin row or a logged payment a bank row confirmed).
+ */
+export interface BankingReviewCashFlow {
+    moneyIn: string;
+    moneyOut: string;
+    net: string;
+    count: number;
+    /** What the counted pending rows add */
+    pendingNet: string;
+    supersededExcluded: number;
+    otherExcluded: number;
+}
+/**
+ * Why there is no comparison
+ * @nullable
+ */
+export type BankingReviewPlanComparisonReason = (typeof BankingReviewPlanComparisonReason)[keyof typeof BankingReviewPlanComparisonReason] | null;
+export declare const BankingReviewPlanComparisonReason: {
+    readonly not_forecast_account: "not_forecast_account";
+};
+export interface BankingReviewPlanComparison {
+    available: boolean;
+    /**
+     * Why there is no comparison
+     * @nullable
+     */
+    reason: BankingReviewPlanComparisonReason;
+    /**
+     * Rows dated from this day (today − 59) through today are compared with the plan
+     * @nullable
+     */
+    comparedFrom: string | null;
+    /**
+     * Plan occurrences due from this day (the first of last month) are decided
+     * @nullable
+     */
+    plansFrom: string | null;
+    /**
+     * The household's today
+     * @nullable
+     */
+    through: string | null;
+}
+export type BankingReviewPlanFate = (typeof BankingReviewPlanFate)[keyof typeof BankingReviewPlanFate];
+export declare const BankingReviewPlanFate: {
+    readonly matched: "matched";
+    readonly partial: "partial";
+    readonly skipped: "skipped";
+    readonly missed: "missed";
+    readonly paid_on_evidence: "paid_on_evidence";
+    readonly suggested: "suggested";
+    readonly on_curve: "on_curve";
+    readonly overdue_outside: "overdue_outside";
+    readonly income_not_arrived: "income_not_arrived";
+    readonly outside_window: "outside_window";
+    readonly not_due: "not_due";
+};
+/**
+ * An everyday hook (its card payoff)
+ * @nullable
+ */
+export type BankingReviewPlannedHook = (typeof BankingReviewPlannedHook)[keyof typeof BankingReviewPlannedHook] | null;
+export declare const BankingReviewPlannedHook: {
+    readonly weekly: "weekly";
+    readonly monthly: "monthly";
+};
+export interface BankingReviewPlanned {
+    /** <itemId>|<occurrenceDate>, the resolution key */
+    key: string;
+    itemId: string;
+    label: string;
+    /** The due date */
+    scheduledDate: string;
+    occurrenceDate: string;
+    /**
+     * Signed; an everyday hook's card payoff; null when not sized
+     * @nullable
+     */
+    planned: string | null;
+    fate: BankingReviewPlanFate;
+    /**
+     * The row behind the fate (confirmed
+     * @nullable
+     */
+    txnId: string | null;
+    /** @nullable */
+    txnDate: string | null;
+    /** @nullable */
+    txnAmount: string | null;
+    txnOnThisAccount: boolean;
+    /**
+     * |row| − |plan| (positive: more than planned)
+     * @nullable
+     */
+    difference: string | null;
+    /**
+     * Row date − due date, in days (negative: early)
+     * @nullable
+     */
+    dayDelta: number | null;
+    /**
+     * Signed, still assumed unpaid after a partial or an evidence row
+     * @nullable
+     */
+    remainder: string | null;
+    /** It (or its remainder) still weighs on the forecast */
+    onCurve: boolean;
+    /**
+     * An everyday hook (its card payoff)
+     * @nullable
+     */
+    hook: BankingReviewPlannedHook;
+}
+export interface BankingReviewRowCategory {
+    id: string;
+    /**
+     * Null when the category is no longer the household's
+     * @nullable
+     */
+    name: string | null;
+}
+/**
+ * The row's own marks — shown, never a rule
+ */
+export interface BankingReviewRowFlags {
+    unplannedAllowance: boolean;
+    weeklyAllowance: boolean;
+    monthlyAllowance: boolean;
+    reimbursable: boolean;
+    transfer: boolean;
+    cardPayment: boolean;
+}
+export type BankingReviewKind = (typeof BankingReviewKind)[keyof typeof BankingReviewKind];
+export declare const BankingReviewKind: {
+    readonly spending: "spending";
+    readonly card_payment: "card_payment";
+    readonly debt_payment: "debt_payment";
+    readonly transfer: "transfer";
+    readonly income: "income";
+    readonly refund: "refund";
+    readonly other: "other";
+};
+/**
+ * Why a row is where it is: partial / amount (amountDifference), timing (timingDifference), marked_unplanned / ignored_unforecasted (confirmedUnplanned), needs_review / suggested_match / not_compared (uncertain), no_plan (unmatched)
+ */
+export type BankingReviewReason = (typeof BankingReviewReason)[keyof typeof BankingReviewReason];
+export declare const BankingReviewReason: {
+    readonly partial: "partial";
+    readonly amount: "amount";
+    readonly timing: "timing";
+    readonly as_planned: "as_planned";
+    readonly marked_unplanned: "marked_unplanned";
+    readonly ignored_unforecasted: "ignored_unforecasted";
+    readonly needs_review: "needs_review";
+    readonly suggested_match: "suggested_match";
+    readonly not_compared: "not_compared";
+    readonly no_plan: "no_plan";
+};
+/**
+ * Who tied the row to its plan
+ * @nullable
+ */
+export type BankingReviewRowEvidence = (typeof BankingReviewRowEvidence)[keyof typeof BankingReviewRowEvidence] | null;
+export declare const BankingReviewRowEvidence: {
+    readonly confirmed: "confirmed";
+    readonly automatic: "automatic";
+};
+export interface BankingReviewRowPlan {
+    key: string;
+    label: string;
+    scheduledDate: string;
+    /** @nullable */
+    planned: string | null;
+    /** @nullable */
+    difference: string | null;
+    /** @nullable */
+    dayDelta: number | null;
+}
+export interface BankingReviewRow {
+    id: string;
+    date: string;
+    /** The household's merchant alias */
+    displayName: string;
+    description: string;
+    /** Signed: negative is money out */
+    amount: string;
+    pending: boolean;
+    /** Typed in (no bank connection) */
+    manual: boolean;
+    category: BankingReviewRowCategory | null;
+    flags: BankingReviewRowFlags;
+    kind: BankingReviewKind;
+    reason: BankingReviewReason;
+    /**
+     * Who tied the row to its plan
+     * @nullable
+     */
+    evidence: BankingReviewRowEvidence;
+    plan: BankingReviewRowPlan | null;
+}
+export interface BankingReviewTotals {
+    count: number;
+    moneyIn: string;
+    moneyOut: string;
+    net: string;
+    pendingNet: string;
+}
+export interface BankingReviewKindTotals {
+    spending: BankingReviewTotals;
+    card_payment: BankingReviewTotals;
+    debt_payment: BankingReviewTotals;
+    transfer: BankingReviewTotals;
+    income: BankingReviewTotals;
+    refund: BankingReviewTotals;
+    other: BankingReviewTotals;
+}
+export interface BankingReviewUncertainTotals {
+    needs_review: BankingReviewTotals;
+    suggested_match: BankingReviewTotals;
+    not_compared: BankingReviewTotals;
+}
+export interface BankingReviewBucket {
+    count: number;
+    moneyIn: string;
+    moneyOut: string;
+    net: string;
+    pendingNet: string;
+    /** Largest first, at most rowsPerBucket */
+    rows: BankingReviewRow[];
+    /** More rows than listed */
+    truncated: boolean;
+    /**
+     * (amountDifference) Σ difference over rows whose plan amount is known; null for the other buckets
+     * @nullable
+     */
+    differenceTotal: string | null;
+    /** (unmatched) The rows by kind; null for the other buckets */
+    byKind: BankingReviewKindTotals | null;
+    /** (uncertain) The rows by reason; null for the other buckets */
+    byReason: BankingReviewUncertainTotals | null;
+}
+export interface BankingReviewNotInPlan {
+    amountDifference: BankingReviewBucket;
+    timingDifference: BankingReviewBucket;
+    confirmedUnplanned: BankingReviewBucket;
+    uncertain: BankingReviewBucket;
+    unmatched: BankingReviewBucket;
+}
+/**
+ * Rows that paid their plan cleanly — totals only
+ */
+export interface BankingReviewAsPlanned {
+    count: number;
+    net: string;
+    pendingNet: string;
+    /** Confirmed rows whose plan is older than the forecast reads (placed on the household's word) */
+    withoutPlanDetail: number;
+}
+export interface BankingReviewReconciliation {
+    rowsPlaced: number;
+    /** cashFlow.count − rowsPlaced − excluded rows; always 0 */
+    rowsUnexplained: number;
+    /** (Σ buckets' net + asPlanned.net) − cashFlow.net; always "0.00" */
+    unexplained: string;
+}
+export type BankingReviewInboxBadgeScope = (typeof BankingReviewInboxBadgeScope)[keyof typeof BankingReviewInboxBadgeScope];
+export declare const BankingReviewInboxBadgeScope: {
+    readonly "this_calendar_month,_forecast_account": "this calendar month, forecast account";
+};
+export interface BankingReviewInbox {
+    /** Rows placed here (dated through today */
+    unresolvedInRange: number;
+    /** The Review badge (spine.reviewCount) */
+    badgeCount: number;
+    badgeScope: BankingReviewInboxBadgeScope;
+}
+export type BankingReviewBalanceTieStatus = (typeof BankingReviewBalanceTieStatus)[keyof typeof BankingReviewBalanceTieStatus];
+export declare const BankingReviewBalanceTieStatus: {
+    readonly ties: "ties";
+    readonly drift: "drift";
+    readonly not_checked: "not_checked";
+};
+/**
+ * The last check of the bank's own balance against the ledger (a manual Sync), for this account
+ */
+export interface BankingReviewBalanceTie {
+    status: BankingReviewBalanceTieStatus;
+    /** @nullable */
+    checkedAt: string | null;
+    /**
+     * bank − ledger at that check
+     * @nullable
+     */
+    unexplained: string | null;
+}
+export type BankingReviewHouseholdScope = (typeof BankingReviewHouseholdScope)[keyof typeof BankingReviewHouseholdScope];
+export declare const BankingReviewHouseholdScope: {
+    readonly all_accounts_·_this_week: "all accounts · this week";
+};
+export interface BankingReviewHousehold {
+    scope: BankingReviewHouseholdScope;
+    weekStart: string;
+    weekEnd: string;
+    /** GET /money/position spentWeekDiscretionary */
+    spentWeek: string;
+    /**
+     * GET /money/position weekCap; null when the plan is not set
+     * @nullable
+     */
+    weekPlan: string | null;
+    /**
+     * GET /money/position remainingWeek; null when the plan is not set
+     * @nullable
+     */
+    remainingWeek: string | null;
+}
+export type BankingReviewBucketName = (typeof BankingReviewBucketName)[keyof typeof BankingReviewBucketName];
+export declare const BankingReviewBucketName: {
+    readonly amountDifference: "amountDifference";
+    readonly timingDifference: "timingDifference";
+    readonly confirmedUnplanned: "confirmedUnplanned";
+    readonly uncertain: "uncertain";
+    readonly unmatched: "unmatched";
+};
+export interface BankingReviewPage {
+    bucket: BankingReviewBucketName;
+    kind: BankingReviewKind | null;
+    rows: BankingReviewRow[];
+    /** @nullable */
+    nextCursor: string | null;
+    limit: number;
+}
+/**
+ * (S4) One bank account's period: balance, cash in and out, the plan occurrences due in it, and every counted row placed exactly once — in one of the five "not in the plan" buckets or as planned. Money is a two-decimal string, signed (negative is money out) unless named in / out. See GET /banking/review for the rules.
+ */
+export interface BankingReview {
+    account: BankingReviewAccount;
+    period: BankingReviewPeriod;
+    balance: BankingReviewBalance;
+    /** The forecast account's bank freshness (as on the spine); null for another account */
+    freshness: BankingReviewFreshness | null;
+    cashFlow: BankingReviewCashFlow;
+    planComparison: BankingReviewPlanComparison;
+    /** Plan occurrences due in the period (forecast account only), by due date */
+    planned: BankingReviewPlanned[];
+    notInPlan: BankingReviewNotInPlan;
+    asPlanned: BankingReviewAsPlanned;
+    reconciliation: BankingReviewReconciliation;
+    reviewInbox: BankingReviewInbox;
+    balanceTie: BankingReviewBalanceTie;
+    /** Secondary and labelled — all accounts, this week (the money position's figures); null when not read */
+    household: BankingReviewHousehold | null;
+    /** With `bucket`, one page of that bucket's rows; null otherwise */
+    page: BankingReviewPage | null;
+}
 export interface WaysBackAdjustment {
     /** The Sunday of the week it lowers */
     weekStart: string;
@@ -6280,6 +6730,48 @@ export type GetPeriodBreakdownPeriod = (typeof GetPeriodBreakdownPeriod)[keyof t
 export declare const GetPeriodBreakdownPeriod: {
     readonly week: "week";
     readonly month: "month";
+};
+export type GetBankingReviewParams = {
+    /**
+     * `plaid_accounts.id` of a checking or savings account (as on GET /transactions/ledger). Optional; defaults to the account the forecast reads. Any other depository account is reviewed without a balance or a plan comparison; a card or a loan is a 400.
+     * @maxLength 64
+     */
+    account?: string;
+    /**
+     * First day, YYYY-MM-DD, inclusive. Not after today.
+     * @maxLength 10
+     */
+    from: string;
+    /**
+     * Last day, YYYY-MM-DD, inclusive. At most 366 days after `from`.
+     * @maxLength 10
+     */
+    to: string;
+    /**
+     * Rows listed in each bucket, largest first (each bucket's totals still cover every row).
+     * @minimum 1
+     * @maximum 50
+     */
+    rowsPerBucket?: number;
+    /**
+     * Page one bucket's rows (`page`).
+     */
+    bucket?: BankingReviewBucketName;
+    /**
+     * With bucket=unmatched, only rows of this kind.
+     */
+    kind?: BankingReviewKind;
+    /**
+     * The `page.nextCursor` of the previous page.
+     * @maxLength 512
+     */
+    cursor?: string;
+    /**
+     * Rows per page of `bucket`, 1 to 100.
+     * @minimum 1
+     * @maximum 100
+     */
+    limit?: number;
 };
 export type ListAgentFindingsParams = {
     status?: ListAgentFindingsStatus;
