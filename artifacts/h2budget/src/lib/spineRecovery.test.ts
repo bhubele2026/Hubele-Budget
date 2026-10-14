@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { getGetSpineQueryKey } from "@workspace/api-client-react";
-import { askForSpineAgainIfFailed } from "./spineRecovery";
+import { askForSpineAgainIfFailed, askForUnauthorizedAgain, isUnauthorized } from "./spineRecovery";
 
 const queryKey = getGetSpineQueryKey();
 const SPINE = { asOf: "2026-09-11" };
@@ -168,5 +168,72 @@ describe("askForSpineAgainIfFailed — with a page's spine reader already mounte
     expect(queryFn).toHaveBeenCalledTimes(3);
     stop();
     unmountReader();
+  });
+});
+
+describe("askForUnauthorizedAgain", () => {
+  const unauthorized = () => Object.assign(new Error("HTTP 401"), { status: 401 });
+  const serverError = () => Object.assign(new Error("HTTP 500"), { status: 500 });
+  const KEY = ["/api/budget/categories"];
+
+  it("refetches a query that failed with 401, once", async () => {
+    const qc = client();
+    const fn = vi.fn().mockRejectedValueOnce(unauthorized()).mockResolvedValue([1]);
+    const obs = new QueryObserver(qc, { queryKey: KEY, queryFn: fn });
+    const off = obs.subscribe(() => {});
+    await settle();
+    expect(qc.getQueryState(KEY)?.status).toBe("error");
+    const stop = askForUnauthorizedAgain(qc);
+    await settle();
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(qc.getQueryData(KEY)).toEqual([1]);
+    stop();
+    off();
+  });
+
+  it("does not touch a 500", async () => {
+    const qc = client();
+    const fn = vi.fn().mockRejectedValue(serverError());
+    const obs = new QueryObserver(qc, { queryKey: KEY, queryFn: fn });
+    const off = obs.subscribe(() => {});
+    await settle();
+    askForUnauthorizedAgain(qc);
+    await settle();
+    expect(fn).toHaveBeenCalledTimes(1);
+    off();
+  });
+
+  it("waits for a request still out and re-asks only if it ends in 401", async () => {
+    const qc = client();
+    const { held, run } = heldRequest();
+    const fn = vi.fn().mockImplementationOnce(run).mockResolvedValue([2]);
+    const obs = new QueryObserver(qc, { queryKey: KEY, queryFn: fn });
+    const off = obs.subscribe(() => {});
+    await settle();
+    askForUnauthorizedAgain(qc);
+    held.fail(unauthorized());
+    await settle();
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(qc.getQueryData(KEY)).toEqual([2]);
+    off();
+  });
+
+  it("never loops: a second 401 after the ask is left alone", async () => {
+    const qc = client();
+    const fn = vi.fn().mockRejectedValue(unauthorized());
+    const obs = new QueryObserver(qc, { queryKey: KEY, queryFn: fn });
+    const off = obs.subscribe(() => {});
+    await settle();
+    askForUnauthorizedAgain(qc);
+    await settle();
+    await settle();
+    expect(fn).toHaveBeenCalledTimes(2);
+    off();
+  });
+
+  it("isUnauthorized is true for status 401 only", () => {
+    expect(isUnauthorized(unauthorized())).toBe(true);
+    expect(isUnauthorized(serverError())).toBe(false);
+    expect(isUnauthorized(null)).toBe(false);
   });
 });

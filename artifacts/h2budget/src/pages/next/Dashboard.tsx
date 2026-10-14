@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { PageGrid } from "@/components/next";
 import { RefreshBanner } from "@/components/data-state";
 import { useSpine } from "@/hooks/useSpine";
@@ -24,15 +25,15 @@ const loadBelowFold = () =>
     throw e;
   }));
 // (W4) The Amex tile's "Purchases this week": its own chunk, after first paint.
-const AmexWeekCharges = lazy(() => import("./dashboard/AmexWeekCharges"));
-const ForecastRow = lazy(() => loadBelowFold().then((m) => ({ default: m.ForecastRow })));
+const AmexWeekCharges = lazyWithPreload(() => import("./dashboard/AmexWeekCharges"));
+const ForecastRow = lazyWithPreload(() => loadBelowFold().then((m) => ({ default: m.ForecastRow })));
 
 /** Start the chunk when the browser is idle after first paint, then show it. */
 export function useBelowFoldReady(): boolean {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    const go = () => void loadBelowFold().then(() => !cancelled && setReady(true), () => !cancelled && setReady(true));
+    const go = () => void ForecastRow.preload().then(() => !cancelled && setReady(true), () => !cancelled && setReady(true));
     const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
     if (typeof w.requestIdleCallback === "function") {
       const h = w.requestIdleCallback(go, { timeout: 1500 });
