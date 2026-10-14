@@ -37,8 +37,6 @@ export { AprValidationError, validateAprDecimal };
 
 const router: IRouter = Router();
 
-const REFRESH_STALE_MS = 60 * 60 * 1000; // 1 hour
-
 function normalize<T extends Record<string, unknown>>(input: T): Record<string, unknown> {
   const out: Record<string, unknown> = { ...input };
   if (typeof out.lastBalanceUpdate === "string") {
@@ -240,61 +238,19 @@ router.get(
 router.get("/debts", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const householdId = req.householdId!;
-  let rows = await db
+  const rows = await db
     .select()
     .from(debtsTable)
     .where(eq(debtsTable.householdId, householdId))
     .orderBy(asc(debtsTable.sortOrder), desc(debtsTable.apr), asc(debtsTable.name));
 
-  // Opportunistic refresh of stale linked debts
-  const now = Date.now();
-  const stale = rows.filter(
-    (d) =>
-      d.plaidAccountId &&
-      (!d.plaidLastSyncedAt ||
-        now - d.plaidLastSyncedAt.getTime() > REFRESH_STALE_MS),
-  );
-  if (stale.length > 0) {
-    // Group by item so we only call /liabilities/get once per item
-    const accountIds = stale
-      .map((d) => d.plaidAccountId!)
-      .filter((v, i, a) => a.indexOf(v) === i);
-    const accts = await db
-      .select()
-      .from(plaidAccountsTable)
-      .where(
-        and(
-          eq(plaidAccountsTable.householdId, householdId),
-          inArray(plaidAccountsTable.id, accountIds),
-        ),
-      );
-    const itemIds = Array.from(new Set(accts.map((a) => a.itemId)));
-    const itemFetchOk = new Map<string, boolean>();
-    for (const itemId of itemIds) {
-      try {
-        await fetchLiabilitiesForItem(userId, itemId);
-        itemFetchOk.set(itemId, true);
-      } catch {
-        itemFetchOk.set(itemId, false);
-      }
-    }
-    const itemByAccount = new Map(accts.map((a) => [a.id, a.itemId]));
-    for (const d of stale) {
-      const ok = itemFetchOk.get(itemByAccount.get(d.plaidAccountId!) ?? "") ?? false;
-      // Don't break GET /debts if a single Plaid value is malformed — the
-      // explicit /refresh endpoint surfaces that as a 400.
-      try {
-        await applyLiabilityToDebt(userId, householdId, d, "refresh", ok);
-      } catch (e) {
-        if (!(e instanceof AprValidationError)) throw e;
-      }
-    }
-    rows = await db
-      .select()
-      .from(debtsTable)
-      .where(eq(debtsTable.householdId, householdId))
-      .orderBy(asc(debtsTable.sortOrder), desc(debtsTable.apr), asc(debtsTable.name));
-  }
+  // (P3) No refresh on read. The owner: "I don't need debt refresh, I can handle
+  // that on my own." This GET used to call Plaid's liabilities endpoint and
+  // write the balances onto every linked debt more than an hour stale, on each
+  // page that listed debts. It never calls Plaid now: balances move when a
+  // person presses Sync (POST /plaid/sync fetches liabilities and applies them,
+  // `applyCachedLiabilitiesToPlaidDebts`) or a debt's own Refresh
+  // (POST /debts/:id/refresh). No background job replaces it.
 
   // Ensure every active debt has at least one balance snapshot so the
   // reports thermometer and per-debt rings have a starting reference.
