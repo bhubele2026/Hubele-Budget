@@ -17,6 +17,9 @@
 //                  production caller) with the ledger's tier-2 off-curve pairs
 //                  as `tier2PairedTxnIds`, classified by `classifyMovement` and
 //                  sized by `allowanceRowOf` (B6: a refund nets its account).
+//                  (S3) Through `loadAllowanceWindow`, and the classified rows
+//                  are kept on the read (`weekMovement`) for the period
+//                  breakdown to group.
 //   the cap        `allowance_plans` through `everydayPlanFromRows`, with the
 //                  week's override from `preferences.weeklyAllowanceOverrides`.
 //   freshness      `computeBankFreshness` — the spine's own bank verdict.
@@ -34,21 +37,26 @@
 // ⚠️ READ-ONLY. No write, no Plaid call: it sits on the spine's path.
 
 import { and, eq, inArray } from "drizzle-orm";
-import { db, planAdjustmentsTable, recurringItemsTable } from "@workspace/db";
+import { db, planAdjustmentsTable, recurringItemsTable, type AllowancePlan } from "@workspace/db";
 import {
   addDaysISO,
   allowanceRowOf,
-  classifyMovement,
   computePosition,
   everydayPlanFromRows,
   weekBounds,
+  weeklyCapCents,
   type MoneyPosition,
   type PositionEvent,
   type PositionInputs,
 } from "@workspace/avalanche-core";
 import { computeCashSignalDetailed, type DetailedCashSignal } from "./cashSignal";
 import { computeBankFreshness, type BankFreshness } from "./bankFreshness";
-import { loadMoneyContext, loadMovementRows, type MoneyContextSupersede } from "./moneyContext";
+import {
+  loadAllowanceWindow,
+  type ClassifiedMovement,
+  type MoneyContext,
+  type MoneyContextSupersede,
+} from "./moneyContext";
 import { loadAllowancePlans, planRowsOf } from "./allowancePlans";
 import { TRACKING_START } from "./spendingFacts";
 import { reservesHeld as loadReservesHeld } from "./goals";
@@ -114,6 +122,18 @@ export interface MoneyPositionRead {
    * carry-over already applied to it. Read for `GET /money/ways-back`.
    */
   nextWeek: { start: string; capCents: number | null; adjustment: WeekAdjustmentRead | null };
+  /**
+   * ⭐ (S3) The week's rows exactly as `computePosition` counted them — each row
+   * and how `classifyMovement` placed it (with its rule). `inputs.weekRows` is
+   * `allowanceRowOf` over these very entries, so the period breakdown that
+   * groups them (`GET /money/period-breakdown`) adds up to `spentWeekDiscretionary`
+   * by construction, never through a second read.
+   */
+  weekMovement: ClassifiedMovement[];
+  /** (S3) The money context the week was classified with (category names, the week's overrides). */
+  money: MoneyContext;
+  /** (S3) The household's allowance plan rows this read capped the week with. */
+  allowancePlans: AllowancePlan[];
 }
 
 /**
@@ -184,7 +204,10 @@ export async function loadPositionInputs(
   const todayISO = ledger.todayISO;
   const week = weekBounds(todayISO);
   const from = week.start < TRACKING_START ? TRACKING_START : week.start;
-  const money = await loadMoneyContext(
+  // (S3) `loadAllowanceWindow` is `loadMoneyContext` + `loadMovementRows` +
+  // `classifyMovement`, the same three calls as before, now shared with the
+  // Monthly Spend hook and the period breakdown.
+  const { money, movement: weekMovement } = await loadAllowanceWindow(
     householdId,
     { start: from, end: week.end },
     {
@@ -192,22 +215,22 @@ export async function loadPositionInputs(
       ...(opts.supersede ? { supersede: await opts.supersede } : {}),
     },
   );
-  const rows = await loadMovementRows(householdId, from, week.end, money);
   // (B6) `allowanceRowOf`: a refund carries the coverage it nets and a negative
   // amount, and its account, so `computePosition` nets it there.
-  const weekRows = rows.map((r) => allowanceRowOf(r, classifyMovement(r, money)));
+  const weekRows = weekMovement.map(({ row, m }) => allowanceRowOf(row, m));
 
   const plan = everydayPlanFromRows(week.start, planRowsOf(planRows), money.settings.weeklyAllowanceOverrides);
   // (Lead's ruling on PR-B1 Q2) A $0 week — no plan, a $0 plan, or a $0
-  // override — means no cap was set: null, never a $0 cap.
-  const weekCap = plan.weeklySource === "none" || plan.weeklyCents === 0 ? null : plan.weeklyCents / 100;
+  // override — means no cap was set: null, never a $0 cap (`weeklyCapCents`).
+  const capCents = weeklyCapCents(plan);
+  const weekCap = capCents == null ? null : capCents / 100;
   // (V5) The household's own carry-over: this week's lowers the week; next
   // week's is said, not counted.
   const nextStart = addDaysISO(week.start, 7);
   const thisAdj = adjustments.get(week.start) ?? null;
   const nextAdj = adjustments.get(nextStart) ?? null;
   const nextPlan = everydayPlanFromRows(nextStart, planRowsOf(planRows), money.settings.weeklyAllowanceOverrides);
-  const nextCapCents = nextPlan.weeklySource === "none" || nextPlan.weeklyCents === 0 ? null : nextPlan.weeklyCents;
+  const nextCapCents = weeklyCapCents(nextPlan);
 
   const inputs: PositionInputs = {
     todayISO,
@@ -234,6 +257,9 @@ export async function loadPositionInputs(
     inputs,
     cash: { signal, ledger },
     nextWeek: { start: nextStart, capCents: nextCapCents, adjustment: nextAdj },
+    weekMovement,
+    money,
+    allowancePlans: planRows,
   };
 }
 

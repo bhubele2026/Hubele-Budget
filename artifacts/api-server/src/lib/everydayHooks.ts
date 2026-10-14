@@ -31,8 +31,7 @@ import { eq } from "drizzle-orm";
 import { db, settingsTable } from "@workspace/db";
 import {
   allowanceRowOf,
-  allowanceTotals,
-  classifyMovement,
+  allowanceSpentCents,
   everydayPlanFromRows,
   hookPeriodOf,
   payoffFor,
@@ -89,6 +88,13 @@ export interface HookPayoff extends Payoff {
    * amount (the bill as it was), never $0: a $0 payoff would read higher than before.
    */
   fromStoredAmount: boolean;
+  /**
+   * (S3) What the open period has already spent from its allowance, in cents —
+   * the figure `remainingCents` was sized from (`allowanceSpentCents`, the same
+   * helper the period breakdown's `actual` is). Null for a period that is not
+   * open, or has no allowance. Read by no figure; the parity tests read it.
+   */
+  spentCents: number | null;
 }
 
 const toCents = (v: string | number | null | undefined): number => {
@@ -113,7 +119,7 @@ export async function loadHookPayoffs(args: {
   const out = new Map<string, HookPayoff>();
   if (occurrences.length === 0) return out;
 
-  const [{ computeWeeklyPayoff }, { loadAllowancePlans, planRowsOf }, { loadMoneyContext, loadMovementRows }, { TRACKING_START }] =
+  const [{ computeWeeklyPayoff }, { loadAllowancePlans, planRowsOf }, { loadAllowanceWindow }, { TRACKING_START }] =
     await Promise.all([
       import("./amexAnchor"),
       import("./allowancePlans"),
@@ -171,16 +177,20 @@ export async function loadHookPayoffs(args: {
     const from = open.reduce((m, p) => (p.start < m ? p.start : m), open[0]!.start);
     const to = open.reduce((m, p) => (p.end > m ? p.end : m), open[0]!.end);
     const rangeStart = from < TRACKING_START ? TRACKING_START : from;
-    const money = await loadMoneyContext(householdId, { start: rangeStart, end: to }, { tier2PairedTxnIds: args.tier2PairedTxnIds });
-    const rows = await loadMovementRows(householdId, rangeStart, to, money);
+    // (S3) `loadAllowanceWindow` — the read the money position and the period
+    // breakdown classify with (the same `loadMoneyContext` + `loadMovementRows`
+    // + `classifyMovement` as before).
+    const { movement } = await loadAllowanceWindow(householdId, { start: rangeStart, end: to }, { tier2PairedTxnIds: args.tier2PairedTxnIds });
     // (B6) `allowanceRowOf` + `allowanceTotals` — the money position's own
     // netting: a refund gives back exactly what `computeWeeklyPayoff` takes off
     // the card's charges, so the open period's payoff holds.
-    const classified = rows.map((r) => ({ date: r.occurredOn, row: allowanceRowOf(r, classifyMovement(r, money)) }));
+    const classified = movement.map(({ row, m }) => ({ date: row.occurredOn, row: allowanceRowOf(row, m) }));
     for (const p of open) {
       const lo = p.start < TRACKING_START ? TRACKING_START : p.start;
-      const totals = allowanceTotals(classified.filter((r) => r.date >= lo && r.date <= p.end).map((r) => r.row));
-      spent.set(`${p.cadence}|${p.start}`, p.cadence === "weekly" ? totals.discretionaryCents : totals.monthlyCents);
+      // (S3) `allowanceSpentCents`: weekly → the cap's pool, monthly → monthly-flagged.
+      // The period breakdown's `actual` is this same helper over the same rows.
+      const inPeriod = classified.filter((r) => r.date >= lo && r.date <= p.end).map((r) => r.row);
+      spent.set(`${p.cadence}|${p.start}`, allowanceSpentCents(inPeriod, p.cadence));
     }
   }
 
@@ -198,6 +208,7 @@ export async function loadHookPayoffs(args: {
         periodStart: p.start,
         periodEnd: p.end,
         fromStoredAmount: true,
+        spentCents: null,
       });
       continue;
     }
@@ -208,7 +219,7 @@ export async function loadHookPayoffs(args: {
       periodEnd: p.end,
       todayISO,
     });
-    out.set(o.key, { ...payoff, periodStart: p.start, periodEnd: p.end, fromStoredAmount: false });
+    out.set(o.key, { ...payoff, periodStart: p.start, periodEnd: p.end, fromStoredAmount: false, spentCents: spent.get(id) ?? null });
   }
   return out;
 }

@@ -55,7 +55,7 @@
 // ceiling is a CAP the household set, named `weekCap`.
 
 import { addDaysISO, dayOfWeekISO, householdDateOf, weekBounds } from "./householdTime";
-import { allowanceTotals, type MovementCoverage } from "./householdMoney";
+import { allowanceRemainingCents, allowanceTotals, type MovementCoverage } from "./householdMoney";
 
 /** How far ahead a paycheck still counts as "payday" for this figure. */
 export const PAYDAY_MAX_DAYS = 45;
@@ -369,7 +369,7 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
   let withinPlan: WithinPlan | null = null;
   if (capCents != null) {
     // (V5) The household's own carry-over lowers the week (0 when none).
-    remainingCents = capCents + adjustmentCents - discretionary;
+    remainingCents = allowanceRemainingCents(capCents, adjustmentCents, discretionary);
     const dow = dayOfWeekISO(todayISO); // 0 = Sunday
     const elapsedDaysInclToday = dow + 1;
     const daysLeftInclToday = 7 - dow;
