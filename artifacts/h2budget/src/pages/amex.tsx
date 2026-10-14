@@ -82,7 +82,7 @@ import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
 import { AMEX_SOURCES } from "@/lib/amexSources";
 import { accountPageHref } from "@/lib/accountPage";
 import { currentRowDeepLink, rowDeepLinkStatus } from "@/lib/rowDeepLink";
-import { useUrlState } from "@/hooks/useUrlState";
+import { replaceUrlParam, useUrlState } from "@/hooks/useUrlState";
 import { modeParam, monthParam, pickParam, urlHasMonth } from "@/lib/ledgerUrl";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
 import { AMEX_BALANCE_DISTINCTION } from "@/lib/reportsBalances";
@@ -112,6 +112,15 @@ import {
 } from "@/components/account-page";
 import { AmexLogo } from "@/components/brand-logos";
 import { AmexCardBand } from "@/components/amex-card-band";
+import { AmexSummaryPanel, AmexNeedsAttention } from "@/components/amex-summary";
+import { useGetAmexSummary, getGetAmexSummaryQueryKey } from "@workspace/api-client-react/features";
+import {
+  amexRowKind,
+  amexSummaryPeriod,
+  rowInFigure,
+  type AmexFigure,
+} from "@/lib/amexSummaryView";
+import { monthWords } from "@/lib/rowDeepLink";
 import { PageGrid } from "@/components/next/PageGrid";
 import { cardOrderOf, identityOf, type AccountAccentName } from "@/lib/accountIdentity";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
@@ -365,6 +374,32 @@ export default function AmexPage({
   const [selectedMonth, setSelectedMonth] = useUrlState<MonthKey>("month", monthParam, currentMonth);
   // (WP7) The month a row link opened, for "Showing <Month> for the row you opened".
   const rowLinkMonthRef = useRef<MonthKey | null>(rowLink.tx ? selectedMonth : null);
+
+  // (W4) The summary's figure the owner opened (Purchases, Payments, Credits &
+  // refunds) filters the activity below; the row a "Needs attention" line
+  // jumped to (`?tx=`) is scrolled to and marked.
+  const [figure, setFigure] = useState<AmexFigure | null>(null);
+  const [focusTx, setFocusTx] = useState<string | null>(rowLink.tx);
+  useEffect(() => {
+    const onPop = () => setFocusTx(new URLSearchParams(window.location.search).get("tx"));
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const summaryPeriod = useMemo(
+    () => amexSummaryPeriod(rangeMode, selectedMonth),
+    [rangeMode, selectedMonth],
+  );
+  const summaryParams = {
+    accountId: cardFilter,
+    from: summaryPeriod?.from ?? "",
+    to: summaryPeriod?.to ?? "",
+  };
+  const summaryQ = useGetAmexSummary(summaryParams, {
+    query: {
+      queryKey: getGetAmexSummaryQueryKey(summaryParams),
+      enabled: !embedded && summaryPeriod != null,
+    },
+  });
 
   // Task #168 — apply `?category=<name>` once categories load. Mirrors the
   // Transactions page implementation: matches by category name (the deep
@@ -688,6 +723,7 @@ export default function AmexPage({
       if (cardFilter !== "all" && (t.plaidAccountId ?? "") !== cardFilter)
         return false;
       if (hideReviewed && t.reviewed) return false;
+      if (figure && !rowInFigure(figure, amexRowKind(t, categories))) return false;
       if (categoryFilter !== "all") {
         if (categoryFilter === "uncategorized") {
           if (t.categoryId) return false;
@@ -699,7 +735,7 @@ export default function AmexPage({
       }
       return true;
     });
-  }, [monthScoped, search, memberFilter, cardFilter, categoryFilter, categoryById, from, to, hideReviewed, rangeMode, selectedMonth, currentMonth]);
+  }, [monthScoped, search, memberFilter, cardFilter, categoryFilter, categoryById, from, to, hideReviewed, rangeMode, selectedMonth, currentMonth, figure, categories]);
 
   // Group by day (descending). Within each day, sort newest-first via
   // the canonical comparator so the per-row "bal $X" running statement
@@ -716,6 +752,38 @@ export default function AmexPage({
     for (const arr of map.values()) arr.sort(compareNewestFirst);
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [filtered]);
+
+  // (W4) Scroll to the row a "Needs attention" line (or a `?tx=` link) named,
+  // once its month's rows have loaded, and mark it. Both layouts render the
+  // row; the visible one is the one scrolled to.
+  const focusedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusTx) {
+      focusedRef.current = null;
+      return;
+    }
+    if (typeof document === "undefined") return;
+    const nodes = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        `[data-testid="row-amex-${focusTx}"], [data-testid="row-amex-mobile-${focusTx}"]`,
+      ),
+    );
+    const el = nodes.find((n) => n.offsetParent !== null) ?? nodes[0];
+    if (!el) return;
+    el.setAttribute("data-focused", "true");
+    el.style.outline = "2px solid var(--color-brand-navy, #19315b)";
+    el.style.outlineOffset = "-2px";
+    // Scroll once per row; the mark is re-applied whenever the rows re-render.
+    if (focusedRef.current !== focusTx) {
+      focusedRef.current = focusTx;
+      el.scrollIntoView?.({ block: "center" });
+    }
+    return () => {
+      el.removeAttribute("data-focused");
+      el.style.outline = "";
+      el.style.outlineOffset = "";
+    };
+  }, [focusTx, groups]);
 
   // Per-month totals: split by sign of `amount`. Charges are positive
   // (expenses on the card), payments/credits are negative.
@@ -1964,6 +2032,30 @@ export default function AmexPage({
     navigate(id === "all" ? "/amex" : accountPageHref({ plaidAccountId: id }));
   };
 
+  const summaryPeriodLabel =
+    rangeMode === "wk" && compareMonth(selectedMonth, currentMonth) === 0
+      ? currentWeekRange().label
+      : rangeMode === "yr"
+        ? String(selectedMonth.year)
+        : monthWords(selectedMonth);
+
+  // (W4) A "Needs attention" line: open that row's month in the activity, show
+  // everything (no figure, search or category filter hiding it), scroll to it.
+  // The jump is its own history entry, so Back returns to where the owner was.
+  const jumpToRow = (row: { id: string; date: string }) => {
+    if (typeof window !== "undefined") {
+      window.history.pushState(window.history.state, "", `${window.location.pathname}${window.location.search}${window.location.hash}`);
+    }
+    setFigure(null);
+    setSearch("");
+    setCategoryFilter("all");
+    setHideReviewed(false);
+    setRangeMode("mo");
+    setSelectedMonth(monthKeyFromISO(row.date));
+    replaceUrlParam("tx", row.id);
+    setFocusTx(row.id);
+  };
+
   const pageActions = (
     <>
       <SyncButton relevantItemIds={relevantPlaidItemIds} />
@@ -2050,11 +2142,30 @@ export default function AmexPage({
           leadCount={lead ? 1 : 0}
         />
 
+        {!embedded ? (
+          <>
+            <AmexSummaryPanel
+              summary={summaryQ.data}
+              failed={summaryQ.isError}
+              periodLabel={summaryPeriodLabel}
+              mode={rangeMode}
+              isThisWeek={compareMonth(selectedMonth, currentMonth) === 0}
+              figure={figure}
+              onFigure={setFigure}
+            />
+            <AmexNeedsAttention
+              summary={summaryQ.data}
+              showCard={cardFilter === "all"}
+              onOpenRow={jumpToRow}
+            />
+          </>
+        ) : null}
+
         <BalanceTrendChart
-          caption="Ending balance — forward 12 months"
+          caption="Balance history · last 12 months"
           window={balanceWindow ?? undefined}
           color="hsl(var(--chart-1))"
-          valueLabel="Ending balance"
+          valueLabel="Actual balance"
           accent="amex"
         />
 

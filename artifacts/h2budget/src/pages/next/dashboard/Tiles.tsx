@@ -202,7 +202,7 @@ function AmexTile({ weekCharges }: AmexTileProps) {
           })}
         </ul>
       )}
-      {weekCharges != null && weekCharges !== false ? <div data-testid="tile-amex-weekcharges">{weekCharges}</div> : null}
+      {weekCharges != null && weekCharges !== false ? <div className="empty:hidden" data-testid="tile-amex-weekcharges">{weekCharges}</div> : null}
     </Tile>
   );
 }

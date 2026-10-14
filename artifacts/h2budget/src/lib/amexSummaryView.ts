@@ -1,0 +1,112 @@
+import { classifyCardCredit, type CardRowKind, type SpendContext } from "@workspace/avalanche-core";
+import type { AmexSummary, Category, Transaction } from "@workspace/api-client-react";
+import { monthFirstISO, monthLastISO } from "@/components/account-page/month-navigator";
+import { currentWeekRange, type RangeMode } from "@/lib/timeRange";
+import { householdToday } from "@/lib/householdDay";
+import { formatCurrency } from "@/lib/utils";
+
+/**
+ * (W4) Pure helpers behind the Amex page's summary: the period the summary
+ * asks for, the plan line it prints, and which ledger rows a figure opens.
+ * No money is computed here: every amount is the server's string.
+ */
+
+export type AmexFigure = "purchases" | "payments" | "credits";
+
+type MonthKey = { year: number; month: number };
+const pad = (n: number) => String(n).padStart(2, "0");
+const iso = (y: number, m0: number, d: number) => `${y}-${pad(m0 + 1)}-${pad(d)}`;
+
+/**
+ * The summary's period from the page's controls: Week on the current month is
+ * this Sun–Sat week; Week on any other month, and Month, is that month; Year is
+ * that calendar year. The API refuses a `from` after today, so a period that
+ * has not started yet asks for nothing (null).
+ */
+export function amexSummaryPeriod(
+  mode: RangeMode,
+  month: MonthKey,
+  now: Date = new Date(),
+): { from: string; to: string } | null {
+  const today = householdToday(now);
+  const thisMonth = today.slice(0, 7);
+  const monthStr = `${month.year}-${pad(month.month + 1)}`;
+  let from: string;
+  let to: string;
+  if (mode === "wk" && monthStr === thisMonth) {
+    ({ from, to } = currentWeekRange(now));
+  } else if (mode === "yr") {
+    from = iso(month.year, 0, 1);
+    to = iso(month.year, 11, 31);
+  } else {
+    from = monthFirstISO(month);
+    to = monthLastISO(month);
+  }
+  if (from > today) return null;
+  return { from, to };
+}
+
+export type AmexPlanLine =
+  | { kind: "weekly_hook" | "monthly_hook"; label: string; amount: string | null; to: string; linkText: string }
+  | { kind: "debt"; label: string; amount: string | null; to: string; linkText: string };
+
+/** The plan comparison line, by `planLink.kind`; null for `none`. */
+export function amexPlanLine(plan: AmexSummary["planLink"]): AmexPlanLine | null {
+  switch (plan.kind) {
+    case "weekly_hook":
+      return { kind: "weekly_hook", label: "Saturday payoff", amount: plan.payoff ?? null, to: "/forecast", linkText: "Forecast" };
+    case "monthly_hook":
+      return { kind: "monthly_hook", label: "Monthly payoff", amount: plan.payoff ?? null, to: "/forecast", linkText: "Forecast" };
+    case "debt":
+      return { kind: "debt", label: "On the payoff plan: minimum", amount: plan.minimum ?? null, to: "/debts", linkText: "Debt" };
+    default:
+      return null;
+  }
+}
+
+/** "Adds $560.00 to this week's household plan" (never the card's own budget). */
+export function householdLine(
+  hc: AmexSummary["householdContribution"],
+  mode: RangeMode,
+  isThisWeek: boolean,
+): string {
+  const week = formatCurrency(hc.weeklyPlan);
+  if (mode === "wk" && isThisWeek) return `Adds ${week} to this week's household plan`;
+  return `Adds ${week} weekly and ${formatCurrency(hc.monthlyPlan)} monthly to the household plan`;
+}
+
+/** A row's place on the card's ledger, by the server's own rule (classification only). */
+export function amexRowKind(t: Transaction, categories: readonly Category[] | undefined): CardRowKind | null {
+  const ctx: SpendContext = {
+    categoriesById: new Map((categories ?? []).map((c) => [c.id, { name: c.name, debtId: null, kind: c.kind }])),
+    debtCategoryIds: new Set(),
+  };
+  return classifyCardCredit(
+    {
+      amount: t.amount,
+      source: t.source,
+      isTransfer: t.isTransfer,
+      categoryId: t.categoryId ?? null,
+      description: t.description,
+      debtId: t.debtId ?? null,
+      isExternalCardPayment: t.isExternalCardPayment,
+      reimbursable: t.reimbursable,
+      pfcDetailed: t.pfcDetailed ?? null,
+    },
+    ctx,
+    { reimbursableIsSpend: true },
+  );
+}
+
+/** Does a ledger row belong to the figure the owner opened? */
+export function rowInFigure(figure: AmexFigure, kind: CardRowKind | null): boolean {
+  if (figure === "purchases") return kind === "purchase";
+  if (figure === "payments") return kind === "payment";
+  return kind === "refund" || kind === "other_credit";
+}
+
+export const FIGURE_WORDS: Record<AmexFigure, string> = {
+  purchases: "Purchases",
+  payments: "Payments",
+  credits: "Credits & refunds",
+};

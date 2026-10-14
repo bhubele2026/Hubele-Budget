@@ -65,10 +65,12 @@ export function AmexCardBand({
   };
 
   const cards = data?.cards ?? [];
-  if (cards.length === 0) return null;
+  // (W4) A card on the payoff plan (debt-linked) is still a card to review.
+  const planCards = data?.debtLinkedCards ?? [];
+  if (cards.length === 0 && planCards.length === 0) return null;
   // Beside a lead (a span-4 Summary) every cell is span-4: rows of three.
   // Alone: two cells halve the row, four quarter it, otherwise thirds.
-  const total = cards.length + 1;
+  const total = cards.length + planCards.length + 1;
   const span =
     leadCount > 0 ? "span-4" : total === 2 ? "span-6" : total % 4 === 0 ? "span-3" : "span-4";
   const tile =
@@ -128,7 +130,7 @@ export function AmexCardBand({
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <span className={cn(fieldLabel, "flex items-center gap-1.5")}>
+                  <span className={cn(fieldLabel, "flex flex-wrap items-center gap-x-1.5")}>
                     {/* The card's tier colour (identity within Amex); the
                         panel's edge is the account accent. */}
                     <span
@@ -136,7 +138,7 @@ export function AmexCardBand({
                       style={{ background: color }}
                       aria-hidden
                     />
-                    <span className="truncate">
+                    <span className="min-w-0 [overflow-wrap:anywhere]">
                       {names[c.accountId] || BRAND_LABEL[tier] || c.name}
                     </span>
                     {mask ? (
@@ -191,6 +193,38 @@ export function AmexCardBand({
               <AddToAvalanche card={c} onCreated={refreshAfterCreate} />
             </div>
           </div>
+        );
+      })}
+      {planCards.map((c) => {
+        const tier = effectiveBrand(c.accountId, c.brand, overrides);
+        const color = brandColor(tier);
+        const active = selected === c.accountId;
+        const mask = masks?.get(c.accountId) || c.mask || "";
+        return (
+          <button
+            key={c.accountId}
+            type="button"
+            onClick={() => onSelect(c.accountId)}
+            aria-pressed={active}
+            className={cn(
+              "panel panel-accent-amex press flex h-full w-full flex-col p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40",
+              span,
+              active && "ring-2 ring-brand-navy/40",
+            )}
+            data-testid={`amex-tile-plan-${c.accountId}`}
+            data-account-id={c.accountId}
+          >
+            <span className={cn(fieldLabel, "flex flex-wrap items-center gap-x-1.5")}>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                {names[c.accountId] || BRAND_LABEL[tier] || c.name}
+              </span>
+              {mask ? (
+                <span className="shrink-0 font-mono normal-case tracking-normal tabular-nums text-neutral-500">••{mask}</span>
+              ) : null}
+            </span>
+            <span className="mt-2 text-label text-neutral-600">On the payoff plan</span>
+          </button>
         );
       })}
     </>

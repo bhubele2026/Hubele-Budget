@@ -23,8 +23,8 @@ export default function AmexCardTabsFeed({ onTabs }: { onTabs: (tabs: SectionTab
   const settings = useQuery<Settings>({ queryKey: getGetSettingsQueryKey(), enabled: false });
   const items = useQuery<PlaidItemDetail[]>({ queryKey: getListPlaidItemsQueryKey(), enabled: false });
   const tabs = useMemo(
-    () => amexCardTabs(payoff.data?.cards, settings.data, items.data),
-    [payoff.data?.cards, settings.data, items.data],
+    () => amexCardTabs([...(payoff.data?.cards ?? []), ...(payoff.data?.debtLinkedCards ?? [])], settings.data, items.data),
+    [payoff.data?.cards, payoff.data?.debtLinkedCards, settings.data, items.data],
   );
   useEffect(() => onTabs(tabs), [tabs, onTabs]);
   return null;

@@ -221,3 +221,57 @@ describe("(#825) buildBalanceWindow weekly dollar values", () => {
     expect(last.balance).toBe(1350);
   });
 });
+
+// (W4) The window is the 12 months ENDING THIS MONTH, up to today: it rolls
+// forward (the old one ran out in April 2027) and has no empty future.
+describe("(W4) buildBalanceWindow is the last 12 months, ending today", () => {
+  const build = (now: Date) =>
+    buildBalanceWindow({
+      anchorPresent: true,
+      currentMonth: monthKeyOf(now),
+      balanceAtEndOf: constBalanceAtEndOf(1000),
+      transactions: [],
+      now,
+    })!;
+
+  it("spans the 12 months ending this month", () => {
+    const w = build(new Date(2026, 9, 14, 12));
+    expect(w.subtitle).toBe("Nov 2025 – Oct 2026");
+    expect(w.monthTicks).toHaveLength(12);
+    expect(w.domain[0]).toBe(localMidnightMs(2025, 10, 1));
+  });
+
+  it("ends at today: no future area, no future points", () => {
+    const now = new Date(2026, 9, 14, 12);
+    const w = build(now);
+    expect(w.domain[1]).toBe(localMidnightMs(2026, 9, 14));
+    expect(w.todayMs).toBe(w.domain[1]);
+    for (const p of w.series) expect(p.x).toBeLessThanOrEqual(w.domain[1]);
+    expect(w.series[w.series.length - 1]!.x).toBe(w.todayMs);
+  });
+
+  it("rolls forward: a date after April 2027 still includes today", () => {
+    const now = new Date(2027, 5, 9, 12);
+    const w = build(now);
+    expect(w.subtitle).toBe("Jul 2026 – Jun 2027");
+    expect(w.domain[0]).toBeLessThanOrEqual(w.todayMs);
+    expect(w.domain[1]).toBe(localMidnightMs(2027, 5, 9));
+    expect(w.series[w.series.length - 1]!.x).toBe(localMidnightMs(2027, 5, 9));
+    const w2 = build(new Date(2028, 0, 3, 12));
+    expect(w2.subtitle).toBe("Feb 2027 – Jan 2028");
+    expect(w2.series.length).toBeGreaterThan(40);
+  });
+
+  it("months with no balance have no points; later months still do", () => {
+    const now = new Date(2026, 9, 14, 12);
+    const w = buildBalanceWindow({
+      anchorPresent: true,
+      currentMonth: monthKeyOf(now),
+      balanceAtEndOf: (m) => (m.year === 2026 && m.month >= 4 ? 500 : null),
+      transactions: [],
+      now,
+    })!;
+    expect(w.series.length).toBeGreaterThan(15);
+    expect(w.series[0]!.x).toBeGreaterThanOrEqual(localMidnightMs(2026, 4, 1));
+  });
+});
