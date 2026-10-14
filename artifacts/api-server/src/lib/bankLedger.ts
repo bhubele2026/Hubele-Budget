@@ -16,7 +16,7 @@ import {
   type CashRow,
   type CashRowOutcome,
 } from "@workspace/avalanche-core";
-import { computeCashSignal } from "./cashSignal";
+import { computeCashSignal, type CashSignal } from "./cashSignal";
 import { addDaysISO, householdDayOf, householdTodayISO } from "./householdClock";
 import {
   resolveSnapshotAccount,
@@ -119,11 +119,12 @@ const bad = (code: string, message: string) => new LedgerRequestError(400, code,
 // ── Money in cents ──────────────────────────────────────────────────────────
 
 /** `numeric(12,2)` text to integer cents. Exact: at most 12 digits. */
-function toCents(amount: string | number): number {
+export function toCents(amount: string | number): number {
   return Math.round(Number(amount) * 100);
 }
 
-function money(cents: number): string {
+/** Whole cents to the ledger's money text ("-12.30"). */
+export function money(cents: number): string {
   const abs = Math.abs(cents);
   return `${cents < 0 ? "-" : ""}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
 }
@@ -406,7 +407,7 @@ export async function resolveLedgerAccounts(
 }
 
 /** The anchor of an account with no register: today, and no balance. */
-function noBalanceAnchor(): LedgerAnchor {
+export function noBalanceAnchor(): LedgerAnchor {
   return { today: householdTodayISO(), todayBalance: null, snapshotBalance: null, snapshotAt: null, snapshotDay: null };
 }
 
@@ -415,15 +416,25 @@ export function balanceUnavailableReason(scope: LedgerScope): BalanceUnavailable
   return scope.anchor.todayBalance === null ? "no_snapshot" : null;
 }
 
+/**
+ * (S4) A caller that already holds the spine's cash signal (the same call:
+ * `horizonDays: 90`, from today) hands it in, so one request builds one ledger.
+ */
+export type LedgerAnchorOptions = { signal?: Promise<CashSignal> | CashSignal };
+
 /** Today's bank balance and the snapshot it rolls from, exactly as the spine reads them. */
-export async function readLedgerAnchor(householdId: string, ownerUserId: string): Promise<LedgerAnchor> {
+export async function readLedgerAnchor(
+  householdId: string,
+  ownerUserId: string,
+  opts: LedgerAnchorOptions = {},
+): Promise<LedgerAnchor> {
   const [[settings], signal] = await Promise.all([
     db
       .select({ bankSnapshotBalance: forecastSettingsTable.bankSnapshotBalance })
       .from(forecastSettingsTable)
       .where(eq(forecastSettingsTable.userId, ownerUserId)),
     // ⚠️ The spine's call, unchanged: its `bank.balance` IS this `bankToday`.
-    computeCashSignal(householdId, ownerUserId, { horizonDays: SPINE_HORIZON_DAYS }),
+    opts.signal ?? computeCashSignal(householdId, ownerUserId, { horizonDays: SPINE_HORIZON_DAYS }),
   ]);
   const snapshotBalance = settings?.bankSnapshotBalance ?? null;
   // Without a snapshot the cash signal's `bankToday` is the starting balance,
@@ -442,11 +453,12 @@ export async function resolveLedgerScope(
   householdId: string,
   ownerUserId: string,
   account: string | undefined,
+  opts: LedgerAnchorOptions = {},
 ): Promise<LedgerScope> {
   const accounts = await resolveLedgerAccounts(householdId, ownerUserId, account);
   // Another account's anchor never reads the cash signal: its todayBalance is
   // null, so the register below has no opening balance and every balance is null.
-  const anchor = accounts.snapshotAccount ? await readLedgerAnchor(householdId, ownerUserId) : noBalanceAnchor();
+  const anchor = accounts.snapshotAccount ? await readLedgerAnchor(householdId, ownerUserId, opts) : noBalanceAnchor();
   return { ...accounts, anchor };
 }
 
@@ -654,7 +666,7 @@ function runningBalanceOf(reg: Register, row: RegisterRow): string | null {
  * is "no Plaid account", as in JavaScript. Without `includeManual` (an account
  * other than the snapshot's), only the rows on `plaidAccountIds`.
  */
-function bankRowWhere(plaidAccountIds: string[], includeManual: boolean): SQL {
+export function bankRowWhere(plaidAccountIds: string[], includeManual: boolean): SQL {
   const t = transactionsTable;
   const onAccount = plaidAccountIds.length > 0 ? inArray(t.plaidAccountId, plaidAccountIds) : sql`false`;
   if (!includeManual) return sql`(${onAccount})`;
@@ -664,9 +676,13 @@ function bankRowWhere(plaidAccountIds: string[], includeManual: boolean): SQL {
 /**
  * `acct`: the account's rows. `bal`: the same rows with `balance_amount`, what
  * each moves the register by — its amount, except the rows `overrides` names
- * (from `loadRegister`).
+ * (from `loadRegister`) — and (S4) `balance_reason`, why an overridden row moves
+ * it by that (null for a row the register counts).
  */
-function ledgerCtes(accounts: LedgerAccounts, overrides: Array<{ id: string; amount: string }>): SQL {
+function ledgerCtes(
+  accounts: LedgerAccounts,
+  overrides: Array<{ id: string; amount: string; reason?: BalanceReason }>,
+): SQL {
   const t = transactionsTable;
   return sql`
     acct as (
@@ -686,11 +702,11 @@ function ledgerCtes(accounts: LedgerAccounts, overrides: Array<{ id: string; amo
         and ${bankRowWhere(accounts.plaidAccountIds, accounts.snapshotAccount)}
     ),
     overrides as (
-      select (e->>'id')::uuid as id, (e->>'amount')::numeric as amount
+      select (e->>'id')::uuid as id, (e->>'amount')::numeric as amount, e->>'reason' as reason
       from jsonb_array_elements(${JSON.stringify(overrides)}::jsonb) as e
     ),
     bal as (
-      select acct.*, coalesce(o.amount, acct.amount) as balance_amount
+      select acct.*, coalesce(o.amount, acct.amount) as balance_amount, o.reason as balance_reason
       from acct
       left join overrides o on o.id = acct.id
     )`;
@@ -757,6 +773,89 @@ export type LedgerPage = {
   account: { via: string; plaidAccountIds: string[] };
 };
 
+/**
+ * ⭐ (S4) THE LEDGER'S TOTALS — the one SQL the Chase register's totals and the
+ * banking review's cash flow both read, so the two can never disagree.
+ * Extracted verbatim from `readLedgerPage`, plus three sums the page does not
+ * show: what the counted pending rows add (`pendingNet`) and how many rows the
+ * register moves by 0 (`notCounted`: a pending row its posted row replaced; any
+ * other reason — a repeated Plaid id, a mask-twin row, a logged payment a bank
+ * row confirmed).
+ *
+ *   matchingCount  every row matching the filter;
+ *   count, moneyIn, moneyOut, net, review, pendingNet, notCounted
+ *                  every row matching the filter other than `reviewed`, each
+ *                  moving the register by what `loadRegister` says (0 for a row
+ *                  it does not count).
+ */
+export type LedgerTotals = {
+  matchingCount: number;
+  count: number;
+  moneyIn: string;
+  moneyOut: string;
+  net: string;
+  pendingNet: string;
+  notCounted: { superseded: number; other: number };
+  review: { reviewed: number; unreviewed: number };
+};
+
+export async function readLedgerTotals(
+  scope: LedgerScope,
+  filter: LedgerFilter,
+  register?: Register,
+): Promise<LedgerTotals> {
+  const reg = register ?? (await loadRegister(scope));
+  const householdId = scope.householdId;
+  const overrides = reg.ordered
+    .filter((r) => !r.countsInBalance)
+    .map((r) => ({ id: r.id, amount: money(r.balanceCents), reason: r.balanceReason }));
+  const withoutReviewed = filterWhere(filter, false, householdId);
+  const aggregateResult = await db.execute(sql`
+    with ${ledgerCtes(scope, overrides)}
+    select
+      count(*) filter (where ${filterWhere(filter, true, householdId)})::int as matching_count,
+      count(*) filter (where ${withoutReviewed})::int as total_count,
+      round(coalesce(sum(r.balance_amount) filter (where ${withoutReviewed} and r.balance_amount > 0), 0), 2)::text as money_in,
+      round(coalesce(-sum(r.balance_amount) filter (where ${withoutReviewed} and r.balance_amount < 0), 0), 2)::text as money_out,
+      round(coalesce(sum(r.balance_amount) filter (where ${withoutReviewed}), 0), 2)::text as net,
+      count(*) filter (where ${withoutReviewed} and r.reviewed)::int as reviewed_count,
+      count(*) filter (where ${withoutReviewed} and not r.reviewed)::int as unreviewed_count,
+      round(coalesce(sum(r.balance_amount) filter (where ${withoutReviewed} and r.pending), 0), 2)::text as pending_net,
+      count(*) filter (where ${withoutReviewed} and r.balance_reason = 'superseded')::int as superseded_count,
+      count(*) filter (where ${withoutReviewed} and r.balance_reason is not null and r.balance_reason <> 'superseded')::int as other_not_counted
+    from bal r
+    left join ${budgetCategoriesTable} c on c.id = r.category_id
+  `);
+  const [agg] = rowsOf<{
+    matching_count: number;
+    total_count: number;
+    money_in: string;
+    money_out: string;
+    net: string;
+    reviewed_count: number;
+    unreviewed_count: number;
+    pending_net: string;
+    superseded_count: number;
+    other_not_counted: number;
+  }>(aggregateResult);
+  return {
+    matchingCount: Number(agg?.matching_count ?? 0),
+    count: Number(agg?.total_count ?? 0),
+    moneyIn: agg?.money_in ?? "0.00",
+    moneyOut: agg?.money_out ?? "0.00",
+    net: agg?.net ?? "0.00",
+    pendingNet: agg?.pending_net ?? "0.00",
+    notCounted: {
+      superseded: Number(agg?.superseded_count ?? 0),
+      other: Number(agg?.other_not_counted ?? 0),
+    },
+    review: {
+      reviewed: Number(agg?.reviewed_count ?? 0),
+      unreviewed: Number(agg?.unreviewed_count ?? 0),
+    },
+  };
+}
+
 export async function readLedgerPage(
   scope: LedgerScope,
   filter: LedgerFilter,
@@ -784,23 +883,8 @@ export async function readLedgerPage(
   `);
   const [register, pageResult] = await Promise.all([loadRegister(scope), pageQuery]);
 
-  const overrides = register.ordered
-    .filter((r) => !r.countsInBalance)
-    .map((r) => ({ id: r.id, amount: money(r.balanceCents) }));
-  const withoutReviewed = filterWhere(filter, false, householdId);
-  const aggregateQuery = db.execute(sql`
-    with ${ledgerCtes(scope, overrides)}
-    select
-      count(*) filter (where ${filterWhere(filter, true, householdId)})::int as matching_count,
-      count(*) filter (where ${withoutReviewed})::int as total_count,
-      round(coalesce(sum(r.balance_amount) filter (where ${withoutReviewed} and r.balance_amount > 0), 0), 2)::text as money_in,
-      round(coalesce(-sum(r.balance_amount) filter (where ${withoutReviewed} and r.balance_amount < 0), 0), 2)::text as money_out,
-      round(coalesce(sum(r.balance_amount) filter (where ${withoutReviewed}), 0), 2)::text as net,
-      count(*) filter (where ${withoutReviewed} and r.reviewed)::int as reviewed_count,
-      count(*) filter (where ${withoutReviewed} and not r.reviewed)::int as unreviewed_count
-    from bal r
-    left join ${cats} c on c.id = r.category_id
-  `);
+  // (S4) The totals SQL lives in `readLedgerTotals`, shared with the banking review.
+  const aggregateQuery = readLedgerTotals(scope, filter, register);
 
   const pageRows = rowsOf<{ id: string; occurred_on: string; amount: string; occurred_at_key: string | null }>(
     pageResult,
@@ -811,19 +895,10 @@ export async function readLedgerPage(
   const nextCursor =
     hasMore && last ? encodeLedgerCursor({ d: last.occurred_on, t: last.occurred_at_key, i: last.id }) : null;
 
-  const [aggregateResult, full] = await Promise.all([
+  const [totals, full] = await Promise.all([
     aggregateQuery,
     loadAnnotatedRows(scope.householdId, pageSlice.map((r) => r.id)),
   ]);
-  const [agg] = rowsOf<{
-    matching_count: number;
-    total_count: number;
-    money_in: string;
-    money_out: string;
-    net: string;
-    reviewed_count: number;
-    unreviewed_count: number;
-  }>(aggregateResult);
 
   const rows: LedgerPageRow[] = [];
   for (const r of pageSlice) {
@@ -856,17 +931,14 @@ export async function readLedgerPage(
     rows,
     nextCursor,
     limit,
-    matchingCount: Number(agg?.matching_count ?? 0),
+    matchingCount: totals.matchingCount,
     totals: {
-      count: Number(agg?.total_count ?? 0),
-      moneyIn: agg?.money_in ?? "0.00",
-      moneyOut: agg?.money_out ?? "0.00",
-      net: agg?.net ?? "0.00",
+      count: totals.count,
+      moneyIn: totals.moneyIn,
+      moneyOut: totals.moneyOut,
+      net: totals.net,
     },
-    review: {
-      reviewed: Number(agg?.reviewed_count ?? 0),
-      unreviewed: Number(agg?.unreviewed_count ?? 0),
-    },
+    review: totals.review,
     balanceStart,
     balanceEnd: balanceAtEndOf(register, filter.to ?? today),
     balanceToday: scope.anchor.todayBalance,
@@ -881,7 +953,7 @@ export async function readLedgerPage(
  * merchantSignature, displayName), keyed by id. GET /transactions keeps its own
  * copy of this block: that route is deliberately untouched in PR13.
  */
-async function loadAnnotatedRows(
+export async function loadAnnotatedRows(
   householdId: string,
   ids: string[],
 ): Promise<Map<string, Record<string, unknown>>> {
