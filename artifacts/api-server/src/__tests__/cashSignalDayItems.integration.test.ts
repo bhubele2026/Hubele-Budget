@@ -180,7 +180,10 @@ describe("cash signal dayItems — the walk, read back", () => {
     // Today's bank rows: on the curve's first day, signed, the matched one flagged.
     const today = items.filter((i) => i.date === "2026-05-14");
     expect(today.every((i) => i.kind === "bank_row")).toBe(true);
-    expect(today.map((i) => i.amount).sort()).toEqual(["-30.00", "-42.17", "250.00"]);
+    // A stable order whatever order the database returned the rows in: by day, kind, then amount.
+    expect(today.map((i) => i.amount)).toEqual(["-42.17", "-30.00", "250.00"]);
+    // 05-15: income first, then the expenses by label.
+    expect(items.filter((i) => i.date === "2026-05-15").map((i) => (i.kind === "bank_row" ? i.txnId : i.label))).toEqual(["Paycheck", "Phone", "Rent"]);
     const matched = today.filter((i) => i.kind === "bank_row" && i.matched);
     expect(matched).toHaveLength(1);
     expect(matched[0]!.kind === "bank_row" && matched[0]!.txnId).toBe(waterRowId);

@@ -4722,7 +4722,7 @@ export const GetForecastResponse = zod.object({
           )
           .optional()
           .describe(
-            "(T3) Every item the walk applied inside the window, in the order it\napplied them: planned income, planned expenses (the same\noccurrences as `events`) and the checking rows counted after the\nbank reading. A read-only projection of the walk — for every day\n`daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`\nbefore the first day); Σ positive amounts = `projectedIncome`;\nΣ the rest, negated = `projectedExpenses`.\n",
+            "(T3) Every item the walk applied inside the window: planned\nincome, planned expenses (the same occurrences as `events`) and the\nchecking rows counted after the bank reading, in a stable order (by\nday, then income, expenses, bank rows, each by its label and\namount). A\nread-only projection of the walk — for every day\n`daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`\nbefore the first day); Σ positive amounts = `projectedIncome`;\nΣ the rest, negated = `projectedExpenses`.\n",
           ),
         hookAmountIgnored: zod
           .array(
@@ -5246,7 +5246,7 @@ export const GetForecastCashSignalResponse = zod.object({
     )
     .optional()
     .describe(
-      "(T3) Every item the walk applied inside the window, in the order it\napplied them: planned income, planned expenses (the same\noccurrences as `events`) and the checking rows counted after the\nbank reading. A read-only projection of the walk — for every day\n`daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`\nbefore the first day); Σ positive amounts = `projectedIncome`;\nΣ the rest, negated = `projectedExpenses`.\n",
+      "(T3) Every item the walk applied inside the window: planned\nincome, planned expenses (the same occurrences as `events`) and the\nchecking rows counted after the bank reading, in a stable order (by\nday, then income, expenses, bank rows, each by its label and\namount). A\nread-only projection of the walk — for every day\n`daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`\nbefore the first day); Σ positive amounts = `projectedIncome`;\nΣ the rest, negated = `projectedExpenses`.\n",
     ),
   hookAmountIgnored: zod
     .array(

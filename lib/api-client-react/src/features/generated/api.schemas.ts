@@ -6492,10 +6492,12 @@ then, and `status` is `no_data`.
   acceptedImpact?: string;
   daily?: CashSignalDailyItem[];
   events?: CashSignalEventsItem[];
-  /** (T3) Every item the walk applied inside the window, in the order it
-applied them: planned income, planned expenses (the same
-occurrences as `events`) and the checking rows counted after the
-bank reading. A read-only projection of the walk — for every day
+  /** (T3) Every item the walk applied inside the window: planned
+income, planned expenses (the same occurrences as `events`) and the
+checking rows counted after the bank reading, in a stable order (by
+day, then income, expenses, bank rows, each by its label and
+amount). A
+read-only projection of the walk — for every day
 `daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`
 before the first day); Σ positive amounts = `projectedIncome`;
 Σ the rest, negated = `projectedExpenses`.
