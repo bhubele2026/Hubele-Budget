@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amexPlanLine, amexRowKind, amexSummaryPeriod, householdLine, rowInFigure } from "./amexSummaryView";
+import { amexPlanLine, amexRowKind, amexSummaryPeriod, householdLine, monthNameOf, overLinkView, rowInFigure, summaryTitle } from "./amexSummaryView";
 
 describe("amexSummaryPeriod (W4)", () => {
   // Wed 2026-10-14, noon Chicago.
@@ -66,5 +66,50 @@ describe("which rows a figure opens (W4)", () => {
     expect(rowInFigure("credits", refund)).toBe(true);
     expect(rowInFigure("credits", "other_credit")).toBe(true);
     expect(rowInFigure("credits", payment)).toBe(false);
+  });
+});
+
+
+describe("(P1) summaryTitle — the Summary is titled by its period", () => {
+  const now = new Date("2026-10-14T17:00:00Z"); // Wed, noon in Chicago
+  it("this week, a month, Week on another month, a year", () => {
+    expect(summaryTitle("wk", { year: 2026, month: 9 }, now)).toBe("This week · Oct 11 – 17");
+    expect(summaryTitle("mo", { year: 2026, month: 9 }, now)).toBe("October 2026");
+    expect(summaryTitle("wk", { year: 2026, month: 8 }, now)).toBe("September 2026");
+    expect(summaryTitle("yr", { year: 2026, month: 9 }, now)).toBe("2026");
+    expect(monthNameOf({ year: 2026, month: 9 })).toBe("October");
+  });
+});
+
+describe("(P1) overLinkView — every row of the link table", () => {
+  const wk = (plan: "loading" | "failed" | "none" | "over" | "set", owner?: boolean | "unknown") =>
+    overLinkView({ period: "week", current: true, plan, owner });
+  const mo = (plan: "loading" | "failed" | "none" | "over" | "set", current: boolean, owner?: boolean | "unknown") =>
+    overLinkView({ period: "month", monthName: "October", current, plan, owner });
+  it("over (even when not final) asks why", () => {
+    expect(wk("over")).toEqual({ text: "Why are we over? →", state: "over" });
+    expect(mo("over", true)).toEqual({ text: "Why are we over? →", state: "over" });
+    expect(mo("over", false)).toEqual({ text: "Why are we over? →", state: "over" });
+  });
+  it("set and not over (on plan, tight, not final) only views", () => {
+    expect(wk("set")).toEqual({ text: "View this week's spending →", state: "within" });
+    expect(mo("set", true)).toEqual({ text: "View October spending →", state: "within" });
+  });
+  it("no plan this period: the owner sets one, anyone else (or not known yet) reviews", () => {
+    expect(wk("none", true)).toEqual({ text: "Set a weekly plan →", state: "set_plan" });
+    expect(mo("none", true, true)).toEqual({ text: "Set a monthly plan →", state: "set_plan" });
+    expect(wk("none", false)).toEqual({ text: "Review this week →", state: "review" });
+    expect(wk("none", "unknown")).toEqual({ text: "Review this week →", state: "review" });
+    expect(mo("none", true, false)).toEqual({ text: "Review this month →", state: "review" });
+  });
+  it("no plan on a past month, loading, or a failed read: view, never 'over'", () => {
+    expect(mo("none", false, true)).toEqual({ text: "View October spending →", state: "view" });
+    expect(wk("loading")).toEqual({ text: "View this week's spending →", state: "view" });
+    expect(wk("failed")).toEqual({ text: "View this week's spending →", state: "view" });
+    expect(mo("loading", false)).toEqual({ text: "View October spending →", state: "view" });
+    expect(mo("failed", true)).toEqual({ text: "View October spending →", state: "view" });
+  });
+  it("a year views spending by month", () => {
+    expect(overLinkView({ period: "year" })).toEqual({ text: "View spending by month →", state: "year" });
   });
 });

@@ -8,8 +8,9 @@ import React from "react";
 // linked Plaid items and renders "<name> ••<mask>", or "—" when the
 // transaction is manual (no `plaidAccountId`) or the linked Plaid
 // account isn't in the items list (e.g. unlinked / removed). The label
-// is exposed via the `text-card-<id>` (desktop) and
-// `text-card-mobile-<id>` (mobile list) hooks.
+// is exposed via the `text-card-<id>` hook — (P1) one row per transaction,
+// phone and desktop alike. With the All cards summary in, the label is the
+// card's household name instead (amexLayout.test.tsx); here it has not loaded.
 
 class ResizeObserverStub {
   observe() {}
@@ -42,6 +43,8 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/amex", () => undefined] as const,
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+// (P1) The household link reads the plan state (spine / period breakdown): not this test's subject.
+vi.mock("@/components/amex-over-link", () => ({ AmexOverLink: () => null }));
 vi.mock("@/components/plaid-link-button", () => ({ PlaidLinkButton: () => null }));
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => null }));
 vi.mock("@/components/category-picker", () => ({
@@ -199,9 +202,6 @@ describe("Amex page — per-row source-card label", () => {
 
     const desktopCell = screen.getByTestId("text-card-tx-linked");
     expect(desktopCell.textContent ?? "").toBe("Amex Gold ••1002");
-
-    const mobileCell = screen.getByTestId("text-card-mobile-tx-linked");
-    expect(mobileCell.textContent ?? "").toBe("Amex Gold ••1002");
   });
 
   it("renders '—' for a manual txn with no plaidAccountId", async () => {
@@ -243,9 +243,6 @@ describe("Amex page — per-row source-card label", () => {
 
     const desktopCell = screen.getByTestId("text-card-tx-manual");
     expect(desktopCell.textContent ?? "").toBe("—");
-
-    const mobileCell = screen.getByTestId("text-card-mobile-tx-manual");
-    expect(mobileCell.textContent ?? "").toBe("—");
   });
 
   it("renders '—' (no error) when the txn's plaidAccountId isn't in the linked accounts list", async () => {
@@ -284,8 +281,5 @@ describe("Amex page — per-row source-card label", () => {
 
     const desktopCell = screen.getByTestId("text-card-tx-orphan");
     expect(desktopCell.textContent ?? "").toBe("—");
-
-    const mobileCell = screen.getByTestId("text-card-mobile-tx-orphan");
-    expect(mobileCell.textContent ?? "").toBe("—");
   });
 });

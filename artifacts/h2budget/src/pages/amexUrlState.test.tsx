@@ -6,7 +6,8 @@ import React from "react";
 /**
  * (W1) The Amex page keeps its view in the address: `?card=` (and the older
  *   `?accountId=`), `?month=`, `?mode=`. A refresh or a shared link opens the
- *   same view, the band writes `?card=`, and other params (`?tx=`) survive.
+ *   same view, the Summary's By-card list writes `?card=` (P1: the shell's card tabs
+ *   and that list select; the band is the embedded page's), and other params survive.
  *
  * The clock is Wednesday 2026-10-14 (local): this week is Sun 10-11 – Sat 10-17.
  */
@@ -35,6 +36,38 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/next/accounts/x", state.navigate] as const,
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+// (P1) The household link reads the plan state (spine / period breakdown): not this test's subject.
+vi.mock("@/components/amex-over-link", () => ({ AmexOverLink: () => null }));
+// The All cards summary lists each card (the By card list): synthetic figures.
+vi.mock("@workspace/api-client-react/features", () => ({
+  getGetAmexSummaryQueryKey: (p: unknown) => ["/api/amex/summary", p],
+  useGetAmexSummary: (p: { accountId: string; from: string; to: string }) => ({
+    data: {
+      scope: {
+        kind: p.accountId === "all" ? "all" : "card",
+        accountId: p.accountId === "all" ? null : p.accountId,
+        name: null, mask: null, institution: null,
+        cards: [{ accountId: "ext-plat", name: "Platinum", mask: "1005", institution: "American Express", brand: "silver", cadence: "weekly", debtLinked: false, debtId: null, owed: "100.00", paidAs: null, purchases: { amount: "12.34", count: 1 } }],
+      },
+      period: { from: p.from, to: p.to, timezone: "America/Chicago" },
+      owed: { current: "100.00", statement: null, asOf: null, source: "plaid" },
+      purchases: { amount: "12.34", count: 1, reimbursable: { amount: "0.00", count: 0 } },
+      refunds: { amount: "0.00", count: 0 }, payments: { amount: "0.00", count: 0 }, otherCredits: { amount: "0.00", count: 0 },
+      otherCharges: { amount: "0.00", count: 0 }, notMine: { amount: "0.00", count: 0 },
+      householdContribution: { weeklyPlan: "0.00", weeklyKnown: "0.00", weeklyUnresolved: "0.00", monthlyPlan: "0.00", monthlyKnown: "0.00", monthlyUnresolved: "0.00", unfiled: "0.00", link: "/spending/week" },
+      planLink: { kind: "none", payoff: null, payoffDate: null, basis: null, debtId: null, name: null, minimum: null, avalancheRank: null, status: null },
+      needsAttention: {
+        unplanned: { amount: "0.00", count: 0, truncated: false, rows: [] },
+        unfiled: { amount: "0.00", count: 0, truncated: false, rows: [] },
+        uncategorized: { amount: "0.00", count: 0, truncated: false, rows: [] },
+        truncated: false,
+      },
+      limitations: [],
+    },
+    isError: false,
+    isFetching: false,
+  }),
+}));
 vi.mock("@/components/plaid-link-button", () => ({ PlaidLinkButton: () => null }));
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => null }));
 vi.mock("@/components/category-picker", () => ({
@@ -174,14 +207,15 @@ describe("(W1) the Amex page's view is in the address", () => {
     state.rows = [txn({ id: "p1" })];
     show();
     await waitFor(() => expect(screen.getByTestId("row-amex-p1")).toBeTruthy());
-    const tile = document.querySelector('[data-account-id="ext-plat"] button[aria-pressed]') as HTMLElement;
-    expect(tile.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("amex-tile-all").getAttribute("aria-pressed")).toBe("false");
+    // (P1) The card is named once, in the header chip, with its tab's words.
+    expect(screen.getByTestId("account-head-identity").textContent).toContain("Platinum");
+    expect(screen.getByTestId("account-head-identity").textContent).toContain("••1005");
+    expect(screen.queryByTestId("amex-head-all-cards")).toBeNull();
     cleanup();
     window.history.replaceState(null, "", "/amex?accountId=ext-plat");
     show();
     await waitFor(() => expect(screen.getByTestId("row-amex-p1")).toBeTruthy());
-    expect((document.querySelector('[data-account-id="ext-plat"] button[aria-pressed]') as HTMLElement).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("account-head-identity").textContent).toContain("••1005");
   });
 
   it("(Q6b r3) a card with no rows in the opened month stays chosen: the 12-month rows know it", async () => {
@@ -192,20 +226,21 @@ describe("(W1) the Amex page's view is in the address", () => {
     await waitFor(() => expect(state.params.length).toBeGreaterThan(0));
     await new Promise((r) => setTimeout(r, 50));
     expect(new URLSearchParams(window.location.search).get("card")).toBe("ext-plat");
-    expect((document.querySelector('[data-account-id="ext-plat"] button[aria-pressed]') as HTMLElement).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("account-head-identity").textContent).toContain("Platinum");
+    expect(screen.queryByTestId("amex-head-all-cards")).toBeNull();
   });
 
-  it("choosing a card in the band writes ?card=, All cards removes it, and ?tx= is kept", async () => {
+  it("(P1) choosing a card in the By card list writes ?card= (one history entry) and keeps other params", async () => {
     window.history.replaceState(null, "", "/amex?category=Dining");
     state.rows = [txn({ id: "p1" })];
     show();
     await waitFor(() => expect(screen.getByTestId("row-amex-p1")).toBeTruthy());
-    fireEvent.click(document.querySelector('[data-account-id="ext-plat"] button[aria-pressed]') as HTMLElement);
+    const before = window.history.length;
+    fireEvent.click(screen.getByTestId("amex-card-balance-ext-plat"));
     expect(new URLSearchParams(window.location.search).get("card")).toBe("ext-plat");
     expect(new URLSearchParams(window.location.search).get("category")).toBe("Dining");
-    fireEvent.click(screen.getByTestId("amex-tile-all"));
-    expect(new URLSearchParams(window.location.search).has("card")).toBe(false);
-    expect(new URLSearchParams(window.location.search).get("category")).toBe("Dining");
+    expect(window.history.length).toBe(before + 1);
+    await waitFor(() => expect(screen.getByTestId("account-head-identity").textContent).toContain("••1005"));
   });
 
   it("the month and the Wk/Mo/Yr mode are written, and a reload (remount) opens the same view", async () => {

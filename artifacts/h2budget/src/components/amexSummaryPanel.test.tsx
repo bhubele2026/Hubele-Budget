@@ -1,13 +1,22 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 
-/** (Q6b round 2) The Summary panel: title from the page's selection, the period's "Why over?" link, reserved height, focus. */
+/**
+ * (Q6b round 2 → P1) The Summary panel: titled by its period, the period's household
+ * link, the To-review buttons, reserved height, focus. Synthetic figures.
+ */
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...rest }: { children: React.ReactNode; href: string; "data-testid"?: string }) => <a href={href} data-testid={rest["data-testid"]}>{children}</a>,
 }));
-vi.mock("@/components/amex-pay-mode", () => ({ CardPayModes: () => null }));
+const link = vi.hoisted(() => ({ periods: [] as unknown[] }));
+vi.mock("@/components/amex-over-link", () => ({
+  AmexOverLink: ({ href, period }: { href: string; period: unknown }) => {
+    link.periods.push(period);
+    return <a href={href} data-testid="amex-household-link">link</a>;
+  },
+}));
 
-import { AmexSummaryPanel, AmexNeedsAttention, whyOverPath } from "./amex-summary";
+import { AmexSummaryPanel, whyOverPath } from "./amex-summary";
 
 const total = (amount: string, count: number) => ({ amount, count });
 const summary = (over: Record<string, unknown> = {}) =>
@@ -21,7 +30,7 @@ const summary = (over: Record<string, unknown> = {}) =>
     planLink: { kind: "weekly_hook", payoff: "0.00", payoffDate: "2026-09-30", basis: "plan", debtId: null, name: null, minimum: null, avalancheRank: null, status: null },
     needsAttention: {
       unplanned: { amount: "40.00", count: 2, truncated: false, rows: [] },
-      unfiled: { amount: "0.00", count: 0, truncated: false, rows: [] },
+      unfiled: { amount: "85.00", count: 1, truncated: false, rows: [] },
       uncategorized: { amount: "0.00", count: 0, truncated: false, rows: [] },
       truncated: false,
     },
@@ -29,10 +38,23 @@ const summary = (over: Record<string, unknown> = {}) =>
     ...over,
   }) as never;
 
-const panel = (props: Record<string, unknown> = {}) =>
-  render(<AmexSummaryPanel summary={summary()} failed={false} periodLabel="September 2026" mode="mo" isThisWeek={false} figure={null} onFigure={() => undefined} {...props} />);
+type Props = Partial<React.ComponentProps<typeof AmexSummaryPanel>>;
+const BASE = {
+  failed: false,
+  title: "September 2026",
+  mode: "mo" as const,
+  isThisWeek: false,
+  figure: null,
+  onFigure: () => undefined,
+  allCards: true,
+  linkPeriod: { kind: "month" as const, start: "2026-09-01", monthName: "September" },
+};
+const panel = (props: Props = {}) => render(<AmexSummaryPanel summary={summary()} {...BASE} {...props} />);
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  link.periods.length = 0;
+});
 
 describe("whyOverPath", () => {
   it("this week -> the week page; a past month -> that month; a year -> the month holding its end; no period -> the bare month", () => {
@@ -42,24 +64,78 @@ describe("whyOverPath", () => {
     expect(whyOverPath("yr", false, { from: "2025-01-01", to: "2025-12-31" })).toBe("/spending/month?start=2025-12-31");
     expect(whyOverPath("mo", false, null)).toBe("/spending/month");
   });
-  it("the panel links the Summary's own period, not the current one", () => {
+  it("the panel links the Summary's own period, and hands the link the period it reads the plan for", () => {
     panel();
     expect(screen.getByTestId("amex-household-link").getAttribute("href")).toBe("/spending/month?start=2026-09-01");
+    expect(link.periods.at(-1)).toEqual({ kind: "month", start: "2026-09-01", monthName: "September" });
   });
 });
 
-describe("title follows the page's selection", () => {
-  it("one card selected, summary loading: the card, never 'All cards'", () => {
-    panel({ summary: undefined, allCards: false, cardTitle: "Platinum ••1005" });
-    expect(screen.getByRole("heading", { name: "Platinum ••1005" })).toBeTruthy();
+describe("(P1) the title is the period; the card is named in the page's header", () => {
+  it("a period title, loaded, loading or failed", () => {
+    panel({ title: "This week · Oct 11 – 17" });
+    expect(screen.getByRole("heading", { name: "This week · Oct 11 – 17" })).toBeTruthy();
+    cleanup();
+    panel({ summary: undefined, allCards: false });
+    expect(screen.getByRole("heading", { name: "September 2026" })).toBeTruthy();
+    expect(screen.getByTestId("amex-summary").textContent).not.toContain("All cards");
+    cleanup();
+    panel({ summary: undefined, failed: true, allCards: false });
+    expect(screen.getByRole("heading", { name: "September 2026" })).toBeTruthy();
   });
-  it("one card selected, summary failed: still the card", () => {
-    panel({ summary: undefined, failed: true, allCards: false, cardTitle: "Platinum ••1005" });
-    expect(screen.getByRole("heading", { name: "Platinum ••1005" })).toBeTruthy();
+  it("All cards shows its By card list; one card shows how it is paid, and the Owed figure links its history", () => {
+    const onHistory = vi.fn();
+    panel({ byCard: <div data-testid="by-card" />, payBlock: <div data-testid="pay-block" />, onOwedHistory: onHistory });
+    expect(screen.getByTestId("by-card")).toBeTruthy();
+    expect(screen.queryByTestId("pay-block")).toBeNull();
+    expect(screen.queryByTestId("amex-owed-history-link")).toBeNull();
+    cleanup();
+    panel({ allCards: false, byCard: <div data-testid="by-card" />, payBlock: <div data-testid="pay-block" />, onOwedHistory: onHistory });
+    expect(screen.queryByTestId("by-card")).toBeNull();
+    expect(screen.getByTestId("pay-block")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("amex-owed-history-link"));
+    expect(onHistory).toHaveBeenCalledTimes(1);
   });
-  it("All cards selected says All cards", () => {
-    panel({ allCards: true, cardTitle: null });
-    expect(screen.getByRole("heading", { name: "All cards" })).toBeTruthy();
+  it("figures use the KPI step and readable labels", () => {
+    panel();
+    const owed = screen.getByTestId("amex-fig-owed");
+    expect(owed.querySelector(".text-kpi")!.textContent).toBe("$100.00");
+    expect(within(owed).getByText("Owed").className).toContain("text-label");
+  });
+});
+
+describe("(P1) the To-review line", () => {
+  it("one button per group with a count, said and priced; pressing one narrows the activity", () => {
+    const onAttention = vi.fn();
+    panel({ onAttention });
+    const line = screen.getByTestId("amex-review-count");
+    expect(line.textContent).toContain("To review:");
+    expect(screen.getByTestId("amex-attn-unplanned").textContent).toBe("2 unplanned · $40.00");
+    expect(screen.getByTestId("amex-attn-unfiled").textContent).toBe("1 not filed yet · $85.00");
+    expect(screen.queryByTestId("amex-attn-uncategorized")).toBeNull();
+    expect(screen.getByTestId("amex-attn-unfiled").getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(screen.getByTestId("amex-attn-unfiled"));
+    expect(onAttention).toHaveBeenCalledWith("unfiled");
+  });
+  it("the pressed group says so, and pressing it again clears it", () => {
+    const onAttention = vi.fn();
+    panel({ attention: "unplanned", onAttention });
+    expect(screen.getByTestId("amex-attn-unplanned").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByTestId("amex-attn-unplanned"));
+    expect(onAttention).toHaveBeenCalledWith(null);
+  });
+  it("nothing to review says so", () => {
+    panel({
+      summary: summary({
+        needsAttention: {
+          unplanned: { amount: "0.00", count: 0, truncated: false, rows: [] },
+          unfiled: { amount: "0.00", count: 0, truncated: false, rows: [] },
+          uncategorized: { amount: "0.00", count: 0, truncated: false, rows: [] },
+          truncated: false,
+        },
+      }),
+    });
+    expect(screen.getByTestId("amex-attn-none").textContent).toBe("Nothing to review in this period.");
   });
 });
 
@@ -69,7 +145,7 @@ describe("height while the next answer loads", () => {
     Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 312 });
     try {
       const r = panel();
-      r.rerender(<AmexSummaryPanel summary={undefined} failed={false} periodLabel="September 2026" mode="mo" isThisWeek={false} figure={null} onFigure={() => undefined} />);
+      r.rerender(<AmexSummaryPanel summary={undefined} {...BASE} />);
       expect((screen.getByTestId("amex-summary-loading") as HTMLElement).style.height).toBe("312px");
     } finally {
       if (desc) Object.defineProperty(HTMLElement.prototype, "offsetHeight", desc);
@@ -78,25 +154,11 @@ describe("height while the next answer loads", () => {
 });
 
 describe("keyboard focus", () => {
-  it("'N to review' moves focus to the Needs attention heading", () => {
-    const s = summary();
-    render(
-      <>
-        <AmexSummaryPanel summary={s} failed={false} periodLabel="x" mode="mo" isThisWeek={false} figure={null} onFigure={() => undefined} />
-        <AmexNeedsAttention summary={s} showCard={false} onOpenRow={() => undefined} />
-      </>,
-    );
-    fireEvent.click(screen.getByText("2 to review"));
-    const h = screen.getByRole("heading", { name: "Needs attention" });
-    expect(document.activeElement).toBe(h);
-    expect(h.getAttribute("tabindex")).toBe("-1");
-    expect(h.className).toContain("focus:ring-2");
-  });
   it("Retry keeps focus on the Summary heading", () => {
     const retry = vi.fn();
-    panel({ summary: undefined, failed: true, allCards: true, onRetry: retry });
+    panel({ summary: undefined, failed: true, onRetry: retry });
     fireEvent.click(screen.getByTestId("amex-summary-retry"));
     expect(retry).toHaveBeenCalledTimes(1);
-    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "All cards" }));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "September 2026" }));
   });
 });

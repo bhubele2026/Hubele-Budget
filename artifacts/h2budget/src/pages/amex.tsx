@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ledgerLoaded, useTxDeepLink } from "@/hooks/useTxDeepLink";
 import { pinRowInView, stickyClearance } from "@/lib/pinRow";
 import { Link, useLocation } from "wouter";
@@ -20,11 +20,7 @@ import { LedgerChartSkeleton } from "@/components/account-page/account-page-skel
 import { Panel } from "@/components/next/Panel";
 import { useNearViewport } from "@/hooks/useNearViewport";
 import { AMEX_MONTH_LIMIT, amexAllScope, amexMonthParams, amexSummaryParams } from "./amexQueries";
-import { MatchedRuleChip } from "@/components/matched-rule-chip";
-import { RowMenu } from "@/components/row-menu";
 import { displayAmount, formatDisplayAmount } from "@/lib/amountDisplay";
-import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
-import { AccountTransactionRow, ExpiredHoldLabel, ROW_SCROLL_MARGIN_TOP } from "@/components/account-page/transaction-row";
 import { SplitByCategoryHost } from "@/components/splits/SplitByCategoryHost";
 import {
   useBulkRecategorizePrompt,
@@ -37,16 +33,6 @@ import { btnSm, card, emptyNote } from "@/ui";
 import { scoped, amexSummaryMatches } from "@/lib/queryState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Popover,
   PopoverContent,
@@ -60,21 +46,13 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import {
-  Check,
-  CreditCard,
-  RefreshCw,
-  X,
-  ExternalLink,
-} from "lucide-react";
-import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { formatCurrency } from "@/lib/utils";
 import { householdToday } from "@/lib/householdDay";
-import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
+import type { BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PostLinkProgressBanner } from "@/components/post-link-progress";
 import {
@@ -83,11 +61,10 @@ import {
 import { SyncButton } from "@/components/sync-button";
 import { useListPlaidItems } from "@workspace/api-client-react";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
-import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
 import { accountPageHref } from "@/lib/accountPage";
 import { currentRowDeepLink, rowDeepLinkStatus } from "@/lib/rowDeepLink";
-import { replaceUrlParam, useUrlState } from "@/hooks/useUrlState";
+import { useUrlState } from "@/hooks/useUrlState";
 import { modeParam, monthParam, pickParam, urlHasMonth } from "@/lib/ledgerUrl";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
 import { isCounted } from "@/lib/countedRows";
@@ -115,29 +92,53 @@ import {
   type WindowConfig,
 } from "@/components/account-page";
 import { AmexLogo } from "@/components/brand-logos";
-import { AmexCardBand, useAmexCardTitle } from "@/components/amex-card-band";
-import { AmexSummaryPanel, AmexNeedsAttention } from "@/components/amex-summary";
+import { AmexCardBand, useAmexCardName } from "@/components/amex-card-band";
+import { AmexSummaryPanel, type AmexAttentionGroup, type AmexLinkPeriod } from "@/components/amex-summary";
+import { CardPayModes } from "@/components/amex-pay-mode";
+import { AmexLedgerRow, AmexRowDetails } from "@/components/amex-row";
+import { AddToAvalanche } from "@/components/add-card-to-avalanche";
+import { amexLedgerGrid, type AmexRowMode } from "@/components/account-page/ledger-grid";
 import { useGetAmexSummary, getGetAmexSummaryQueryKey } from "@workspace/api-client-react/features";
 import {
+  FIGURE_WORDS,
   amexRowKind,
   amexSummaryPeriod,
+  monthNameOf,
   rowInFigure,
+  summaryTitle,
   type AmexFigure,
 } from "@/lib/amexSummaryView";
-import { monthWords } from "@/lib/rowDeepLink";
+import { categoryProvenance, spendingWords } from "@/lib/amexRowWords";
+import { shellScrollerOf } from "@/lib/shellScroll";
 import { PageGrid } from "@/components/next/PageGrid";
-import { cardOrderOf, identityOf, type AccountAccentName } from "@/lib/accountIdentity";
+import { cardOrderOf, identityOf, type AccountAccentName, type AccountIdentity } from "@/lib/accountIdentity";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { currentWeekRange, type RangeMode } from "@/lib/timeRange";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
 import { cardOwedView, needsLiability } from "@/lib/cardBalance";
+import { getListDebtsQueryKey, getGetAmexWeeklyPayoffQueryKey } from "@workspace/api-client-react";
 
-/** The identity accent's dot (the same tokens as `AccountChip`). */
-const ACCENT_DOT: Record<AccountAccentName, string> = {
-  checking: "bg-acct-checking",
-  amex: "bg-acct-amex",
-  card2: "bg-acct-card2",
-  other: "bg-acct-other",
+/** (P1) How the rows read: Review (words, the default) or Categorize (the bucket marks). Kept per browser. */
+const ROW_MODE_KEY = "amex.rowMode";
+function readRowMode(): AmexRowMode {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(ROW_MODE_KEY) === "categorize" ? "categorize" : "review";
+  } catch {
+    return "review";
+  }
+}
+
+/** (P1) The To-review group the activity is narrowed to: a snapshot of the server's rows at the click. */
+type AttentionLens = {
+  group: AmexAttentionGroup;
+  rows: ReadonlyArray<{ id: string; date: string }>;
+  count: number;
+  truncated: boolean;
+};
+const ATTN_WORDS: Record<AmexAttentionGroup, string> = {
+  unplanned: "unplanned",
+  unfiled: "not filed yet",
+  uncategorized: "with no category",
 };
 
 // The "American Express" page is really the credit-cards view: AMEX_SOURCES
@@ -178,11 +179,6 @@ function dayInOut(items: { amount: string; source?: string | null; expiredHold?:
   return { out: out / 100, in: inn / 100 };
 }
 
-/** The state chip a row carries instead of fading: Ignored wins over Reviewed. */
-function rowStateLabel(t: { reviewed?: boolean }, isIgnored: boolean): "Ignored" | "Reviewed" | null {
-  return isIgnored ? "Ignored" : t.reviewed ? "Reviewed" : null;
-}
-
 function parseSigned(amount: string) {
   return parseFloat(amount) || 0;
 }
@@ -200,67 +196,6 @@ function currentBucket(t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowanc
   if (t.monthlyAllowance) return "monthly";
   if (t.unplannedAllowance) return "unplanned";
   return "";
-}
-
-// (#632 follow-up) Per-row chip for marking a card payment as going to a
-// card OUTSIDE the household's debt avalanche (e.g. a spouse's external
-// card). When set, the row is excluded from avalanche actuals on the
-// server and from every dashboard bucket on the client. Surfaced on
-// every row (not just isTransfer rows) so the user can pre-empt the
-// classifier — but visually subtle until clicked.
-function ExternalCardChip({
-  t,
-  onToggle,
-  testIdSuffix,
-}: {
-  t: Transaction;
-  onToggle: (next: boolean) => void;
-  testIdSuffix: string;
-}) {
-  if (t.isExternalCardPayment) {
-    return (
-      <span
-        className="chip gray inline-flex items-center gap-1"
-        title="Excluded from avalanche actuals and every dashboard bucket"
-        data-testid={`badge-external-card-${testIdSuffix}`}
-      >
-        <ExternalLink className="h-3 w-3" />
-        Not in avalanche
-        <button
-          type="button"
-          aria-label="Clear external card flag"
-          data-testid={`button-clear-external-card-${testIdSuffix}`}
-          className="press -mr-0.5 ml-0.5 inline-flex items-center justify-center rounded hover:text-brand-navy"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle(false);
-          }}
-        >
-          <X className="h-3 w-3" />
-        </button>
-      </span>
-    );
-  }
-  // Only offer the affordance on rows that look like card payments —
-  // i.e. already classified as a transfer. This keeps the noise down
-  // on regular charges while still making the toggle reachable for
-  // the rows that actually need it.
-  if (!t.isTransfer) return null;
-  return (
-    <button
-      type="button"
-      data-testid={`button-mark-external-card-${testIdSuffix}`}
-      title="Mark this payment as going to a card outside our avalanche"
-      className="chip gray press inline-flex items-center gap-1 hover:text-brand-navy"
-      onClick={(e) => {
-        e.stopPropagation();
-        onToggle(true);
-      }}
-    >
-      <ExternalLink className="h-3 w-3" />
-      Not in avalanche
-    </button>
-  );
 }
 
 /**
@@ -344,6 +279,20 @@ export default function AmexPage({
       window.localStorage.removeItem("amex.hideReviewed");
     }
   }, [hideReviewed]);
+  // (P1) Review (words) or Categorize (the bucket marks), kept like Hide reviewed.
+  const [rowMode, setRowModeState] = useState<AmexRowMode>(readRowMode);
+  useEffect(() => {
+    try {
+      if (rowMode === "categorize") window.localStorage.setItem(ROW_MODE_KEY, "categorize");
+      else window.localStorage.removeItem(ROW_MODE_KEY);
+    } catch {
+      /* storage unavailable: the mode lasts for this visit */
+    }
+  }, [rowMode]);
+  // (P1) The rows whose details are open. Several may be open; each survives refetches,
+  // a mode switch and Hide reviewed (an open row stays listed until it is closed).
+  const [openDetails, setOpenDetails] = useState<ReadonlySet<string>>(() => new Set());
+  const detailToggles = useRef(new Map<string, HTMLButtonElement>());
 
   // (#814) Reactive "today" so the forward-looking chart window rolls
   // forward without a reload. `currentMonth` is derived from this, so the
@@ -411,9 +360,16 @@ export default function AmexPage({
   const rowLinkMonthRef = useRef<MonthKey | null>(rowLink.tx ? selectedMonth : null);
 
   // (W4) The summary's figure the owner opened (Purchases, Payments, Credits &
-  // refunds) filters the activity below; the row a "Needs attention" line
-  // jumped to (`?tx=`) is scrolled to and marked.
-  const [figure, setFigure] = useState<AmexFigure | null>(null);
+  // refunds) filters the activity below; the row a `?tx=` link names is
+  // scrolled to and marked.
+  const [figure, setFigureState] = useState<AmexFigure | null>(null);
+  // (P1) A To-review group's rows (a snapshot of the server's ids). A figure and a group
+  // never both narrow the activity: choosing one clears the other.
+  const [attn, setAttn] = useState<AttentionLens | null>(null);
+  const setFigure = (f: AmexFigure | null) => {
+    setAttn(null);
+    setFigureState(f);
+  };
   const [focusTx, setFocusTx] = useState<string | null>(rowLink.tx);
   useEffect(() => {
     const onPop = () => setFocusTx(new URLSearchParams(window.location.search).get("tx"));
@@ -812,7 +768,8 @@ export default function AmexPage({
         return false;
       if (cardFilter !== "all" && (t.plaidAccountId ?? "") !== cardFilter)
         return false;
-      if (hideReviewed && t.reviewed) return false;
+      // (P1) A row whose details are open stays listed until they close.
+      if (hideReviewed && t.reviewed && !openDetails.has(t.id)) return false;
       if (figure && !rowInFigure(figure, amexRowKind(t, categories))) return false;
       if (categoryFilter !== "all") {
         if (categoryFilter === "uncategorized") {
@@ -825,7 +782,33 @@ export default function AmexPage({
       }
       return true;
     });
-  }, [monthScoped, search, memberFilter, cardFilter, categoryFilter, categoryById, from, to, hideReviewed, rangeMode, selectedMonth, currentMonth, figure, categories]);
+  }, [monthScoped, search, memberFilter, cardFilter, categoryFilter, categoryById, from, to, hideReviewed, rangeMode, selectedMonth, currentMonth, figure, categories, openDetails]);
+
+  // (P1) A To-review group narrows the activity to the server's rows for it, as they were
+  // when it was chosen (a row filed since stays on screen, so the person sees it resolved).
+  // It bypasses the week, Hide reviewed, the search and the category filter: those rows
+  // ARE what the person asked to see. Rows of another month are counted in the note.
+  const attnIds = useMemo(() => (attn ? new Set(attn.rows.map((r) => r.id)) : null), [attn]);
+  const shown = useMemo(() => {
+    if (!attnIds) return filtered;
+    return monthScoped.filter((t) => attnIds.has(t.id) && (cardFilter === "all" || (t.plaidAccountId ?? "") === cardFilter));
+  }, [attnIds, filtered, monthScoped, cardFilter]);
+  const attnInMonth = attn ? attn.rows.filter((r) => compareMonth(monthKeyFromISO(r.date), selectedMonth) === 0).length : 0;
+  const attnElsewhere = useMemo(() => {
+    if (!attn) return null;
+    const months = new Map<string, number>();
+    for (const r of attn.rows) {
+      const mk = monthKeyFromISO(r.date);
+      if (compareMonth(mk, selectedMonth) === 0) continue;
+      const key = r.date.slice(0, 7);
+      months.set(key, (months.get(key) ?? 0) + 1);
+    }
+    if (months.size === 0) return null;
+    // The newest month holding any of them is the one offered.
+    const newest = [...months.keys()].sort().reverse()[0]!;
+    const total = [...months.values()].reduce((a, b) => a + b, 0);
+    return { total, month: monthKeyFromISO(`${newest}-01`), single: months.size === 1 };
+  }, [attn, selectedMonth]);
 
   // Group by day (descending). Within each day, sort newest-first via
   // the canonical comparator so the per-row "bal $X" running statement
@@ -833,7 +816,7 @@ export default function AmexPage({
   // `walkCardBalancesBack` walked the list.
   const groups = useMemo(() => {
     const map = new Map<string, Transaction[]>();
-    for (const t of filtered) {
+    for (const t of shown) {
       const k = t.occurredOn.slice(0, 10);
       const arr = map.get(k);
       if (arr) arr.push(t);
@@ -841,16 +824,16 @@ export default function AmexPage({
     }
     for (const arr of map.values()) arr.sort(compareNewestFirst);
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  }, [filtered]);
+  }, [shown]);
 
-  // (W4) Scroll to the row a "Needs attention" line (or a `?tx=` link) named,
-  // once its month's rows have loaded, and mark it. Both layouts render the
-  // row; the visible one is the one scrolled to.
+  // (W4) Scroll to the row a `?tx=` link named, once its month's rows have
+  // loaded, and mark it.
   const focusedRef = useRef<string | null>(null);
   const pinCancelRef = useRef<(() => void) | null>(null);
   useEffect(() => () => pinCancelRef.current?.(), []);
+  // (P1) One row per transaction, phone and desktop alike.
   const nodesFor = (id: string) =>
-    Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="row-amex-${id}"], [data-testid="row-amex-mobile-${id}"]`));
+    Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="row-amex-${id}"]`));
   useEffect(() => {
     if (!focusTx) {
       focusedRef.current = null;
@@ -1384,7 +1367,7 @@ export default function AmexPage({
   useEffect(() => {
     // Drop selections that are no longer visible.
     setSelected((prev) => {
-      const visible = new Set(filtered.map((t) => t.id));
+      const visible = new Set(shown.map((t) => t.id));
       let changed = false;
       const next = new Set<string>();
       for (const id of prev) {
@@ -1393,10 +1376,19 @@ export default function AmexPage({
       }
       return changed ? next : prev;
     });
-  }, [filtered]);
+  }, [shown]);
 
-  const invalidateTxns = () =>
-    qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+  // (P1) The Summary's figures and To-review counts, and the plan state its link reads,
+  // move with any row write. Page-local on purpose: the global write invalidation sits
+  // on the landing path, which has no room for these keys.
+  const invalidateSummary = () => {
+    void qc.invalidateQueries({ queryKey: ["/api/amex/summary"] });
+    void qc.invalidateQueries({ queryKey: ["/api/money/period-breakdown"] });
+  };
+  const invalidateTxns = () => {
+    invalidateSummary();
+    return qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+  };
 
   const monthStartOf = (occurredOn: string): string =>
     `${occurredOn.slice(0, 7)}-01`;
@@ -1417,13 +1409,26 @@ export default function AmexPage({
   // sync won't restamp it back to Plaid's date. Invalidates both the
   // source and destination budget months when the move crosses a boundary.
   // Mark / unmark a card payment as going to a card outside the avalanche.
-  // One handler for the mobile and the desktop row.
+  // (P1) From the row's details.
   const setExternalCard = (t: Transaction, v: boolean) =>
     updateTx.mutate(
       { id: t.id, data: { isExternalCardPayment: v } },
       {
         onSuccess: () => {
-          qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+          void invalidateTxns();
+          qc.invalidateQueries({
+            queryKey: getGetBudgetMonthQueryKey(`${t.occurredOn.slice(0, 7)}-01`),
+          });
+        },
+      },
+    );
+  // Count a transfer as spending (clears the row's Transfer flag; the server records it was by hand).
+  const clearTransfer = (t: Transaction) =>
+    updateTx.mutate(
+      { id: t.id, data: { isTransfer: false } },
+      {
+        onSuccess: () => {
+          void invalidateTxns();
           qc.invalidateQueries({
             queryKey: getGetBudgetMonthQueryKey(`${t.occurredOn.slice(0, 7)}-01`),
           });
@@ -1693,6 +1698,7 @@ export default function AmexPage({
           weeklyBucket: updated.weeklyBucket,
           reviewed: updated.reviewed,
         });
+        invalidateSummary();
       } catch (e) {
         // Field-level revert: only restore fields whose cache value is
         // still our optimistic value. A newer click's optimistic edit
@@ -1741,6 +1747,7 @@ export default function AmexPage({
           reimbursed: updated.reimbursed,
           ...("reviewed" in reviewedPatch ? { reviewed: updated.reviewed } : {}),
         });
+        invalidateSummary();
       } catch (e) {
         if (prev) patchTransactionIfMatching(t.id, patch, prev);
         toast({
@@ -2016,14 +2023,14 @@ export default function AmexPage({
 
   // (Q6b) The page opens at the top, summary first: nothing scrolls on its own
   // when a card opens or changes. The only scrolls are a `?tx=` deep link (one,
-  // in the focus effect above) and a "Needs attention" line.
+  // in the focus effect above) and a To-review button (to the Activity heading).
   const scrolledRef = useRef(false);
 
   // (F8) `?tx=<id>` — an Ask answer's charge link — scrolls to that row once
   // the month is on screen, as the Chase page does (CH-09).
   useTxDeepLink({
     ready: !isLoading,
-    rowTestIds: (id) => [`row-amex-${id}`, `row-amex-mobile-${id}`],
+    rowTestIds: (id) => [`row-amex-${id}`],
     scrolledRef,
     scroll: false,
     // (Q6b) A row that never appears: once this card's month has loaded, drop the link
@@ -2094,31 +2101,158 @@ export default function AmexPage({
     navigate(id === "all" ? "/amex" : accountPageHref({ plaidAccountId: id }));
   };
 
-  const selectedCardTitle = useAmexCardTitle(cardFilter, cardMasks);
-
-  const summaryPeriodLabel =
-    rangeMode === "wk" && compareMonth(selectedMonth, currentMonth) === 0
-      ? currentWeekRange().label
-      : rangeMode === "yr"
-        ? String(selectedMonth.year)
-        : monthWords(selectedMonth);
-
-  // (W4) A "Needs attention" line: open that row's month in the activity, show
-  // everything (no figure, search or category filter hiding it), scroll to it.
-  // The jump is its own history entry, so Back returns to where the owner was.
-  const jumpToRow = (row: { id: string; date: string }) => {
-    if (typeof window !== "undefined") {
-      window.history.pushState(window.history.state, "", `${window.location.pathname}${window.location.search}${window.location.hash}`);
+  // (P1) The card on screen is named ONCE, in the header chip, with the words of its tab
+  // (the household's name for it ••last4). While those words are still being read the chip
+  // keeps its place as a placeholder: never "All cards" under one card's tab.
+  const cardName = useAmexCardName(cardFilter, cardMasks);
+  const headIdentity: AccountIdentity | null = (() => {
+    if (cardFilter === "all") return null;
+    if (cardName) {
+      const base: AccountIdentity = selectedCardIdentity ?? {
+        id: cardFilter, kind: "amex", label: cardName.name, shortLabel: cardName.name, mask4: "", accent: "amex", isCard: true,
+      };
+      return { ...base, label: cardName.name, shortLabel: cardName.name, mask4: cardName.mask || base.mask4 };
     }
-    setFigure(null);
-    setSearch("");
-    setCategoryFilter("all");
-    setHideReviewed(false);
-    setRangeMode("mo");
-    setSelectedMonth(monthKeyFromISO(row.date));
-    replaceUrlParam("tx", row.id);
-    setFocusTx(row.id);
+    return cardName === null ? selectedCardIdentity : null;
+  })();
+  const headUnknown = cardFilter !== "all" && headIdentity === null && (cardName === undefined || plaidItemsForScope === undefined);
+
+  const isThisMonth = compareMonth(selectedMonth, currentMonth) === 0;
+  const linkPeriod: AmexLinkPeriod =
+    rangeMode === "wk" && isThisMonth
+      ? { kind: "week" }
+      : rangeMode === "yr"
+        ? { kind: "year" }
+        : { kind: "month", start: monthFirstISO(selectedMonth), monthName: monthNameOf(selectedMonth) };
+
+  // (P1) Each card's household name ••last4 for the rows' Card column (All cards), from the
+  // summary's own cards (the tab's words); Plaid's label until those are in.
+  const summaryCardLabel = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of summaryQ.data?.scope.cards ?? []) {
+      const mask = cardMasks.get(c.accountId) || c.mask || "";
+      m.set(c.accountId, mask ? `${c.name} ••${mask}` : c.name);
+    }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summaryQ.data, plaidItemsForScope]);
+  const rowCardLabel = (t: Transaction): string | null =>
+    (t.plaidAccountId && (summaryCardLabel.get(t.plaidAccountId) ?? cardLabelByPlaidAccountId.get(t.plaidAccountId))) || null;
+
+  // (P1) The server's "not filed yet" rows, for a row's spending words.
+  const unfiledIds = useMemo(
+    () => new Set((summaryQ.data?.needsAttention.unfiled.rows ?? []).map((r) => r.id)),
+    [summaryQ.data],
+  );
+  const uncategorizedCatId = useMemo(
+    () => (categories ?? []).find((c) => c.name === "Uncategorized")?.id ?? null,
+    [categories],
+  );
+
+  // (P1) A To-review button: the activity shows that group's rows (the server's, up to 50),
+  // and the keyboard lands on the Activity heading.
+  const ledgerTitleRef = useRef<HTMLHeadingElement | null>(null);
+  const focusActivity = () => {
+    requestAnimationFrame(() => {
+      const h = ledgerTitleRef.current;
+      if (!h) return;
+      h.scrollIntoView?.({ block: "start" });
+      h.focus({ preventScroll: true });
+    });
   };
+  const chooseAttention = (g: AmexAttentionGroup | null) => {
+    const grp = g ? summaryQ.data?.needsAttention[g] : undefined;
+    if (!g || !grp) {
+      setAttn(null);
+      return;
+    }
+    setFigureState(null);
+    setAttn({ group: g, rows: grp.rows.map((r) => ({ id: r.id, date: r.date })), count: grp.count, truncated: grp.truncated });
+    focusActivity();
+  };
+  const chooseFigure = (f: AmexFigure | null) => setFigure(f);
+  // A different card shows different rows: a group chosen on another card is dropped.
+  useEffect(() => setAttn(null), [cardFilter]);
+
+  // (P1) Details: open / close; closing gives focus back to the row's Details button.
+  const toggleDetails = (id: string) =>
+    setOpenDetails((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const closeDetails = (id: string) => {
+    setOpenDetails((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    detailToggles.current.get(id)?.focus();
+  };
+
+  // (P1) Switching Review ⇄ Categorize changes the rows' height. Scrolled into the
+  // activity (the pane pinned at the top), the first row in view stays where it was: its
+  // top is measured before the switch and restored after. Above that, nothing over the
+  // switch moves, so the page is left alone (the button stays under the finger).
+  const modeAnchorRef = useRef<{ id: string; top: number } | null>(null);
+  const setRowMode = (next: AmexRowMode) => {
+    if (next === rowMode) return;
+    modeAnchorRef.current = null;
+    const pane = paneRef.current;
+    const ledger = pane?.closest<HTMLElement>('[data-testid="amex-ledger"]');
+    if (pane && ledger) {
+      const scroller = shellScrollerOf(pane);
+      const viewTop = scroller ? scroller.getBoundingClientRect().top : 0;
+      const pinned = ledger.getBoundingClientRect().top < viewTop;
+      if (pinned) {
+        const paneBottom = pane.getBoundingClientRect().bottom;
+        const rows = Array.from(ledger.querySelectorAll<HTMLElement>('[data-testid^="row-amex-"]'));
+        const first = rows.find((r) => r.getBoundingClientRect().bottom > paneBottom + 1);
+        if (first) modeAnchorRef.current = { id: first.getAttribute("data-testid")!, top: first.getBoundingClientRect().top };
+      }
+    }
+    setRowModeState(next);
+  };
+  useLayoutEffect(() => {
+    const a = modeAnchorRef.current;
+    modeAnchorRef.current = null;
+    if (!a) return;
+    const el = document.querySelector<HTMLElement>(`[data-testid="${a.id}"]`);
+    if (!el) return;
+    const delta = el.getBoundingClientRect().top - a.top;
+    if (Math.abs(delta) < 1) return;
+    const scroller = shellScrollerOf(el);
+    if (scroller) scroller.scrollTop += delta;
+    else window.scrollBy?.(0, delta);
+  }, [rowMode]);
+
+  // The single card's "How this card is paid" (with Add to Avalanche for a card not on the debt plan).
+  const refreshAfterAdd = async () => {
+    await qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+    await qc.invalidateQueries({ queryKey: getGetAmexWeeklyPayoffQueryKey() });
+    invalidateSummary();
+  };
+  const payoffCard = cardFilter === "all" ? undefined : amexPayoff?.cards?.find((c) => c.accountId === cardFilter);
+  const addNode = payoffCard ? <AddToAvalanche card={payoffCard} onCreated={refreshAfterAdd} /> : null;
+  const summaryCard =
+    summaryQ.data && summaryQ.data.scope.kind === "card"
+      ? summaryQ.data.scope.cards.find((c) => c.accountId === summaryQ.data!.scope.accountId && c.payoffMode != null)
+      : undefined;
+  const payBlock = summaryCard ? (
+    <CardPayModes cards={[summaryCard]} addNode={addNode} />
+  ) : addNode ? (
+    <div data-testid="amex-paymode-add">{addNode}</div>
+  ) : null;
+
+  const scrollToHistory = () => {
+    const el = document.getElementById("amex-balance-history");
+    el?.scrollIntoView?.({ block: "start" });
+    el?.querySelector<HTMLElement>("h2, [tabindex]")?.focus?.({ preventScroll: true });
+  };
+
+  const showCardColumn = cardFilter === "all" && !embedded;
 
   const pageActions = (
     <>
@@ -2130,6 +2264,29 @@ export default function AmexPage({
       />
     </>
   );
+
+  const chart =
+    ledgerPending || cardFilter === "all" ? null : wideTxns === undefined && !trendFailed ? (
+      // (P4) The 12-month pull has not started (the chart is still far
+      // down the page) or is on its way: the chart says so.
+      <div ref={trendSlotRef} className="span-12" data-testid="amex-trend-pending" id={embedded ? undefined : "amex-balance-history"}>
+        <Panel title="Balance history · last 12 months" span={12} variant="static" accent="amex">
+          <p className="flex h-[220px] items-center justify-center text-label text-neutral-600 md:h-[260px]" role="status">
+            Loading the last 12 months…
+          </p>
+        </Panel>
+      </div>
+    ) : (
+      <div className="span-12" id={embedded ? undefined : "amex-balance-history"}>
+        <BalanceTrendChart
+          caption="Balance history · last 12 months"
+          window={balanceWindow ?? undefined}
+          color="hsl(var(--chart-1))"
+          valueLabel="Actual balance"
+          accent="amex"
+        />
+      </div>
+    );
 
   return (
     <div
@@ -2152,11 +2309,11 @@ export default function AmexPage({
           done — N imported" (or failed + Retry). */}
       <PostLinkProgressBanner viewTransactionsPath="/amex" />
 
-      {/* (C10) The account page on the 12-column grid, as Chase: head,
-          controls, the card panels, the forward balance chart, then the
-          ledger panel. The same layout standalone and embedded
-          (`/next/accounts/:id`), where the account page supplies the title
-          and its Summary comes first in the card row (`lead`). */}
+      {/* (P1) The account page on the 12-column grid: head, controls, ONE Summary
+          (titled by its period), the activity, then — one card only — its balance
+          history. The shell's card tabs choose the card. Embedded
+          (`/next/accounts/:id`) keeps its card band and chart above the ledger: the
+          account page has no card tabs, and its own Summary comes first (`lead`). */}
       <PageGrid>
         <div className="span-12">
           {embedded ? (
@@ -2167,13 +2324,21 @@ export default function AmexPage({
             <AccountPageHeader
               title="American Express"
               icon={<AmexLogo className="h-6 w-7" />}
-              identity={selectedCardIdentity}
+              identity={headIdentity}
               meta={
-                selectedCardIdentity ? null : (
+                cardFilter === "all" ? (
                   // (Q6b) Same height as a card's identity chip, so choosing a card does not move the page below.
                   <span className="chip gray py-1 text-label" data-testid="amex-head-all-cards">
                     All cards
                   </span>
+                ) : headIdentity ? null : headUnknown ? (
+                  <span
+                    className="inline-block h-[1.625rem] w-32 animate-pulse rounded-control bg-platinum-2"
+                    aria-hidden
+                    data-testid="amex-head-card-loading"
+                  />
+                ) : (
+                  <span className="chip gray py-1 text-label" data-testid="amex-head-card">Card</span>
                 )
               }
               actions={pageActions}
@@ -2198,119 +2363,138 @@ export default function AmexPage({
         {lead}
 
         {!embedded ? (
-          <>
-            <AmexSummaryPanel
-              summary={summaryQ.data}
-              failed={summaryQ.isError}
-              onRetry={() => void summaryRaw.refetch?.()}
-              periodLabel={summaryPeriodLabel}
-              allCards={cardFilter === "all"}
-              cardTitle={selectedCardTitle}
-              mode={rangeMode}
-              isThisWeek={compareMonth(selectedMonth, currentMonth) === 0}
-              figure={figure}
-              onFigure={setFigure}
-            />
-          </>
-        ) : null}
-
-        {/* (#748 → drill) The card switcher is not a tablist — the per-card
-            panels ARE the selector: tapping one filters the ledger to that
-            card (drill); "All cards" clears it. */}
-        <AmexCardBand
-          selected={cardFilter}
-          onSelect={embedded ? openCardFromBand : setCardFilter}
-          masks={cardMasks}
-          leadCount={lead ? 1 : 0}
-          period={summaryPeriod}
-          showPurchases={embedded}
-        />
-
-        {!embedded ? (
-          <>
-            <AmexNeedsAttention
-              summary={summaryQ.data}
-              showCard={cardFilter === "all"}
-              onOpenRow={jumpToRow}
-            />
-          </>
-        ) : null}
-
-        {ledgerPending ? (
-          <LedgerChartSkeleton />
-        ) : cardFilter === "all" ? (
-          // (Q3) No combined running balance or chart: each card's own balance,
-          // labelled by card. The slot still starts the 12-month read when it
-          // nears the viewport, as the chart did (card list, first-load jump).
-          <div ref={trendSlotRef} className="span-12">
-            <AmexCardBalances
-              summary={summaryQ.data}
-              failed={summaryQ.isError}
-              pending={summaryQ.isFetching === true}
-              masks={cardMasks}
-              onSelect={embedded ? openCardFromBand : setCardFilter}
-            />
-          </div>
-        ) : wideTxns === undefined && !trendFailed ? (
-          // (P4) The 12-month pull has not started (the chart is still far
-          // down the page) or is on its way: the chart says so.
-          <div ref={trendSlotRef} className="span-12" data-testid="amex-trend-pending">
-            <Panel title="Balance history · last 12 months" span={12} variant="static" accent="amex">
-              <p className="flex h-[220px] items-center justify-center text-label text-neutral-600 md:h-[260px]" role="status">
-                Loading the last 12 months…
-              </p>
-            </Panel>
-          </div>
-        ) : (
-          <BalanceTrendChart
-            caption="Balance history · last 12 months"
-            window={balanceWindow ?? undefined}
-            color="hsl(var(--chart-1))"
-            valueLabel="Actual balance"
-            accent="amex"
+          <AmexSummaryPanel
+            summary={summaryQ.data}
+            failed={summaryQ.isError}
+            onRetry={() => void summaryRaw.refetch?.()}
+            title={summaryTitle(rangeMode, selectedMonth)}
+            allCards={cardFilter === "all"}
+            mode={rangeMode}
+            isThisWeek={isThisMonth}
+            figure={figure}
+            onFigure={chooseFigure}
+            attention={attn?.group ?? null}
+            onAttention={chooseAttention}
+            linkPeriod={linkPeriod}
+            byCard={
+              <AmexCardBalances
+                summary={summaryQ.data}
+                failed={summaryQ.isError}
+                pending={summaryQ.isFetching === true}
+                masks={cardMasks}
+                onSelect={setCardFilter}
+              />
+            }
+            payBlock={payBlock}
+            onOwedHistory={scrollToHistory}
           />
+        ) : (
+          <>
+            {/* Embedded: the card band moves between card pages, and the chart sits above the ledger. */}
+            <AmexCardBand
+              selected={cardFilter}
+              onSelect={openCardFromBand}
+              masks={cardMasks}
+              leadCount={lead ? 1 : 0}
+              period={summaryPeriod}
+              showPurchases
+            />
+            {ledgerPending ? <LedgerChartSkeleton /> : chart}
+          </>
         )}
 
-        {ledgerPending ? null : (
+        {ledgerPending ? (
+          embedded ? null : <LedgerChartSkeleton />
+        ) : (
         <LedgerPanel
           title="Activity"
           accent="amex"
           paneRef={paneRef}
+          titleRef={ledgerTitleRef}
+          legend={rowMode === "categorize"}
           data-testid="amex-ledger"
           pane={
             /* (D2) Visible control for the persisted hide-reviewed filter.
                Rows are never hidden from a stored value without this on
-               screen. */
-            <div className="flex min-h-8 flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant={hideReviewed ? "default" : "outline"}
-                className="h-7 text-xs"
-                aria-pressed={hideReviewed}
-                data-testid="button-hide-reviewed"
-                onClick={() => setHideReviewed((v) => !v)}
-              >
-                {hideReviewed ? "Show reviewed" : "Hide reviewed"}
-              </Button>
-              {hideReviewed && (
-                <span className="text-micro text-neutral-500" data-testid="text-hide-reviewed-note">
-                  Reviewed rows are hidden.
-                </span>
-              )}
+               screen. (P1) The Categorize switch shows the bucket marks. */
+            <div className="space-y-1">
+              <div className="flex min-h-8 flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={rowMode === "categorize" ? "default" : "outline"}
+                  className="h-8 text-xs"
+                  aria-pressed={rowMode === "categorize"}
+                  data-testid="amex-rowmode-toggle"
+                  onClick={() => setRowMode(rowMode === "categorize" ? "review" : "categorize")}
+                >
+                  {rowMode === "categorize" ? "Done categorizing" : "Categorize"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant={hideReviewed ? "default" : "outline"}
+                  className="h-8 text-xs"
+                  aria-pressed={hideReviewed}
+                  data-testid="button-hide-reviewed"
+                  onClick={() => setHideReviewed((v) => !v)}
+                >
+                  {hideReviewed ? "Show reviewed" : "Hide reviewed"}
+                </Button>
+                {hideReviewed && !attn && (
+                  <span className="text-micro text-neutral-600" data-testid="text-hide-reviewed-note">
+                    Reviewed rows are hidden.
+                  </span>
+                )}
+              </div>
+              {figure ? (
+                <p className="text-micro text-neutral-600" role="status" data-testid="amex-figure-note">
+                  Showing {FIGURE_WORDS[figure].toLowerCase()}.{" "}
+                  <button type="button" className="font-semibold text-brand-navy underline" onClick={() => setFigure(null)}>Show all</button>
+                </p>
+              ) : null}
+              {attn ? (
+                <p className="text-micro text-neutral-600" role="status" data-testid="amex-attn-note">
+                  {attn.truncated
+                    ? `Showing the largest ${attnInMonth} of ${attn.count} ${ATTN_WORDS[attn.group]}`
+                    : `Showing ${attnInMonth} ${ATTN_WORDS[attn.group]}`}
+                  {attnElsewhere
+                    ? `; ${attnElsewhere.total} more ${attnElsewhere.total === 1 ? "is" : "are"} in ${
+                        attnElsewhere.single ? monthNameOf(attnElsewhere.month) : "other months"
+                      }.`
+                    : "."}{" "}
+                  {attnElsewhere ? (
+                    <>
+                      <button
+                        type="button"
+                        className="font-semibold text-brand-navy underline"
+                        onClick={() => {
+                          setRangeMode("mo");
+                          setSelectedMonth(attnElsewhere.month);
+                        }}
+                        data-testid="amex-attn-open-month"
+                      >
+                        Open {monthNameOf(attnElsewhere.month)}
+                      </button>{" "}
+                    </>
+                  ) : null}
+                  <button type="button" className="font-semibold text-brand-navy underline" onClick={() => setAttn(null)} data-testid="amex-attn-show-all">
+                    Show all
+                  </button>
+                </p>
+              ) : null}
               {anchorNote ? (
-                <span className="text-micro text-neutral-500" data-testid="amex-anchor-note">{anchorNote}</span>
+                <p className="text-micro text-neutral-600" data-testid="amex-anchor-note">{anchorNote}</p>
               ) : null}
               {/* (WP8b) A capped read says so (CLAUDE.md §2). */}
               {monthCapHit ? (
-                <span className="text-micro text-neutral-500" data-testid="amex-month-cap">
+                <p className="text-micro text-neutral-600" data-testid="amex-month-cap">
                   Showing the most recent {MONTH_LIMIT.toLocaleString("en-US")} rows of this month.
-                </span>
+                </p>
               ) : null}
               {trendCapHit ? (
-                <span className="text-micro text-neutral-500" data-testid="amex-trend-cap">
+                <p className="text-micro text-neutral-600" data-testid="amex-trend-cap">
                   Only the most recent {TREND_LIMIT.toLocaleString("en-US")} rows feed the chart and earlier
                   months&apos; running balances.
-                </span>
+                </p>
               ) : null}
             </div>
           }
@@ -2519,336 +2703,103 @@ export default function AmexPage({
                 columnHeader={
                   groupIndex === 0 ? (
                     // (Q3) "All cards" shows no "bal": the column says only Amount.
-                    <LedgerColumns {...(cardFilter === "all" ? { amountLabel: "Amount" } : {})} />
+                    <LedgerColumns
+                      gridClass={amexLedgerGrid(rowMode, showCardColumn)}
+                      cardLabel={showCardColumn ? "Card" : null}
+                      bucketsLabel={rowMode === "review" ? "Spending" : "Buckets"}
+                      {...(cardFilter === "all" ? { amountLabel: "Amount" } : {})}
+                    />
                   ) : undefined
                 }
               >
-              {/* Mobile: stacked card layout (below md) */}
-              <div className="divide-y divide-brand-line/70 md:hidden">
+              {/* (P1) One row per transaction, phone and desktop alike. */}
+              <div className="divide-y divide-brand-line/70">
                 {items.map((t) => {
-                  // (#629) Either reviewed OR Ignore'd dims the row — same
-                  // visual treatment, so the bubble lights don't make a
-                  // held-out line look "active". Purely cosmetic.
-                  const isIgnored =
-                    !!ignoreCatId && t.categoryId === ignoreCatId;
+                  const isIgnored = !!ignoreCatId && t.categoryId === ignoreCatId;
+                  const open = openDetails.has(t.id);
+                  const label = rowCardLabel(t);
                   return (
-                  <div
-                    key={t.id}
-                    className={cn(
-                      "flex flex-col gap-2 px-4 py-3 text-body transition-colors hover:bg-brand-tint",
-                    )}
-                    data-reviewed={t.reviewed ? "true" : "false"}
-                    data-ignored={isIgnored ? "true" : "false"}
-                    data-testid={`row-amex-mobile-${t.id}`}
-                    style={{ scrollMarginTop: ROW_SCROLL_MARGIN_TOP }}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={selected.has(t.id)}
-                        onCheckedChange={() => toggleOne(t.id)}
-                        aria-label={`Select ${t.displayName || t.description}`}
-                        className="mt-1"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1">
-                          <span
-                            className="font-medium break-words"
-                            title={t.description}
-                          >
-                            {t.displayName || t.description}
+                    <AmexLedgerRow
+                      key={t.id}
+                      t={t}
+                      mode={rowMode}
+                      showCard={showCardColumn}
+                      cardLabel={label}
+                      cardAccent={
+                        t.plaidAccountId && label ? (accentByPlaidAccountId.get(t.plaidAccountId) ?? null) : null
+                      }
+                      selected={selected.has(t.id)}
+                      onToggleSelect={() => toggleOne(t.id)}
+                      categories={categories}
+                      onCategoryChange={(id, remember) => setRowCategory(t.id, id, remember)}
+                      onBucketToggle={(b, next) => onBubbleToggle(t, b, next)}
+                      ignored={isIgnored}
+                      spending={spendingWords(t, {
+                        ignored: isIgnored,
+                        unfiled: unfiledIds.has(t.id),
+                        kind: amexRowKind(t, categories),
+                      })}
+                      disabled={updateTx.isPending}
+                      amountNode={
+                        <div className="flex flex-col items-end">
+                          <span className="font-semibold text-brand-navy" data-testid={`amount-${t.id}`}>
+                            {signedAmount(t)}
                           </span>
-                          <MerchantRenamePopover tx={t} onSplit={() => setSplitTx(t)} />
-                          {/* (F6 ⇄ Q6b merge) An expired hold says so once ("Expired hold · not counted", below), not "Pending" too. */}
-                          {t.pending && !t.expiredHold ? (
-                            <span className="chip gray ml-1 shrink-0" data-testid={`chip-pending-mobile-${t.id}`}>Pending</span>
-                          ) : null}
-                          {rowStateLabel(t, isIgnored) ? (
-                            <span className="chip gray ml-1 shrink-0" data-testid={`chip-state-mobile-${t.id}`}>
-                              {rowStateLabel(t, isIgnored)}
-                            </span>
-                          ) : null}
-                        </div>
-                        {t.expiredHold ? <ExpiredHoldLabel id={t.id} /> : null}
-                        {t.notes && (
-                          <div className="break-words text-micro text-neutral-500" title={t.notes}>
-                            {t.notes}
-                          </div>
-                        )}
-                        <div className="mt-0.5 flex items-center gap-1.5 text-micro text-neutral-500">
-                          {t.plaidAccountId &&
-                          cardLabelByPlaidAccountId.has(t.plaidAccountId) &&
-                          accentByPlaidAccountId.has(t.plaidAccountId) ? (
+                          {runningBalanceMap.has(t.id) && (
                             <span
-                              aria-hidden
-                              className={cn(
-                                "size-2 shrink-0 rounded-full",
-                                ACCENT_DOT[accentByPlaidAccountId.get(t.plaidAccountId)!],
-                              )}
-                            />
-                          ) : null}
-                          <span data-testid={`text-card-mobile-${t.id}`}>
-                            {(t.plaidAccountId &&
-                              cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
-                              "—"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <div
-                          className="whitespace-nowrap font-mono text-label font-semibold tabular-nums text-brand-navy"
-                          data-testid={`amount-mobile-${t.id}`}
-                        >
-                          {signedAmount(t)}
-                        </div>
-                        {runningBalanceMap.has(t.id) && (
-                          <span
-                            className="font-mono text-micro tabular-nums text-neutral-400"
-                            data-testid={`text-running-balance-mobile-${t.id}`}
-                          >
-                            bal {formatCurrency(runningBalanceMap.get(t.id)!)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 pl-7">
-                      <CategoryPicker
-                        value={t.categoryId ?? null}
-                        categories={categories}
-                        description={t.description}
-                        onChange={(id, remember) =>
-                          setRowCategory(t.id, id, remember)
-                        }
-                      />
-                      {/* Move a charge to the right Sun→Sat week.
-                          Hidden on pending rows (Plaid restamps them). */}
-                      <RowMenu
-                        tx={t}
-                        merchant={t.displayName || t.description}
-                        onMove={t.pending ? undefined : (raw) => handleQuickDate(t, raw)}
-                        disabled={updateTx.isPending}
-                      />
-                      {/* (#607) Transfer rows are excluded from budget
-                          actuals, so weekly/monthly/unplanned bubbles
-                          would never affect any roll-up. Hide them on
-                          transfers to keep the row uncluttered. */}
-                      {!t.isTransfer && (
-                        <BucketBubbles
-                          flags={{
-                            weekly: t.weeklyAllowance,
-                            monthly: t.monthlyAllowance,
-                            unplanned: t.unplannedAllowance,
-                            reimbursable: t.reimbursable,
-                          }}
-                          onToggle={(b, next) => onBubbleToggle(t, b, next)}
-                        />
-                      )}
-                      {!t.isTransfer && t.isTransferUserOverridden && (
-                        <span
-                          className="chip gray"
-                          title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
-                          data-testid={`badge-transfer-overridden-cleared-mobile-${t.id}`}
-                        >
-                          Manually set
-                        </span>
-                      )}
-                      {t.isTransfer && (
-                        <span
-                          className="chip gray inline-flex items-center gap-1"
-                          title={
-                            t.isTransferUserOverridden
-                              ? "Manually set — won't be re-flagged on the next sync"
-                              : "Excluded from budget actuals"
-                          }
-                          data-testid={`badge-transfer-mobile-${t.id}`}
-                        >
-                          Transfer
-                          {t.isTransferUserOverridden && (
-                            <span
-                              aria-hidden="true"
-                              data-testid={`badge-transfer-overridden-mobile-${t.id}`}
-                              className="-ml-0.5"
+                              className="font-mono text-micro tabular-nums text-neutral-600"
+                              data-testid={`text-running-balance-${t.id}`}
                             >
-                              *
+                              bal {formatCurrency(runningBalanceMap.get(t.id)!)}
                             </span>
                           )}
-                          <button
-                            type="button"
-                            aria-label="Clear Transfer flag"
-                            data-testid={`button-clear-transfer-mobile-${t.id}`}
-                            className="press -mr-0.5 ml-0.5 inline-flex items-center justify-center rounded hover:text-brand-navy"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updateTx.mutate(
-                                { id: t.id, data: { isTransfer: false } },
-                                {
-                                  onSuccess: () => {
-                                    qc.invalidateQueries({
-                                      queryKey: getListTransactionsQueryKey(),
-                                    });
-                                    qc.invalidateQueries({
-                                      queryKey: getGetBudgetMonthQueryKey(
-                                        `${t.occurredOn.slice(0, 7)}-01`,
-                                      ),
-                                    });
-                                  },
-                                },
-                              );
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      )}
-                      <ExternalCardChip
-                        t={t}
-                        onToggle={(v) => setExternalCard(t, v)}
-                        testIdSuffix={`mobile-${t.id}`}
-                      />
-                      <MatchedRuleChip
-                        categoryId={t.categoryId}
-                        matchedRuleId={t.matchedRuleId}
-                        rules={mappingRules}
-                        testIdSuffix={`amex-mobile-${t.id}`}
-                        variant="compact"
-                      />
-                    </div>
-                  </div>
+                        </div>
+                      }
+                      detailsOpen={open}
+                      onToggleDetails={() => toggleDetails(t.id)}
+                      toggleRef={(el) => {
+                        if (el) detailToggles.current.set(t.id, el);
+                        else detailToggles.current.delete(t.id);
+                      }}
+                      details={
+                        open ? (
+                          <AmexRowDetails
+                            t={t}
+                            mode={rowMode}
+                            cardLabel={label}
+                            categoryName={
+                              t.categoryId && t.categoryId !== uncategorizedCatId
+                                ? (categoryById.get(t.categoryId) ?? null)
+                                : null
+                            }
+                            provenance={categoryProvenance(t, mappingRules, uncategorizedCatId)}
+                            ignored={isIgnored}
+                            onBucketToggle={(b, next) => onBubbleToggle(t, b, next)}
+                            onClearTransfer={() => clearTransfer(t)}
+                            onSetExternal={(v) => setExternalCard(t, v)}
+                            onQuickDate={(raw) => handleQuickDate(t, raw)}
+                            onSetReviewed={(next) => void bulkSetReviewed(next, [t.id])}
+                            onSplit={() => setSplitTx(t)}
+                            onClose={() => closeDetails(t.id)}
+                            disabled={updateTx.isPending}
+                          />
+                        ) : null
+                      }
+                    />
                   );
                 })}
-              </div>
-              {/* Desktop: compact row list (md and up) */}
-              <div className="hidden divide-y divide-brand-line/70 md:block">
-                    {items.map((t) => {
-                      // (#629) Either reviewed OR Ignore'd dims the row.
-                      const isIgnored =
-                        !!ignoreCatId && t.categoryId === ignoreCatId;
-                      return (
-                      <AccountTransactionRow
-                        key={t.id}
-                        tx={t}
-                        selected={selected.has(t.id)}
-                        onToggleSelect={() => toggleOne(t.id)}
-                        categories={categories}
-                        onCategoryChange={(id, remember) =>
-                          setRowCategory(t.id, id, remember)
-                        }
-                        onBucketToggle={(b, next) => onBubbleToggle(t, b, next)}
-                        onQuickDate={(raw) => handleQuickDate(t, raw)}
-                        disabled={updateTx.isPending}
-                        stateLabel={rowStateLabel(t, isIgnored)}
-                        hideDate={t.pending}
-                        testId={`row-amex-${t.id}`}
-                        rowData={{
-                          "data-reviewed": t.reviewed ? "true" : "false",
-                          "data-ignored": isIgnored ? "true" : "false",
-                        }}
-                        cardLabel={
-                          (t.plaidAccountId &&
-                            cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
-                          null
-                        }
-                        cardAccent={
-                          t.plaidAccountId
-                            ? (accentByPlaidAccountId.get(t.plaidAccountId) ?? null)
-                            : null
-                        }
-                        onSplit={() => setSplitTx(t)}
-                        metaNode={
-                          <>
-                            {/* (F6 ⇄ Q6b merge) An expired hold carries its own label (the shared row's "Expired hold · not counted"), not "Pending" too. */}
-                            {t.pending && !t.expiredHold ? (
-                              <span className="chip gray shrink-0" data-testid={`chip-pending-${t.id}`}>Pending</span>
-                            ) : null}
-                            {t.notes ? (
-                              <div
-                                className="truncate text-micro text-neutral-500"
-                                title={t.notes}
-                              >
-                                {t.notes}
-                              </div>
-                            ) : null}
-                          </>
-                        }
-                        chipsNode={
-                          <>
-                          {t.isTransfer ? (
-                            <span
-                              className="chip gray inline-flex items-center gap-1"
-                              title={
-                                t.isTransferUserOverridden
-                                  ? "Manually set — won't be re-flagged on the next sync"
-                                  : "Excluded from budget actuals"
-                              }
-                              data-testid={`badge-transfer-${t.id}`}
-                            >
-                              Transfer
-                              <button
-                                type="button"
-                                aria-label="Clear Transfer flag"
-                                data-testid={`button-clear-transfer-${t.id}`}
-                                className="press -mr-0.5 ml-0.5 inline-flex items-center justify-center rounded hover:text-brand-navy"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  updateTx.mutate(
-                                    { id: t.id, data: { isTransfer: false } },
-                                    {
-                                      onSuccess: () => {
-                                        qc.invalidateQueries({
-                                          queryKey: getListTransactionsQueryKey(),
-                                        });
-                                        qc.invalidateQueries({
-                                          queryKey: getGetBudgetMonthQueryKey(
-                                            `${t.occurredOn.slice(0, 7)}-01`,
-                                          ),
-                                        });
-                                      },
-                                    },
-                                  );
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </span>
-                          ) : null}
-                          <ExternalCardChip
-                            t={t}
-                            onToggle={(v) => setExternalCard(t, v)}
-                            testIdSuffix={t.id}
-                          />
-                          <MatchedRuleChip
-                            categoryId={t.categoryId}
-                            matchedRuleId={t.matchedRuleId}
-                            rules={mappingRules}
-                            testIdSuffix={`amex-${t.id}`}
-                            variant="compact"
-                          />
-                          </>
-                        }
-                        amountNode={
-                          <div className="flex flex-col items-end">
-                            <span className="font-semibold text-brand-navy" data-testid={`amount-${t.id}`}>
-                              {signedAmount(t)}
-                            </span>
-                            {runningBalanceMap.has(t.id) && (
-                              <span
-                                className="font-mono text-micro tabular-nums text-neutral-400"
-                                data-testid={`text-running-balance-${t.id}`}
-                              >
-                                bal {formatCurrency(runningBalanceMap.get(t.id)!)}
-                              </span>
-                            )}
-                          </div>
-                        }
-                      />
-                      );
-                    })}
               </div>
           </DayGroup>
         );
         }}
       />
+          {/* (P4 → P1) The 12-month read starts when the bottom of the activity nears the
+              viewport (All cards draws no combined chart; one card's chart has its own slot). */}
+          {cardFilter === "all" && !embedded ? <div ref={trendSlotRef} aria-hidden className="h-0" data-testid="amex-trend-slot" /> : null}
         </LedgerPanel>
         )}
+
+        {!embedded ? chart : null}
       </PageGrid>
       <datalist id={owedByListId}>
         {knownPayers.map((p) => (

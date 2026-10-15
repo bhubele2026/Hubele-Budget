@@ -283,18 +283,35 @@ export function AmexCardBand({
 }
 
 /**
- * (Q6b) The selected card's name ••last4 exactly as the band's tile words it, so the
- * Summary's title follows the page's selection (null for "All cards" or until the
- * band's own data is in). Same queries as the band: no extra request.
+ * (P1) The selected card's household name and last four, the way its section
+ * tab names it (`amexCardTabs`: the name the household gave it, else its tier
+ * word, else Plaid's name). `undefined` while the cards are still being read,
+ * `null` for "All cards" or a card the roster does not list. Same queries as
+ * the band and the tabs: no extra request — and this read keeps the settings
+ * (the household's names) loaded for the cache-only tabs.
  */
-export function useAmexCardTitle(selected: string, masks?: ReadonlyMap<string, string>): string | null {
+export function useAmexCardName(
+  selected: string,
+  masks?: ReadonlyMap<string, string>,
+): { name: string; mask: string } | null | undefined {
   const { data } = useGetAmexWeeklyPayoff();
   const { data: settings } = useGetSettings();
   if (selected === "all") return null;
-  const c = [...(data?.cards ?? []), ...(data?.debtLinkedCards ?? [])].find((x) => x.accountId === selected);
+  if (data === undefined) return undefined;
+  const c = [...(data.cards ?? []), ...(data.debtLinkedCards ?? [])].find((x) => x.accountId === selected);
   if (!c) return null;
   const names = (settings?.preferences?.amexCardNames as Record<string, string>) ?? {};
   const tier = effectiveBrand(c.accountId, c.brand, cardBrandOverrides(settings));
   const mask = masks?.get(c.accountId) || ("mask" in c ? c.mask : null) || "";
-  return `${names[c.accountId] || BRAND_LABEL[tier] || c.name}${mask ? ` ••${mask}` : ""}`;
+  return { name: names[c.accountId] || BRAND_LABEL[tier] || c.name, mask };
+}
+
+/**
+ * (Q6b) The selected card's name ••last4 exactly as the band's tile words it
+ * (null for "All cards" or until the band's own data is in).
+ */
+export function useAmexCardTitle(selected: string, masks?: ReadonlyMap<string, string>): string | null {
+  const n = useAmexCardName(selected, masks);
+  if (!n) return null;
+  return `${n.name}${n.mask ? ` ••${n.mask}` : ""}`;
 }
