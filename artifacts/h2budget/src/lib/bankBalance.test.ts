@@ -110,22 +110,22 @@ describe("the words", () => {
   });
 
   it("sinceSnapshotWords: why the balance is not the bank's figure", () => {
-    expect(sinceSnapshotWords(bankBalanceView(bank()))).toBe("Includes 20 entries since the Oct 2 snapshot");
+    expect(sinceSnapshotWords(bankBalanceView(bank()))).toBe("Includes 20 entries since the Oct 2 reading");
     expect(sinceSnapshotWords(bankBalanceView(bank({ sinceSnapshot: { net: "-4.00", count: 1, through: "2026-10-09" } })))).toBe(
-      "Includes 1 entry since the Oct 2 snapshot",
+      "Includes 1 entry since the Oct 2 reading",
     );
     expect(sinceSnapshotWords(bankBalanceView(bank({ sinceSnapshot: { net: "0.00", count: 0, through: "2026-10-09" } })))).toBeNull();
     expect(sinceSnapshotWords(bankBalanceView(bank({ snapshot: null, sinceSnapshot: null })))).toBeNull();
   });
 
   it("snapshotWords: the bank's own figure, dated, beside the balance today", () => {
-    expect(snapshotWords(bankBalanceView(bank()))).toBe("Snapshot $3,458.98 · Oct 2 · +20 entries");
+    expect(snapshotWords(bankBalanceView(bank()))).toBe("Bank's last reading $3,458.98 · Oct 2 · +20 entries since");
     expect(snapshotWords(bankBalanceView(bank({ sinceSnapshot: { net: "0.00", count: 0, through: "2026-10-09" } })))).toBe(
-      "Snapshot $3,458.98 · Oct 2",
+      "Bank's last reading $3,458.98 · Oct 2",
     );
     // A real zero snapshot is $0.00; no snapshot is no words (never $0.00).
     expect(snapshotWords(bankBalanceView(bank({ snapshot: { balance: "0.00", at: "2026-10-02T19:00:00.000Z", source: "manual" } })))).toBe(
-      "Snapshot $0.00 · Oct 2 · +20 entries",
+      "Typed balance $0.00 (not from the bank) · Oct 2 · +20 entries since",
     );
     expect(snapshotWords(bankBalanceView(bank({ snapshot: null, sinceSnapshot: null })))).toBeNull();
   });

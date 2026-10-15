@@ -9,6 +9,7 @@ import {
 } from "@/lib/cardBalance";
 import { NOT_TRACKED, snapshotCaption } from "@/lib/snapshotWords";
 import { entriesWord, sinceSnapshotWords, type BankBalanceView } from "@/lib/bankBalance";
+import { READING_WORDS, TYPED_WORDS } from "@/lib/checkingWords";
 import { ForecastLegend } from "./ForecastLegend";
 import { STATE_WORD, type AccountEntry } from "./entries";
 
@@ -30,12 +31,12 @@ export const money = (v: string | number | null | undefined): string | number =>
   return Number.isFinite(n) ? n : BLANK;
 };
 
-/** "Oct 2 · +20 entries": when the bank snapshot was read, and what rolled on top. */
+/** "Oct 2 · +20 entries since": when the bank's reading was taken, and what rolled on top. */
 function snapshotCaptionOf(v: BankBalanceView): string | null {
   const s = v.snapshot;
   if (!s) return null;
   const n = v.since?.count ?? 0;
-  return `${dayOf(s.day) ?? s.day}${n > 0 ? ` · +${entriesWord(n)}` : ""}`;
+  return `${dayOf(s.day) ?? s.day}${n > 0 ? ` · +${entriesWord(n)} since` : ""}`;
 }
 
 export function AccountSummary({
@@ -129,7 +130,8 @@ export function AccountSummary({
             hint={sinceSnapshotWords(bank) ?? undefined} />
           {bank.snapshot ? (
             <div data-testid="summary-bank-snapshot">
-              <StatBlock label="Bank snapshot" value={money(bank.snapshot.balance)} hint={snapshotCaptionOf(bank) ?? undefined} />
+              {/* (T1) The bank's own figure is evidence, never "today"; a typed balance is not the bank's. */}
+              <StatBlock label={bank.snapshot.source === "manual" ? TYPED_WORDS : READING_WORDS} value={money(bank.snapshot.balance)} hint={snapshotCaptionOf(bank) ?? undefined} />
               <div className="mt-1 text-micro text-neutral-500"><BankSnapshotFreshness source={bank.snapshot.source} at={bank.snapshot.at} /></div>
             </div>
           ) : (

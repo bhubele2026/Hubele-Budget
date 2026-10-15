@@ -129,6 +129,7 @@ export {
   type BankBalanceCheck,
   type BankBalanceCheckArgs,
   type BankBalanceField,
+  type BankCheckCountedRow,
   type BankCheckDirection,
   type BankCheckIds,
   type BankCheckLedger,

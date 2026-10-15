@@ -1,7 +1,7 @@
 import type { Spine } from "@workspace/api-client-react";
 import { identityOf } from "@/lib/accountIdentity";
 import { bankBalanceView } from "@/lib/bankBalance";
-import { confidenceView } from "@/lib/bankConfidenceView";
+import { checkedAgo, confidenceView } from "@/lib/bankConfidenceView";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,6 +18,10 @@ export default function BankConfidence({ s, variant }: { s: Spine; variant: "til
   const v = bankBalanceView(s.bank);
   if (!bc || v.balance == null) return null;
   const conf = confidenceView(bc);
+  // (T2) The header names when, beside the same chip words as Banking: "Checked 2 h ago · difference needs review".
+  const ago = bc.check.checkedAt ? checkedAgo(bc.check.checkedAt, Date.now()) : null;
+  const headerCheck =
+    bc.check.status === "off_by" && !bc.check.stale && ago ? `Checked ${ago} · ${conf.check.word.toLowerCase()}` : conf.check.word;
   if (variant === "tile") {
     return (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro" data-testid="tile-banking-confidence">
@@ -38,7 +42,7 @@ export default function BankConfidence({ s, variant }: { s: Spine; variant: "til
         <span className="font-semibold text-neutral-700">{identity ? `${identity.label}${identity.mask4 ? ` ••${identity.mask4}` : ""}` : "Checking"}</span>
       </span>
       {conf.updated ? <span data-testid="dash-bank-updated">{conf.updated}</span> : null}
-      <span className={cn(conf.tone === "bad" && "font-semibold text-bad-ink")} data-testid="dash-bank-check">{conf.check.word}</span>
+      <span className={cn(conf.tone === "bad" && "font-semibold text-bad-ink")} data-testid="dash-bank-check">{headerCheck}</span>
       {conf.pending ? <span data-testid="dash-bank-pending">{conf.pending}</span> : null}
     </p>
   );

@@ -109,6 +109,7 @@ export function ProjectedBalanceChart({
   incomeByDate,
   lowLabel = "full",
   monthTicks = false,
+  startLabel = null,
 }: {
   data: DailyPoint[];
   cashBuffer: number;
@@ -147,6 +148,11 @@ export function ProjectedBalanceChart({
   lowLabel?: "full" | "short";
   /** Axis ticks as "Oct 9" instead of "10-09" (the expanded chart always does). */
   monthTicks?: boolean;
+  /**
+   * (T1) Expanded only: "Starting at $0.00 · as of Oct 15", drawn at the curve's
+   * first point (`cashSignal.startingBalance`, the day the reading rolls to).
+   */
+  startLabel?: string | null;
 }) {
   const expanded = variant === "expanded";
   // Content fingerprint — see the draw-restart note above.
@@ -214,6 +220,14 @@ export function ProjectedBalanceChart({
   // place as "top". Anchoring has to be done on the <text> itself.
   const lowAnchor: "start" | "middle" | "end" =
     lowFrac <= 0.2 ? "start" : lowFrac >= 0.8 ? "end" : "middle";
+  // ⭐ (T2) Only a projected NEGATIVE is rust. A low point at or above $0 — even under the buffer — is
+  // marked in navy: the buffer line and its tint already say "under the buffer", quietly.
+  const lowNegative = !!lowestPoint && lowestPoint.y < 0;
+  const lowFill = lowNegative ? CHART.orangeDeep : CHART.navy;
+  const lowInk = lowNegative ? CHART.badInk : CHART.navy;
+  // (T2) The zero rule shows whenever the curve touches or crosses $0 (and when the axis goes below it).
+  const touchesZero = series.some((d) => Number.isFinite(d.balance) && d.balance <= 0);
+  const first = series[0];
 
   return (
     // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
@@ -417,14 +431,14 @@ export function ProjectedBalanceChart({
               data-testid="risk-below-zero"
             />
           ))}
-          {expanded && scale.domain[0] < 0 && (
-            <ReferenceLine y={0} stroke={CHART.steel} strokeWidth={1} data-testid="ref-zero" />
+          {expanded && (scale.domain[0] < 0 || touchesZero) && (
+            <ReferenceLine y={0} stroke={CHART.steel} strokeWidth={1} ifOverflow="extendDomain" data-testid="ref-zero" />
           )}
           {expanded && todayISO && (
             <Area
                 {...ANIM_AREA}
                 isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
-                type="monotone"
+                type="linear"
                 dataKey="past"
                 stroke={CHART.navy}
                 strokeWidth={2.25}
@@ -437,7 +451,7 @@ export function ProjectedBalanceChart({
             <Area
                 {...ANIM_AREA}
                 isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
-                type="monotone"
+                type="linear"
                 dataKey="future"
                 stroke={CHART.mid}
                 strokeWidth={2}
@@ -456,7 +470,7 @@ export function ProjectedBalanceChart({
             <Area
               {...ANIM_AREA}
               isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
-              type="monotone"
+              type="linear"
               dataKey="balance"
               stroke={CHART.navy}
               strokeWidth={2}
@@ -538,12 +552,40 @@ export function ProjectedBalanceChart({
                 )}
               />
             ))}
+          {expanded && startLabel && first && Number.isFinite(first.balance) && (
+            <ReferenceDot
+              x={first.rawDate}
+              y={first.balance}
+              r={4}
+              fill={CHART.navy}
+              stroke="#ffffff"
+              strokeWidth={1.5}
+              ifOverflow="extendDomain"
+              isFront
+              data-testid="ref-start-point"
+            >
+              <RechartsLabel
+                value={startLabel}
+                content={(p: unknown) => {
+                  const vb = (p as { viewBox?: { cx?: number; cy?: number; x?: number; y?: number } })?.viewBox ?? {};
+                  const cx = vb.cx ?? vb.x ?? 0;
+                  const cy = vb.cy ?? vb.y ?? 0;
+                  // Anchored inward from the left edge; below the dot when the low point's label sits above it.
+                  return (
+                    <text x={cx + 6} y={lowIdx === 0 ? cy + 20 : cy - 10} textAnchor="start" fill={CHART.navy} fontSize={11} fontWeight={600} data-testid="chart-start-label">
+                      {startLabel}
+                    </text>
+                  );
+                }}
+              />
+            </ReferenceDot>
+          )}
           {lowestPoint && (
             <ReferenceDot
               x={lowestPoint.x}
               y={lowestPoint.y}
               r={5}
-              fill={CHART.orangeDeep}
+              fill={lowFill}
               stroke="#ffffff"
               strokeWidth={2}
               ifOverflow="extendDomain"
@@ -569,7 +611,8 @@ export function ProjectedBalanceChart({
                       x={cx}
                       y={lowLabel === "short" ? cy + 18 : cy - 12}
                       textAnchor={lowAnchor}
-                      fill={CHART.badInk}
+                      fill={lowInk}
+                      data-tone={lowNegative ? "bad" : "neutral"}
                       fontSize={11}
                       fontWeight={600}
                     >

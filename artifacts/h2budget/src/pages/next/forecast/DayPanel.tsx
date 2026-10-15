@@ -1,3 +1,4 @@
+import { moneyFace } from "@/components/data-state";
 import { useMemo } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -184,9 +185,9 @@ export function DayPanel({
         <div className="font-semibold text-neutral-700">What this day assumes</div>
         <ul className="mt-1 list-inside list-disc space-y-0.5">
           <li>Cash buffer {bufferText}.</li>
-          <li>
-            Starts from the bank balance of {formatCurrency(ctx.bankBalance)}
-            {ctx.lookbackOpen ? `, looking back to ${formatDate(ctx.fromDate)}` : ""}.
+          {/* (T1) The curve's own start (cashSignal.startingBalance) — the hero's "before" figure; a dash, never $0, when unknown. */}
+          <li data-testid="day-starts-from">
+            Starts from checking before {formatDate(ctx.fromDate)}: {moneyFace(ctx.proj?.startingBalance)}.
           </li>
           <li>
             {sum.scheduledCount} scheduled from your plans

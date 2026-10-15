@@ -14,6 +14,8 @@ import {
  * - Every `/api/reports/*` aggregate: spending facts include category and
  *   unplanned edits, and must refresh with the ledger even when a page only
  *   invalidates transactions.
+ * - (T1) The banking review (`/api/banking/review`, every account and range):
+ *   it shows the same balance and check as the spine.
  *
  * `invalidateQueries` refetches only mounted queries; anything else is simply
  * marked stale for its next reader. `mutationInvalidation.test.ts` pins every
@@ -21,6 +23,8 @@ import {
  */
 export const MONEY_POSITION_KEY = ["/api/money/position"] as const;
 export const WAYS_BACK_KEY = ["/api/money/ways-back"] as const;
+/** (T1) The banking review: its balance, its check and its buckets move with any write (a prefix: every account and range). */
+export const BANKING_REVIEW_KEY = ["/api/banking/review"] as const;
 
 export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
@@ -30,6 +34,7 @@ export function invalidateAfterWrite(queryClient: QueryClient): void {
   // functions: this file is on the entry path and must not import that module.
   void queryClient.invalidateQueries({ queryKey: MONEY_POSITION_KEY });
   void queryClient.invalidateQueries({ queryKey: WAYS_BACK_KEY });
+  void queryClient.invalidateQueries({ queryKey: BANKING_REVIEW_KEY });
   void queryClient.invalidateQueries({
     predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/"),
   });

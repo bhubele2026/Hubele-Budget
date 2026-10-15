@@ -143,7 +143,7 @@ export const SPINE = {
 
 /** Every string a surface must print, per concept, written out by hand. */
 export const EXPECT = {
-  checking: { ext: "ext-chk", balance: "$2,156.55", snapshotLine: "Snapshot $3,458.98 · Oct 2 · +20 entries", snapshot: "$3,458.98", caption: "Oct 2 · +20 entries", since: "Includes 20 entries since the Oct 2 snapshot" },
+  checking: { ext: "ext-chk", balance: "$2,156.55", snapshotLine: "Bank's last reading $3,458.98 · Oct 2 · +20 entries since", snapshot: "$3,458.98", caption: "Oct 2 · +20 entries since", since: "Includes 20 entries since the Oct 2 reading" },
   live: { ext: "ext-plat", debtId: "d-plat", owed: "$1,227.27", creditor: "$3,842.98", pending: "$2,615.71" },
   twin: { ext: "ext-plat2", debtId: "d-plat2", owed: "$250.00" },
   zero: { ext: "ext-blue", debtId: "d-blue", owed: "$0.00" },

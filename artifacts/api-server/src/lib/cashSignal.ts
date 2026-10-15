@@ -693,6 +693,11 @@ export type SinceSnapshotPart = { net: string; count: number; through: string };
 /**
  * ⭐ (WP1) THE TWO HALVES OF `bankToday`, from the ledger that computed it.
  *
+ * (T1) docs/contracts/checking-balance.md: `bankToday` is "Checking today" (the
+ * one balance every surface shows); `snapshot` is "Bank's last reading" (evidence,
+ * never under a "today" label; a `manual` source is a typed balance, not the bank's);
+ * `startingBalance` is the curve's start. Words only — nothing here changes.
+ *
  * Every screen shows the balance rolled forward (`bankToday`). The account
  * pages used to show the raw snapshot beside it with no date, so one account
  * read two balances and nothing said why. These are those two halves, from

@@ -76,9 +76,28 @@ export interface BankCheckIds {
   amount: number;
 }
 
+/** (T2) One row the check counted: its id, what it added (unrounded), and whether it reached the ledger after `checkAt`. */
+export interface BankCheckCountedRow {
+  id: string;
+  contribution: number;
+  late: boolean;
+}
+
 export interface BankCheckLedger {
   /** What the ledger adds to the anchor for the check (rules 1–3 applied). Unrounded. */
   net: number;
+  /**
+   * (T2) The rows behind `net` (rule 2's additions are in `added`), in input
+   * order. Σ contribution over them + `added.amount` = `net`. Read by the
+   * "Review difference" investigation only; nothing here changes `net`.
+   */
+  counted: BankCheckCountedRow[];
+  /**
+   * (T2) Rows with NO Plaid account (typed in H2, e.g. "Log payment") that the
+   * cash rule counts from the anchor through the check's day: they are in H2's
+   * balance, yet the check leaves them out (PR4e). Listed, never added to `net`.
+   */
+  manual: BankCheckIds;
   /** Rule 1: rows left out as deposits the bank figure does not hold. */
   excluded: BankCheckIds;
   /** Rule 2: deposits the anchor did not hold that have since posted. */
@@ -112,11 +131,18 @@ export function bankCheckLedger(inp: BankCheckLedgerInputs): BankCheckLedger {
 
   let net = 0;
   let lateRows = 0;
+  const counted: BankCheckCountedRow[] = [];
+  const manual: BankCheckIds = { ids: [], amount: 0 };
   const excluded: BankCheckIds = { ids: [], amount: 0 };
   const added: BankCheckIds = { ids: [], amount: 0 };
   const pendingDeposits: BankCheckIds = { ids: [], amount: 0 };
   inp.rows.forEach((r, i) => {
     const o = inp.outcomes[i];
+    // (T2) Listed only: a typed-in row the cash rule counts through the check's day.
+    if (o && !r.plaidAccountId && o.counts && r.occurredOn <= inp.checkDay) {
+      manual.ids.push(r.id);
+      manual.amount += o.contribution;
+    }
     if (!o || !r.plaidAccountId || r.plaidAccountId !== inp.accountExternalId) return;
     if (isPendingDeposit(r) && !replaced.has(r.id) && (o.reason === "held" || o.counts)) {
       pendingDeposits.ids.push(r.id);
@@ -130,7 +156,9 @@ export function bankCheckLedger(inp: BankCheckLedgerInputs): BankCheckLedger {
         return;
       }
       net += o.contribution;
-      if (r.createdAt.getTime() > checkMs) lateRows += 1;
+      const late = r.createdAt.getTime() > checkMs;
+      if (late) lateRows += 1;
+      counted.push({ id: r.id, contribution: o.contribution, late });
       return;
     }
     // Rule 2: a deposit the anchor's read saw pending, posted since and held by the anchor.
@@ -148,7 +176,7 @@ export function bankCheckLedger(inp: BankCheckLedgerInputs): BankCheckLedger {
       net += r.amount;
     }
   });
-  return { net, excluded, added, pendingDeposits, lateRows };
+  return { net, counted, manual, excluded, added, pendingDeposits, lateRows };
 }
 
 // ── The review's answer ──────────────────────────────────────────────────────
@@ -241,6 +269,8 @@ export function sameAnchorMoment(checked: string, current: string | null): boole
  * balance replaced the one this check read) · `rows_since` (rows dated on or
  * before the check's day reached the ledger after it) · `age` (more than
  * BANK_CHECK_STALE_DAYS days old). A not-checked outcome is stale by age only.
+ * (T2) On `resolved_since` the late rows ARE the explanation, not a reason to
+ * doubt it: `rows_since` does not apply there (`anchor_changed` and `age` do).
  */
 export function bankBalanceCheckOf(args: BankBalanceCheckArgs): BankBalanceCheck {
   const none: BankBalanceCheck = {
@@ -286,7 +316,7 @@ export function bankBalanceCheckOf(args: BankBalanceCheckArgs): BankBalanceCheck
     if (Math.abs(gapNow) < 1) status = "resolved_since";
   }
   const anchorChanged = !!rec.anchor && !sameAnchorMoment(rec.anchor.at, args.currentAnchorAt);
-  const rowsSince = (args.recompute?.lateRows ?? 0) > 0;
+  const rowsSince = status !== "resolved_since" && (args.recompute?.lateRows ?? 0) > 0;
   const staleReason: BankCheckStaleReason | null = anchorChanged ? "anchor_changed" : rowsSince ? "rows_since" : old ? "age" : null;
   return {
     status,

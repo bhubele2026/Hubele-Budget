@@ -91,10 +91,11 @@ export default function ForecastPanel() {
                     <span aria-hidden className="h-0 w-3 border-t border-dashed border-neutral-400" />
                     Buffer {money(view!.buffer)}
                   </span>
+                  {/* (T2) Only a projected NEGATIVE is rust; under the buffer at or above $0 is quiet. */}
                   {view!.lowestPoint ? (
                     <span data-testid="dash-forecast-low">
                       Low point in these {days} days:{" "}
-                      <span className={cn("font-mono font-semibold tabular-nums", view!.lowestPoint.y < view!.buffer ? "text-bad-ink" : "text-brand-ink")}>
+                      <span className={cn("font-mono font-semibold tabular-nums", view!.lowestPoint.y < 0 ? "text-bad-ink" : "text-brand-ink")} data-tone={view!.lowestPoint.y < 0 ? "bad" : "neutral"}>
                         {money(view!.lowestPoint.y)}
                       </span>{" "}
                       on {weekdayLabel(view!.lowestPoint.rawDate)}

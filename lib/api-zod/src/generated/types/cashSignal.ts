@@ -14,6 +14,7 @@ import type { CashSignalHookReservesItem } from "./cashSignalHookReservesItem";
 import type { CashSignalListedPlan } from "./cashSignalListedPlan";
 import type { CashSignalMatchesItem } from "./cashSignalMatchesItem";
 import type { CashSignalStatus } from "./cashSignalStatus";
+import type { DataAsOf } from "./dataAsOf";
 
 export interface CashSignal {
   /**
@@ -35,6 +36,8 @@ then, and `status` is `no_data`.
   snapshotAt?: string | null;
   /** @nullable */
   snapshotSource?: string | null;
+  /** (T1) Set by GET /forecast/cash-signal — the bank reading this projection starts from, and when it was computed. */
+  dataAsOf?: DataAsOf;
   account: CashSignalAccount;
   horizonDays?: number;
   fromDate?: string;

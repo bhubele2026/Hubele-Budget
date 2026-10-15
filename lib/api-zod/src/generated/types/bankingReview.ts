@@ -20,11 +20,13 @@ import type { BankingReviewPeriod } from "./bankingReviewPeriod";
 import type { BankingReviewPlanComparison } from "./bankingReviewPlanComparison";
 import type { BankingReviewPlanned } from "./bankingReviewPlanned";
 import type { BankingReviewReconciliation } from "./bankingReviewReconciliation";
+import type { DataAsOf } from "./dataAsOf";
 
 /**
  * (S4) One bank account's period: balance, cash in and out, the plan occurrences due in it, and every counted row placed exactly once — in one of the five "not in the plan" buckets or as planned. Money is a two-decimal string, signed (negative is money out) unless named in / out. See GET /banking/review for the rules.
  */
 export interface BankingReview {
+  dataAsOf?: DataAsOf;
   account: BankingReviewAccount;
   period: BankingReviewPeriod;
   balance: BankingReviewBalance;

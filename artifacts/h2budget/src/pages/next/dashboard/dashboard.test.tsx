@@ -158,14 +158,14 @@ describe("header", () => {
     const line = await screen.findByTestId("dash-bank-confidence");
     expect(line.getAttribute("data-tone")).toBe("ok");
     expect(screen.getByTestId("dash-bank-updated").textContent).toBe("Updated 2 h ago");
-    expect(screen.getByTestId("dash-bank-check").textContent).toBe("Matches bank");
+    expect(screen.getByTestId("dash-bank-check").textContent).toBe("Balances match");
     expect(screen.getByTestId("dash-bank-pending").textContent).toBe("1 pending");
     a.unmount();
     // Never checked: grey, with the reason; an all-clear review count cannot make it green.
     h.spine.data = spine({ reviewCount: 0, bankConfidence: bc({ status: "not_checked", reason: "anchor_too_old", checkedAt: null, difference: null }, { pendingCount: 0 }) });
     wrap(<DashboardHeader />);
     expect((await screen.findByTestId("dash-bank-confidence")).getAttribute("data-tone")).toBe("grey");
-    expect(screen.getByTestId("dash-bank-check").textContent).toBe("Not checked yet — last balance too old");
+    expect(screen.getByTestId("dash-bank-check").textContent).toBe("Not checked");
     expect(screen.queryByTestId("dash-bank-pending")).toBeNull();
   });
   it("ONE action by priority: Reconnect beats a week over plan, which beats Afford", () => {
@@ -330,7 +330,7 @@ describe("summary row: four figures, status-aware", () => {
     h.spine.data = spine({ bank: { ...spineBank, asOfDate: at, stale: true, staleReason: "old",
       snapshot: { balance: "4224.50", at, source: "plaid" }, sinceSnapshot: { net: "-24.00", count: 2, through: "2026-10-08" } } });
     const a = wrap(<SummaryRow />);
-    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 2 entries since the Oct 5 snapshot");
+    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 2 entries since the Oct 5 reading");
     a.unmount();
     // Nothing rolled on top: nothing said.
     h.spine.data = spine({ bank: { ...spineBank, sinceSnapshot: { net: "0.00", count: 0, through: "2026-10-08" } } });
@@ -342,7 +342,7 @@ describe("summary row: four figures, status-aware", () => {
     h.spine.data = spine({ bank: { ...spineBank, asOfDate: "2026-10-08T14:00:00Z",
       snapshot: { balance: "4212.50", at: "2026-10-08T14:00:00Z", source: "plaid" }, sinceSnapshot: { net: "-12.00", count: 1, through: "2026-10-08" } } });
     const c = wrap(<SummaryRow />);
-    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 1 entry since the Oct 8 snapshot");
+    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 1 entry since the Oct 8 reading");
     c.unmount();
     // No snapshot at all: nothing to say it rolled from.
     h.spine.data = spine({ bank: { ...spineBank, snapshot: null, sinceSnapshot: null } });
@@ -820,6 +820,8 @@ describe("cash-flow forecast", () => {
     wrap(<ForecastPanel />);
     expect(h.horizons[0]).toBe(90);
     expect(screen.getByTestId("dash-forecast-low").textContent).toBe("Low point in these 90 days: $350.00 on Tue Oct 20");
+    // (T2) Under the $500 buffer but above $0: quiet, never rust.
+    expect(screen.getByTestId("dash-forecast-low").querySelector("[data-tone]")!.getAttribute("data-tone")).toBe("neutral");
     await waitFor(() => expect(screen.getByTestId("chart-stub").textContent).toBe("3 points, buffer 500, short label"));
     expect(screen.getByTestId("dash-forecast-link").getAttribute("href")).toBe("/forecast");
     expect(screen.getByTestId("dash-forecast-chart").className).toContain("h-80");

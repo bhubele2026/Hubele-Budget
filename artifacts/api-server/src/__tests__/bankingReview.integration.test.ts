@@ -710,7 +710,7 @@ describe("S4 · GET /banking/review — another account", () => {
     const r = await expectTiesToLedger(qs, qs);
     expect(r.planComparison).toEqual({ available: false, reason: "not_forecast_account", comparedFrom: null, plansFrom: null, through: null });
     expect(r.planned).toEqual([]);
-    expect(r.balance).toEqual({ today: null, asOf: null, start: null, end: null, unavailableReason: "not_snapshot_account" });
+    expect(r.balance).toEqual({ today: null, asOf: null, reading: null, start: null, end: null, unavailableReason: "not_snapshot_account" });
     expect(r.freshness).toBeNull();
     expect(r.account).toMatchObject({ id: acct.savings.rowId, institution: "Chase", name: "Savings", mask: "8802", isForecastAccount: false });
     expect(r.asPlanned.count).toBe(0);

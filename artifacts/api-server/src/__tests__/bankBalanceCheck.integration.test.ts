@@ -306,12 +306,13 @@ describe("(F3) the bank balance check — sync stores, review answers", () => {
     expect((await reviewCheck()).status).toBe("off_by");
     // The feed delivers it late, dated before the check's day.
     await addRow({ day: 2, amount: "169.90", createdAt: new Date(Date.now() + 1000), description: "DEPOSIT" });
+    // (T2) The late row is the explanation, so the resolved check is not "out of date" for it.
     expect(await reviewCheck()).toMatchObject({
       status: "resolved_since",
       difference: "169.90",
       direction: "bank_higher",
-      stale: true,
-      staleReason: "rows_since",
+      stale: false,
+      staleReason: null,
     });
   });
 

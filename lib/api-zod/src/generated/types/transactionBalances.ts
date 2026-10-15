@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { DataAsOf } from "./dataAsOf";
 import type { LedgerAccountScope } from "./ledgerAccountScope";
 import type { LedgerAnchor } from "./ledgerAnchor";
 import type { TransactionBalancesBalancesItem } from "./transactionBalancesBalancesItem";
@@ -16,6 +17,7 @@ export interface TransactionBalances {
    * @nullable
    */
   balanceUnavailableReason: string | null;
+  dataAsOf?: DataAsOf;
   anchor: LedgerAnchor;
   account: LedgerAccountScope;
 }

@@ -83,6 +83,29 @@ export type FakeHouseholdOptions = {
    * it (`source: "plaid"`). A card not named has no figure (`missing`).
    */
   cardBalances?: Record<string, { balance: string; lastFetchedAt: string }>;
+  /**
+   * ⭐ (T1) The checking balance as ONE household answers it everywhere — the
+   * bank's reading, the balance today rolled from it, the check, the reading's
+   * moment (`dataAsOf`) — so every surface can be rendered from the same fake:
+   * GET /spine (full), /banking/review, /forecast, /forecast/cash-signal,
+   * /money/position, /me and the ledger's anchor all say the same thing. Absent:
+   * the responses above stay as they were.
+   */
+  checking?: FakeChecking;
+};
+
+export type FakeChecking = {
+  /** The bank's own reading (`forecast_settings.bank_snapshot_*`). */
+  reading: { balance: string; at: string; source: "plaid" | "manual" };
+  /** Balance today (spine.bank.balance = review balance.today = cashSignal.bankToday). Default: the reading. */
+  today?: string;
+  /** The last check (review balanceCheck; the spine's check is this without bank/h2/lastDrift). Default: not checked. */
+  check?: Record<string, unknown>;
+  /** When the bank last told us anything. Default: the reading's time. */
+  fetchedAt?: string;
+  /** The projected low point and its day. Default: the balance today, today. */
+  lowPoint?: { value: string; date: string };
+  cashBuffer?: string;
 };
 
 const json = (status: number, body: unknown) =>
@@ -119,14 +142,17 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
     }
     otherAccounts[a.id] = opts.rows.filter((r) => r.account === a.key).map(asLedgerInput);
   }
+  const chk = opts.checking ?? null;
+  const todayBal = chk ? (chk.today ?? chk.reading.balance) : (opts.balanceToday ?? "1000.00");
   const ledger: FakeLedgerServer = createFakeLedgerServer({
     rows: snapshotRows.map(asLedgerInput),
     today: opts.today,
     otherAccounts,
     refusedAccounts,
-    balanceToday: opts.balanceToday ?? "1000.00",
-    balanceStart: null,
-    balanceEnd: opts.balanceToday ?? "1000.00",
+    balanceToday: todayBal,
+    balanceStart: chk ? todayBal : null,
+    balanceEnd: todayBal,
+    ...(chk ? { snapshot: { balance: chk.reading.balance, at: chk.reading.at }, balanceByDate: { [opts.today]: todayBal } } : {}),
   });
 
   // The list endpoint's rows, shaped like the generated `Transaction`.
@@ -145,6 +171,132 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
       subtype: a.subtype,
       institutionName: itemOf(a.item).institutionName,
     }));
+
+  // ── (T1) One checking balance, said the same by every endpoint (only with `checking`). ──
+  const dataAsOf = () => ({ snapshotAt: chk!.reading.at, computedAt: `${opts.today}T12:00:00.000Z` });
+  const signalAccount = { rowId: snapshot.id, externalId: snapshot.accountId, name: snapshot.name, mask: snapshot.mask, subtype: snapshot.subtype, via: "pointer" };
+  const notChecked = { status: "not_checked", reason: "never", stale: false, staleReason: null, checkedAt: null, bank: null, h2: null, difference: null, direction: null, lastDrift: null };
+  const reviewCheck = () => ({ ...notChecked, ...(chk!.check ?? {}) });
+  const spineCheck = () => {
+    const { bank: _b, h2: _h, lastDrift: _l, ...rest } = reviewCheck() as Record<string, unknown>;
+    return rest;
+  };
+  const low = () => chk!.lowPoint ?? { value: todayBal, date: opts.today };
+  const buffer = () => chk!.cashBuffer ?? "0.00";
+  const cashSignal = (horizonDays: number) => ({
+    bankToday: todayBal,
+    lowestProjected: low().value,
+    lowestDate: low().date,
+    cashBuffer: buffer(),
+    status: Number(low().value) < Number(buffer()) ? "not_yet" : "ready",
+    maxSafeExtra: "0.00",
+    snapshotAt: chk!.reading.at,
+    snapshotSource: chk!.reading.source,
+    account: signalAccount,
+    horizonDays,
+    fromDate: opts.today,
+    toDate: opts.today,
+    startingBalance: todayBal,
+    endingBalance: todayBal,
+    endingDate: opts.today,
+    projectedIncome: "0.00",
+    projectedExpenses: "0.00",
+    acceptedImpact: "0.00",
+    daily: [{ date: opts.today, balance: todayBal }],
+    events: [],
+    matches: [],
+  });
+  const fullSpine = () => ({
+    asOf: `${opts.today}T12:00:00.000Z`,
+    dataAsOf: dataAsOf(),
+    bank: {
+      balance: todayBal,
+      asOfDate: chk!.reading.at,
+      source: chk!.reading.source,
+      lastContactAt: null,
+      lastFailureAt: null,
+      stale: false,
+      staleReason: null,
+      snapshot: { ...chk!.reading },
+      // What rolled on top of the reading (the fake's one stand-in row when today differs from it).
+      sinceSnapshot: {
+        net: (Number(todayBal) - Number(chk!.reading.balance)).toFixed(2),
+        count: todayBal === chk!.reading.balance ? 0 : 1,
+        through: opts.today,
+      },
+      account: signalAccount,
+    },
+    spentMonth: 0,
+    spentWeek: 0,
+    nextBill: null,
+    billsDueCount: 0,
+    forecast: { lowPoint: low().value, lowPointDate: low().date, runwayDays: null, cashBuffer: buffer(), status: cashSignal(90).status },
+    debt: { payoffPct: null, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 },
+    reviewCount: 0,
+    position: {
+      safeToSpendNow: null, remainingWeek: null, availableUntilPayday: null, paydayDate: null, horizonKind: "week_end",
+      withinPlan: null, confidence: "firm", degraded: false, weekAdjustment: null, knownWeek: "0.00", unresolvedWeek: "0.00",
+      provisional: false, remainingWeekKnown: null,
+    },
+    monthAllowance: { plan: null, actual: "0.00", status: "not_set", remaining: null, over: null },
+    bankConfidence: {
+      fetchedAt: chk!.fetchedAt ?? chk!.reading.at,
+      bankBalance: chk!.reading.balance,
+      bankAsOf: chk!.reading.at,
+      h2Balance: todayBal,
+      check: spineCheck(),
+      pendingCount: 0,
+    },
+  });
+  const moneyPosition = () => ({
+    safeToSpendNow: null, remainingWeek: null, availableUntilPayday: null, paydayDate: null,
+    horizon: { kind: "week_end", endDate: opts.today, lastDay: opts.today }, withinPlan: null, confidence: "firm", degraded: false,
+    weekAdjustment: null, lowestUntilPayday: null, cashBuffer: buffer(), weekCap: null, spentWeekDiscretionary: "0.00",
+    weekStart: opts.today, weekEnd: opts.today, knownWeek: "0.00", unresolvedWeek: "0.00", provisional: false, remainingWeekKnown: null,
+  });
+  const forecastBundle = () => ({
+    dataAsOf: dataAsOf(),
+    fromDate: opts.today,
+    toDate: opts.today,
+    events: [],
+    transactions: [],
+    resolutions: [],
+    closedMonths: [],
+    settings: { daysAhead: 90, startingBalance: "0.00", cashBuffer: buffer() },
+    bankSnapshot: { ...chk!.reading, accountId: snapshot.id, name: snapshot.name, mask: snapshot.mask },
+    cashSignal: cashSignal(90),
+    plaidCheckingAccounts: checkingAccounts,
+    checkingAccountExternalId: snapshot.accountId,
+    today: opts.today,
+    monthSnapshots: {},
+    accountSnapshots: {},
+  });
+  const zeroBucket = () => ({
+    count: 0, moneyIn: "0.00", moneyOut: "0.00", net: "0.00", pendingNet: "0.00", rows: [], truncated: false,
+    differenceTotal: null, varianceIn: null, varianceOut: null, byKind: null, byReason: null,
+  });
+  const bankingReview = (from: string, to: string) => ({
+    dataAsOf: dataAsOf(),
+    account: { id: snapshot.id, institution: itemOf(snapshot.item).institutionName, name: snapshot.name, mask: snapshot.mask, isForecastAccount: true, lastSyncedAt: `${opts.today}T11:00:00.000Z` },
+    period: { from, to, today: opts.today, timezone: "America/Chicago" },
+    balance: { today: todayBal, asOf: chk!.reading.at, reading: chk!.reading.balance, start: todayBal, end: todayBal, unavailableReason: null },
+    freshness: { source: chk!.reading.source, fetchedAt: chk!.fetchedAt ?? chk!.reading.at, lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null },
+    cashFlow: { moneyIn: "0.00", moneyOut: "0.00", net: "0.00", count: 0, pendingNet: "0.00", pendingCount: 0, supersededExcluded: 0, otherExcluded: 0 },
+    planComparison: { available: true, reason: null, comparedFrom: from, plansFrom: from, through: opts.today },
+    planned: [],
+    notInPlan: {
+      amountDifference: zeroBucket(), timingDifference: zeroBucket(), confirmedUnplanned: zeroBucket(),
+      uncertain: { ...zeroBucket(), byReason: { needs_review: { count: 0, moneyIn: "0.00", moneyOut: "0.00", net: "0.00", pendingNet: "0.00" }, suggested_match: { count: 0, moneyIn: "0.00", moneyOut: "0.00", net: "0.00", pendingNet: "0.00" }, not_compared: { count: 0, moneyIn: "0.00", moneyOut: "0.00", net: "0.00", pendingNet: "0.00" } } },
+      unmatched: { ...zeroBucket(), byKind: null },
+    },
+    asPlanned: { count: 0, net: "0.00", pendingNet: "0.00", withoutPlanDetail: 0 },
+    reconciliation: { rowsPlaced: 0, rowsUnexplained: 0, unexplained: "0.00" },
+    reviewInbox: { unresolvedInRange: 0, unresolvedScope: "this account · this period", unresolvedFrom: from, unresolvedTo: to, badgeCount: 0, badgeScope: "this calendar month, forecast account" },
+    balanceTie: { status: "not_checked", checkedAt: null, unexplained: null },
+    balanceCheck: reviewCheck(),
+    household: null,
+    page: null,
+  });
 
   const calls: FakeCall[] = [];
   const unknownCalls: string[] = [];
@@ -209,6 +361,7 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
           })),
         );
       case "/api/spine":
+        if (chk) return json(200, fullSpine());
         return json(200, {
           asOf: `${opts.today}T12:00:00.000Z`,
           bank: {
@@ -226,6 +379,7 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
           reviewCount: 0,
         });
       case "/api/forecast":
+        if (chk) return json(200, forecastBundle());
         return json(200, {
           bankSnapshot: {
             balance: opts.balanceToday ?? "1000.00",
@@ -241,7 +395,20 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
           today: opts.today,
         });
       case "/api/forecast/cash-signal":
+        if (chk) return json(200, { ...cashSignal(q.get("horizonDays") ? Number(q.get("horizonDays")) : 30), dataAsOf: dataAsOf() });
         return json(200, { daily: [], events: [], account: null, status: "no_data" });
+      case "/api/banking/review":
+        if (chk) return json(200, bankingReview(q.get("from") ?? opts.today, q.get("to") ?? opts.today));
+        break;
+      case "/api/money/position":
+        if (chk) return json(200, moneyPosition());
+        break;
+      case "/api/me":
+        if (chk) return json(200, { userId: "u-owner", householdId: "hh-1", isOwner: true, role: "owner" });
+        break;
+      case "/api/review/proposals":
+        if (chk) return json(200, { proposals: [], count: 0 });
+        break;
       case "/api/plaid/liability-accounts":
         return json(
           200,

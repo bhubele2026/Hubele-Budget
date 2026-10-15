@@ -362,7 +362,11 @@ async function expectStep(id: StepId): Promise<Observed & { _raw: Record<string,
     ["confirmedPaymentsMtd", "newChargesMtd", "nextMilestone", "paidDownMtd", "payoffPct"],
   );
   // The Forecast page's curve is the cash-signal's, the same call.
-  expect((_raw.forecast as Record<string, any>).cashSignal, `${id} /forecast cashSignal`).toEqual(_raw.sig);
+  // (T1) GET /forecast/cash-signal also names its bank reading (`dataAsOf`, response metadata): the
+  // curve is compared without it, and the reading is the bundle's own.
+  const { dataAsOf: sigAsOf, ...sigCurve } = _raw.sig as Record<string, any>;
+  expect((_raw.forecast as Record<string, any>).cashSignal, `${id} /forecast cashSignal`).toEqual(sigCurve);
+  expect(sigAsOf.snapshotAt, `${id} cash-signal dataAsOf`).toBe((_raw.forecast as Record<string, any>).dataAsOf.snapshotAt);
   // The Chase page's "today" is the spine's bank balance.
   expect(o.chase.balanceToday, `${id} Chase register today = spine cash`).toBe(o.cash);
   // (S4) The banking review's cash flow and balances are the register's, to the cent.

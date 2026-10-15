@@ -12,6 +12,7 @@ describe("lowPointView", () => {
   it("not_yet is BELOW the buffer, with the value and the date (never blank)", () => {
     expect(lowPointView(f(), { buffer: "500.00" })).toEqual({
       kind: "below", value: 350, date: "2026-10-20", words: "below your $500 buffer", tone: "neutral", stale: false,
+      chip: { word: "Under the $500 buffer", tone: "neutral" },
     });
   });
   it("a negative low point carries the bad tone", () => {
@@ -28,7 +29,7 @@ describe("lowPointView", () => {
   });
   it("no_data is the only `none`: no value, no date, no $0", () => {
     const v = lowPointView(f({ lowPoint: "0.00", lowPointDate: null, status: "no_data" }), { buffer: "500" });
-    expect(v).toEqual({ kind: "none", value: null, date: null, words: "No bank balance yet, so no forecast", tone: "neutral", stale: false });
+    expect(v).toEqual({ kind: "none", value: null, date: null, words: "No bank balance yet, so no forecast", tone: "neutral", stale: false, chip: null });
     expect(lowPointView(null).kind).toBe("none");
     expect(lowPointView(f({ lowPoint: null })).kind).toBe("none");
   });
@@ -41,5 +42,14 @@ describe("lowPointView", () => {
     expect(lowPointView(f({ cashBuffer: "750.00" })).words).toBe("below your $750 buffer");
     expect(lowPointView(f(), { buffer: "512.50" }).words).toBe("below your $512.50 buffer");
     expect(lowPointView(f({ cashBuffer: null })).words).toBe("below your buffer");
+  });
+
+  it("⭐ (T2) one status word: only a projected NEGATIVE is rust; under the buffer at or above $0 is quiet; $0.00 is never rust", () => {
+    expect(lowPointView(f({ lowPoint: "-120.55", lowPointDate: "2026-10-22" }), { buffer: 500 }).chip).toEqual({ word: "Below zero on Oct 22", tone: "bad" });
+    expect(lowPointView(f({ lowPoint: "0.00" }), { buffer: 500 })).toMatchObject({ tone: "neutral", chip: { word: "Under the $500 buffer", tone: "neutral" } });
+    expect(lowPointView(f({ lowPoint: "620.00", status: "tight" }), { buffer: "500" }).chip).toEqual({ word: "Near buffer", tone: "neutral" });
+    expect(lowPointView(f({ lowPoint: "2400.10", status: "ready" }), { buffer: "500" }).chip).toEqual({ word: "Above buffer", tone: "ok" });
+    // (H12) A stale bank keeps the chip; the words carry the warning.
+    expect(lowPointView(f(), { buffer: "500", stale: true }).chip).toEqual({ word: "Under the $500 buffer", tone: "neutral" });
   });
 });

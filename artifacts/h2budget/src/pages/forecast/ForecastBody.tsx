@@ -9,6 +9,8 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { ChartPanel, useChartModel } from "../next/forecast/ChartPanel";
 import { DayPanel } from "../next/forecast/DayPanel";
 import type { ForecastNextCtx } from "../next/forecast/types";
+import { lowPointView } from "@/lib/lowPoint";
+import { asOfWords } from "@/lib/checkingWords";
 
 /**
  * ⭐ THE FORECAST SCREEN (C13) — `/forecast`, `/review` and `/next/forecast`
@@ -121,15 +123,23 @@ function SummaryStrip({ ctx }: { ctx: ForecastNextCtx }) {
   const { proj, projReady } = ctx;
   const lowest = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
   const buffer = Number.isFinite(ctx.cashBufferNum) ? ctx.cashBufferNum : null;
-  const dips = Number.isFinite(lowest) && lowest < Number(proj?.cashBuffer ?? 0);
+  // ⭐ (T2) One reading of the low point (lib/lowPoint): only a projected NEGATIVE is rust; under the
+  // buffer at or above $0 is quiet ("Under the $500 buffer"); the words are the dashboard tile's.
+  const low = lowPointView(
+    proj ? { lowPoint: proj.lowestProjected, lowPointDate: proj.lowestDate, status: proj.status, cashBuffer: proj.cashBuffer } : null,
+  );
+  const account = `${ctx.bankAccountName}${ctx.bankAccountMask ? ` ••${ctx.bankAccountMask}` : ""}`;
+  const readAsOf = asOfWords(ctx.bankReadAt);
   return (
     <Panel title="Where the money lands" span={8} variant="static" data-testid="forecast-kpis">
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-3">
+        {/* ⭐ (T1) Checking today = the dashboard's figure (cashSignal.bankToday), never the raw reading;
+            no reading is a dash, never $0.00. An older answer says so instead of "as of". */}
         <StatBlock
           data-testid="kpi-bank-today"
-          label="Bank today"
-          value={formatCurrency(ctx.bankBalance)}
-          hint={`${ctx.bankAccountName}${ctx.bankAccountMask ? ` ••${ctx.bankAccountMask}` : ""}`}
+          label="Checking today"
+          value={moneyFace(ctx.bankBalance)}
+          hint={ctx.bankOlder ?? [account, readAsOf].filter(Boolean).join(" · ")}
         />
         <StatBlock
           data-testid="kpi-cash-buffer"
@@ -140,27 +150,32 @@ function SummaryStrip({ ctx }: { ctx: ForecastNextCtx }) {
           data-testid="kpi-lowest-point"
           label="Lowest point"
           value={projReady && Number.isFinite(lowest) ? formatCurrency(lowest) : "—"}
-          tone={dips ? "bad" : "neutral"}
-          hint={`${!projReady ? "Set a bank balance to project" : dips ? "under buffer" : "above buffer"}${
-            proj?.lowestDate ? ` · ${formatDate(proj.lowestDate)}` : ""
-          }`}
+          tone={projReady && low.tone === "bad" ? "bad" : "neutral"}
+          hint={
+            !projReady || !low.chip
+              ? "Sync to read the bank balance"
+              : low.value != null && low.value < 0
+                ? low.chip.word
+                : `${low.chip.word}${proj?.lowestDate ? ` · ${formatDate(proj.lowestDate)}` : ""}`
+          }
         />
         <StatBlock
           data-testid="kpi-ending-balance"
           label="Ending balance"
-          value={proj && proj.status !== "no_data" ? formatCurrency(proj.endingBalance ?? 0) : "—"}
+          value={proj && proj.status !== "no_data" ? moneyFace(proj.endingBalance) : "—"}
+          tone={proj && proj.status !== "no_data" && Number(proj.endingBalance) < 0 ? "bad" : "neutral"}
           hint={proj?.endingDate ? formatDate(proj.endingDate) : `${ctx.horizonDays}-day horizon`}
         />
         <StatBlock
           data-testid="kpi-projected-income"
           label="Money in"
-          value={proj ? formatCurrency(Number(proj.projectedIncome) || 0) : "—"}
+          value={proj ? moneyFace(proj.projectedIncome) : "—"}
           hint={`over ${ctx.horizonDays}d`}
         />
         <StatBlock
           data-testid="kpi-projected-expenses"
           label="Money out"
-          value={proj ? formatCurrency(Number(proj.projectedExpenses) || 0) : "—"}
+          value={proj ? moneyFace(proj.projectedExpenses) : "—"}
           hint={`over ${ctx.horizonDays}d`}
         />
       </div>

@@ -18,6 +18,7 @@ import { buildEntries, accountViewOf } from "@/pages/next/accounts/entries";
 import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { Help, input } from "@/ui";
 import { BalanceCheck } from "./banking/BalanceCheck";
+import { BankBalanceWhy } from "@/components/bank-balance-why";
 import { BucketRows } from "./banking/BucketRows";
 import { ProposedFixes } from "./banking/ProposedFixes";
 import { PRESETS, isDay, presetOf, presetRange, rangeWords, sanitizeRange } from "./banking/reviewDates";
@@ -26,6 +27,9 @@ import { BUCKETS, KIND_ORDER, KIND_WORDS, bucketAria, dayWords, isBucketName, is
 import { WEEK_FIGURE_WORDS } from "@workspace/avalanche-core/glossary";
 import { bankFreshWords, freshKindOf } from "@/lib/bankFreshWords";
 import { useSpine } from "@/hooks/useSpine";
+import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { asOfWords, readingLine } from "@/lib/checkingWords";
+import { useOlderSnapshot } from "@/lib/dataAsOf";
 
 /**
  * (W3) ⭐ BANKING › REVIEW — "what wasn't in the plan?" for ONE bank account.
@@ -135,6 +139,12 @@ export default function BankingReviewPage() {
   // one (kept while this loads) is not: its balance, buckets and rows would sit
   // under the new account's name and the new dates.
   const d = scoped(q, (r) => r.period.to === range.to).data;
+  // (T1) An answer built on an older bank reading than the newest seen is labelled and asked again once.
+  const olderReading = useOlderSnapshot(q);
+  const [checkParam] = useUrlState<string>("check", str, "");
+  // (T2) Review difference: opened by its button, by `?check=1`, or from "Why this number?".
+  const [explainOpen, setExplainOpen] = useState(checkParam === "1");
+  const { runSync, isPending: syncing } = usePlaidSync();
 
   const items = useListPlaidItems({ query: { staleTime: MIN } as never });
   const entries = useMemo(() => buildEntries(items.data), [items.data]);
@@ -293,13 +303,25 @@ export default function BankingReviewPage() {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="br-summary">
             <div className={CELL}>
               <div className={CELL_LABEL}>H2 balance</div>
-              <div className={CELL_VALUE} data-testid="br-balance">{face(d.balance.today)}</div>
-              <div className="mt-1 text-micro text-neutral-500">
-                {d.balance.today != null && d.balance.asOf ? `as of ${dayWords(d.balance.asOf.slice(0, 10))}` : "Not tracked for this account"}
+              {/* ⭐ (T1) Checking today (the reading rolled forward), as of the reading, and the reading itself —
+                  all from THIS response (one moment), never the spine's. An answer on an older reading is grey and says so. */}
+              <div className={cn(CELL_VALUE, olderReading.older && "text-neutral-500")} data-testid="br-balance">{face(d.balance.today)}</div>
+              <div className="mt-1 text-micro text-neutral-500" data-testid="br-balance-asof">
+                {olderReading.words ??
+                  (d.balance.today != null && d.balance.asOf ? (asOfWords(d.balance.asOf) ?? "") : "Not tracked for this account")}
               </div>
-              {/* The bank's own figure today, from the server's confidence read: a separate fact from the check's moment below. */}
-              {d.account.isForecastAccount && spine.data?.bankConfidence?.bankBalance != null ? (
-                <div className="text-micro text-neutral-500" data-testid="br-bank-today">Bank {formatCurrency(spine.data.bankConfidence.bankBalance)}</div>
+              {d.balance.today != null ? (
+                <div className="text-micro text-neutral-500" data-testid="br-bank-today">
+                  {readingLine({ balance: d.balance.reading, at: d.balance.asOf, source: d.freshness?.source })}
+                </div>
+              ) : null}
+              {d.account.isForecastAccount && d.balance.today != null ? (
+                <div className="mt-1 text-micro">
+                  <BankBalanceWhy
+                    trigger={<button type="button" className="press font-semibold text-brand-navy underline" data-testid="br-why">Why this number?</button>}
+                    onReviewDifference={d.balanceCheck.status === "off_by" && !d.balanceCheck.stale ? () => setExplainOpen(true) : undefined}
+                  />
+                </div>
               ) : null}
             </div>
             <div className={CELL}>
@@ -315,7 +337,14 @@ export default function BankingReviewPage() {
                 Balance check
                 <Help>Compares the bank's own balance with H2's at the last Sync.</Help>
               </div>
-              <BalanceCheck check={d.balanceCheck} registerHref={registerHref} />
+              <BalanceCheck
+                check={d.balanceCheck}
+                registerHref={registerHref}
+                today={{ h2: d.balance.today, reading: d.balance.reading ?? null, asOf: d.balance.asOf, source: d.freshness?.source ?? null }}
+                onSync={d.account.isForecastAccount ? () => void runSync({ itemId: here?.itemId }) : undefined}
+                syncing={syncing}
+                explain={{ open: explainOpen, onOpenChange: setExplainOpen }}
+              />
             </div>
           </div>
 

@@ -21,6 +21,7 @@ import {
   resolveLedgerAccounts,
   resolveLedgerScope,
 } from "../lib/bankLedger";
+import { dataAsOfOf } from "../lib/dataAsOf";
 
 /**
  * (PR13) The paginated bank ledger: one page of the Chase register, the
@@ -115,6 +116,8 @@ router.get("/transactions/balances", requireAuth, async (req, res): Promise<void
       balanceUnavailableReason: balanceUnavailableReason(scope),
       anchor: scope.anchor,
       account: { via: scope.via, plaidAccountIds: scope.plaidAccountIds },
+      // (T1) The bank reading these balances roll forward from.
+      dataAsOf: dataAsOfOf(scope.anchor.snapshotAt),
     });
   } catch (err) {
     if (!sendLedgerError(res, err)) throw err;

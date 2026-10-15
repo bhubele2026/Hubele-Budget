@@ -71,6 +71,27 @@ describe("bankCheckLedger — the ledger's side of the check", () => {
     expect(l.net).toBeCloseTo(cashRuleNet(rows), 10);
     expect(l.net).toBeCloseTo(-25.5 + 1200 - 9.99, 10);
     expect(l).toMatchObject({ excluded: { ids: [] }, added: { ids: [] }, pendingDeposits: { ids: [] }, lateRows: 0 });
+    // (T2) The rows behind `net`, each with what it added; they sum to `net` (nothing added by rule 2 here).
+    expect(l.counted.map((c) => c.id)).toEqual(["a", "b", "p"]);
+    expect(l.counted.every((c) => !c.late)).toBe(true);
+    expect(l.counted.reduce((a, c) => a + c.contribution, 0)).toBeCloseTo(l.net, 10);
+    // (T2) The typed-in row is counted by H2's balance, listed here, and left out of the check's `net`.
+    expect(l.manual).toEqual({ ids: ["manual"], amount: -500 });
+  });
+
+  it("(T2) a typed-in row dated before the anchor's day is already in the reading: not listed", () => {
+    const rows = [
+      row("paidBefore", "2026-10-09", -432, { plaidAccountId: null, source: "manual" }),
+      row("paidAfter", "2026-10-13", -432, { plaidAccountId: null, source: "manual" }),
+      // After the check's day: not the check's.
+      row("later", "2026-10-15", -10, { plaidAccountId: null, source: "manual" }),
+      // A card's row with no Plaid account is not the bank's at all.
+      row("amex", "2026-10-12", -60, { plaidAccountId: null, source: "amex" }),
+    ];
+    const l = ledger(rows);
+    expect(l.manual).toEqual({ ids: ["paidAfter"], amount: -432 });
+    expect(l.net).toBe(0);
+    expect(l.counted).toEqual([]);
   });
 
   it("⭐ rule 1: an unpaired pending deposit is left out when the bank figure is `available` (the false drift)", () => {
@@ -136,6 +157,11 @@ describe("bankCheckLedger — the ledger's side of the check", () => {
     const l = ledger(rows, { excludedIds: new Set(), addedIds: new Set() });
     expect(l.net).toBeCloseTo(-55 + 169.9, 10);
     expect(l.lateRows).toBe(1);
+    // (T2) The late row is marked, so the investigation can say it arrived after the check.
+    expect(l.counted).toEqual([
+      { id: "tip", contribution: -55, late: false },
+      { id: "late", contribution: 169.9, late: true },
+    ]);
   });
 
   it("rule 3 through a separate posted row: the pending charge was dated on the check's day", () => {
@@ -196,10 +222,28 @@ describe("bankBalanceCheckOf — the review's answer", () => {
   });
 
   it("resolved since: recomputed now it ties (late rows); off by stays while it does not", () => {
+    // (T2) The late rows ARE the explanation: `rows_since` does not make a resolved check stale.
     expect(bankBalanceCheckOf(args({ recompute: { predicted: 1069.9, lateRows: 1 } }))).toMatchObject({
       status: "resolved_since",
       differenceCents: 16990,
       direction: "bank_higher",
+      stale: false,
+      staleReason: null,
+    });
+    // Still stale for its other reasons: a newer anchor, or age.
+    expect(bankBalanceCheckOf(args({ currentAnchorAt: "2026-10-15T01:00:00.000Z", recompute: { predicted: 1069.9, lateRows: 1 } }))).toMatchObject({
+      status: "resolved_since",
+      stale: true,
+      staleReason: "anchor_changed",
+    });
+    expect(bankBalanceCheckOf(args({ now: new Date("2026-10-21T19:00:01Z"), recompute: { predicted: 1069.9, lateRows: 1 } }))).toMatchObject({
+      status: "resolved_since",
+      stale: true,
+      staleReason: "age",
+    });
+    // An off-by check with late rows that do not tie it is still out of date.
+    expect(bankBalanceCheckOf(args({ recompute: { predicted: 1000, lateRows: 1 } }))).toMatchObject({
+      status: "off_by",
       stale: true,
       staleReason: "rows_since",
     });
