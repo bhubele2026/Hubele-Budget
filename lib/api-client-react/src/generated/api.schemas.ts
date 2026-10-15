@@ -6383,6 +6383,39 @@ stays on the curve.
   remainderAmount?: string;
 };
 
+export type CashSignalDayItemKind =
+  (typeof CashSignalDayItemKind)[keyof typeof CashSignalDayItemKind];
+
+export const CashSignalDayItemKind = {
+  income: "income",
+  expense: "expense",
+  bank_row: "bank_row",
+} as const;
+
+/**
+ * (T3) One item the cash-signal walk applied. `kind` follows the walk's
+sign rule: a positive plan is `income`, any other plan `expense`, a
+counted checking row `bank_row`. Amounts are signed. Plans carry
+`label`, `itemId`, `occurrenceKey`, `occurrenceDate`, `originalDate`
+and `assumption` (as on `events`); bank rows carry `txnId` and
+`matched`.
+
+ */
+export interface CashSignalDayItem {
+  date: string;
+  kind: CashSignalDayItemKind;
+  amount: string;
+  label?: string;
+  itemId?: string;
+  occurrenceKey?: string;
+  occurrenceDate?: string;
+  originalDate?: string;
+  /** @nullable */
+  assumption?: string | null;
+  txnId?: string;
+  matched?: boolean;
+}
+
 /**
  * (PR6) An unresolved plan occurrence kept off the forecast curve.
  */
@@ -6459,6 +6492,15 @@ then, and `status` is `no_data`.
   acceptedImpact?: string;
   daily?: CashSignalDailyItem[];
   events?: CashSignalEventsItem[];
+  /** (T3) Every item the walk applied inside the window, in the order it
+applied them: planned income, planned expenses (the same
+occurrences as `events`) and the checking rows counted after the
+bank reading. A read-only projection of the walk — for every day
+`daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`
+before the first day); Σ positive amounts = `projectedIncome`;
+Σ the rest, negated = `projectedExpenses`.
+ */
+  dayItems?: CashSignalDayItem[];
   /** (PR-B2, decision 7) The everyday hooks in force: the Weekly / Monthly
 Spend items whose occurrences the forecast replaces with the card
 payoff (the period's card charges plus what is left of the

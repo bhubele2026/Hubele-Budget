@@ -19,6 +19,10 @@
 // The snapshot file is written once, on the pre-refactor code, and committed.
 // ⚠️ Vitest never writes snapshots under CI=true, so CI can only compare.
 //
+// (T3) Each entry also proves `dayItems` is the walk read back (opening + items =
+// close every day; Σ in / out = projectedIncome / projectedExpenses), and the
+// snapshot gained that one additive key — every other byte is unchanged.
+//
 // Not covered, because it cannot exist: two rows with the same plaid transaction
 // id. `transactions.plaid_transaction_id` is unique (`transactions_plaid_txn_uq`),
 // so the plaid-id de-duplication in `computeCashSignal` is defensive only, and
@@ -45,6 +49,7 @@ import {
 import { computeCashSignal } from "../lib/cashSignal";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
+import { expectDayItemsReconcile } from "./_helpers/dayItemsReconcile";
 
 const TEST_USER = `ledger-golden-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 let HOUSEHOLD: string;
@@ -272,12 +277,14 @@ describe("PR4a golden — computeCashSignal output, byte for byte", () => {
   it("full household, default window from today", async () => {
     await fullHousehold();
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 45 });
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 
   it("full household, a fromDate window after the anchor", async () => {
     await fullHousehold();
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { fromDate: "2026-05-10", horizonDays: 30 });
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 
@@ -287,18 +294,21 @@ describe("PR4a golden — computeCashSignal output, byte for byte", () => {
     // window alone would drop 05-12 and 05-13 from bankToday.
     await fullHousehold();
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { fromDate: "2026-05-01", horizonDays: 10 });
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 
   it("full household, snapshot dated after today", async () => {
     await fullHousehold({ snapshotAt: new Date("2026-05-20T15:00:00Z") });
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 45 });
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 
   it("full household, a window that starts after today", async () => {
     await fullHousehold();
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { fromDate: "2026-05-20", horizonDays: 20 });
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 
@@ -307,12 +317,14 @@ describe("PR4a golden — computeCashSignal output, byte for byte", () => {
     await recurring({ name: "Mid-month bill", amount: "65", dayOfMonth: 16, anchorDate: "2026-01-16" });
     await recurring({ name: "Paycheck", kind: "income", amount: "1500", frequency: "biweekly", dayOfMonth: null, anchorDate: "2026-05-22" });
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { fromDate: "2026-05-20", horizonDays: 20 });
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 
   it("ties and edge paths: same-day bills with a dragged plan, the day-before-snapshot bill, a recovered moved bill", async () => {
     await edgeHousehold();
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 30 });
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 
@@ -326,6 +338,8 @@ describe("PR4a golden — computeCashSignal output, byte for byte", () => {
       .set({ bankSnapshotBalance: "900", bankSnapshotAt: null, bankSnapshotSource: "manual" })
       .where(eq(forecastSettingsTable.userId, TEST_USER));
     const balanceOnly = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 15 });
+    expectDayItemsReconcile(timeOnly, "timeOnly");
+    expectDayItemsReconcile(balanceOnly, "balanceOnly");
     expect(normalised({ timeOnly, balanceOnly })).toMatchSnapshot();
   });
 
@@ -337,6 +351,7 @@ describe("PR4a golden — computeCashSignal output, byte for byte", () => {
     await txn({ occurredOn: "2026-05-20", amount: "-80", forecastFlag: true });
     await txn({ occurredOn: "2026-05-21", amount: "-60", forecastFlag: false });
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 40 });
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 
@@ -347,6 +362,7 @@ describe("PR4a golden — computeCashSignal output, byte for byte", () => {
     await txn({ occurredOn: "2026-05-13", amount: "-70", plaidAccountId: "unresolved-acct", source: "plaid:chase", plaidTransactionId: "g-unresolved" });
     await txn({ occurredOn: "2026-05-14", amount: "300", source: "manual" });
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 20 });
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 });
@@ -379,6 +395,7 @@ describe("PR4b golden — the snapshot rule", () => {
     await txn({ occurredOn: "2026-05-09", amount: "-12", source: "manual", createdAt: atRead });
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 45 });
     expect(sig.bankToday).toBe("3130.00");
+    expectDayItemsReconcile(sig);
     expect(normalised(sig)).toMatchSnapshot();
   });
 });
@@ -431,6 +448,7 @@ describe("PR-B2 golden — the everyday hooks", () => {
       await txn({ occurredOn: "2026-05-12", amount: "-25", plaidAccountId: "golden-amex-plat", source: "plaid:amex", plaidTransactionId: "h-unplanned", unplannedAllowance: true });
       const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 30 });
       expect(sig.hookAmountIgnored).toEqual([{ itemId: spend!.id, cadence: "weekly", storedAmount: "300.00" }]);
+      expectDayItemsReconcile(sig);
       expect(normalised(sig)).toMatchSnapshot();
     } finally {
       await db.delete(settingsTable).where(eq(settingsTable.userId, TEST_USER));

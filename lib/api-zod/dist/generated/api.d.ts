@@ -8119,6 +8119,43 @@ export declare const GetForecastResponse: zod.ZodObject<{
             assumption?: string | null | undefined;
             occurrenceKey?: string | undefined;
         }>, "many">>;
+        dayItems: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            date: zod.ZodString;
+            kind: zod.ZodEnum<["income", "expense", "bank_row"]>;
+            amount: zod.ZodString;
+            label: zod.ZodOptional<zod.ZodString>;
+            itemId: zod.ZodOptional<zod.ZodString>;
+            occurrenceKey: zod.ZodOptional<zod.ZodString>;
+            occurrenceDate: zod.ZodOptional<zod.ZodString>;
+            originalDate: zod.ZodOptional<zod.ZodString>;
+            assumption: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            txnId: zod.ZodOptional<zod.ZodString>;
+            matched: zod.ZodOptional<zod.ZodBoolean>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            kind: "income" | "expense" | "bank_row";
+            amount: string;
+            matched?: boolean | undefined;
+            itemId?: string | undefined;
+            label?: string | undefined;
+            occurrenceDate?: string | undefined;
+            originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
+            txnId?: string | undefined;
+        }, {
+            date: string;
+            kind: "income" | "expense" | "bank_row";
+            amount: string;
+            matched?: boolean | undefined;
+            itemId?: string | undefined;
+            label?: string | undefined;
+            occurrenceDate?: string | undefined;
+            originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
+            txnId?: string | undefined;
+        }>, "many">>;
         hookAmountIgnored: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
             itemId: zod.ZodString;
             cadence: zod.ZodEnum<["weekly", "monthly"]>;
@@ -8307,10 +8344,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             label: string;
             occurrenceDate: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             daysOverdue: number;
             planAmount: string;
-            txnId: string;
             confidence: string;
             unpaidRemainder: string;
         }, {
@@ -8319,10 +8356,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             label: string;
             occurrenceDate: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             daysOverdue: number;
             planAmount: string;
-            txnId: string;
             confidence: string;
             unpaidRemainder: string;
         }>, "many">>;
@@ -8343,9 +8380,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }, "strip", zod.ZodTypeAny, {
             difference: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             planAmount: string;
-            txnId: string;
             confidence: string;
             planItemId: string;
             planDate: string;
@@ -8357,9 +8394,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }, {
             difference: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             planAmount: string;
-            txnId: string;
             confidence: string;
             planItemId: string;
             planDate: string;
@@ -8392,9 +8429,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         matches?: {
             difference: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             planAmount: string;
-            txnId: string;
             confidence: string;
             planItemId: string;
             planDate: string;
@@ -8427,6 +8464,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        dayItems?: {
+            date: string;
+            kind: "income" | "expense" | "bank_row";
+            amount: string;
+            matched?: boolean | undefined;
+            itemId?: string | undefined;
+            label?: string | undefined;
+            occurrenceDate?: string | undefined;
+            originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
+            txnId?: string | undefined;
         }[] | undefined;
         hookAmountIgnored?: {
             itemId: string;
@@ -8486,10 +8536,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             label: string;
             occurrenceDate: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             daysOverdue: number;
             planAmount: string;
-            txnId: string;
             confidence: string;
             unpaidRemainder: string;
         }[] | undefined;
@@ -8516,9 +8566,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         matches?: {
             difference: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             planAmount: string;
-            txnId: string;
             confidence: string;
             planItemId: string;
             planDate: string;
@@ -8551,6 +8601,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        dayItems?: {
+            date: string;
+            kind: "income" | "expense" | "bank_row";
+            amount: string;
+            matched?: boolean | undefined;
+            itemId?: string | undefined;
+            label?: string | undefined;
+            occurrenceDate?: string | undefined;
+            originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
+            txnId?: string | undefined;
         }[] | undefined;
         hookAmountIgnored?: {
             itemId: string;
@@ -8610,10 +8673,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             label: string;
             occurrenceDate: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             daysOverdue: number;
             planAmount: string;
-            txnId: string;
             confidence: string;
             unpaidRemainder: string;
         }[] | undefined;
@@ -8803,9 +8866,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         matches?: {
             difference: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             planAmount: string;
-            txnId: string;
             confidence: string;
             planItemId: string;
             planDate: string;
@@ -8838,6 +8901,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        dayItems?: {
+            date: string;
+            kind: "income" | "expense" | "bank_row";
+            amount: string;
+            matched?: boolean | undefined;
+            itemId?: string | undefined;
+            label?: string | undefined;
+            occurrenceDate?: string | undefined;
+            originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
+            txnId?: string | undefined;
         }[] | undefined;
         hookAmountIgnored?: {
             itemId: string;
@@ -8897,10 +8973,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             label: string;
             occurrenceDate: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             daysOverdue: number;
             planAmount: string;
-            txnId: string;
             confidence: string;
             unpaidRemainder: string;
         }[] | undefined;
@@ -9037,9 +9113,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         matches?: {
             difference: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             planAmount: string;
-            txnId: string;
             confidence: string;
             planItemId: string;
             planDate: string;
@@ -9072,6 +9148,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        dayItems?: {
+            date: string;
+            kind: "income" | "expense" | "bank_row";
+            amount: string;
+            matched?: boolean | undefined;
+            itemId?: string | undefined;
+            label?: string | undefined;
+            occurrenceDate?: string | undefined;
+            originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
+            txnId?: string | undefined;
         }[] | undefined;
         hookAmountIgnored?: {
             itemId: string;
@@ -9131,10 +9220,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             label: string;
             occurrenceDate: string;
             txnAmount: string;
+            txnId: string;
             planKey: string;
             daysOverdue: number;
             planAmount: string;
-            txnId: string;
             confidence: string;
             unpaidRemainder: string;
         }[] | undefined;
@@ -9449,6 +9538,43 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         assumption?: string | null | undefined;
         occurrenceKey?: string | undefined;
     }>, "many">>;
+    dayItems: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        date: zod.ZodString;
+        kind: zod.ZodEnum<["income", "expense", "bank_row"]>;
+        amount: zod.ZodString;
+        label: zod.ZodOptional<zod.ZodString>;
+        itemId: zod.ZodOptional<zod.ZodString>;
+        occurrenceKey: zod.ZodOptional<zod.ZodString>;
+        occurrenceDate: zod.ZodOptional<zod.ZodString>;
+        originalDate: zod.ZodOptional<zod.ZodString>;
+        assumption: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        txnId: zod.ZodOptional<zod.ZodString>;
+        matched: zod.ZodOptional<zod.ZodBoolean>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        kind: "income" | "expense" | "bank_row";
+        amount: string;
+        matched?: boolean | undefined;
+        itemId?: string | undefined;
+        label?: string | undefined;
+        occurrenceDate?: string | undefined;
+        originalDate?: string | undefined;
+        assumption?: string | null | undefined;
+        occurrenceKey?: string | undefined;
+        txnId?: string | undefined;
+    }, {
+        date: string;
+        kind: "income" | "expense" | "bank_row";
+        amount: string;
+        matched?: boolean | undefined;
+        itemId?: string | undefined;
+        label?: string | undefined;
+        occurrenceDate?: string | undefined;
+        originalDate?: string | undefined;
+        assumption?: string | null | undefined;
+        occurrenceKey?: string | undefined;
+        txnId?: string | undefined;
+    }>, "many">>;
     hookAmountIgnored: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
         itemId: zod.ZodString;
         cadence: zod.ZodEnum<["weekly", "monthly"]>;
@@ -9637,10 +9763,10 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         label: string;
         occurrenceDate: string;
         txnAmount: string;
+        txnId: string;
         planKey: string;
         daysOverdue: number;
         planAmount: string;
-        txnId: string;
         confidence: string;
         unpaidRemainder: string;
     }, {
@@ -9649,10 +9775,10 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         label: string;
         occurrenceDate: string;
         txnAmount: string;
+        txnId: string;
         planKey: string;
         daysOverdue: number;
         planAmount: string;
-        txnId: string;
         confidence: string;
         unpaidRemainder: string;
     }>, "many">>;
@@ -9673,9 +9799,9 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         difference: string;
         txnAmount: string;
+        txnId: string;
         planKey: string;
         planAmount: string;
-        txnId: string;
         confidence: string;
         planItemId: string;
         planDate: string;
@@ -9687,9 +9813,9 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     }, {
         difference: string;
         txnAmount: string;
+        txnId: string;
         planKey: string;
         planAmount: string;
-        txnId: string;
         confidence: string;
         planItemId: string;
         planDate: string;
@@ -9722,9 +9848,9 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     matches?: {
         difference: string;
         txnAmount: string;
+        txnId: string;
         planKey: string;
         planAmount: string;
-        txnId: string;
         confidence: string;
         planItemId: string;
         planDate: string;
@@ -9757,6 +9883,19 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     daily?: {
         date: string;
         balance: string;
+    }[] | undefined;
+    dayItems?: {
+        date: string;
+        kind: "income" | "expense" | "bank_row";
+        amount: string;
+        matched?: boolean | undefined;
+        itemId?: string | undefined;
+        label?: string | undefined;
+        occurrenceDate?: string | undefined;
+        originalDate?: string | undefined;
+        assumption?: string | null | undefined;
+        occurrenceKey?: string | undefined;
+        txnId?: string | undefined;
     }[] | undefined;
     hookAmountIgnored?: {
         itemId: string;
@@ -9816,10 +9955,10 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         label: string;
         occurrenceDate: string;
         txnAmount: string;
+        txnId: string;
         planKey: string;
         daysOverdue: number;
         planAmount: string;
-        txnId: string;
         confidence: string;
         unpaidRemainder: string;
     }[] | undefined;
@@ -9846,9 +9985,9 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     matches?: {
         difference: string;
         txnAmount: string;
+        txnId: string;
         planKey: string;
         planAmount: string;
-        txnId: string;
         confidence: string;
         planItemId: string;
         planDate: string;
@@ -9881,6 +10020,19 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     daily?: {
         date: string;
         balance: string;
+    }[] | undefined;
+    dayItems?: {
+        date: string;
+        kind: "income" | "expense" | "bank_row";
+        amount: string;
+        matched?: boolean | undefined;
+        itemId?: string | undefined;
+        label?: string | undefined;
+        occurrenceDate?: string | undefined;
+        originalDate?: string | undefined;
+        assumption?: string | null | undefined;
+        occurrenceKey?: string | undefined;
+        txnId?: string | undefined;
     }[] | undefined;
     hookAmountIgnored?: {
         itemId: string;
@@ -9940,10 +10092,10 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         label: string;
         occurrenceDate: string;
         txnAmount: string;
+        txnId: string;
         planKey: string;
         daysOverdue: number;
         planAmount: string;
-        txnId: string;
         confidence: string;
         unpaidRemainder: string;
     }[] | undefined;
@@ -21927,9 +22079,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         occurrenceDate: string;
         txnDate: string | null;
         txnAmount: string | null;
+        txnId: string | null;
         hook: "weekly" | "monthly" | null;
         carriedTo: string | null;
-        txnId: string | null;
         dayDelta: number | null;
         key: string;
         direction: "in" | "out";
@@ -21952,9 +22104,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         occurrenceDate: string;
         txnDate: string | null;
         txnAmount: string | null;
+        txnId: string | null;
         hook: "weekly" | "monthly" | null;
         carriedTo: string | null;
-        txnId: string | null;
         dayDelta: number | null;
         key: string;
         direction: "in" | "out";
@@ -27502,9 +27654,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         occurrenceDate: string;
         txnDate: string | null;
         txnAmount: string | null;
+        txnId: string | null;
         hook: "weekly" | "monthly" | null;
         carriedTo: string | null;
-        txnId: string | null;
         dayDelta: number | null;
         key: string;
         direction: "in" | "out";
@@ -28313,9 +28465,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         occurrenceDate: string;
         txnDate: string | null;
         txnAmount: string | null;
+        txnId: string | null;
         hook: "weekly" | "monthly" | null;
         carriedTo: string | null;
-        txnId: string | null;
         dayDelta: number | null;
         key: string;
         direction: "in" | "out";

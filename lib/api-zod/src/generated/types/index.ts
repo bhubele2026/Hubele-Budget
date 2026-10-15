@@ -297,6 +297,8 @@ export * from "./cashSignalAccount";
 export * from "./cashSignalAccountVia";
 export * from "./cashSignalAssumedPaidPlan";
 export * from "./cashSignalDailyItem";
+export * from "./cashSignalDayItem";
+export * from "./cashSignalDayItemKind";
 export * from "./cashSignalEventsItem";
 export * from "./cashSignalHookAmountIgnoredItem";
 export * from "./cashSignalHookAmountIgnoredItemCadence";
