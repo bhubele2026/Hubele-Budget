@@ -110,6 +110,8 @@ export type AffordVerdict = "fits" | "tight" | "breaks_buffer" | "breaks_zero";
 export interface AffordFigures {
   safeToSpendNow: string | null;
   remainingWeek: string | null;
+  /** (Q5 fix) The week's plan against what COUNTS TOWARD IT (the position's `remainingWeekKnown`); null with no cap. `remainingWeek` stays the cautious total. */
+  remainingWeekKnown: string | null;
   availableUntilPayday: string | null;
   /** The curve's lowest end-of-day balance over its whole window (or its starting balance). */
   lowest: string;
@@ -123,6 +125,7 @@ export interface AffordFigures {
 export interface AffordDelta {
   safeToSpendNow: string | null;
   remainingWeek: string | null;
+  remainingWeekKnown: string | null;
   availableUntilPayday: string | null;
   lowest: string;
   /** The proposed lowest day when the purchase moved it, else null. */
@@ -369,6 +372,7 @@ function figuresOf(
   return {
     safeToSpendNow: pos.safeToSpendNow,
     remainingWeek: pos.remainingWeek,
+    remainingWeekKnown: pos.remainingWeekKnown,
     availableUntilPayday: pos.availableUntilPayday,
     lowest: money(toCents(walk.lowest) ?? 0),
     lowestDate: walk.lowestDate,
@@ -492,6 +496,7 @@ export function evaluateAfford(baseline: AffordBaseline, purchase: AffordPurchas
   const delta: AffordDelta = {
     safeToSpendNow: diff(baseFigures.safeToSpendNow, propFigures.safeToSpendNow),
     remainingWeek: diff(baseFigures.remainingWeek, propFigures.remainingWeek),
+    remainingWeekKnown: diff(baseFigures.remainingWeekKnown, propFigures.remainingWeekKnown),
     availableUntilPayday: diff(baseFigures.availableUntilPayday, propFigures.availableUntilPayday),
     lowest: money(toCents(propFigures.lowest)! - toCents(baseFigures.lowest)!),
     lowestDate: propFigures.lowestDate !== baseFigures.lowestDate ? propFigures.lowestDate : null,
@@ -522,8 +527,10 @@ export function evaluateAfford(baseline: AffordBaseline, purchase: AffordPurchas
   if (lowAfter < 0) verdict = "breaks_zero";
   else if (lowAfter < floorCents) verdict = "breaks_buffer";
   else {
-    const remB = toCents(basePos.remainingWeek);
-    const remP = toCents(propPos.remainingWeek);
+    // (Round 3) The sheet shows the week's plan against what COUNTS TOWARD IT (`remainingWeekKnown`); the verdict reads
+    // that same figure, never the cautious total (unconfirmed rows included) the sheet no longer shows.
+    const remB = toCents(basePos.remainingWeekKnown);
+    const remP = toCents(propPos.remainingWeekKnown);
     const weekTight =
       remP !== null && (remP < 0 || (remB !== null && remB > 0 && remP * 100 < remB * AFFORD_TIGHT_PERCENT));
     const avB = toCents(basePos.availableUntilPayday);

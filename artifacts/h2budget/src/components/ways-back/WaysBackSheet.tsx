@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetMe } from "@workspace/api-client-react";
+import { useOwner, type Owner } from "@/hooks/useOwner";
 import {
   getGetWaysBackQueryKey,
   useCreateWeekAdjustment,
@@ -24,7 +24,8 @@ import { errorWords, fmtCents, weekdayName } from "@/lib/waysBack";
  */
 interface BodyProps {
   ways: WaysBack;
-  owner: boolean;
+  /** (Q4) true | false | "unknown": unknown draws a same-size placeholder, not the "Ask …" denial. */
+  owner: Owner;
   ownerName: string;
   busy: boolean;
   error: string | null;
@@ -67,11 +68,14 @@ export function WaysBackBody({ ways, owner, ownerName, busy, error, onCarry, onU
                 </Link>
                 <span className="mt-0.5 block text-micro text-neutral-600">
                   spent {fmtCents(t.spentWeek)} this week
-                  {t.usualWeek != null && (
+                  {t.usualWeek != null ? (
                     <>
                       {" "}
                       · {usualLabel(ways)} {fmtCents(t.usualWeek)}
                     </>
+                  ) : (
+                    // (Q5) A usual needs 2+ prior weeks with rows; below that it is unknown, never $0.
+                    <span data-testid="way-trim-nohistory"> · Not enough history</span>
                   )}
                 </span>
               </li>
@@ -87,7 +91,7 @@ export function WaysBackBody({ ways, owner, ownerName, busy, error, onCarry, onU
             <p className="mt-1 text-body text-neutral-600" data-testid="carry-applied">
               Carried over. Next week starts {lower} lower.
             </p>
-            {owner && (
+            {owner === true && (
               <div className="mt-3">
                 <button type="button" className={btnSecondary} onClick={onUndo} disabled={busy} data-testid="carry-undo">
                   Undo
@@ -101,7 +105,9 @@ export function WaysBackBody({ ways, owner, ownerName, busy, error, onCarry, onU
               Next week starts {fmtCents(ways.overBy)} lower, at {fmtCents(carryOver.nextWeekCap)}.
             </p>
             <div className="mt-3">
-              {owner ? (
+              {owner === "unknown" ? (
+                <div className="skeleton h-9 w-40 rounded-control" aria-busy="true" data-testid="carry-owner-unknown" />
+              ) : owner ? (
                 <button type="button" className={btn} onClick={onCarry} disabled={busy || ways.overBy === 0} data-testid="carry-go">
                   Carry it over
                 </button>
@@ -128,7 +134,7 @@ export function WaysBackBody({ ways, owner, ownerName, busy, error, onCarry, onU
 function LiveBody({ ownerName }: { ownerName: string }) {
   const qc = useQueryClient();
   const q = useGetWaysBack({ query: { queryKey: getGetWaysBackQueryKey(), staleTime: 0 } });
-  const me = useGetMe({ query: { staleTime: 30 * 60_000, gcTime: 60 * 60_000 } as never });
+  const owner = useOwner();
   const [error, setError] = useState<string | null>(null);
   // The sheet invalidates once, itself: the rule marks the spine, the money position and the ways back.
   const create = useCreateWeekAdjustment({ mutation: { meta: OWN_INVALIDATION } });
@@ -158,7 +164,7 @@ function LiveBody({ ownerName }: { ownerName: string }) {
   return (
     <WaysBackBody
       ways={ways}
-      owner={(me.data as { isOwner?: boolean } | undefined)?.isOwner === true}
+      owner={owner}
       ownerName={ownerName}
       busy={create.isPending || del.isPending}
       error={error}

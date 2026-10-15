@@ -81,8 +81,10 @@ function clip(s: string, max: number): string {
 export function attentionItems(i: {
   bank: Spine["bank"] | undefined;
   withinPlan: "yes" | "tight" | "over" | null | undefined;
-  /** How far over the week's limit, in dollars, when over. */
+  /** How far over the week's plan, in dollars, when over (the KNOWN figure). */
   overBy: number | null;
+  /** (Q5) Unconfirmed rows may still change the answer: "so far". */
+  provisional?: boolean;
   dueSoon: DueBill[];
   today: string;
   reviewCount: number;
@@ -130,8 +132,8 @@ export function attentionItems(i: {
     const by = i.overBy != null && i.overBy > 0 ? ` by ${formatCurrency(i.overBy)}` : "";
     out.push({
       kind: "over",
-      title: `Over this week's limit${by}`,
-      detail: "Pick a way back. No lecture.",
+      title: `Over this week's plan${by}${i.provisional ? " so far" : ""}`,
+      detail: i.provisional ? "Counts toward plan. Unconfirmed rows may change it." : "Pick a way back.",
       action: { label: "See allowances", href: "/allowances" },
       wayBack: true,
     });

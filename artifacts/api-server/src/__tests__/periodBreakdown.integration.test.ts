@@ -162,6 +162,7 @@ type Breakdown = {
     usual: string | null;
     usualFullPeriod: string | null;
     aboveUsual: string | null;
+    historyPeriods: number;
     rows: Row[];
     truncated: boolean;
   }>;
@@ -471,9 +472,12 @@ describe("this week — household A, worked by hand", () => {
     const b = await get<Breakdown>(WEEK);
     // (F3) The current week reads each prior week Sunday–Wednesday; every Groceries row is a Sunday or Monday.
     expect(b).toMatchObject({ usualBasis: "same_days", usualThrough: "2026-10-07" });
-    expect(b.categories[0]).toMatchObject({ usual: "45.00", usualFullPeriod: "45.00", aboveUsual: "111.60" });
-    // Gas and Home had no weekly rows before: usual 0 (a week with none counts), never null here.
-    expect(b.categories[1]).toMatchObject({ usual: "0.00", usualFullPeriod: "0.00", aboveUsual: "92.40" });
+    // Groceries has rows in 5 of the 8 weeks (8/16, 8/30, 9/13, 9/20, 9/27): its usual stands.
+    expect(b.categories[0]).toMatchObject({ usual: "45.00", usualFullPeriod: "45.00", aboveUsual: "111.60", historyPeriods: 5 });
+    // (Q1) Deliberately changed: Gas and Home had no weekly rows before. They read usual "0.00" and
+    // "above usual 92.40" — the owner's "Usual $0.00 · above usual" with no history. Now: not enough
+    // history (fewer than 2 prior weeks with rows) → null, and historyPeriods 0 for the words.
+    expect(b.categories[1]).toMatchObject({ usual: null, usualFullPeriod: null, aboveUsual: null, historyPeriods: 0 });
   });
 
   it("⭐ actual === /money/position spent, remaining === position === spine; beside === position and spine", async () => {
@@ -595,9 +599,12 @@ describe("this month — the monthly allowance", () => {
     // October) and above usual 280.00. Read to the 7th of each month it is 0.00 and 380.00; the full
     // month's 100.00 is kept beside it.
     expect(b).toMatchObject({ usualBasis: "same_days", usualThrough: "2026-10-07" });
-    expect(b.categories.map((c) => [c.categoryId, c.amount, c.count, c.usual, c.usualFullPeriod, c.aboveUsual])).toEqual([
-      [cat.Home, "380.00", 3, "0.00", "100.00", "380.00"],
-      [cat.Health, "60.00", 1, "0.00", "0.00", "60.00"],
+    // (Q1) Deliberately changed: Health had no monthly rows in the three months before — usual "0.00"
+    // and above usual "60.00" became not enough history (null). Home has rows in two (Aug, Sep): kept,
+    // a real "0.00" to the 7th included.
+    expect(b.categories.map((c) => [c.categoryId, c.amount, c.count, c.usual, c.usualFullPeriod, c.aboveUsual, c.historyPeriods])).toEqual([
+      [cat.Home, "380.00", 3, "0.00", "100.00", "380.00", 2],
+      [cat.Health, "60.00", 1, null, null, null, 0],
     ]);
     expect(b.categories[0]!.rows.map((r) => r.id)).toEqual([ids.ikea, ids.costco, ids.shoes]);
     expect(b.needsClassification).toMatchObject({ amount: "0.00", count: 0, countsAgainstPlan: false });

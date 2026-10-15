@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   useGetBudgetMonth,
-  useGetMe,
   useListPlaidItems,
   type GetPeriodBreakdownParams,
   type PeriodBreakdownRow,
@@ -14,6 +13,8 @@ import {
   useListAllowancePlans,
 } from "@workspace/api-client-react/features";
 import { useUrlState, type UrlCodec } from "@/hooks/useUrlState";
+import { useOwner } from "@/hooks/useOwner";
+import { scoped } from "@/lib/queryState";
 import { householdToday } from "@/lib/householdDay";
 import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
@@ -21,6 +22,7 @@ import { SpendingWhy } from "@/pages/next/dashboard/SpendingPanel";
 import { cn, formatCurrency } from "@/lib/utils";
 import { periodParams, PERIOD_MIN } from "./periodParams";
 import { Breakdown, provisionalLine } from "./Breakdown";
+import { weekStatus, withinOfRemaining } from "@/lib/weekFigures";
 import { Details } from "./Details";
 import { PlanPrompt } from "./PlanPrompt";
 import { canGoBack, isIsoDay, monthWords, periodTitle, resolveStart, shiftPeriod, type PeriodView } from "./periodDates";
@@ -56,7 +58,9 @@ export function PeriodView({ view }: { view: PeriodView }) {
   const q = useGetPeriodBreakdown(params, {
     query: { queryKey: getGetPeriodBreakdownQueryKey(params), staleTime: MIN },
   });
-  const d = q.data;
+  // (Q4) The breakdown on screen is THIS period's: the old period's (kept while this one loads) is not.
+  const own = scoped(q, (r) => r.start === start && r.period === view);
+  const d = own.data;
   const isCurrent = d?.isCurrent ?? start === currentStart;
 
   const items = useListPlaidItems({ query: { staleTime: MIN } as never });
@@ -73,11 +77,12 @@ export function PeriodView({ view }: { view: PeriodView }) {
   // Only the current period can be given a plan, and only when none is set.
   const needsPrompt = d != null && d.isCurrent && d.plan.status === "not_set";
   const plans = useListAllowancePlans({ query: { staleTime: 5 * MIN, enabled: needsPrompt } as never });
-  const me = useGetMe({ query: { staleTime: 30 * MIN } as never });
-  const canSet = me.data ? (me.data as { isOwner?: boolean }).isOwner === true : !me.isLoading;
+  const canSet = useOwner();
 
   const budgetMonth = view === "month" ? start : "";
-  const budget = useGetBudgetMonth(budgetMonth || start, { query: { enabled: view === "month", staleTime: 5 * MIN } as never });
+  const budgetQ = useGetBudgetMonth(budgetMonth || start, { query: { enabled: view === "month", staleTime: 5 * MIN } as never });
+  // (Q4) Another month's budget is not this month's.
+  const budget = { ...budgetQ, data: scoped(budgetQ, (b) => b.monthStart === start).data };
 
   const go = (dir: -1 | 1) => {
     const next = shiftPeriod(view, start, dir);
@@ -88,6 +93,8 @@ export function PeriodView({ view }: { view: PeriodView }) {
 
   const planWord = view === "week" ? "weekly" : "monthly";
   const over = d?.over != null && Math.round(Number(d.over) * 100) > 0;
+  // (Round 3) The same status rule as the landing's tile: over on the known figure reads Over (rust) even when the period is not final.
+  const bad = weekStatus(withinOfRemaining(d?.remaining), d?.provisional ?? false).tone === "bad";
   const arrow = "press inline-flex size-9 items-center justify-center rounded-control bg-white text-neutral-700 ring-1 ring-brand-line hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-40";
 
   return (
@@ -130,7 +137,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
             <div className={CELL}>
               <div className={CELL_LABEL}>Counts toward plan</div>
               <div className={cn(CELL_VALUE, "text-brand-ink")} data-testid="sp-actual">{formatCurrency(d.known)}</div>
-              {d.provisional ? <span className="chip warn mt-1.5" data-testid="sp-provisional">Provisional</span> : null}
+              {d.provisional ? <span className="chip warn mt-1.5" data-testid="sp-provisional">Not final</span> : null}
             </div>
             <div className={CELL}>
               {d.remaining == null ? (
@@ -141,7 +148,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
               ) : over ? (
                 <>
                   <div className={CELL_LABEL}>{d.provisional ? "Over so far" : "Over"}</div>
-                  <div className={cn(CELL_VALUE, d.provisional ? "text-brand-navy" : "text-bad")} data-testid="sp-left">{formatCurrency(d.over)}</div>
+                  <div className={cn(CELL_VALUE, bad ? "text-bad-ink" : "text-brand-navy")} data-testid="sp-left" data-tone={bad ? "bad" : "neutral"}>{formatCurrency(d.over)}</div>
                 </>
               ) : (
                 <>

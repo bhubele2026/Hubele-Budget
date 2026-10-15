@@ -1,3 +1,4 @@
+import { CATEGORY_DELETED, CATEGORY_LOADING } from "@/lib/categoryLabel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
@@ -228,7 +229,7 @@ export default function ReviewCategoriesPage() {
               <ul ref={listRef} data-testid="review-items" className="list-none p-0">
                 {items.map((item, i) => {
                   const amount = toAmount(item.amount);
-                  const proposed = item.suggestedCategoryId ? (names.get(item.suggestedCategoryId) ?? "Unknown category") : null;
+                  const proposed = item.suggestedCategoryId ? (categories.data ? names.get(item.suggestedCategoryId) ?? CATEGORY_DELETED : CATEGORY_LOADING) : null;
                   const flags = reviewFlags(item.flags);
                   const here = i === cursor;
                   return (

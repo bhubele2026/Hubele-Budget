@@ -1,5 +1,5 @@
 import type { Transaction } from "@workspace/api-client-react";
-import { isCounted } from "./countedRows";
+import { isCounted, isCountedSpend } from "./countedRows";
 
 /**
  * (F4b) CATEGORY SPLITS IN THE CLIENT'S GROUPINGS.
@@ -28,6 +28,9 @@ export function splitPartsOf(t: Pick<Row, "splits">): ReadonlyArray<{ categoryId
  * per source. An expense charge with a valid split adds each part under its
  * own category; everything else is as it always was. (F6 round 4, finding 12)
  * An expired hold counts nowhere (`isCounted`), as in `groupTxnsByCategory`.
+ * (F6 round 5) A cash flow: a held hold and its reversal (`expiredPair`) count
+ * here, net 0, as the register and the Banking review's money in / out do; the
+ * Budget drill (`groupTxnsByCategory`, spending) leaves them out.
  */
 export function monthMoneyFlow(
   txns: readonly Row[],
@@ -88,7 +91,7 @@ export function groupTxnsByCategory<T extends Row>(
   };
   for (const t of txns) {
     if (t.isTransfer) continue;
-    if (opts.replaced.has(t.id) || !isCounted(t)) continue;
+    if (opts.replaced.has(t.id) || !isCountedSpend(t)) continue;
     if (t.occurredOn < opts.start || t.occurredOn >= opts.end) continue;
     const parts = splitPartsOf(t);
     if (parts) {

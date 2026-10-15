@@ -7,7 +7,6 @@ import {
 } from "@workspace/api-client-react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { RingStat } from "@/components/viz";
 import { AddToAvalanche } from "@/components/add-card-to-avalanche";
 import {
   BRAND_LABEL,
@@ -16,6 +15,7 @@ import {
   effectiveBrand,
 } from "@/lib/amexBrand";
 import { cn } from "@/lib/utils";
+import { scoped, amexSummaryMatches } from "@/lib/queryState";
 import { moneyFace } from "@/components/data-state";
 import { fieldLabel } from "@/ui";
 
@@ -33,9 +33,13 @@ export interface BandPeriod {
  */
 function useBandFigures(period: BandPeriod | null | undefined) {
   const params = { accountId: "all", from: period?.from ?? "", to: period?.to ?? "" };
-  return useGetAmexSummary(params, {
+  const q = useGetAmexSummary(params, {
     query: { queryKey: getGetAmexSummaryQueryKey(params), enabled: period != null },
   });
+  // (Q4) Another period's answer (kept while this one loads) is not this
+  // period's purchases: it would sit under this period's label.
+  const own = scoped(q, (s) => amexSummaryMatches(s, params));
+  return { data: own.data, isError: q.isError };
 }
 
 type TileFiguresData = { owed: string | null; purchases: string | null };
@@ -46,34 +50,21 @@ function figuresOf(
   if (!data) return { owed: null, purchases: null };
   if (accountId === "all") return { owed: data.owed.current, purchases: data.purchases.amount };
   const card = data.scope.cards.find((c) => c.accountId === accountId);
-  return { owed: card?.owed ?? null, purchases: card?.purchases?.amount ?? null };
-}
-
-function FigureLine({
-  label, amount, loading, testId,
-}: { label: string; amount: string | null | undefined; loading: boolean; testId: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2" data-testid={testId}>
-      <span className="text-micro text-neutral-500">{label}</span>
-      {loading ? (
-        <span className="h-3 w-14 animate-pulse rounded bg-platinum-2" aria-busy="true" />
-      ) : (
-        <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">{moneyFace(amount)}</span>
-      )}
-    </div>
-  );
+  return { owed: card?.owed ?? null, purchases: card?.purchases.amount ?? null };
 }
 
 /**
- * One tile's figures: the head (its name) and owed on the left, an optional
- * aside (the ring) on the right, and the period's purchases across the foot.
+ * One tile's figures: the head (its name) and owed. (Q6b) The band only
+ * selects: the period's purchases, payments and the payoff words live in the
+ * Summary above, once.
  */
 function TileFigures({
-  accountId, period, periodLabel, head, aside,
+  accountId, period, head, aside, showPurchases,
 }: {
   accountId: string;
   period?: BandPeriod | null;
-  periodLabel?: string;
+  /** (Q6b) Embedded there is no Summary above: the period's purchases sit on the tile. */
+  showPurchases?: boolean;
   head: ReactNode;
   aside?: ReactNode;
 }) {
@@ -89,16 +80,16 @@ function TileFigures({
             {loading ? <span className="inline-block h-5 w-24 animate-pulse rounded bg-platinum-2 align-middle" aria-busy="true" /> : moneyFace(figures.owed)}
           </div>
           <div className="mt-1 text-micro text-neutral-500">Owed</div>
+          {showPurchases ? (
+            <div className="mt-2 text-micro text-neutral-500" data-testid={`amex-band-purchases-${accountId}`}>
+              Purchases{" "}
+              <span className="font-mono font-semibold tabular-nums text-brand-navy">
+                {loading ? "…" : moneyFace(figures.purchases)}
+              </span>
+            </div>
+          ) : null}
         </div>
         {aside}
-      </div>
-      <div className="mt-3 border-t border-brand-line pt-2">
-        <FigureLine
-          testId={`amex-purchases-${accountId}`}
-          label={periodLabel ? `Purchases · ${periodLabel}` : "Purchases"}
-          amount={figures.purchases}
-          loading={loading}
-        />
       </div>
     </>
   );
@@ -130,7 +121,7 @@ export function AmexCardBand({
   masks,
   leadCount = 0,
   period,
-  periodLabel,
+  showPurchases = false,
 }: {
   /** Current cardFilter: "all" or an external Plaid account_id. */
   selected: string;
@@ -141,7 +132,8 @@ export function AmexCardBand({
   leadCount?: number;
   /** The Summary's period: owed + purchases come from the server for it. */
   period?: BandPeriod | null;
-  periodLabel?: string;
+  /** (Q6b) Embedded (no Summary above): each tile also reads the period's purchases. */
+  showPurchases?: boolean;
 }) {
   const { data } = useGetAmexWeeklyPayoff();
   const { data: settings } = useGetSettings();
@@ -187,7 +179,7 @@ export function AmexCardBand({
         <TileFigures
           accountId="all"
           period={period}
-          periodLabel={periodLabel}
+          showPurchases={showPurchases}
           head={<div className={fieldLabel}>All cards</div>}
         />
       </button>
@@ -217,7 +209,7 @@ export function AmexCardBand({
               <TileFigures
                 accountId={c.accountId}
                 period={period}
-                periodLabel={periodLabel}
+                showPurchases={showPurchases}
                 head={
                   <span className={cn(fieldLabel, "flex flex-wrap items-center gap-x-1.5")}>
                     {/* The card's tier colour (identity within Amex); the
@@ -236,27 +228,6 @@ export function AmexCardBand({
                       </span>
                     ) : null}
                   </span>
-                }
-                /* The ring is the WEEKLY PAYOFF PLAN's, not the Summary's:
-                   named so, so no two figures share a name. Navy, not the
-                   card's identity colour. ⚠️ The caption sits under the ring:
-                   at the widest tracking it is wider than a 52px ring. */
-                aside={
-                  <div className="flex shrink-0 flex-col items-center gap-1">
-                    <RingStat
-                      value={c.pctOfStatementThisWeek}
-                      size={52}
-                      stroke={5}
-                      color="var(--color-brand-navy)"
-                      centerText={`${Math.round((c.pctOfStatementThisWeek ?? 0) * 100)}%`}
-                    />
-                    <span
-                      className="text-micro uppercase tracking-wide text-neutral-500"
-                      title="Share of the card's balance charged this week, from the weekly payoff plan"
-                    >
-                      cleared this wk
-                    </span>
-                  </div>
                 }
               />
             </button>
@@ -288,7 +259,7 @@ export function AmexCardBand({
             <TileFigures
               accountId={c.accountId}
               period={period}
-              periodLabel={periodLabel}
+              showPurchases={showPurchases}
               head={
             <span className={cn(fieldLabel, "flex flex-wrap items-center gap-x-1.5")}>
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
@@ -301,10 +272,29 @@ export function AmexCardBand({
             </span>
               }
             />
-            <span className="mt-2 text-micro text-neutral-500">On the payoff plan</span>
+            {c.paidAs?.effectiveMode === "debt_plan" ? (
+              <span className="mt-2 text-micro text-neutral-500" data-testid={`amex-tile-plan-word-${c.accountId}`}>On the payoff plan</span>
+            ) : null}
           </button>
         );
       })}
     </>
   );
+}
+
+/**
+ * (Q6b) The selected card's name ••last4 exactly as the band's tile words it, so the
+ * Summary's title follows the page's selection (null for "All cards" or until the
+ * band's own data is in). Same queries as the band: no extra request.
+ */
+export function useAmexCardTitle(selected: string, masks?: ReadonlyMap<string, string>): string | null {
+  const { data } = useGetAmexWeeklyPayoff();
+  const { data: settings } = useGetSettings();
+  if (selected === "all") return null;
+  const c = [...(data?.cards ?? []), ...(data?.debtLinkedCards ?? [])].find((x) => x.accountId === selected);
+  if (!c) return null;
+  const names = (settings?.preferences?.amexCardNames as Record<string, string>) ?? {};
+  const tier = effectiveBrand(c.accountId, c.brand, cardBrandOverrides(settings));
+  const mask = masks?.get(c.accountId) || ("mask" in c ? c.mask : null) || "";
+  return `${names[c.accountId] || BRAND_LABEL[tier] || c.name}${mask ? ` ••${mask}` : ""}`;
 }

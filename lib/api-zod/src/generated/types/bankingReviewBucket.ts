@@ -11,8 +11,11 @@ import type { BankingReviewUncertainTotals } from "./bankingReviewUncertainTotal
 
 export interface BankingReviewBucket {
   count: number;
+  /** (Q1) Money in: Σ of the bucket's deposits, a positive magnitude ("0.00" when none) */
   moneyIn: string;
+  /** (Q1) Money out: Σ of the bucket's payments and purchases, a positive magnitude ("0.00" when none) */
   moneyOut: string;
+  /** moneyIn − moneyOut (signed). Not "total moved": a screen shows in and out apart */
   net: string;
   pendingNet: string;
   /** Largest first, at most rowsPerBucket */

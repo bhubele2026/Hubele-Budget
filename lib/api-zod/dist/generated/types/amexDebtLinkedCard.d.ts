@@ -7,7 +7,10 @@
  */
 import type { AmexDebtLinkedCardBrand } from "./amexDebtLinkedCardBrand";
 import type { AmexDebtLinkedCardCadence } from "./amexDebtLinkedCardCadence";
+import type { CardPaidAs } from "./cardPaidAs";
 export interface AmexDebtLinkedCard {
+    /** (Q1) How this card is paid (CardPaidAs). A debt row links it, but that alone never means "on the payoff plan": an archived debt's card is in_full_weekly (default_debt_inactive). Null only for a card the payoff roster does not know. */
+    paidAs: CardPaidAs | null;
     /** The card's Plaid account_id */
     accountId: string;
     /** Plaid's name for the card */

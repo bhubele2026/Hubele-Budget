@@ -202,7 +202,7 @@ export function SyncButton({
       )}
       {displayError ? (
         <span
-          className="text-[10px] text-destructive mt-0.5 flex items-center gap-1 max-w-[220px] truncate"
+          className="text-[10px] text-bad-ink mt-0.5 flex items-center gap-1 max-w-[220px] truncate"
           title={displayError}
           data-testid="text-sync-error"
         >

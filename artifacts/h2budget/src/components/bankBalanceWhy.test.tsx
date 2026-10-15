@@ -39,6 +39,7 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 import { BankBalanceWhy } from "./bank-balance-why";
+import { updatedWords } from "@/lib/bankFreshWords";
 
 const NOW = new Date("2026-09-11T17:00:00.000Z");
 
@@ -50,6 +51,7 @@ function explain(over: Record<string, unknown> = {}) {
       source: "plaid",
       lastContactAt: null,
       lastFailureAt: null,
+      fetchedAt: "2026-09-10T14:00:00.000Z",
       stale: false,
       staleReason: null,
     },
@@ -185,9 +187,8 @@ describe("Why this number? — the server's lines", () => {
     state.result = { data: explain() };
     render(<BankBalanceWhy />);
     await open();
-    const fromSnapshot = formatRelativeTime("2026-09-10T14:00:00.000Z", NOW);
-    expect(fromSnapshot).not.toBe(formatRelativeTime(NOW.toISOString(), NOW));
-    expect(screen.getByTestId("text-bank-snapshot-freshness").textContent).toContain(fromSnapshot);
+    // "Updated" is the server's fetchedAt (a day before the answer), in the one set of words.
+    expect(screen.getByTestId("text-bank-snapshot-freshness").textContent).toBe(updatedWords("2026-09-10T14:00:00.000Z", NOW.getTime()));
   });
 
   it("adds no note, and no equation, when the lines add up to the cent (even 0.10 + 0.20 = 0.30)", async () => {
@@ -292,6 +293,7 @@ describe("Why this number? — the server's lines", () => {
           source: "plaid",
           lastContactAt: "2026-09-10T14:00:00.000Z",
           lastFailureAt: "2026-09-11T16:00:00.000Z",
+          fetchedAt: "2026-09-10T14:00:00.000Z",
           stale: true,
           staleReason: "refresh_failed",
         },
@@ -299,6 +301,6 @@ describe("Why this number? — the server's lines", () => {
     };
     render(<BankBalanceWhy />);
     await open();
-    expect(screen.getByTestId("text-bank-freshness-stale").textContent).toContain("Refresh failed");
+    expect(screen.getByTestId("text-bank-freshness-stale").textContent).toBe("Last sync failed · Updated 1 d ago");
   });
 });

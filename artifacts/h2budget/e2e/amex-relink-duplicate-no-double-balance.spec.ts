@@ -89,12 +89,6 @@ function todayIso(): string {
   return `${y}-${m}-${day}`;
 }
 
-function fmtCurrency(n: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(n);
-}
 
 test.describe("Amex page — re-link duplicate window doesn't double Ending Balance (#442)", () => {
   test("with a duplicate Amex debt landing during re-link, the Ending Balance tile equals the sum of the three real debts (not four), and remains unchanged once dedupe collapses to three", async ({
@@ -272,48 +266,35 @@ test.describe("Amex page — re-link duplicate window doesn't double Ending Bala
       page.getByRole("heading", { name: /american express/i }),
     ).toBeVisible({ timeout: 15_000 });
 
-    const expectedTotal = DEBT_BALANCES.reduce((s, n) => s + n, 0); // 2500
-    const inflatedTotal = expectedTotal + DUP_DEBT_BALANCE; // 3000
-    // (C10 repair) The Ending Balance tile (`stat-ending-balance`) is never
-    // rendered (parity AX-33). The per-row running balance is seeded from the
-    // SAME month ending balance, so the NEWEST row's "bal" (card 3003, 11:00)
-    // carries the aggregate this spec guards. (The tile's "From debt row"
-    // source footer is not on screen anywhere.)
-    const tile = page.getByTestId(`text-running-balance-${TXN_ROW_IDS[2]}`);
+    // ⭐ (Q3, 2026-10-14) "All cards" carries NO combined running balance:
+    // the cards' balances are read at different times and from different
+    // sources, so no combined figure is walked onto the rows — and so a
+    // duplicate debt has no combined figure to inflate. (The page's
+    // (institution, mask) collapse in `resolveAmexDebt` is held by its unit
+    // tests, `lib/amexEndingBalance.test.ts`, "(#442/#449)".) Each card's
+    // own balance is on its own page.
+    const anyBal = page.locator('[data-testid^="text-running-balance-"]');
+    const rowTwo = page.getByText(/AMEX RELINK TEST/).first();
 
-    // --- Phase 1: duplicate window. The ending balance must equal the sum
-    //     of the three REAL debts (2500), not the inflated four-debt total
-    //     (3000).
-    await expect(tile).toContainText(fmtCurrency(expectedTotal), {
-      timeout: 15_000,
-    });
-    await expect(tile).not.toContainText(fmtCurrency(inflatedTotal));
+    // --- Phase 1: duplicate window. The rows list; none carries a "bal".
+    await expect(rowTwo).toBeAttached({ timeout: 15_000 });
+    await expect(anyBal).toHaveCount(0);
 
     // --- Phase 2: dedupe lands. Flip the mock so `/api/debts` now
     //     returns the three real debts only, then force the page to
-    //     refetch by reloading. A reload is the most deterministic
-    //     way to guarantee a fresh `/api/debts` GET against the
-    //     mocked route — React Query's `invalidateQueries` requires
-    //     access to the QueryClient and `dispatchEvent('focus')`
-    //     only refetches when `refetchOnWindowFocus` is enabled.
+    //     refetch by reloading.
     duplicatePhase = false;
     const requestsBeforeReload = debtsRequestCount;
     await page.reload();
     await expect(
       page.getByRole("heading", { name: /american express/i }),
     ).toBeVisible({ timeout: 15_000 });
-    // Prove a second `/api/debts` fetch actually happened against
-    // the now-three-debts mock so the "unchanged tile" assertion
-    // below isn't vacuous.
     await expect
       .poll(() => debtsRequestCount, { timeout: 15_000 })
       .toBeGreaterThan(requestsBeforeReload);
 
-    // Unchanged — the duplicate never contributed in the first place, so
-    // removing it leaves the ending balance at 2500.
-    await expect(tile).toContainText(fmtCurrency(expectedTotal), {
-      timeout: 15_000,
-    });
-    await expect(tile).not.toContainText(fmtCurrency(inflatedTotal));
+    // Unchanged: still no combined "bal" on any row.
+    await expect(rowTwo).toBeAttached({ timeout: 15_000 });
+    await expect(anyBal).toHaveCount(0);
   });
 });

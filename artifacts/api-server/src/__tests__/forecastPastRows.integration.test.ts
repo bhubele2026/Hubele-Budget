@@ -503,3 +503,32 @@ describe("posted rows are cash whatever their forecast flag says", () => {
     expect(left).toHaveLength(0);
   });
 });
+
+describe("(Q5 round 3) GET /forecast?fromMonth opens an older month for Review", () => {
+  it("lists a row from two months back only when asked, never moves the balance, and caps at 12 months", async () => {
+    const chase = await seedChase();
+    const old = await addTxn({
+      occurredOn: "2026-03-13",
+      amount: "-40",
+      forecastFlag: false,
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+    });
+    const plain = await getBundle();
+    expect(plain.transactions.map((t) => t.id)).not.toContain(old);
+
+    const asked = await (await fetch(`${baseUrl}/forecast?days=30&fromMonth=2026-03`)).json() as Bundle & { fromDate: string };
+    expect(asked.transactions.map((t) => t.id)).toContain(old);
+    expect(asked.fromDate).toBe("2026-03-01");
+    // The balance is the snapshot rolled forward; an older row is before the snapshot and moves nothing.
+    expect(asked.cashSignal.bankToday).toBe(plain.cashSignal.bankToday);
+
+    // Later than the default start, or malformed: unchanged. Too old: capped at 12 months back.
+    for (const q of ["2026-05", "2026-13", "nope"]) {
+      const same = await (await fetch(`${baseUrl}/forecast?days=30&fromMonth=${q}`)).json() as Bundle & { fromDate: string };
+      expect(same.fromDate).toBe("2026-04-01");
+    }
+    const capped = await (await fetch(`${baseUrl}/forecast?days=30&fromMonth=2020-01`)).json() as { fromDate: string };
+    expect(capped.fromDate).toBe("2025-05-01");
+  });
+});

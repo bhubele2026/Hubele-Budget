@@ -3,7 +3,7 @@
 // detectors on top. The household has no bank, so the position is the
 // no-bank one — nulls, never a false zero — and no money finding fires.
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import {
@@ -145,5 +145,61 @@ describe("loadMonitorFacts", () => {
     const facts = await loadMonitorFacts(H, OWNER, TODAY);
     const cat = facts.categories.find((c) => c.categoryId === catId)!;
     expect(cat.spentMtd).toBe(120);
+  });
+});
+
+// ⭐ (F6 round 5, review finding 4) A "matched" answer whose row is an expired hold
+// — still pending more than 7 days after its date, never replaced — is no bill
+// payment here either (Bills and the forecast already read it so): the monitor
+// never sees a 130 that did not leave. When the payment posted under another
+// name, the answer counts on that posted row (finding 5). Kill switch: as before.
+describe("loadMonitorFacts — an answer on an expired hold (F6 round 5)", () => {
+  const PO = `mon-facts-f6r5-${process.pid}-${randomUUID().slice(0, 8)}`;
+  const ACCT = `acct-mon-f6r5-${randomUUID().slice(0, 8)}`;
+  let PH = "";
+  let powerId = "";
+  const ids: Record<string, string> = {};
+  const plaidTxn = async (key: string, back: number, amount: string, description: string, pending = false) => {
+    const [t] = await db
+      .insert(transactionsTable)
+      .values({ userId: PO, householdId: PH, occurredOn: addDaysISO(TODAY, -back), description, amount, source: "plaid:lakeside", plaidAccountId: ACCT, pending })
+      .returning({ id: transactionsTable.id });
+    ids[key] = t!.id;
+    return t!.id;
+  };
+  const answer = (txnId: string, back: number) =>
+    db.insert(forecastResolutionsTable).values({ userId: PO, householdId: PH, recurringItemId: powerId, occurrenceDate: addDaysISO(TODAY, -back), status: "matched", matchedTxnId: txnId });
+  const payments = async () =>
+    (await loadMonitorFacts(PH, PO, TODAY)).bills.find((b) => b.itemId === powerId)!.payments.map((p) => [p.amount, p.txnId]);
+  const increase = async () => runDetectors(await loadMonitorFacts(PH, PO, TODAY)).filter((f) => f.kind === "bill_increase" && f.payload.itemId === powerId);
+
+  beforeAll(async () => {
+    PH = (await createTestHousehold(PO)).householdId;
+    const [bill] = await db
+      .insert(recurringItemsTable)
+      .values({ userId: PO, householdId: PH, name: "Synthetic Power", kind: "bill", amount: "100", frequency: "monthly", dayOfMonth: 2 })
+      .returning({ id: recurringItemsTable.id });
+    powerId = bill!.id;
+    for (const back of [105, 75, 45]) await answer(await plaidTxn(`p${back}`, back, "-100.00", "SYNTHETIC POWER AUTOPAY"), back);
+    // The latest answer names a −130 row still pending 13 days on: an expired hold.
+    await answer(await plaidTxn("hold", 13, "-130.00", "SYNTHETIC POWER AUTOPAY", true), 13);
+  });
+
+  it("⭐ the expired hold pays nothing and raises no bill_increase (kill switch: 130 paid, the finding fires)", async () => {
+    expect(await payments()).toEqual([[100, ids.p45], [100, ids.p75], [100, ids.p105]]);
+    expect(await increase()).toEqual([]);
+    vi.stubEnv("EXPIRED_HOLDS_RULE", "off");
+    try {
+      expect((await payments())[0]).toEqual([130, ids.hold]);
+      expect(await increase()).toHaveLength(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("the payment posted under another name (−130, a day later): the answer counts on the posted row, as in Bills", async () => {
+    await plaidTxn("posted", 12, "-130.00", "SYNPWR WEB PMT 4471");
+    expect((await payments())[0]).toEqual([130, ids.posted]);
+    expect(await increase()).toHaveLength(1);
   });
 });

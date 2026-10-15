@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canBeReversal,
   canSupersede,
   descriptionsFuzzyEqual,
   expiredHolds,
@@ -8,6 +9,7 @@ import {
   pairPendingWithPostedAmong,
   REVERSAL_MAX_DAYS,
   SUPERSEDE_MAX_DAYS,
+  type ExpiredHoldRow,
   type SupersedeRow,
 } from "@workspace/avalanche-core";
 
@@ -220,11 +222,11 @@ describe("expiredHolds — an expired hold and its reversal count nowhere", () =
     expect(r.holdOf.get("v")).toBe("h");
   });
 
-  it("one to one: two holds and one reversal — the OLDEST hold takes it; the other hold is still expired on its own", () => {
+  it("one to one: two holds and one reversal — (F6 round 5) the MOST RECENT hold takes it (round 6: the closest earlier, names equal); the other hold is still expired on its own", () => {
     const r = expiredHolds([hold("h2", "2026-10-06", -50), hold("h1", "2026-10-04", -50), hold("v", "2026-10-09", 50)], TODAY, none);
-    expect(r.holdOf.get("v")).toBe("h1");
+    expect(r.holdOf.get("v")).toBe("h2");
     expect(ids(r)).toEqual(["h1", "h2", "v"]);
-    // Two young reversals and one hold: one reversal only; the other still counts.
+    // Two young reversals and one hold: one reversal only (the older credit chooses first); the other still counts.
     const r2 = expiredHolds([hold("h", "2026-10-05", -50), hold("v1", "2026-10-09", 50), hold("v2", "2026-10-10", 50)], TODAY, none);
     expect(ids(r2)).toEqual(["h", "v1"]);
   });
@@ -295,22 +297,101 @@ describe("expiredHolds — an expired hold and its reversal count nowhere", () =
     expect(ids(r)).toEqual(["h", "v"]);
   });
 
-  it("⭐ (lead's amendment) two equal-amount credits compete: a fuzzy-equal description first, then the closest date, then id", () => {
+  it("⭐ (F6 round 5 → round 6) THE CREDIT CHOOSES: credits pair oldest first; each takes (a) a fuzzy-equal description, (b) the snapshot's preference, (c) the closest earlier charge, then id", () => {
+    // Round 4: the hold chose (a fuzzy-equal credit first), so the 10/09 "SOME
+    // TAVERN" credit took the 10/03 hold over the 10/04 generic one. Round 5 on:
+    // the 10/04 credit chooses first and takes the only charge on or before it.
     const h = hold("h", "2026-10-03", -40, { description: "SOME TAVERN 0042" });
     const generic = hold("generic", "2026-10-04", 40, { description: "Restaurant Transaction" });
     const named = hold("named", "2026-10-09", 40, { description: "SOME TAVERN" });
     const r = expiredHolds([h, generic, named], TODAY, none);
-    expect(r.holdOf.get("named")).toBe("h");
-    // The generic credit is not a reversal: 11 days old, it is an expired pending credit on its own.
-    expect(ids(r)).toEqual(["generic", "h", "named"]);
-    // Neither named: the closest date wins.
-    const near = hold("near", "2026-10-09", 40, { description: "Restaurant Transaction" });
-    const far = hold("far", "2026-10-10", 40, { description: "Credit Adjustment" });
-    expect(expiredHolds([hold("h2", "2026-10-06", -40), far, near], TODAY, none).holdOf.get("near")).toBe("h2");
-    // Same day, neither named: the lower id.
-    const b = hold("b", "2026-10-09", 40, { description: "Restaurant Transaction" });
-    const a = hold("a", "2026-10-09", 40, { description: "Restaurant Transaction" });
-    expect(expiredHolds([hold("h3", "2026-10-06", -40, { description: "PLACE" }), b, a], TODAY, none).holdOf.get("a")).toBe("h3");
+    expect(r.holdOf.get("generic")).toBe("h");
+    // The named credit finds no free charge: 6 days old, it still counts.
+    expect(ids(r)).toEqual(["generic", "h"]);
+    // ⭐ (Round 6, lead's order) Two charges before one credit: the fuzzy-equal
+    // name first, though older (round 5: the most recent, "newer").
+    const older = hold("older", "2026-09-20", -40, { description: "SOME TAVERN 0042" });
+    const newer = hold("newer", "2026-10-02", -40, { description: "PLACE" });
+    expect(expiredHolds([older, newer, named], TODAY, none).holdOf.get("named")).toBe("older");
+    // No name either way: the closest earlier charge.
+    expect(expiredHolds([older, newer, hold("v", "2026-10-09", 40, { description: "Restaurant Transaction" })], TODAY, none).holdOf.get("v")).toBe("newer");
+    // Same day: a fuzzy-equal description first, then the lower id.
+    const a = hold("a", "2026-10-02", -40, { description: "PLACE" });
+    const b = hold("b", "2026-10-02", -40, { description: "SOME TAVERN 0042" });
+    expect(expiredHolds([a, b, named], TODAY, none).holdOf.get("named")).toBe("b");
+    const c = hold("c", "2026-10-02", -40, { description: "PLACE" });
+    expect(expiredHolds([c, a, hold("v", "2026-10-09", 40, { description: "Restaurant Transaction" })], TODAY, none).holdOf.get("v")).toBe("a");
+  });
+
+  it("⭐ (F6 round 5 → round 6) a later credit moves an earlier credit's pair only to pair one more", () => {
+    const rows = [hold("h1", "2026-09-30", -25), hold("h2", "2026-10-03", -25), hold("v1", "2026-10-05", 25)];
+    const alone = expiredHolds(rows, TODAY, none);
+    const withLater = expiredHolds([...rows, hold("v2", "2026-10-12", 25)], TODAY, none);
+    expect(alone.holdOf.get("v1")).toBe("h2");
+    // Both later credits can reach both holds: v1 keeps its closest one.
+    expect(withLater.holdOf.get("v1")).toBe("h2");
+    expect(withLater.holdOf.get("v2")).toBe("h1");
+    // A later credit that can reach only h2 (h1 is 32 days before it): v1 takes h1, so both pair.
+    const moved = expiredHolds([...rows, hold("v3", "2026-11-01", 25)], "2026-11-05", none);
+    expect(moved.holdOf.get("v1")).toBe("h1");
+    expect(moved.holdOf.get("v3")).toBe("h2");
+    // An earlier credit is never left unpaired for a later one.
+    const one = expiredHolds([hold("h", "2026-10-03", -25), hold("w1", "2026-10-05", 25), hold("w2", "2026-10-06", 25, { description: "SOME TAVERN 0042" })], TODAY, none);
+    expect([...one.holdOf.entries()]).toEqual([["w1", "h"]]);
+  });
+
+  it("⭐ (F6 round 5, finding 6) a leftover hold never takes a newer hold's reversal: 9/15 −100 (posted lower, never paired) and 10/04 −100; the 10/09 +100 reverses 10/04", () => {
+    const leftover = hold("leftover", "2026-09-15", -100, { description: "SHELL OIL 57444" });
+    const fresh = hold("fresh", "2026-10-04", -100, { description: "SHELL OIL 57444" });
+    const back = hold("back", "2026-10-09", 100, { description: "SHELL OIL 57444" });
+    const r = expiredHolds([leftover, fresh, back], TODAY, none);
+    expect(r.holdOf.get("back")).toBe("fresh");
+    expect(ids(r)).toEqual(["back", "fresh", "leftover"]);
+  });
+
+  it("⭐ (F6 round 5) with a snapshot: a credit it does not hold takes a held charge only when no unheld charge qualifies", () => {
+    // The snapshot holds `heldLate` (dated 10/04, in the ledger at the read) but not `unheld` (10/03, after the read).
+    const unheld = hold("unheld", "2026-10-03", -60);
+    const heldLate = hold("heldLate", "2026-10-04", -60);
+    const credit = hold("credit", "2026-10-09", 60);
+    const isHeld = (r: { id: string }) => r.id === "heldLate";
+    // No snapshot: the most recent charge.
+    expect(expiredHolds([unheld, heldLate, credit], TODAY, none).holdOf.get("credit")).toBe("heldLate");
+    // With it: the unheld one, though older.
+    expect(expiredHolds([unheld, heldLate, credit], TODAY, none, { isHeld }).holdOf.get("credit")).toBe("unheld");
+    // No unheld charge qualifies: the held one.
+    expect(expiredHolds([heldLate, credit], TODAY, none, { isHeld }).holdOf.get("credit")).toBe("heldLate");
+    // A credit the snapshot holds itself has no preference: the most recent.
+    const heldCredit = (r: { id: string }) => r.id === "heldLate" || r.id === "credit";
+    expect(expiredHolds([unheld, heldLate, credit], TODAY, none, { isHeld: heldCredit }).holdOf.get("credit")).toBe("heldLate");
+  });
+
+  it("⭐ (F6 round 5, finding 2) a payment or a transfer is never a reversal: a 2-day-old \"PAYMENT - THANK YOU\" of an unpaired hotel hold's cents still counts", () => {
+    const hotel = hold("hotel", "2026-10-04", -150, { description: "HARBOR HOTEL HOLD", plaidAccountId: "card" });
+    const pay = (id: string, extra: Partial<ExpiredHoldRow>) =>
+      ({ ...hold(id, "2026-10-13", 150, { description: "Hotel Transaction", plaidAccountId: "card" }), ...extra }) as ExpiredHoldRow;
+    const payments: ExpiredHoldRow[] = [
+      pay("words", { description: "PAYMENT - THANK YOU" }),
+      pay("autopay", { description: "AUTOPAY 2611" }),
+      pay("tagged", { debtId: "debt-1" }),
+      pay("flagged", { isExternalCardPayment: true }),
+      pay("loanPfc", { pfcDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" }),
+      pay("transferPfc", { pfcPrimary: "TRANSFER_IN" }),
+      pay("transferFlag", { isTransfer: true }),
+      pay("transferWords", { description: "ONLINE TRANSFER FROM SAV 1234" }),
+    ];
+    for (const p of payments) {
+      expect(canBeReversal(p), p.id).toBe(false);
+      const r = expiredHolds([hotel, p], TODAY, none);
+      expect(r.holdOf.size, p.id).toBe(0);
+      expect(ids(r), p.id).toEqual(["hotel"]);
+    }
+    // On checking too: a payroll-like transfer in is no reversal.
+    expect(canBeReversal(pay("chk", { plaidAccountId: "chase", pfcDetailed: "TRANSFER_IN_ACCOUNT_TRANSFER" }))).toBe(false);
+    // The hotel's own reversal still pairs.
+    const back = pay("back", {});
+    expect(canBeReversal(back)).toBe(true);
+    expect(expiredHolds([hotel, back], TODAY, none).holdOf.get("back")).toBe("hotel");
   });
 
   it("one pair per row; a credit takes nothing; a young charge is never anyone's reversal", () => {
@@ -325,5 +406,78 @@ describe("expiredHolds — an expired hold and its reversal count nowhere", () =
     const r = expiredHolds([hold("zero", "2026-10-01", 0), hold("v", "2026-10-03", 0)], TODAY, none);
     expect(ids(r)).toEqual(["v", "zero"]);
     expect(r.holdOf.size).toBe(0);
+  });
+});
+
+// ⭐ (F6 round 6) The review of round 5 (findings 5, 6, 7). Synthetic rows.
+describe("expiredHolds — a maximum matching, the lead's order (F6 round 6)", () => {
+  const TODAY = "2026-10-15";
+  const none = new Set<string>();
+  const p = (id: string, occurredOn: string, amount: number, description: string, extra: Partial<ExpiredHoldRow> = {}): ExpiredHoldRow => ({
+    id,
+    plaidAccountId: "chase",
+    pending: true,
+    occurredOn,
+    amount,
+    description,
+    ...extra,
+  });
+
+  it("⭐ finding 6 (the greedy case, 75): two HARBOR INN holds 9/01 and 9/20, reversals 9/25 and 10/12 — both pair (round 5: the 9/25 credit took 9/20 and the 10/12 credit, 41 days from 9/01, counted)", () => {
+    const rows = [
+      p("h0901", "2026-09-01", -75, "HARBOR INN"),
+      p("h0920", "2026-09-20", -75, "HARBOR INN"),
+      p("v0925", "2026-09-25", 75, "Hotel Transaction"),
+      p("v1012", "2026-10-12", 75, "Hotel Transaction"),
+    ];
+    const r = expiredHolds(rows, TODAY, none);
+    expect(r.holdOf.get("v0925")).toBe("h0901");
+    expect(r.holdOf.get("v1012")).toBe("h0920");
+    expect([...r.expiredIds].sort()).toEqual(["h0901", "h0920", "v0925", "v1012"]);
+    // In either order of the rows.
+    expect(expiredHolds([...rows].reverse(), TODAY, none).holdOf).toEqual(r.holdOf);
+  });
+
+  it("⭐ finding 7 (the named older held case, 100): MARRIOTT +100 takes the older MARRIOTT hold the snapshot holds, not the newer stuck SHELL hold (round 5: the snapshot preference first)", () => {
+    const marriott = p("marriott", "2026-10-01", -100, "MARRIOTT HOTEL 4471");
+    const shell = p("shell", "2026-10-05", -100, "SHELL OIL 57444");
+    const back = p("back", "2026-10-10", 100, "MARRIOTT HOTEL 4471");
+    const isHeld = (r: { id: string }) => r.id === "marriott";
+    const r = expiredHolds([marriott, shell, back], TODAY, none, { isHeld });
+    expect(r.holdOf.get("back")).toBe("marriott");
+    expect([...r.expiredIds].sort()).toEqual(["back", "marriott", "shell"]);
+    // A generic credit has no name to match: the snapshot's preference decides (finding 6 of round 4 unchanged).
+    const generic = p("generic", "2026-10-10", 100, "Hotel Transaction");
+    expect(expiredHolds([marriott, shell, generic], TODAY, none, { isHeld }).holdOf.get("generic")).toBe("shell");
+    // A named SHELL credit ties on the name with SHELL only: SHELL.
+    expect(expiredHolds([marriott, shell, p("s", "2026-10-10", 100, "SHELL OIL 57444")], TODAY, none, { isHeld }).holdOf.get("s")).toBe("shell");
+  });
+
+  it("the most pairs first, then the names: an older credit never takes the one charge a later named credit needs when another is free", () => {
+    // Credits 10/05 (generic) and 10/09 (named TAVERN); charges 10/01 TAVERN and 9/02 PLACE.
+    // 10/09 can reach only 10/01 (9/02 is 37 days back); 10/05 can reach both.
+    const rows = [
+      p("tavern", "2026-10-01", -30, "SOME TAVERN 0042"),
+      p("place", "2026-09-05", -30, "PLACE"),
+      p("generic", "2026-10-05", 30, "Restaurant Transaction"),
+      p("named", "2026-10-09", 30, "SOME TAVERN"),
+    ];
+    const r = expiredHolds(rows, TODAY, none);
+    expect(r.holdOf.get("generic")).toBe("place");
+    expect(r.holdOf.get("named")).toBe("tavern");
+  });
+
+  it("⭐ finding 5: a \"… PREPAY\" credit reverses its hold; \"EPAY\", \"E-PAYMENT\", \"AUTOPAY PAYMENT\" still never do", () => {
+    const hold = p("hold", "2026-10-04", -60, "MURPHY USA PREPAY 7134");
+    for (const d of ["MURPHY USA PREPAY 7134", "WAWA PREPAY 0412", "PAYPAL *REPAY 2201", "PURCHASE CREDIT 4471"]) {
+      const credit = p("credit", "2026-10-11", 60, d);
+      expect(canBeReversal(credit), d).toBe(true);
+      expect(expiredHolds([hold, credit], TODAY, none).holdOf.get("credit"), d).toBe("hold");
+    }
+    for (const d of ["CHASE EPAY", "DISCOVER E-PAYMENT", "AUTOPAY PAYMENT", "CITI EPAYMENT", "BANK EPAY7731", "ONLINE TRANSFER FROM SAV 1234", "WEB ID: 9911"]) {
+      const credit = p("credit", "2026-10-11", 60, d);
+      expect(canBeReversal(credit), d).toBe(false);
+      expect(expiredHolds([hold, credit], TODAY, none).holdOf.size, d).toBe(0);
+    }
   });
 });

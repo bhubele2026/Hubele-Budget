@@ -591,6 +591,11 @@ export interface BankFreshness {
      * @nullable
      */
     lastFailureAt: string | null;
+    /**
+     * (Q5 round 3) Set on /forecast/bank-balance-explain: when the bank last told us anything, by the server's one rule (= spine.bankConfidence.fetchedAt)
+     * @nullable
+     */
+    fetchedAt?: string | null;
     stale: boolean;
     /**
      * refresh_failed when the feed behind the snapshot account failed and has not recovered, or needs a reconnect (immediate, for either source). old when a Plaid balance's feed has been quiet for 48 hours, with no balance re-read and no successful sync. manual_old for a typed-in balance older than 7 days. Null when not stale.
@@ -929,6 +934,17 @@ export interface SpinePosition {
      * @nullable
      */
     remainingWeek: string | null;
+    /** (Q1) MoneyPosition.knownWeek — Counts toward plan */
+    knownWeek: string;
+    /** (Q1) MoneyPosition.unresolvedWeek — Unconfirmed */
+    unresolvedWeek: string;
+    /** (Q1) MoneyPosition.provisional */
+    provisional: boolean;
+    /**
+     * (Q1) MoneyPosition.remainingWeekKnown; null when the plan is not set
+     * @nullable
+     */
+    remainingWeekKnown: string | null;
     /**
      * MoneyPosition.availableUntilPayday
      * @nullable
@@ -980,6 +996,91 @@ export interface SpineMonthAllowance {
      */
     over: string | null;
 }
+export type SpineBankCheckStatus = (typeof SpineBankCheckStatus)[keyof typeof SpineBankCheckStatus];
+export declare const SpineBankCheckStatus: {
+    readonly matches: "matches";
+    readonly off_by: "off_by";
+    readonly resolved_since: "resolved_since";
+    readonly not_checked: "not_checked";
+};
+/**
+ * @nullable
+ */
+export type SpineBankCheckReason = (typeof SpineBankCheckReason)[keyof typeof SpineBankCheckReason] | null;
+export declare const SpineBankCheckReason: {
+    readonly never: "never";
+    readonly not_forecast_account: "not_forecast_account";
+    readonly anchor_too_old: "anchor_too_old";
+    readonly balance_unavailable: "balance_unavailable";
+};
+/**
+ * @nullable
+ */
+export type SpineBankCheckStaleReason = (typeof SpineBankCheckStaleReason)[keyof typeof SpineBankCheckStaleReason] | null;
+export declare const SpineBankCheckStaleReason: {
+    readonly age: "age";
+    readonly anchor_changed: "anchor_changed";
+    readonly rows_since: "rows_since";
+};
+/**
+ * @nullable
+ */
+export type SpineBankCheckDirection = (typeof SpineBankCheckDirection)[keyof typeof SpineBankCheckDirection] | null;
+export declare const SpineBankCheckDirection: {
+    readonly bank_higher: "bank_higher";
+    readonly bank_lower: "bank_lower";
+};
+/**
+ * (Q1) The last manual Sync's check of the bank's balance against H2's — GET /banking/review balanceCheck for the forecast account, field for field (see BankingReviewBalanceCheck).
+ */
+export interface SpineBankCheck {
+    status: SpineBankCheckStatus;
+    /** @nullable */
+    reason: SpineBankCheckReason;
+    stale: boolean;
+    /** @nullable */
+    staleReason: SpineBankCheckStaleReason;
+    /** @nullable */
+    checkedAt: string | null;
+    /**
+     * |bank − H2| at the check ("0.00" when it matched); null when not compared
+     * @nullable
+     */
+    difference: string | null;
+    /** @nullable */
+    direction: SpineBankCheckDirection;
+}
+/**
+ * (Q1) Can the bank balance be trusted — the forecast account (readBankConfidence). The household's own cash, like `bank`: never a debt, a limit or credit. A screen says "Matches bank" / "Off by $X" / "Not checked" from `check` only, never from the review count; "Updated 2 h ago" from `fetchedAt`; "N pending" from `pendingCount`.
+ */
+export interface SpineBankConfidence {
+    /**
+     * When the bank last told us anything (the server freshness rule's own instant): a Plaid balance → the later of its re-read and the last successful sync; a typed balance → its own time. Null with no snapshot. Staleness is bank.stale / bank.staleReason.
+     * @nullable
+     */
+    fetchedAt: string | null;
+    /**
+     * The bank's own figure as read (= bank.snapshot.balance); null with no snapshot
+     * @nullable
+     */
+    bankBalance: string | null;
+    /**
+     * When it was read (= bank.snapshot.at); null with no snapshot
+     * @nullable
+     */
+    bankAsOf: string | null;
+    /**
+     * H2's balance today: the snapshot rolled forward through the ledger (= bank.balance)
+     * @nullable
+     */
+    h2Balance: string | null;
+    check: SpineBankCheck;
+    /**
+     * Pending rows H2's balance counts on the forecast account, dated through today (a pending row its posted row replaced is not one; nor, F6, an expired hold or its reversal — a hold the snapshot held and its reversal count in the balance but are not pending) — GET /banking/review cashFlow.pendingCount over the same rows
+     * @minimum 0
+     */
+    pendingCount: number;
+}
 export interface Spine {
     /** ISO timestamp the snapshot was read */
     asOf: string;
@@ -998,6 +1099,7 @@ export interface Spine {
     reviewCount: number;
     position: SpinePosition;
     monthAllowance: SpineMonthAllowance;
+    bankConfidence: SpineBankConfidence;
 }
 export interface MoneyPositionEstimate {
     itemId: string;
@@ -1028,8 +1130,16 @@ export interface EvaluateAffordBody {
 export interface AffordFigures {
     /** @nullable */
     safeToSpendNow: string | null;
-    /** @nullable */
+    /**
+     * The cautious total's remaining (includes unconfirmed)
+     * @nullable
+     */
     remainingWeek: string | null;
+    /**
+     * (Q5 fix) The plan against what counts toward it (= the position's remainingWeekKnown); null with no cap
+     * @nullable
+     */
+    remainingWeekKnown: string | null;
     /** @nullable */
     availableUntilPayday: string | null;
     /** The curve's lowest end-of-day balance over its window. */
@@ -1054,6 +1164,8 @@ export interface AffordDelta {
     safeToSpendNow: string | null;
     /** @nullable */
     remainingWeek: string | null;
+    /** @nullable */
+    remainingWeekKnown: string | null;
     /** @nullable */
     availableUntilPayday: string | null;
     lowest: string;
@@ -1180,7 +1292,7 @@ export declare const MoneyPositionDegradedReason: {
     readonly manual_old: "manual_old";
 };
 /**
- * (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed; weekAdjustment is the household's own carry-over for this week, never positive, 0 when none). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).
+ * (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed; weekAdjustment is the household's own carry-over for this week, never positive, 0 when none). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)). (Q1) The week contract (names in avalanche-core glossary.ts): knownWeek ("Counts toward plan") = spentWeekDiscretionary without the F2 evidence rule's unresolved rows, netted the same way; unresolvedWeek ("Unconfirmed") = spentWeekDiscretionary − knownWeek; provisional = unresolvedWeek > max($25, 5% of the cap); remainingWeekKnown = weekCap + weekAdjustment − knownWeek, null with no cap. Each equals GET /money/period-breakdown's current week (known, unresolved.amount, provisional, remaining) to the cent. remainingWeek, withinPlan and safeToSpendNow stay cautious.
  */
 export interface MoneyPosition {
     todayISO: string;
@@ -1215,8 +1327,22 @@ export interface MoneyPosition {
     needsClassificationWeek: string;
     unplannedWeek: string;
     monthlyWeek: string;
-    /** @nullable */
+    /**
+     * Cautious: weekCap + weekAdjustment − spentWeekDiscretionary; null when the plan is not set
+     * @nullable
+     */
     remainingWeek: string | null;
+    /** (Q1) Counts toward plan: spentWeekDiscretionary without its unresolved rows (the F2 evidence rule), refunds netted per account and never below zero, exactly as spentWeekDiscretionary is */
+    knownWeek: string;
+    /** (Q1) Unconfirmed: spentWeekDiscretionary − knownWeek (≥ 0) */
+    unresolvedWeek: string;
+    /** (Q1) unresolvedWeek > max($25, 5% of the cap; $25 with no cap) */
+    provisional: boolean;
+    /**
+     * (Q1) weekCap + weekAdjustment − knownWeek (negative when over); null when the plan is not set — never "0.00"
+     * @nullable
+     */
+    remainingWeekKnown: string | null;
     /**
      * weekCap × days elapsed (today included) ÷ 7
      * @nullable
@@ -1507,20 +1633,25 @@ export interface PeriodBreakdownCategory {
     /** Rows (split parts count one each) */
     count: number;
     /**
-     * Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left. (F3) For the current period each prior period is read only to the same point (usualBasis same_days, through usualThrough): the usual by today, not a whole period.
+     * Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left. (F3) For the current period each prior period is read only to the same point (usualBasis same_days, through usualThrough): the usual by today, not a whole period. (Q1) Null when fewer than 2 of those prior periods hold rows of the category (historyPeriods < 2): "Not enough history", never "0.00". (Final #10) Also null when fewer than half of them do (4 of 8 weeks, 2 of 3 months). With enough history a real "0.00" stays.
      * @nullable
      */
     usual: string | null;
     /**
-     * (F3) The same median over the whole prior periods ("a full month usually"); equals usual for a past period
+     * (F3) The same median over the whole prior periods ("a full month usually"); equals usual for a past period. (Q1) Null with historyPeriods < 2 (Final #10: or below half of the prior periods)
      * @nullable
      */
     usualFullPeriod: string | null;
     /**
-     * max(0, amount − usual); null when usual is null. (F3) Against the to-date usual for the current period
+     * max(0, amount − usual); null when usual is null (including too little history). (F3) Against the to-date usual for the current period
      * @nullable
      */
     aboveUsual: string | null;
+    /**
+     * (Q1) How many of the prior periods usual reads (8 weeks, 3 months, after tracking began) hold rows of this category. Below 2, or (Final #10) below half of those periods, usual, usualFullPeriod and aboveUsual are null: the screen says "Not enough history".
+     * @minimum 0
+     */
+    historyPeriods: number;
     /** Largest first, at most rowsPerGroup */
     rows: PeriodBreakdownRow[];
     /** More rows than listed */
@@ -1728,6 +1859,11 @@ export declare const BankingReviewFreshnessStaleReason: {
 export interface BankingReviewFreshness {
     /** @nullable */
     source: BankingReviewFreshnessSource;
+    /**
+     * (Q5 fix) When the bank last told us anything, by the server's one rule (= spine.bankConfidence.fetchedAt): a Plaid balance, the later of its re-read and the last successful sync; a typed balance, its own time
+     * @nullable
+     */
+    fetchedAt: string | null;
     /** @nullable */
     lastContactAt: string | null;
     /** @nullable */
@@ -1746,6 +1882,11 @@ export interface BankingReviewCashFlow {
     count: number;
     /** What the counted pending rows add */
     pendingNet: string;
+    /**
+     * (Q1) How many counted pending rows there are (a pending row its posted row replaced is not one; nor, F6, an expired hold or its reversal, even a held pair the balance counts); the spine's bankConfidence.pendingCount reads the same rule
+     * @minimum 0
+     */
+    pendingCount: number;
     supersededExcluded: number;
     otherExcluded: number;
 }
@@ -1836,6 +1977,24 @@ export declare const BankingReviewVarianceKind: {
     readonly over_planned: "over_planned";
     readonly under_planned: "under_planned";
 };
+/**
+ * (Q1) What happened to the plan, in its own direction (the web words it; `fate` keeps how the ledger decided it). Money in: received · received_different (a different amount, or part) · not_received_yet. Money out: paid · paid_different · not_paid_yet. Either: suggested (a row may be it), skipped, missed, carried (an everyday hook week whose unpaid purchases moved on), not_due, not_decided (before the window the ledger reads). From fate: matched / paid_on_evidence → received or paid (…_different with a cash variance); partial → …_different; on_curve / overdue_outside / income_not_arrived → not_…_yet.
+ */
+export type BankingReviewPlanOutcome = (typeof BankingReviewPlanOutcome)[keyof typeof BankingReviewPlanOutcome];
+export declare const BankingReviewPlanOutcome: {
+    readonly received: "received";
+    readonly received_different: "received_different";
+    readonly not_received_yet: "not_received_yet";
+    readonly paid: "paid";
+    readonly paid_different: "paid_different";
+    readonly not_paid_yet: "not_paid_yet";
+    readonly suggested: "suggested";
+    readonly skipped: "skipped";
+    readonly missed: "missed";
+    readonly carried: "carried";
+    readonly not_due: "not_due";
+    readonly not_decided: "not_decided";
+};
 export interface BankingReviewPlanned {
     /** <itemId>|<occurrenceDate>, the resolution key */
     key: string;
@@ -1908,6 +2067,7 @@ export interface BankingReviewPlanned {
      */
     variance: string | null;
     varianceKind: BankingReviewVarianceKind | null;
+    outcome: BankingReviewPlanOutcome;
 }
 export interface BankingReviewRowCategory {
     id: string;
@@ -2031,8 +2191,11 @@ export interface BankingReviewRow {
 }
 export interface BankingReviewTotals {
     count: number;
+    /** (Q1) A positive magnitude */
     moneyIn: string;
+    /** (Q1) A positive magnitude */
     moneyOut: string;
+    /** moneyIn − moneyOut (signed) */
     net: string;
     pendingNet: string;
 }
@@ -2052,8 +2215,11 @@ export interface BankingReviewUncertainTotals {
 }
 export interface BankingReviewBucket {
     count: number;
+    /** (Q1) Money in: Σ of the bucket's deposits, a positive magnitude ("0.00" when none) */
     moneyIn: string;
+    /** (Q1) Money out: Σ of the bucket's payments and purchases, a positive magnitude ("0.00" when none) */
     moneyOut: string;
+    /** moneyIn − moneyOut (signed). Not "total moved": a screen shows in and out apart */
     net: string;
     pendingNet: string;
     /** Largest first, at most rowsPerBucket */
@@ -2114,13 +2280,29 @@ export interface BankingReviewReconciliation {
     /** (Σ buckets' net + asPlanned.net + (F6 round 4) counted expired holds' net) − cashFlow.net; always "0.00". A counted expired hold is one the bank snapshot held, and its reversal: the balance counts the pair (net 0), no bucket lists it. */
     unexplained: string;
 }
+/**
+ * (Q1) What unresolvedInRange counts: this review's account (account) and period
+ */
+export type BankingReviewInboxUnresolvedScope = (typeof BankingReviewInboxUnresolvedScope)[keyof typeof BankingReviewInboxUnresolvedScope];
+export declare const BankingReviewInboxUnresolvedScope: {
+    readonly this_account_·_this_period: "this account · this period";
+};
 export type BankingReviewInboxBadgeScope = (typeof BankingReviewInboxBadgeScope)[keyof typeof BankingReviewInboxBadgeScope];
 export declare const BankingReviewInboxBadgeScope: {
     readonly "this_calendar_month,_forecast_account": "this calendar month, forecast account";
 };
+/**
+ * (Q1) Two counts, each with its own scope — never one under the other's label: unresolvedInRange (this review's account and period) and badgeCount (the Review badge: this calendar month, the forecast account).
+ */
 export interface BankingReviewInbox {
     /** Rows placed here (dated through today */
     unresolvedInRange: number;
+    /** (Q1) What unresolvedInRange counts: this review's account (account) and period */
+    unresolvedScope: BankingReviewInboxUnresolvedScope;
+    /** (Q1) The first day unresolvedInRange reads (= period.from) */
+    unresolvedFrom: string;
+    /** (Q1) The last day unresolvedInRange reads (= period.to) */
+    unresolvedTo: string;
     /** The Review badge (spine.reviewCount) */
     badgeCount: number;
     badgeScope: BankingReviewInboxBadgeScope;
@@ -2252,7 +2434,7 @@ export interface BankingReviewHousehold {
     scope: BankingReviewHouseholdScope;
     weekStart: string;
     weekEnd: string;
-    /** GET /money/position spentWeekDiscretionary */
+    /** GET /money/position spentWeekDiscretionary — the cautious total (includes unconfirmed) */
     spentWeek: string;
     /**
      * GET /money/position weekCap; null when the plan is not set
@@ -2260,10 +2442,21 @@ export interface BankingReviewHousehold {
      */
     weekPlan: string | null;
     /**
-     * GET /money/position remainingWeek; null when the plan is not set
+     * GET /money/position remainingWeek (cautious); null when the plan is not set
      * @nullable
      */
     remainingWeek: string | null;
+    /** (Q1) GET /money/position knownWeek — Counts toward plan (confirmed purchases) */
+    knownWeek: string;
+    /** (Q1) GET /money/position unresolvedWeek — Unconfirmed; knownWeek + unresolvedWeek = spentWeek */
+    unresolvedWeek: string;
+    /** (Q1) GET /money/position provisional */
+    provisional: boolean;
+    /**
+     * (Q1) GET /money/position remainingWeekKnown; null when the plan is not set
+     * @nullable
+     */
+    remainingWeekKnown: string | null;
 }
 export type BankingReviewBucketName = (typeof BankingReviewBucketName)[keyof typeof BankingReviewBucketName];
 export declare const BankingReviewBucketName: {
@@ -2319,15 +2512,20 @@ export interface WaysBackTrim {
     /** This week's spend in the category, whole cents: (S6) purchases less refunds, as the week's spent figure and the period breakdown's category amount net them. Always > 0 (a fully refunded category is not a trim). */
     spentWeek: number;
     /**
-     * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts. (F3) Each week read only to today's weekday (Sunday through usualThrough's weekday): the usual by today.
+     * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts. (F3) Each week read only to today's weekday (Sunday through usualThrough's weekday): the usual by today. (Q1) Null when fewer than 2 of the weeks hold rows of the category (historyPeriods); (Final #10) also when fewer than half of them do (4 of 8).
      * @nullable
      */
     usualWeek: number | null;
     /**
-     * (F3) The same median over the whole 8 weeks, whole cents; null when no week counts
+     * (F3) The same median over the whole 8 weeks, whole cents; null when no week counts. (Q1) Null with historyPeriods < 2 (Final #10: or below half of the weeks)
      * @nullable
      */
     usualFullWeek: number | null;
+    /**
+     * (Q1) How many of the 8 weeks hold rows of the category. Below 2, or (Final #10) below half of the weeks, usualWeek and usualFullWeek are null ("Not enough history").
+     * @minimum 0
+     */
+    historyPeriods: number;
 }
 export type WaysBackHold = {
     /** @nullable */
@@ -2801,9 +2999,21 @@ export interface Transaction {
   card cap, budgets, allowances, review or any total (owner's decision
   2026-10-15); every browser sum skips it. Worked out on read; the row
   is kept and shown. On GET /transactions list rows, the GET /forecast
-  bundle's transactions and ledger rows; absent elsewhere.
+  bundle's transactions and ledger rows; absent elsewhere. (F6 round 5)
+  A reversal is never a payment or a transfer, and each credit takes the
+  most recent expired charge on or before it. A hold the bank snapshot
+  held and its reversal are not expiredHold: see expiredPair.
    */
     readonly expiredHold?: boolean;
+    /** (F6 round 5) An expired hold the bank snapshot already held, or the
+  reversal paired with it. The bank balance counts the reversal (the
+  money came back), so the register counts both (they net to 0) and
+  neither is labelled - but neither is spending, and neither is asked
+  about in review. Cash walks (the Reconcile running balance, cash
+  flow) count it; spending sums and review skip it. The same test on
+  GET /transactions, the GET /forecast bundle and the ledger rows.
+   */
+    readonly expiredPair?: boolean;
 }
 export type LedgerRow = Transaction & {
     /** (PR-A2) How many parts the charge is split into; 0 when it is not split. */
@@ -3654,6 +3864,28 @@ export interface DebtPlaidAccount {
     /** @nullable */
     institutionSlug?: string | null;
 }
+export type CardPaidAsEffectiveMode = (typeof CardPaidAsEffectiveMode)[keyof typeof CardPaidAsEffectiveMode];
+export declare const CardPaidAsEffectiveMode: {
+    readonly in_full_weekly: "in_full_weekly";
+    readonly in_full_monthly: "in_full_monthly";
+    readonly debt_plan: "debt_plan";
+    readonly unset: "unset";
+};
+export type CardPaidAsSource = (typeof CardPaidAsSource)[keyof typeof CardPaidAsSource];
+export declare const CardPaidAsSource: {
+    readonly chosen: "chosen";
+    readonly default_no_debt: "default_no_debt";
+    readonly default_debt_inactive: "default_debt_inactive";
+    readonly default_debt_active: "default_debt_active";
+    readonly needs_choice: "needs_choice";
+};
+/**
+ * (Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly / in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.
+ */
+export interface CardPaidAs {
+    effectiveMode: CardPaidAsEffectiveMode;
+    source: CardPaidAsSource;
+}
 export interface Debt {
     id: string;
     name: string;
@@ -3768,6 +4000,8 @@ export interface Debt {
    */
     statement?: DebtStatement | null;
     plaidAccount?: DebtPlaidAccount | null;
+    /** (Q1) For a debt linked to an Amex card: how that card is paid — the one definition the Amex band and summary read (CardPaidAs). An archived debt's card reads in_full_weekly (default_debt_inactive), never "on the payoff plan". Null for a debt no Amex card links. GET /debts always sends it; the single-debt responses leave it out. */
+    paidAs?: CardPaidAs | null;
 }
 export interface DebtInput {
     /** @minLength 1 */
@@ -5873,6 +6107,8 @@ export type AmexWeeklyPayoffCardTopMerchant = null | {
     amount: number;
 };
 export interface AmexWeeklyPayoffCard {
+    /** (Q1) How this card is paid (CardPaidAs); null only for a card the payoff roster does not know */
+    paidAs: CardPaidAs | null;
     accountId: string;
     /** @nullable */
     plaidAccountId: string | null;
@@ -5909,6 +6145,8 @@ export declare const AmexDebtLinkedCardCadence: {
     readonly monthly: "monthly";
 };
 export interface AmexDebtLinkedCard {
+    /** (Q1) How this card is paid (CardPaidAs). A debt row links it, but that alone never means "on the payoff plan": an archived debt's card is in_full_weekly (default_debt_inactive). Null only for a card the payoff roster does not know. */
+    paidAs: CardPaidAs | null;
     /** The card's Plaid account_id */
     accountId: string;
     /** Plaid's name for the card */
@@ -5955,6 +6193,39 @@ export declare const PayoffModeReason: {
     readonly debt_terms_missing: "debt_terms_missing";
     readonly debt_plan_without_active_debt: "debt_plan_without_active_debt";
 };
+/**
+ * @nullable
+ */
+export type CardPayDownReason = (typeof CardPayDownReason)[keyof typeof CardPayDownReason] | null;
+export declare const CardPayDownReason: {
+    readonly no_debt: "no_debt";
+    readonly debt_not_active: "debt_not_active";
+    readonly debt_terms_missing: "debt_terms_missing";
+};
+/**
+ * (Q6b) Can "Paying down" take effect on this card? The server's own rule (resolvePayoffMode with debt_plan), so no screen re-derives it. reason when not available: no_debt (no debt row links the card) · debt_not_active (its debt is archived, paid or zero) · debt_terms_missing (active, but no APR and no minimum).
+ */
+export interface CardPayDown {
+    available: boolean;
+    /** @nullable */
+    reason: CardPayDownReason;
+}
+/**
+ * @nullable
+ */
+export type CardDefaultModeMode = (typeof CardDefaultModeMode)[keyof typeof CardDefaultModeMode] | null;
+export declare const CardDefaultModeMode: {
+    readonly in_full: "in_full";
+    readonly debt_plan: "debt_plan";
+};
+/**
+ * (Q6b r3) What "Use the default" would resolve to (resolvePayoffMode with no explicit choice). mode null = the default cannot tell either (an active debt with no APR and no minimum): going back to it pauses plans.
+ */
+export interface CardDefaultMode {
+    /** @nullable */
+    mode: CardDefaultModeMode;
+    reason: PayoffModeReason;
+}
 export interface AmexCardPayoffMode {
     /** The card's Plaid account_id */
     accountId: string;
@@ -5975,6 +6246,9 @@ export interface AmexCardPayoffMode {
      * @nullable
      */
     debtId: string | null;
+    paidAs: CardPaidAs;
+    payDown: CardPayDown;
+    defaultMode: CardDefaultMode;
 }
 export interface AmexWeeklyPayoff {
     weekStart: string;
@@ -6069,6 +6343,10 @@ export interface AmexSummaryCard {
     owed: string | null;
     /** (F1) How the card is paid. `mode` null = not chosen yet (the hook bills it like in_full meanwhile, and plans are paused); `source` says whether the owner chose it or it is the default from the card's debt row. A card on the debt plan answers to its debt (`planLink`); a card paid in full answers to its hook. */
     payoffMode?: AmexSummaryCardPayoffMode;
+    /** (Q1) How this card is paid — the one definition (CardPaidAs); null only for a card the payoff roster does not know */
+    paidAs: CardPaidAs | null;
+    payDown: CardPayDown;
+    defaultMode: CardDefaultMode;
     /** (P3) This card's purchases over the period: the same rows and rule as the top-level `purchases` of this card's own summary (?accountId=<this card>), so the card band needs one "all" call. With "all", the cards' purchases add up to the top-level `purchases`. */
     purchases: AmexSummaryTotal;
 }
@@ -6125,13 +6403,21 @@ export interface AmexSummaryPurchases {
     reimbursable: AmexSummaryTotal;
 }
 /**
- * What the card(s) added to the HOUSEHOLD's allowances over the period — the household's plan, never this card's budget. Refunds net per account, never below zero.
+ * What the card(s) added to the HOUSEHOLD's allowances over the period — the household's plan, never this card's budget. Refunds net per account, never below zero. (hh-split) Each plan figure is the cautious total, split by the F2 evidence rule exactly as GET /money/period-breakdown splits `actual` (`evidenceSplitCents`, the same money context and the same forecast suggestions): known + unresolved = the plan figure, to the cent. For one card and a week, weeklyPlan / weeklyKnown / weeklyUnresolved = that breakdown's actual / known / unresolved.amount with `account=` the card.
  */
 export interface AmexSummaryHouseholdContribution {
-    /** Weekly-flagged + unfiled spending (the weekly cap's pool) */
+    /** Weekly-flagged + unfiled spending (the weekly cap's pool): the cautious total */
     weeklyPlan: string;
+    /** (hh-split) weeklyPlan without its unresolved rows — Counts toward plan */
+    weeklyKnown: string;
+    /** (hh-split) weeklyPlan − weeklyKnown — Unconfirmed; "0.00" when none */
+    weeklyUnresolved: string;
     /** Monthly-flagged spending */
     monthlyPlan: string;
+    /** (hh-split) monthlyPlan without its unresolved rows — Counts toward plan */
+    monthlyKnown: string;
+    /** (hh-split) monthlyPlan − monthlyKnown — Unconfirmed; "0.00" when none */
+    monthlyUnresolved: string;
     /** The part of weeklyPlan not filed to an allowance yet */
     unfiled: string;
     /** Where the household week is reviewed: always /spending/week */
@@ -6314,6 +6600,47 @@ export interface PlaidAccount {
    */
     snapshot?: PlaidAccountSnapshot | null;
 }
+export type PlaidItemFreshnessState = (typeof PlaidItemFreshnessState)[keyof typeof PlaidItemFreshnessState];
+export declare const PlaidItemFreshnessState: {
+    readonly ok: "ok";
+    readonly stale: "stale";
+    readonly refresh_failed: "refresh_failed";
+    readonly needs_reconnect: "needs_reconnect";
+    readonly never: "never";
+};
+/**
+ * @nullable
+ */
+export type PlaidItemFreshnessStaleReason = (typeof PlaidItemFreshnessStaleReason)[keyof typeof PlaidItemFreshnessStaleReason] | null;
+export declare const PlaidItemFreshnessStaleReason: {
+    readonly refresh_failed: "refresh_failed";
+    readonly old: "old";
+    readonly manual_old: "manual_old";
+};
+/**
+ * (Q1) One bank connection's state. state, first match wins: needs_reconnect (its error code asks for a reconnect) · refresh_failed (an unrecovered transactions or balance failure, or a code that means the feed is gone) · never (never synced, no balance read) · stale (silent 48 hours: no balance re-read and no successful sync) · ok.
+ */
+export interface PlaidItemFreshness {
+    state: PlaidItemFreshnessState;
+    stale: boolean;
+    /** @nullable */
+    staleReason: PlaidItemFreshnessStaleReason;
+    /**
+     * When the bank last told us anything: the later of its newest balance reading and its last successful sync
+     * @nullable
+     */
+    fetchedAt: string | null;
+    /**
+     * The last successful sync
+     * @nullable
+     */
+    lastContactAt: string | null;
+    /**
+     * The newest transactions or balance failure not yet followed by a success of the same kind
+     * @nullable
+     */
+    lastFailureAt: string | null;
+}
 export type PlaidItemDetailAutoUpdatesReason = (typeof PlaidItemDetailAutoUpdatesReason)[keyof typeof PlaidItemDetailAutoUpdatesReason];
 export declare const PlaidItemDetailAutoUpdatesReason: {
     readonly ok: "ok";
@@ -6377,6 +6704,12 @@ export interface PlaidItemDetail {
     lastBankTxOn?: string | null;
     /** @nullable */
     refreshProductDisabledAt?: string | null;
+    /** (Q1) This connection's freshness by the bank balance's own rule
+  (computeBankFreshness): never read failure from lastSyncError (the
+  liabilities refresh writes it too). GET /plaid/items always sends
+  it; the single-item mutation responses leave it out.
+   */
+    freshness?: PlaidItemFreshness;
     /** (V3) Whether this bank tells H2 when something changes. `on` only
   when the webhook address Plaid holds equals the server's current
   PLAID_WEBHOOK_URL.
@@ -6844,6 +7177,27 @@ export declare const ReviewProposalKind: {
     readonly bill_match: "bill_match";
     readonly income_category: "income_category";
 };
+/**
+ * The account the row is on; all null for a row with no linked account
+ */
+export interface ReviewProposalAccount {
+    /**
+     * plaid_accounts.id
+     * @nullable
+     */
+    id: string | null;
+    /** @nullable */
+    institution: string | null;
+    /** @nullable */
+    name: string | null;
+    /** @nullable */
+    mask: string | null;
+    /**
+     * (Q2) The account's external Plaid id — the ledgers' plaidAccountId filter, so a screen can link straight to the row
+     * @nullable
+     */
+    externalId: string | null;
+}
 export interface ReviewProposalOccurrence {
     planKey: string;
     recurringItemId: string;
@@ -6857,7 +7211,9 @@ export interface ReviewProposalRow {
     /** Signed: negative is money out (a workbook Amex charge is positive) */
     amount: string;
     pending: boolean;
-    account: PeriodBreakdownAccount;
+    /** (Q2) The row's ledger source (plaid:chase, plaid:amex, manual, …), for its link */
+    source: string;
+    account: ReviewProposalAccount;
     category: PeriodBreakdownRowCategory | null;
     /** The bill occurrence "mark matched" would name; null when none is in reach */
     occurrence: ReviewProposalOccurrence | null;
@@ -6918,6 +7274,8 @@ export declare const ReviewProposalApplyWithItem: {
 export interface ReviewProposal {
     /** Stable for the same rows and target */
     key: string;
+    /** (Q2) A fingerprint of what the fix would do (key, kind, action, target, and each listed row's id, amount, pending state, category and occurrence). POST /review/proposals/{key}/apply echoes it. */
+    proposalHash: string;
     kind: ReviewProposalKind;
     /** Newest first, at most 20 */
     rows: ReviewProposalRow[];
@@ -6936,6 +7294,352 @@ export interface ReviewProposals {
     count: number;
     truncated: boolean;
     items: ReviewProposal[];
+}
+export interface ApplyReviewProposalInput {
+    /**
+     * The proposal's listed row ids, as shown
+     * @minItems 1
+     * @maxItems 20
+     */
+    rowIds: string[];
+    /**
+     * @minLength 1
+     * @maxLength 64
+     */
+    proposalHash: string;
+}
+export type CorrectionRefusalCode = (typeof CorrectionRefusalCode)[keyof typeof CorrectionRefusalCode];
+export declare const CorrectionRefusalCode: {
+    readonly proposal_gone: "proposal_gone";
+    readonly proposal_changed: "proposal_changed";
+    readonly no_target_category: "no_target_category";
+    readonly direction_conflict: "direction_conflict";
+    readonly already_applied: "already_applied";
+    readonly not_found: "not_found";
+    readonly already_undone: "already_undone";
+    readonly changed_since: "changed_since";
+};
+export type CorrectionRefusalConflict = (typeof CorrectionRefusalConflict)[keyof typeof CorrectionRefusalConflict];
+export declare const CorrectionRefusalConflict: {
+    readonly inflow_into_expense: "inflow_into_expense";
+    readonly outflow_into_income: "outflow_into_income";
+};
+export type CorrectionRefusalConflictsItemConflict = (typeof CorrectionRefusalConflictsItemConflict)[keyof typeof CorrectionRefusalConflictsItemConflict];
+export declare const CorrectionRefusalConflictsItemConflict: {
+    readonly inflow_into_expense: "inflow_into_expense";
+    readonly outflow_into_income: "outflow_into_income";
+};
+export type CorrectionRefusalConflictsItem = {
+    id: string;
+    conflict: CorrectionRefusalConflictsItemConflict;
+};
+/**
+ * (Q2) A refused fix or undo. Nothing was written.
+ */
+export interface CorrectionRefusal {
+    /** Plain words for the household */
+    error: string;
+    code: CorrectionRefusalCode;
+    /** proposal_changed: the proposal's hash now */
+    proposalHash?: string;
+    /** already_applied: the fix that applied it */
+    applicationId?: string;
+    /** already_undone: when */
+    undoneAt?: string;
+    conflict?: CorrectionRefusalConflict;
+    conflicts?: CorrectionRefusalConflictsItem[];
+    /** changed_since: the rows that no longer hold what the fix wrote */
+    rows?: string[];
+    /** changed_since: the answers (resolutions) changed or replaced since */
+    answers?: string[];
+}
+/**
+ * (Q2) The columns a fix writes on a row
+ */
+export interface CorrectionRowState {
+    /** @nullable */
+    categoryId: string | null;
+    categoryLockedByUser: boolean;
+    categoryProvisional: boolean;
+    isTransfer: boolean;
+    isTransferUserOverridden: boolean;
+    weeklyAllowance: boolean;
+    monthlyAllowance: boolean;
+    unplannedAllowance: boolean;
+}
+/**
+ * Why a row the fix marks matched gets no answer of its own (no occurrence in reach, or another listed row answers it)
+ * @nullable
+ */
+export type CorrectionRowResolutionSkipped = (typeof CorrectionRowResolutionSkipped)[keyof typeof CorrectionRowResolutionSkipped] | null;
+export declare const CorrectionRowResolutionSkipped: {
+    readonly no_occurrence: "no_occurrence";
+    readonly occurrence_shared: "occurrence_shared";
+};
+export type CorrectionResolutionStatus = (typeof CorrectionResolutionStatus)[keyof typeof CorrectionResolutionStatus];
+export declare const CorrectionResolutionStatus: {
+    readonly matched: "matched";
+};
+export interface CorrectionResolution {
+    recurringItemId: string;
+    occurrenceDate: string;
+    status: CorrectionResolutionStatus;
+}
+export interface CorrectionRow {
+    id: string;
+    date: string;
+    displayName: string;
+    amount: string;
+    pending: boolean;
+    source: string;
+    account: ReviewProposalAccount;
+    before: CorrectionRowState;
+    after: CorrectionRowState;
+    /** The answer the fix writes for the row (mark matched); null when none */
+    resolution: CorrectionResolution | null;
+    /**
+     * Why a row the fix marks matched gets no answer of its own (no occurrence in reach, or another listed row answers it)
+     * @nullable
+     */
+    resolutionSkipped: CorrectionRowResolutionSkipped;
+    /**
+     * (applied only) The user decision the fix wrote for the row
+     * @nullable
+     */
+    decisionId?: string | null;
+}
+export interface CorrectionReplacedAnswer {
+    id: string;
+    status: string;
+    /** @nullable */
+    recurringItemId: string | null;
+    /** @nullable */
+    occurrenceDate: string | null;
+    /** @nullable */
+    matchedTxnId: string | null;
+}
+export type CorrectionProposalRefKind = (typeof CorrectionProposalRefKind)[keyof typeof CorrectionProposalRefKind];
+export declare const CorrectionProposalRefKind: {
+    readonly loan_payment: "loan_payment";
+    readonly transfer: "transfer";
+    readonly bill_match: "bill_match";
+    readonly income_category: "income_category";
+};
+export type CorrectionProposalRefAction = (typeof CorrectionProposalRefAction)[keyof typeof CorrectionProposalRefAction];
+export declare const CorrectionProposalRefAction: {
+    readonly file_as_bill_payment: "file_as_bill_payment";
+    readonly file_as_debt_payment: "file_as_debt_payment";
+    readonly file_as_transfer: "file_as_transfer";
+    readonly confirm_bill_match: "confirm_bill_match";
+    readonly file_under_income_category: "file_under_income_category";
+};
+export interface CorrectionProposalRef {
+    key: string;
+    kind: CorrectionProposalRefKind;
+    proposalHash: string;
+    action: CorrectionProposalRefAction;
+    label: string;
+}
+/**
+ * The period breakdown's own figures (GET /money/period-breakdown, household scope)
+ */
+export interface CorrectionPeriodFigures {
+    start: string;
+    end: string;
+    /**
+     * Null when no plan is set
+     * @nullable
+     */
+    plan: string | null;
+    actual: string;
+    /** Counts toward plan */
+    known: string;
+    /** Unconfirmed */
+    unresolved: string;
+    /** @nullable */
+    remaining: string | null;
+    /** @nullable */
+    over: string | null;
+}
+export interface CorrectionPeriodChange {
+    before: CorrectionPeriodFigures;
+    after: CorrectionPeriodFigures;
+}
+export type CorrectionBudgetFiguresLinesItem = {
+    categoryId: string;
+    name: string;
+    kind: string;
+    actual: string;
+};
+/**
+ * The Budget month's own summary (GET /budget/months/{monthStart}) and the lines the fix moves
+ */
+export interface CorrectionBudgetFigures {
+    /** summary.income.actual */
+    income: string;
+    /** summary.expenses.actual */
+    expenses: string;
+    /** summary.net.actual */
+    net: string;
+    lines: CorrectionBudgetFiguresLinesItem[];
+}
+export interface CorrectionBudgetMonthChange {
+    monthStart: string;
+    before: CorrectionBudgetFigures;
+    after: CorrectionBudgetFigures;
+}
+export interface CorrectionBankingBucket {
+    count: number;
+    moneyIn: string;
+    moneyOut: string;
+    net: string;
+}
+export type CorrectionBankingFiguresBuckets = {
+    amountDifference: CorrectionBankingBucket;
+    timingDifference: CorrectionBankingBucket;
+    confirmedUnplanned: CorrectionBankingBucket;
+    uncertain: CorrectionBankingBucket;
+    unmatched: CorrectionBankingBucket;
+};
+export type CorrectionBankingFiguresAsPlanned = {
+    count: number;
+    net: string;
+};
+/**
+ * The Banking review's own buckets (GET /banking/review) for the account and the rows' dates
+ */
+export interface CorrectionBankingFigures {
+    buckets: CorrectionBankingFiguresBuckets;
+    asPlanned: CorrectionBankingFiguresAsPlanned;
+    unresolvedInRange: number;
+}
+export type CorrectionBankingChangeAccount = {
+    /** @nullable */
+    id: string | null;
+    /** @nullable */
+    institution: string | null;
+    /** @nullable */
+    name: string | null;
+    /** @nullable */
+    mask: string | null;
+};
+export interface CorrectionBankingChange {
+    account: CorrectionBankingChangeAccount;
+    from: string;
+    to: string;
+    before: CorrectionBankingFigures;
+    /** (Q1) The same review as the fix would leave it: its rows' filing and answers patched, on the forecast ledger rebuilt with the fix (the applied result, to the cent). Null was the Q2 limitation banking_after_not_previewed; it is no longer sent. */
+    after: CorrectionBankingFigures | null;
+}
+export type CorrectionPreviewFigures = {
+    week: CorrectionPeriodChange;
+    month: CorrectionPeriodChange;
+    budgetMonths: CorrectionBudgetMonthChange[];
+    /** One per checking or savings account the rows are on. (Final #7) A row on a card has no Banking review: it gets no entry here (its own before and after are in rows; the week, month and Budget figures carry it). */
+    banking: CorrectionBankingChange[];
+};
+export type CorrectionPreviewLimitationsItem = (typeof CorrectionPreviewLimitationsItem)[keyof typeof CorrectionPreviewLimitationsItem];
+export declare const CorrectionPreviewLimitationsItem: {
+    readonly forecast_pairs_as_before: "forecast_pairs_as_before";
+    readonly banking_after_not_previewed: "banking_after_not_previewed";
+    readonly listed_rows_only: "listed_rows_only";
+};
+/**
+ * (Q2) What a fix would change. Nothing was written.
+ */
+export interface CorrectionPreview {
+    dryRun: boolean;
+    proposal: CorrectionProposalRef;
+    rows: CorrectionRow[];
+    /** The answers (resolutions) the fix would delete to write its own */
+    replaces: CorrectionReplacedAnswer[];
+    /** Whether the fix teaches merchant memory (once, from its first row, sign-aware) */
+    learnsMemory: boolean;
+    figures: CorrectionPreviewFigures;
+    /** listed_rows_only — a truncated proposal applies to its listed rows. (Q1) The forecast ledger and the Banking review are rebuilt with the fix for the preview, so forecast_pairs_as_before and banking_after_not_previewed are no longer sent (kept in the enum for older clients). */
+    limitations: CorrectionPreviewLimitationsItem[];
+}
+/**
+ * (Q2) A fix, applied
+ */
+export interface AppliedCorrection {
+    dryRun: boolean;
+    /** Pass it to undo */
+    applicationId: string;
+    appliedAt: string;
+    proposal: CorrectionProposalRef;
+    rows: CorrectionRow[];
+    replaced: CorrectionReplacedAnswer[];
+    learnedMemory: boolean;
+}
+export type CorrectionUndoMemory = (typeof CorrectionUndoMemory)[keyof typeof CorrectionUndoMemory];
+export declare const CorrectionUndoMemory: {
+    readonly none: "none";
+    readonly restored: "restored";
+    readonly disabled: "disabled";
+    readonly kept: "kept";
+};
+export interface CorrectionUndo {
+    applicationId: string;
+    undoneAt: string;
+    /** Rows put back */
+    rows: number;
+    answersRemoved: number;
+    answersRestored: number;
+    memory: CorrectionUndoMemory;
+}
+export type AppliedCorrectionsItemsItemKind = (typeof AppliedCorrectionsItemsItemKind)[keyof typeof AppliedCorrectionsItemsItemKind];
+export declare const AppliedCorrectionsItemsItemKind: {
+    readonly loan_payment: "loan_payment";
+    readonly transfer: "transfer";
+    readonly bill_match: "bill_match";
+    readonly income_category: "income_category";
+};
+export type AppliedCorrectionsItemsItem = {
+    id: string;
+    proposalKey: string;
+    kind: AppliedCorrectionsItemsItemKind;
+    label: string;
+    rowCount: number;
+    filedCount: number;
+    matchedCount: number;
+    appliedAt: string;
+    /** @nullable */
+    undoneAt: string | null;
+    undoable: boolean;
+};
+export interface AppliedCorrections {
+    /** @maxItems 20 */
+    items: AppliedCorrectionsItemsItem[];
+}
+export type DirectionRefusalCode = (typeof DirectionRefusalCode)[keyof typeof DirectionRefusalCode];
+export declare const DirectionRefusalCode: {
+    readonly direction_conflict: "direction_conflict";
+};
+export type DirectionRefusalConflict = (typeof DirectionRefusalConflict)[keyof typeof DirectionRefusalConflict];
+export declare const DirectionRefusalConflict: {
+    readonly inflow_into_expense: "inflow_into_expense";
+    readonly outflow_into_income: "outflow_into_income";
+};
+export type DirectionRefusalConflictsItemConflict = (typeof DirectionRefusalConflictsItemConflict)[keyof typeof DirectionRefusalConflictsItemConflict];
+export declare const DirectionRefusalConflictsItemConflict: {
+    readonly inflow_into_expense: "inflow_into_expense";
+    readonly outflow_into_income: "outflow_into_income";
+};
+export type DirectionRefusalConflictsItem = {
+    id: string;
+    conflict: DirectionRefusalConflictsItemConflict;
+};
+/**
+ * (Q2) A write refused by the direction guard. Nothing was written.
+ */
+export interface DirectionRefusal {
+    /** Plain words for the household (the first conflict) */
+    error: string;
+    code: DirectionRefusalCode;
+    conflict: DirectionRefusalConflict;
+    /** Every row the write would have filed against its direction. */
+    conflicts: DirectionRefusalConflictsItem[];
 }
 /**
  * (F2) Present when the category goes against the money's direction

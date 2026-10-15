@@ -424,7 +424,8 @@ export function expectedToday(step: StepId): Observed {
 // Week, Platinum (signed as stored: − a charge, + a credit):
 //   purchases   WHOLE FOODS 60 (weekly, Groceries) · SHELL 40 (posted; its pending
 //               twin replaced, hand-filed Gas, carried over) · BEST BUY 120 (UN) ·
-//               TARGET 30 (reimbursable, Home) · UBER EATS 25 (nothing) ·
+//               TARGET 30 (reimbursable, Home) · AFFIRM 25 (nothing; Plaid
+//               says LOAN_PAYMENTS — a pay-later instalment, UNRESOLVED) ·
 //               COSTCO 80 (weekly, no category; alias "Costco") · TRADER JOE'S 70 (weekly, split
 //               Groceries 50 / Home 20)  = 425.00 / 7, reimbursable 30.00 / 1
 //   refunds     WHOLE FOODS +15                                   = 15.00 / 1
@@ -434,8 +435,9 @@ export function expectedToday(step: StepId): Observed {
 //   weekCharges 425 − 15 = 410.00 (the payoff's own figure)
 //   household   weekly 60 + 80 + 70 = 210; unfiled 40 + 25 + 300 − 15 = 350
 //               (the position does not read "not mine") → weeklyPlan 560.00,
-//               unfiled 350.00
-//   attention   unplanned BEST BUY 120 · unfiled SHELL 40 (Gas), UBER EATS 25 ·
+//               unfiled 350.00; (hh-split) of it AFFIRM 25 is unconfirmed (the
+//               F2 evidence rule) → weeklyKnown 535.00, weeklyUnresolved 25.00
+//   attention   unplanned BEST BUY 120 · unfiled SHELL 40 (Gas), AFFIRM 25 ·
 //               uncategorized COSTCO 80
 // Week, Gold: DELTA AIR −250 (Travel, unfiled) · AMEX EPAYMENT +100 (payment).
 // Month, Blue: AMAZON −45 (monthly, Home) on 10/2.
@@ -490,7 +492,8 @@ export const S5_ROWS: readonly S5Row[] = [
   { key: "fee", account: "plat", on: "2026-10-06", desc: "MEMBERSHIP FEE", amount: "-5.00", category: "Ignore" },
   { key: "notMine", account: "plat", on: "2026-10-06", desc: "AIRLINE TICKET", amount: "-300.00" },
   { key: "target", account: "plat", on: "2026-10-07", desc: "TARGET 55", amount: "-30.00", category: "Home", reimbursable: true },
-  { key: "uberEats", account: "plat", on: "2026-10-07", desc: "UBER EATS", amount: "-25.00" },
+  // (hh-split) Unfiled, and Plaid says a loan payment: the week's one unconfirmed card row.
+  { key: "affirm", account: "plat", on: "2026-10-07", desc: "AFFIRM INC", amount: "-25.00", pfc: "LOAN_PAYMENTS_OTHER_PAYMENT" },
   { key: "costco", account: "plat", on: "2026-10-07", desc: "COSTCO WHSE", amount: "-80.00", weekly: true },
   { key: "traderJoes", account: "plat", on: "2026-10-07", desc: "TRADER JOE S #712", amount: "-70.00", category: "Groceries", weekly: true, splits: [["Groceries", "-50.00"], ["Home", "-20.00"]] },
   { key: "wfRefund", account: "plat", on: "2026-10-08", desc: "WHOLE FOODS #123", amount: "15.00" },
@@ -514,11 +517,11 @@ export const S5_EXPECTED = {
     notMine: "300.00/1",
     weekCharges: 410,
     owed: "842.10",
-    household: { weeklyPlan: "560.00", monthlyPlan: "0.00", unfiled: "350.00" },
+    household: { weeklyPlan: "560.00", weeklyKnown: "535.00", weeklyUnresolved: "25.00", monthlyPlan: "0.00", monthlyKnown: "0.00", monthlyUnresolved: "0.00", unfiled: "350.00" },
     plan: "weekly_hook 600.00 2026-10-10 plan",
     attention: {
       unplanned: ["Best Buy 88 120.00 Electronics unplanned"],
-      unfiled: ["Shell Oil 123 40.00 Gas unfiled", "Uber Eats 25.00 — unfiled uncategorized"],
+      unfiled: ["Shell Oil 123 40.00 Gas unfiled", "Affirm Inc 25.00 — unfiled uncategorized"],
       uncategorized: ["Costco 80.00 — weekly uncategorized"],
     },
   },
@@ -535,7 +538,7 @@ export const S5_EXPECTED = {
     refunds: "15.00/1",
     payments: "300.00/2",
     owed: "2076.66",
-    household: { weeklyPlan: "810.00", monthlyPlan: "0.00", unfiled: "600.00" },
+    household: { weeklyPlan: "810.00", weeklyKnown: "785.00", weeklyUnresolved: "25.00", monthlyPlan: "0.00", monthlyKnown: "0.00", monthlyUnresolved: "0.00", unfiled: "600.00" },
     unfiled: "315.00/3",
   },
   spendingFactsWeek: 930,

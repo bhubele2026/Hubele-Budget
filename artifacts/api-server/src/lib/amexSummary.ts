@@ -24,7 +24,11 @@
 //                  through `allowanceRowOf` + `allowanceSpentCents` /
 //                  `allowanceTotals` — the read and helpers GET
 //                  /money/period-breakdown's `account=` scope uses, so for a week
-//                  `weeklyPlan` IS that breakdown's `actual`.
+//                  `weeklyPlan` IS that breakdown's `actual`. (hh-split) Each
+//                  plan figure is split known / unresolved by the F2 evidence
+//                  rule (`rowEvidenceOf`, the same ledger's suggestions) and
+//                  `evidenceSplitCents` — the breakdown's own `known` /
+//                  `unresolved` — so the line can say how much is unconfirmed.
 //   planLink       a debt-linked card: its debt (minimum, place in the avalanche
 //                  order). A card the everyday hook pays: the hook's payoff for
 //                  the period that holds `to`, straight from the ledger's
@@ -44,11 +48,11 @@ import {
   HOUSEHOLD_TZ,
   addDaysISO,
   allowanceRowOf,
-  allowanceSpentCents,
   allowanceTotals,
   amexCardLabel,
   classifyCardCredit,
   creditAmount,
+  evidenceSplitCents,
   netAccountOf,
   readEverydayHooks,
   spendAmount,
@@ -59,7 +63,7 @@ import { CARD_OWED } from "./amexAnchor";
 import { resolveAmexAnchor, type AmexAnchorAnswer } from "./amexAnchorRead";
 import { discoverAmexCards, type AmexBrand, type AmexCardRow } from "./amexCardCadence";
 import { avalancheRankOf } from "./avalancheSim";
-import { loadCardPayoffModes, type CardPayoffMode, type PayoffModeReason, type PayoffModeSource } from "./cardPayoffMode";
+import { loadCardPayoffModes, type CardPayoffMode, type PaidAs, type DefaultMode, type PayDown, type PayoffModeReason, type PayoffModeSource } from "./cardPayoffMode";
 import { isCalendarDay } from "./bankLedger";
 import { computeCashSignalDetailed } from "./cashSignal";
 import { loadLatestStatements } from "./debtLedger";
@@ -67,6 +71,7 @@ import { householdTodayISO } from "./householdClock";
 import { loadAllowanceWindow, type MovementRowRead } from "./moneyContext";
 import { POSITION_HORIZON_DAYS, tier2PairedTxnIdsOf } from "./moneyPosition";
 import { displayNameOf, loadMerchantAliases } from "./periodBreakdown";
+import { billSuggestionsOf, evidenceContextOf, rowEvidenceOf } from "./rowEvidence";
 import { TRACKING_START } from "./spendingFacts";
 import { findSupersededPendingForRange, notCountedIdsOf } from "./supersededPending";
 
@@ -145,6 +150,12 @@ interface CardView {
    * owner chose it or it is the default from the card's debt row.
    */
   payoffMode: { mode: CardPayoffMode | null; source: PayoffModeSource; reason: PayoffModeReason };
+  /** (Q1) The one definition every screen words (`paidAsOf`); null only for a card the payoff roster does not know. */
+  paidAs: PaidAs | null;
+  /** (Q6b) Whether "Paying down" can take effect (the server's own rule) and why not. */
+  payDown: PayDown;
+  /** (Q6b r3) What "Use the default" would resolve to (mode null = it cannot tell either). */
+  defaultMode: DefaultMode;
 }
 
 export type AmexAttentionFlag =
@@ -362,6 +373,9 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
           const m = modeById.get(c.accountId);
           return m ? { mode: m.mode, source: m.source, reason: m.reason } : { mode: null, source: "default" as const, reason: "debt_terms_missing" as const };
         })(),
+        paidAs: modeById.get(c.accountId)?.paidAs ?? null,
+        payDown: modeById.get(c.accountId)?.payDown ?? { available: false, reason: debt ? ("debt_terms_missing" as const) : ("no_debt" as const) },
+        defaultMode: modeById.get(c.accountId)?.defaultMode ?? { mode: null, reason: "debt_terms_missing" as const },
       };
     }),
   );
@@ -414,11 +428,30 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
 
   // ── What the card(s) added to the household's allowances: the breakdown's account scope.
   const windowRows = window.movement.filter(({ row }) => inScope.has(netAccountOf(row)));
-  const allowanceRows = windowRows.map(({ row, m }) => allowanceRowOf(row, m));
+  // (hh-split) Each row with the F2 evidence rule's class, read exactly as the
+  // money position reads its week (`moneyPosition.ts`): this window's money
+  // context and the bills THIS request's ledger only suggests
+  // (`billSuggestionsOf` with the window's pending pairs; the ledger pairs
+  // checking rows, so a card row has none today — read anyway, so the rule
+  // stays the breakdown's). The pool is then
+  // split by `evidenceSplitCents` — the call GET /money/period-breakdown's
+  // actual / known / unresolved are — so each plan figure says how much of it
+  // is unconfirmed. `actualCents` IS `allowanceSpentCents` (unchanged figures).
+  const evidenceCtx = evidenceContextOf(ctx, billSuggestionsOf(cash.ledger, ctx.supersede));
+  const splitRows = windowRows.map(({ row, m }) => ({
+    allowance: allowanceRowOf(row, m),
+    evidenceClass: rowEvidenceOf(row, m, evidenceCtx)?.class ?? null,
+  }));
+  const weekSplit = evidenceSplitCents(splitRows, "week");
+  const monthSplit = evidenceSplitCents(splitRows, "month");
   const householdContribution = {
-    weeklyPlan: money(allowanceSpentCents(allowanceRows, "weekly")),
-    monthlyPlan: money(allowanceSpentCents(allowanceRows, "monthly")),
-    unfiled: money(allowanceTotals(allowanceRows).unfiledCents),
+    weeklyPlan: money(weekSplit.actualCents),
+    weeklyKnown: money(weekSplit.knownCents),
+    weeklyUnresolved: money(weekSplit.unresolvedCents),
+    monthlyPlan: money(monthSplit.actualCents),
+    monthlyKnown: money(monthSplit.knownCents),
+    monthlyUnresolved: money(monthSplit.unresolvedCents),
+    unfiled: money(allowanceTotals(splitRows.map((r) => r.allowance)).unfiledCents),
     link: "/spending/week" as const,
   };
 

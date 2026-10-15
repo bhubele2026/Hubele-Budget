@@ -63,6 +63,7 @@ import { GetBankingReviewResponse } from "@workspace/api-zod";
 import { addDaysISO } from "@workspace/avalanche-core";
 import bankingRouter from "../routes/banking";
 import forecastRouter from "../routes/forecast";
+import spineRouter from "../routes/spine";
 import { syncPlaidItem } from "../lib/plaidSync";
 import { classifyLedgerRowsThroughToday } from "../lib/ledgerCashRows";
 import { computeCashSignal } from "../lib/cashSignal";
@@ -81,6 +82,7 @@ app.use((req: { log?: unknown }, _res, next) => {
 });
 app.use(bankingRouter);
 app.use(forecastRouter);
+app.use(spineRouter);
 let server: Server;
 let baseUrl = "";
 
@@ -450,5 +452,56 @@ describe("(F3) the bank balance check — sync stores, review answers", () => {
       anchor: { balance: "875.00", field: "available" },
       fieldChanged: true,
     });
+  });
+});
+
+describe("(Q1) the spine's bankConfidence — this check, the bank's figure beside H2's, the pending rows", () => {
+  const spine = async (): Promise<Json> => {
+    const r = await fetch(`${baseUrl}/spine`);
+    const body = (await r.json()) as Json;
+    if (r.status !== 200) throw new Error(`spine ${r.status} ${JSON.stringify(body)}`);
+    return body;
+  };
+  const strip = (c: Json) => {
+    const { bank: _b, h2: _h, lastDrift: _l, ...rest } = c;
+    return rest;
+  };
+
+  it("⭐ after a Sync that was off: the same check as the review, no Plaid call; pending counted once", async () => {
+    await setUp();
+    await addRow({ day: 1, amount: "-100.00" });
+    bank = { available: 1069.9, current: 1069.9 };
+    await sync();
+    // After the Sync: one pending charge, and a pending charge its posted row replaced.
+    await addRow({ day: 3, amount: "-12.34", pending: true, description: "CORNER CAFE 0042" });
+    await addRow({ day: 2, amount: "-20.00", pending: true, description: "FUEL STOP 12" });
+    await addRow({ day: 3, amount: "-20.00", description: "FUEL STOP 12" });
+    const [b, t] = [balanceCalls, transactionsGetCalls];
+    const [s, r] = await Promise.all([spine(), review()]);
+    expect([balanceCalls, transactionsGetCalls]).toEqual([b, t]);
+    expect(s.bankConfidence.check).toEqual(strip(r.balanceCheck));
+    expect(s.bankConfidence.check).toMatchObject({ status: "off_by", difference: "169.90", direction: "bank_higher" });
+    // The replaced pending row is not counted; the café's is.
+    expect(r.cashFlow.supersededExcluded).toBe(1);
+    expect(r.cashFlow.pendingCount).toBe(1);
+    expect(s.bankConfidence.pendingCount).toBe(1);
+    // The bank's own figure (the Sync re-anchored on it) beside H2's roll-forward of it.
+    expect(s.bankConfidence).toMatchObject({
+      bankBalance: s.bank.snapshot.balance,
+      bankAsOf: s.bank.snapshot.at,
+      h2Balance: s.bank.balance,
+    });
+    expect(s.bankConfidence.bankBalance).toBe("1069.90");
+    // fetchedAt: the later of that read and the last successful sync (a Plaid balance).
+    const later = Math.max(Date.parse(s.bank.snapshot.at), s.bank.lastContactAt ? Date.parse(s.bank.lastContactAt) : 0);
+    expect(Date.parse(s.bankConfidence.fetchedAt)).toBe(later);
+  });
+
+  it("never checked: not checked · never on both", async () => {
+    await setUp();
+    const [s, r] = await Promise.all([spine(), review()]);
+    expect(s.bankConfidence.check).toEqual(strip(r.balanceCheck));
+    expect(s.bankConfidence.check).toMatchObject({ status: "not_checked", reason: "never" });
+    expect(s.bankConfidence.pendingCount).toBe(0);
   });
 });

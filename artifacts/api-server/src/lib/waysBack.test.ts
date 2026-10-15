@@ -12,6 +12,7 @@ import {
   computeWaysBack,
   medianCents,
   POSITION_ASSUMPTIONS,
+  USUAL_MIN_HISTORY_PERIODS,
   type MovementCoverage,
   type PositionInputs,
   type WaysBackInputs,
@@ -205,11 +206,14 @@ describe("computeWaysBack (V5)", () => {
       daysLeft: 4,
       hold: { perDay: 0, leavesUntilPayday: 140000 },
       trims: [
-        { categoryId: "dining", name: "Dining", spentWeek: 18000, usualWeek: 7500, usualFullWeek: 8500 },
-        // Groceries in 2 of the 8 weeks: [0 ×6, 5,000, 6,000] → median 0.
-        { categoryId: "groceries", name: "Groceries", spentWeek: 12000, usualWeek: 0, usualFullWeek: 0 },
+        // Dining's rows sit in 6 of the 8 weeks (9/27, 9/13, 9/6, 8/23, 8/16, 8/9).
+        { categoryId: "dining", name: "Dining", spentWeek: 18000, usualWeek: 7500, usualFullWeek: 8500, historyPeriods: 6 },
+        // Groceries in 2 of the 8 weeks. (Final #10) Below half of them: not enough history → null
+        // (Q1 quoted the median of [0 ×6, 5,000, 6,000] = 0: "usual $0.00").
+        { categoryId: "groceries", name: "Groceries", spentWeek: 12000, usualWeek: null, usualFullWeek: null, historyPeriods: 2 },
         // Fun and Gas tie at 4,000: by name, Fun first; Gas is the fourth and is left out.
-        { categoryId: "fun", name: "Fun", spentWeek: 4000, usualWeek: 0, usualFullWeek: 0 },
+        // (Q1) Fun has no row in any of the 8 weeks: not enough history → null (was 0).
+        { categoryId: "fun", name: "Fun", spentWeek: 4000, usualWeek: null, usualFullWeek: null, historyPeriods: 0 },
       ],
       usualBasis: "same_days",
       usualThrough: "2026-10-07",
@@ -236,9 +240,10 @@ describe("computeWaysBack (V5)", () => {
     // From 2026-09-01 only 9/6, 9/13, 9/20, 9/27 count: whole weeks [80.00, 120.00, 0, 100.01] → floor((8,000 + 10,001) / 2) = 9,000;
     // (F3) to Wednesday [80.00, 120.00, 0, 0] (the 100.01 is a Saturday) → floor((0 + 8,000) / 2) = 4,000.
     const w = wb({ rows: [...THIS_WEEK, ...DINING_HISTORY], trackingStart: "2026-09-01" });
-    expect(w.trims[0]).toEqual({ categoryId: "dining", name: "Dining", spentWeek: 18000, usualWeek: 4000, usualFullWeek: 9000 });
+    // Rows in 3 of those 4 weeks (9/6, 9/13, 9/27).
+    expect(w.trims[0]).toEqual({ categoryId: "dining", name: "Dining", spentWeek: 18000, usualWeek: 4000, usualFullWeek: 9000, historyPeriods: 3 });
     // Every week before the tracking start: no week counts → null, never a false 0.
-    expect(wb({ rows: THIS_WEEK, trackingStart: "2026-10-04" }).trims[0]).toMatchObject({ usualWeek: null, usualFullWeek: null });
+    expect(wb({ rows: THIS_WEEK, trackingStart: "2026-10-04" }).trims[0]).toMatchObject({ usualWeek: null, usualFullWeek: null, historyPeriods: 0 });
   });
 
   it("only rows that count against the cap, with a category, can be trims", () => {
@@ -280,10 +285,11 @@ describe("computeWaysBack (V5)", () => {
     });
     // (F3) Every history row is a Tuesday or a Wednesday: to-Wednesday and whole weeks agree.
     expect(w.trims).toEqual([
-      { categoryId: "groceries", name: "Groceries", spentWeek: 12000, usualWeek: 0, usualFullWeek: 0 },
-      // [0, 0, 0, 40.00, 70.00, 80.00, 90.00, 120.00] → floor((4,000 + 7,000) / 2) = 5,500.
-      { categoryId: "dining", name: "Dining", spentWeek: 10000, usualWeek: 5500, usualFullWeek: 5500 },
-      { categoryId: "gas", name: "Gas", spentWeek: 3000, usualWeek: 0, usualFullWeek: 0 },
+      // (Q1) No Groceries / Gas row in any of the 8 weeks: not enough history → null (was 0).
+      { categoryId: "groceries", name: "Groceries", spentWeek: 12000, usualWeek: null, usualFullWeek: null, historyPeriods: 0 },
+      // [0, 0, 0, 40.00, 70.00, 80.00, 90.00, 120.00] → floor((4,000 + 7,000) / 2) = 5,500. Rows in 5 weeks.
+      { categoryId: "dining", name: "Dining", spentWeek: 10000, usualWeek: 5500, usualFullWeek: 5500, historyPeriods: 5 },
+      { categoryId: "gas", name: "Gas", spentWeek: 3000, usualWeek: null, usualFullWeek: null, historyPeriods: 0 },
     ]);
   });
 
@@ -303,7 +309,7 @@ describe("computeWaysBack (V5)", () => {
       const w = wb({ rows, trackingStart, todayISO: "2026-10-07" });
       // To Wednesday: [10.00, 60.00, 30.00, 0] → sorted [0, 10, 30, 60] → floor((1,000 + 3,000) / 2) = 2,000.
       // Whole weeks: [10.00, 60.00, 30.00, 80.00] → floor((3,000 + 6,000) / 2) = 4,500.
-      expect(w.trims[0]).toEqual({ categoryId: "dining", name: "Dining", spentWeek: 5000, usualWeek: 2000, usualFullWeek: 4500 });
+      expect(w.trims[0]).toEqual({ categoryId: "dining", name: "Dining", spentWeek: 5000, usualWeek: 2000, usualFullWeek: 4500, historyPeriods: 4 });
       expect(w).toMatchObject({ usualBasis: "same_days", usualThrough: "2026-10-07" });
     });
 
@@ -331,6 +337,34 @@ describe("computeWaysBack (V5)", () => {
       // The same refund on the Tuesday, before the cut, nets both: to Wednesday [10, 0, 30, 0] → floor((0 + 10) / 2) = 500.
       expect(before.trims[0]).toMatchObject({ usualWeek: 500, usualFullWeek: 2000 });
     });
+  });
+
+  it("(Q1 / Final #10) not enough history: a usual needs rows in at least half of the 8 weeks (and 2+)", () => {
+    expect(USUAL_MIN_HISTORY_PERIODS).toBe(2);
+    const thisWeek = r("2026-10-05", "dining", 5000);
+    // No prior week: null, 0 weeks.
+    expect(wb({ rows: [thisWeek] }).trims[0]).toMatchObject({ usualWeek: null, usualFullWeek: null, historyPeriods: 0 });
+    // One prior week (Mon 9/28, 60.00): still not enough — null, never "0.00" (the old median [0 ×7, 60.00] read 0).
+    expect(wb({ rows: [thisWeek, r("2026-09-28", "dining", 6000)] }).trims[0]).toMatchObject({
+      usualWeek: null,
+      usualFullWeek: null,
+      historyPeriods: 1,
+    });
+    // ⭐ (Final #10) Two prior weeks of eight: below half → null (Q1 quoted [0 ×6, 40.00, 60.00] → 0).
+    const two = [thisWeek, r("2026-09-28", "dining", 6000), r("2026-09-21", "dining", 4000)];
+    expect(wb({ rows: two }).trims[0]).toMatchObject({ usualWeek: null, usualFullWeek: null, historyPeriods: 2 });
+    // Five of eight (Mondays and Tuesdays, all to-date): quoted. [0 ×3, 20, 30, 40, 60, 70] → floor((20+30)/2) = 25.00.
+    const five = [...two, r("2026-09-14", "dining", 2000), r("2026-09-08", "dining", 3000), r("2026-08-31", "dining", 7000)];
+    expect(wb({ rows: five }).trims[0]).toMatchObject({ usualWeek: 2500, usualFullWeek: 2500, historyPeriods: 5 });
+    // Exactly half (four of eight) is enough: [0 ×4, 20, 30, 40, 60] → floor((0+20)/2) = 10.00.
+    expect(wb({ rows: five.slice(0, 5) }).trims[0]).toMatchObject({ usualWeek: 1000, historyPeriods: 4 });
+    // A short window (tracking began 9/20: two weeks): two of two is enough; one of two is not.
+    expect(wb({ rows: two, trackingStart: "2026-09-20" }).trims[0]).toMatchObject({ usualWeek: 5000, historyPeriods: 2 });
+    expect(wb({ rows: two.slice(0, 2), trackingStart: "2026-09-20" }).trims[0]).toMatchObject({ usualWeek: null, historyPeriods: 1 });
+    // A prior week whose rows net to 0 (a purchase and its refund) still holds rows of the category.
+    expect(
+      wb({ rows: [...five, r("2026-08-25", "dining", 4000), r("2026-08-25", "dining", -4000)] }).trims[0],
+    ).toMatchObject({ historyPeriods: 6 });
   });
 
   it("medianCents", () => {

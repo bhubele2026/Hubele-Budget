@@ -718,13 +718,13 @@ export default function BudgetPage() {
     );
   };
 
-  const monthName = useMemo(() => {
-    const d = new Date(currentMonth + "T00:00:00");
-    return new Intl.DateTimeFormat("en-US", {
-      month: "long",
-      year: "numeric",
-    }).format(d);
-  }, [currentMonth]);
+  const monthWords = (iso: string) =>
+    new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date(iso + "T00:00:00"));
+  const monthName = useMemo(() => monthWords(currentMonth), [currentMonth]);
+  // (Q4) The numbers below are the ones the server answered for `budgetData.monthStart`.
+  // While another month loads they stay (no blank page) but are SAID to be that month's.
+  const shownMonthName = budgetData ? monthWords(budgetData.monthStart) : monthName;
+  const budgetSwitching = !!budgetData && budgetData.monthStart !== currentMonth;
 
   // Only show the full-page skeleton on the very first load (before any
   // budget data exists). Once we have data for any month, keepPreviousData
@@ -768,6 +768,11 @@ export default function BudgetPage() {
         <h1 className="text-display font-semibold text-brand-navy">Budget</h1>
         <div className="flex flex-wrap items-center gap-2">
           <AffordLauncher />
+          {budgetSwitching ? (
+            <span role="status" className="text-micro text-neutral-600" data-testid="budget-switching">
+              Showing {shownMonthName} while {monthName} loads
+            </span>
+          ) : null}
           <span className="flex items-center gap-1.5">
             <button
               type="button"
@@ -966,7 +971,7 @@ export default function BudgetPage() {
       {summary && (
         <div className="span-12">
         <Foot data-testid="budget-basis-note">
-          Every figure on this page is the server's, for {monthName}. Spend
+          Every figure on this page is the server's, for {shownMonthName}. Spend
           counts a pending purchase once, at its final amount when it posts —{" "}
           {formatCurrency(summary.expenses.actual)} against
           all envelopes, of which {formatCurrency(actualTotal)} sits against the

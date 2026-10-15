@@ -27,6 +27,11 @@ export interface BankFreshness {
    * @nullable
    */
   lastFailureAt: string | null;
+  /**
+   * (Q5 round 3) Set on /forecast/bank-balance-explain: when the bank last told us anything, by the server's one rule (= spine.bankConfidence.fetchedAt)
+   * @nullable
+   */
+  fetchedAt?: string | null;
   stale: boolean;
   /**
    * refresh_failed when the feed behind the snapshot account failed and has not recovered, or needs a reconnect (immediate, for either source). old when a Plaid balance's feed has been quiet for 48 hours, with no balance re-read and no successful sync. manual_old for a typed-in balance older than 7 days. Null when not stale.

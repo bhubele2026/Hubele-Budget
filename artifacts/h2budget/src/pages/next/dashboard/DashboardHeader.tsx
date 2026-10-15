@@ -6,6 +6,7 @@ import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
 import { attentionItems, headerActionOf } from "@/lib/attention";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { useSpine } from "@/hooks/useSpine";
+import { knownWithinPlan, weekStory } from "@/lib/weekFigures";
 import { btn, btnSecondary } from "@/ui";
 import { cn } from "@/lib/utils";
 import { useCashSignalQ, usePlaidItemsQ } from "./queries";
@@ -18,6 +19,7 @@ const QUIET = "bg-transparent px-1 text-label font-semibold text-brand-navy ring
 
 /** The morning text preview (and the request behind it) load on first open only. */
 const RecapPreview = lazyWithPreload(() => import("./RecapPreview"));
+const BankConfidence = lazyWithPreload(() => import("./BankConfidence"));
 
 /**
  * ⭐ THE HEADER: what day it is, one factual line built from the spine, how
@@ -37,11 +39,12 @@ export default function DashboardHeader() {
 
   const attention = useMemo(() => {
     if (!s) return null;
-    const rem = s.position.remainingWeek == null ? null : Number(s.position.remainingWeek);
+    const week = weekStory(s.position);
     return attentionItems({
       bank: s.bank,
-      withinPlan: s.position.withinPlan,
-      overBy: rem != null && rem < 0 ? -rem : null,
+      withinPlan: knownWithinPlan(s.position),
+      overBy: week.over && week.remainingKnown != null ? -week.remainingKnown : null,
+      provisional: week.provisional,
       dueSoon: dueSoonOf(obligations, today, addDaysISO(today, 1)),
       today,
       reviewCount: s.reviewCount,
@@ -75,6 +78,11 @@ export default function DashboardHeader() {
                 </li>
               ))}
             </ul>
+          ) : null}
+          {s?.bankConfidence ? (
+            // (Q5) Two lines are reserved below sm (the line wraps there): the tiles do not move when the chunk lands.
+            // The checking account's confidence: updated · check · pending, apart. Green only for a matching, fresh check.
+            <div className="mt-1 min-h-[2.25rem] sm:min-h-4"><Suspense fallback={null}><BankConfidence s={s} variant="header" /></Suspense></div>
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>

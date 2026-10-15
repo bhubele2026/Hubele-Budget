@@ -1,6 +1,6 @@
 import { bankLineStatusOf, inForecast, type BankLineStatus as CoreBankLineStatus } from "@workspace/avalanche-core";
 import type { CashEvent } from "./forecast";
-import { isCounted } from "./countedRows";
+import { isCounted, isCountedSpend } from "./countedRows";
 
 export type Transaction = {
   id: string;
@@ -17,6 +17,8 @@ export type Transaction = {
   isTransfer?: boolean;
   /** (F6 round 4) The server's answer (`GET /forecast`): an expired hold counts nowhere. */
   expiredHold?: boolean | null;
+  /** (F6 round 5) A hold the snapshot held, or its reversal: on the running balance, never in the inbox. */
+  expiredPair?: boolean | null;
 };
 
 /** True if a transaction belongs to a bank/checking-style account.
@@ -59,6 +61,17 @@ export function filterForecastTxns<
   return txns.filter(
     (t) => inForecast(t, todayISO) && isBankTxn(t, checkingPlaidAccountIds) && isCounted(t),
   );
+}
+
+/**
+ * ⭐ (F6 round 5, review finding 3) DOES THIS BANK ROW ASK FOR AN ANSWER? Every
+ * row `filterForecastTxns` keeps walks the running balance — a hold the bank
+ * snapshot held and its reversal too (`expiredPair`: the bank balance counts
+ * the reversal, so the walk meets it). But that pair is never asked about, as
+ * the review badge and the Banking review never ask (`isCountedSpend`).
+ */
+export function asksForAnswer(txn: Pick<Transaction, "expiredHold" | "expiredPair">): boolean {
+  return isCountedSpend(txn);
 }
 
 export type ResolutionStatus =
@@ -515,8 +528,10 @@ export function buildLineRegister(opts: {
         (p.status === "partial" && p.amount !== 0)) &&
       !isHiddenByClosedMonth(p.date, false),
   );
+  // (F6 round 5) A held hold and its reversal walk the balance (below) but are
+  // never listed as waiting for an answer (`asksForAnswer`).
   const activeBank = allBank.filter(
-    (b) => b.status === "pending_bank" && !isHiddenByClosedMonth(b.date, false),
+    (b) => b.status === "pending_bank" && asksForAnswer(b.txn) && !isHiddenByClosedMonth(b.date, false),
   );
 
   const inWindow = (iso: string) => {

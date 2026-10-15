@@ -9,7 +9,7 @@ import {
 } from "@workspace/db";
 import { expandItem, fmtISO, isPastOneTime, parseISO } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
-import { findExpiredHoldsAmong } from "./supersededPending";
+import { expiredHoldsRuleOn, readAnsweredRows } from "./supersededPending";
 import { loadInFullDebtIds } from "./cardPayoffMode";
 import {
   buildDebtMinSchedule,
@@ -85,6 +85,8 @@ export const ONE_TIME_UNRESOLVED_KEEP_DAYS = 60;
  *   - "Resolved" = a matched, skipped, missed or dismissed resolution on its
  *     occurrence — or on its moved-to date, where the pre-PR6 Past-due card
  *     wrote it. A `partial` is not resolved: a remainder may still be owed.
+ *     (F6 round 6) Nor is a `matched` answer on a row still pending, until
+ *     that payment posts (the row, or its posted twin once it expired).
  *   - Everything that counted only active bills treats a one-time bill dated
  *     before today as archived (`isPastOneTime`), so the Budget page plan and
  *     the Bills totals do not change.
@@ -113,6 +115,7 @@ export async function archiveExpiredOneTime(householdId: string): Promise<void> 
       occurrenceDate: forecastResolutionsTable.occurrenceDate,
       status: forecastResolutionsTable.status,
       rescheduledTo: forecastResolutionsTable.rescheduledTo,
+      matchedTxnId: forecastResolutionsTable.matchedTxnId,
     })
     .from(forecastResolutionsTable)
     .where(
@@ -121,6 +124,36 @@ export async function archiveExpiredOneTime(householdId: string): Promise<void> 
         inArray(forecastResolutionsTable.recurringItemId, expired.map((e) => e.id)),
       ),
     );
+  // ⭐ (F6 round 6, review finding 3) A "matched" answer on a row still PENDING
+  // resolves the bill only once that payment posts: the row itself posts, or —
+  // when it expired (pending more than 7 days after its date, never replaced) —
+  // through its posted twin (`readAnsweredRows`). Until then the bill stays
+  // active: an answered past one-time bill drags nowhere and counts in no total
+  // (`isPastOneTime`), and if the payment failed the forecast drags it again
+  // when the row expires — archiving it on the first page load would have
+  // erased that. Kill switch off: as before. Usually no query: only a matched
+  // answer on such a bill reads its row.
+  const ruleOn = expiredHoldsRuleOn();
+  const answeredIds = ruleOn
+    ? [...new Set(resolutions.filter((r) => r.status === "matched" && r.matchedTxnId).map((r) => r.matchedTxnId!))]
+    : [];
+  const answeredRows =
+    answeredIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: transactionsTable.id,
+            pending: transactionsTable.pending,
+            plaidAccountId: transactionsTable.plaidAccountId,
+            occurredOn: transactionsTable.occurredOn,
+            amount: transactionsTable.amount,
+          })
+          .from(transactionsTable)
+          .where(and(eq(transactionsTable.householdId, householdId), inArray(transactionsTable.id, answeredIds)));
+  const answerRead = await readAnsweredRows(householdId, answeredRows);
+  const stillPending = new Set(answeredRows.filter((t) => t.pending === true).map((t) => t.id));
+  const namesNoPostedRow = (txnId: string | null): boolean =>
+    !!txnId && stillPending.has(txnId) && !answerRead.postedTwinOf.has(txnId);
   const archive = expired
     .filter((item) => {
       const own = resolutions.filter((r) => r.recurringItemId === item.id);
@@ -141,6 +174,7 @@ export async function archiveExpiredOneTime(householdId: string): Promise<void> 
       const resolved = own.some(
         (r) =>
           (r.status === "matched" || r.status === "skipped" || r.status === "missed" || r.status === "dismissed") &&
+          !(r.status === "matched" && namesNoPostedRow(r.matchedTxnId)) &&
           (r.occurrenceDate === item.anchorDate || r.occurrenceDate === dueISO),
       );
       return resolved || dueISO < keepFromISO;
@@ -304,9 +338,15 @@ export async function buildBillsSummary(
     // ⭐ (F6 round 4, decision on finding 9) An answer whose row is an expired
     // hold names no row: it pays nothing toward "$X paid" (the forecast drags
     // the bill again — `forecastLedger`'s `resolutionsLive`).
-    const expired = await findExpiredHoldsAmong(householdId, txns);
+    // ⭐ (F6 round 5, finding 5) Unless its payment posted under another name:
+    // then it pays what that posted row paid (`readAnsweredRows`, the ledger's read).
+    const { expired, postedTwinOf } = await readAnsweredRows(householdId, txns);
     for (const t of txns) {
-      if (expired.has(t.id)) continue;
+      if (expired.has(t.id)) {
+        const twin = postedTwinOf.get(t.id);
+        if (twin) txnAmountById.set(t.id, Math.abs(Number(twin.amount) || 0));
+        continue;
+      }
       txnAmountById.set(t.id, Math.abs(Number(t.amount) || 0));
     }
   }

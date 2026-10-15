@@ -1,33 +1,36 @@
 import type { PlaidItemDetail } from "@workspace/api-client-react";
-import { isPlaidReauthCode, isSyntheticPlaidItem } from "@/lib/plaidReauth";
+import { isSyntheticPlaidItem } from "@/lib/plaidReauth";
 import { agoShort } from "@/lib/accountFreshness";
-import { PLAID_FEED_QUIET_MS } from "@workspace/avalanche-core/freshness";
+import { FRESH_STATUS } from "@/lib/bankFreshWords";
 
 // (WP3) `agoShort` moved to `lib/accountFreshness.ts` with the account
 // freshness stamps; re-exported so existing callers keep their import.
 export { agoShort };
 
-/**
- * A bank's feed is "out of date" after 48 hours without a successful sync —
- * the server's own threshold (`computeBankFreshness`), one constant for both
- * (`@workspace/avalanche-core/freshness`). (WP3) It was 36 hours here, so for
- * twelve hours a day this line said "out of date" while the balance beside it
- * was served as fresh.
- */
-export const STALE_MS = PLAID_FEED_QUIET_MS;
-
 export type AccountState = "ok" | "stale" | "reauth" | "failed" | "never";
 
-/** The words an account's connection state uses. Reauth reuses the app's own reason copy. */
-export function connectionState(item: PlaidItemDetail, now: number): AccountState {
-  if (isPlaidReauthCode(item.lastSyncErrorCode)) return "reauth";
-  if (item.lastSyncError) return "failed";
-  if (!item.lastSyncedAt) return "never";
-  return now - Date.parse(item.lastSyncedAt) > STALE_MS ? "stale" : "ok";
+/**
+ * (Q5 fix) A bank connection's state is the SERVER's (`PlaidItemDetail.freshness`,
+ * computeBankFreshness' rule: needs_reconnect · refresh_failed · never · stale · ok).
+ * The browser holds no second rule: it used to read `lastSyncError` / `lastSyncedAt`,
+ * which disagreed with the confidence line beside it (a liability refresh error, a
+ * transactions success after a balance failure, a webhook-only sync). A connection
+ * the server sent no freshness for is "never" (unknown, never green). `now` is unused;
+ * the argument stays so callers keep their shape.
+ */
+export function connectionState(item: PlaidItemDetail, _now?: number): AccountState {
+  switch (item.freshness?.state) {
+    case "needs_reconnect": return "reauth";
+    case "refresh_failed": return "failed";
+    case "stale": return "stale";
+    case "ok": return "ok";
+    default: return "never";
+  }
 }
 
+/** (Round 3) The words are `lib/bankFreshWords`' — one set for the header, the tile and the Banking page. */
 export const STATE_WORD: Record<AccountState, string> = {
-  ok: "Up to date", stale: "Out of date", reauth: "Needs reconnecting", failed: "Last sync failed", never: "Not synced yet",
+  ok: FRESH_STATUS.ok, stale: FRESH_STATUS.stale, reauth: FRESH_STATUS.reauth, failed: FRESH_STATUS.failed, never: FRESH_STATUS.never,
 };
 
 export interface BankLine {
@@ -50,13 +53,13 @@ export function bankLines(items: readonly PlaidItemDetail[] | undefined, now: nu
   }
   for (const it of real) {
     const state = connectionState(it, now);
-    const ago = agoShort(it.lastSyncedAt, now);
+    // (Round 3) The connection's own time wears its own word, "synced": "Updated …" is the balance line's (the server's
+    // fetchedAt for the checking balance, which a typed balance keeps at its own time).
+    const ago = agoShort(it.freshness?.fetchedAt ?? null, now);
     const words =
-      state === "reauth" ? "needs reconnecting"
-        : state === "failed" ? "last sync failed"
-          : state === "never" ? "not synced yet"
-            : state === "stale" ? `out of date · synced ${ago}`
-              : `synced ${ago}`;
+      state === "ok" ? (ago ? `synced ${ago}` : STATE_WORD.ok.toLowerCase())
+        : state === "stale" ? `${STATE_WORD.stale.toLowerCase()}${ago ? ` · synced ${ago}` : ""}`
+          : STATE_WORD[state].toLowerCase();
     const inst = (it.institutionName ?? "").trim() || "Bank";
     const first = it.accounts?.[0];
     const shared = (seen.get((it.institutionName ?? "").trim().toLowerCase()) ?? 0) > 1;

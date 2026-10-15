@@ -25,6 +25,8 @@ import {
   computeBankFreshness,
   MANUAL_SNAPSHOT_STALE_MS,
   PLAID_FEED_QUIET_MS,
+  plaidItemFreshness,
+  unrecoveredFailureAt,
 } from "../lib/bankFreshness";
 import {
   BANK_FEED_DEAD_CODES,
@@ -55,12 +57,13 @@ async function seed(opts: {
     lastSyncErrorCode?: string | null;
     attempts?: Attempt[];
   } | null;
-}): Promise<{ householdId: string; userId: string; lastSyncedAt: Date | null }> {
+}): Promise<{ householdId: string; userId: string; lastSyncedAt: Date | null; itemRowId: string | null }> {
   const userId = `bank-fresh-${process.pid}-${randomUUID().slice(0, 8)}`;
   users.push(userId);
   const { householdId } = await createTestHousehold(userId);
 
   let accountRowId: string | null = null;
+  let itemRowId: string | null = null;
   let lastSyncedAt: Date | null = null;
   if (opts.plaid) {
     lastSyncedAt =
@@ -92,6 +95,7 @@ async function seed(opts: {
       })
       .returning();
     accountRowId = acct!.id;
+    itemRowId = item!.id;
     for (const a of opts.plaid.attempts ?? []) {
       await db.insert(plaidSyncAttemptsTable).values({
         userId,
@@ -117,7 +121,7 @@ async function seed(opts: {
     });
   }
 
-  return { householdId, userId, lastSyncedAt };
+  return { householdId, userId, lastSyncedAt, itemRowId };
 }
 
 const judge = (s: { householdId: string; userId: string }) =>
@@ -415,5 +419,74 @@ describe("computeBankFreshness — constants", () => {
     }
     expect(PLAID_FEED_QUIET_MS).toBe(48 * HOUR);
     expect(MANUAL_SNAPSHOT_STALE_MS).toBe(7 * DAY);
+  });
+});
+
+// ── (Q1) One rule for every connection ─────────────────────────────────────
+
+describe("(Q1) plaidItemFreshness — the bank balance's rule, applied to each connection", () => {
+  /** The item's freshness as GET /plaid/items computes it, with the snapshot as its newest Plaid reading. */
+  const itemFreshness = async (s: { itemRowId: string | null }, o: { lastSyncedAgoMs?: number; code?: string | null; snapshotAgoMs?: number | null }) =>
+    plaidItemFreshness({
+      lastSyncedAt: o.lastSyncedAgoMs != null ? ago(o.lastSyncedAgoMs) : null,
+      lastSyncErrorCode: o.code ?? null,
+      lastFailureAt: (await unrecoveredFailureAt([s.itemRowId!])).get(s.itemRowId!) ?? null,
+      snapshotAt: o.snapshotAgoMs != null ? ago(o.snapshotAgoMs) : null,
+      now: NOW,
+    });
+
+  it("⭐ on the snapshot's own item it says what computeBankFreshness says: stale, why, contact, failure", async () => {
+    const cases: Array<{ snap: number; synced?: number; code?: string | null; attempts?: Attempt[] }> = [
+      { snap: 3 * DAY, synced: 1 * HOUR, attempts: [{ kind: "transactions", success: true, agoMs: 1 * HOUR }] },
+      { snap: 3 * DAY, synced: 49 * HOUR },
+      { snap: 49 * HOUR },
+      { snap: 1 * HOUR, synced: 30 * MINUTE, attempts: [{ kind: "balance", success: true, agoMs: 2 * HOUR }, { kind: "transactions", success: true, agoMs: 30 * MINUTE }, { kind: "balance", success: false, agoMs: 30 * MINUTE - 1000 }] },
+      { snap: 1 * HOUR, synced: 2 * HOUR, attempts: [{ kind: "transactions", success: false, agoMs: 3 * HOUR }, { kind: "transactions", success: true, agoMs: 2 * HOUR }] },
+      { snap: 1 * HOUR, synced: 2 * HOUR, attempts: [{ kind: "transactions", success: false, agoMs: 10 * MINUTE, errorCode: "PRODUCT_NOT_READY" }] },
+      { snap: 1 * HOUR, synced: 1 * HOUR, code: "USER_PERMISSION_REVOKED" },
+      { snap: 1 * HOUR, synced: 1 * HOUR, code: "ITEM_LOGIN_REQUIRED" },
+    ];
+    for (const [i, c] of cases.entries()) {
+      const s = await seed({
+        snapshot: { source: "plaid", ageMs: c.snap },
+        plaid: { lastSyncedAgoMs: c.synced, lastSyncErrorCode: c.code ?? null, attempts: c.attempts },
+      });
+      const bank = await judge(s);
+      const item = await itemFreshness(s, { lastSyncedAgoMs: c.synced, code: c.code, snapshotAgoMs: c.snap });
+      expect({ stale: item.stale, staleReason: item.staleReason, lastContactAt: item.lastContactAt, lastFailureAt: item.lastFailureAt }, `case ${i}`).toEqual({
+        stale: bank.stale,
+        staleReason: bank.staleReason,
+        lastContactAt: bank.lastContactAt,
+        lastFailureAt: bank.lastFailureAt,
+      });
+    }
+  });
+
+  it("states: a card hiccup in last_sync_error alone is not a failure; reconnect, feed gone, never, out of date", () => {
+    const at = (ms: number | null) => (ms == null ? null : ago(ms));
+    const f = (o: { synced?: number | null; code?: string | null; failure?: number | null; snap?: number | null }) =>
+      plaidItemFreshness({ lastSyncedAt: at(o.synced ?? null), lastSyncErrorCode: o.code ?? null, lastFailureAt: at(o.failure ?? null), snapshotAt: at(o.snap ?? null), now: NOW });
+    // The liabilities refresh wrote last_sync_error; the bank's own feeds are fine: "Up to date", never "Last sync failed".
+    expect(f({ synced: 1 * HOUR })).toMatchObject({ state: "ok", stale: false, fetchedAt: ago(1 * HOUR).toISOString() });
+    expect(f({ synced: 1 * HOUR, code: "ITEM_LOGIN_REQUIRED" })).toMatchObject({ state: "needs_reconnect", stale: true, staleReason: "refresh_failed" });
+    expect(f({ synced: 1 * HOUR, code: "PENDING_EXPIRATION" })).toMatchObject({ state: "needs_reconnect", stale: false });
+    expect(f({ synced: 1 * HOUR, code: "USER_PERMISSION_REVOKED" })).toMatchObject({ state: "refresh_failed", stale: true });
+    expect(f({ synced: 1 * HOUR, failure: 10 * MINUTE })).toMatchObject({ state: "refresh_failed", lastFailureAt: ago(10 * MINUTE).toISOString() });
+    expect(f({})).toMatchObject({ state: "never", stale: false, fetchedAt: null });
+    expect(f({ synced: 49 * HOUR })).toMatchObject({ state: "stale", staleReason: "old" });
+    // A newer balance reading counts as hearing from the bank (fetchedAt = the later of the two).
+    expect(f({ synced: 49 * HOUR, snap: 2 * HOUR })).toMatchObject({ state: "ok", fetchedAt: ago(2 * HOUR).toISOString() });
+    expect(PLAID_FEED_QUIET_MS).toBe(48 * HOUR);
+  });
+
+  it("unrecoveredFailureAt reads any number of items in one call; an item with no attempts is null", async () => {
+    const failed = await seed({ snapshot: null, plaid: { lastSyncedAgoMs: 1 * HOUR, attempts: [{ kind: "transactions", success: false, agoMs: 5 * MINUTE }] } });
+    const fine = await seed({ snapshot: null, plaid: { lastSyncedAgoMs: 1 * HOUR, attempts: [{ kind: "transactions", success: true, agoMs: 5 * MINUTE }] } });
+    const none = await seed({ snapshot: null, plaid: {} });
+    const m = await unrecoveredFailureAt([failed.itemRowId!, fine.itemRowId!, none.itemRowId!]);
+    expect(m.get(failed.itemRowId!)?.toISOString()).toBe(ago(5 * MINUTE).toISOString());
+    expect(m.get(fine.itemRowId!)).toBeNull();
+    expect(m.get(none.itemRowId!)).toBeNull();
+    expect(await unrecoveredFailureAt([])).toEqual(new Map());
   });
 });

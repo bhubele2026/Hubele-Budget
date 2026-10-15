@@ -76,6 +76,7 @@ import { cleanupMalformedTokenSiblings } from "../lib/plaidMalformedSiblingClean
 import { debtsTable, forecastSettingsTable } from "@workspace/db";
 import { lastBankTxOnByItem } from "../lib/bankCoverage";
 import { accountSnapshotOf, type AccountSnapshot } from "../lib/accountSnapshot";
+import { plaidItemFreshness, unrecoveredFailureAt } from "../lib/bankFreshness";
 
 const router: IRouter = Router();
 
@@ -1168,15 +1169,40 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
     .from(forecastSettingsTable)
     .where(eq(forecastSettingsTable.userId, req.householdOwnerId!));
   const snapshotOf = (accountRowId: string) => accountSnapshotOf(settings, accountRowId);
+  // ⭐ (Q1) Each connection's freshness by the bank balance's own rule
+  // (`plaidItemFreshness`: unrecovered transactions / balance failures, the
+  // feed-dead and reconnect codes, 48 hours of silence) — so no screen judges a
+  // connection from `lastSyncError`, which the liabilities refresh writes too.
+  // One read of the attempts for every item.
+  const failures = await unrecoveredFailureAt(items.map((it) => it.id));
+  const now = new Date();
+  /** The item's newest balance reading Plaid gave (a typed one is not the bank talking). */
+  const newestReadingAt = (accounts: PlaidAccountRow[]): Date | null => {
+    let best: Date | null = null;
+    for (const a of accounts) {
+      const snap = snapshotOf(a.id);
+      if (!snap || snap.source !== "plaid") continue;
+      const at = new Date(snap.at);
+      if (Number.isFinite(at.getTime()) && (!best || at > best)) best = at;
+    }
+    return best;
+  };
   res.json(
-    items.map((it) =>
-      serializePlaidItemDetail(
+    items.map((it) => ({
+      ...serializePlaidItemDetail(
         it,
         byItem.get(it.id) ?? [],
         lastByItem.get(it.id) ?? null,
         snapshotOf,
       ),
-    ),
+      freshness: plaidItemFreshness({
+        lastSyncedAt: it.lastSyncedAt ?? null,
+        lastSyncErrorCode: it.lastSyncErrorCode ?? null,
+        lastFailureAt: failures.get(it.id) ?? null,
+        snapshotAt: newestReadingAt(byItem.get(it.id) ?? []),
+        now,
+      }),
+    })),
   );
 });
 

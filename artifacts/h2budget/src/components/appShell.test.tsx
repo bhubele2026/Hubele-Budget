@@ -399,14 +399,14 @@ describe("W1 — section tabs under the bar", () => {
     ["/reports/cashflow", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
     ["/reports/budget", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
     ["/reports/behavior", "Spending", ["This week", "Monthly allowance", "Budget", "Allowances", "Wish list", "Reports"], "/reports"],
-    ["/forecast/overview", "Forecast", ["Overview", "Forecast", "Reconcile", "Bills"], "/forecast/overview"],
+    ["/forecast/overview", "Forecast", ["Overview", "Forecast", "To review", "Bills"], "/forecast/overview"],
     // /forecast/overview never also lights /forecast, and /next/forecast is Forecast's.
-    ["/forecast", "Forecast", ["Overview", "Forecast", "Reconcile", "Bills"], "/forecast"],
-    ["/next/forecast", "Forecast", ["Overview", "Forecast", "Reconcile", "Bills"], "/forecast"],
-    ["/review", "Forecast", ["Overview", "Forecast", "Reconcile", "Bills"], "/review"],
-    ["/bills", "Forecast", ["Overview", "Forecast", "Reconcile", "Bills"], "/bills"],
+    ["/forecast", "Forecast", ["Overview", "Forecast", "To review", "Bills"], "/forecast"],
+    ["/next/forecast", "Forecast", ["Overview", "Forecast", "To review", "Bills"], "/forecast"],
+    ["/review", "Forecast", ["Overview", "Forecast", "To review", "Bills"], "/review"],
+    ["/bills", "Forecast", ["Overview", "Forecast", "To review", "Bills"], "/bills"],
     // One tab covers /bills and /bills/all.
-    ["/bills/all", "Forecast", ["Overview", "Forecast", "Reconcile", "Bills"], "/bills"],
+    ["/bills/all", "Forecast", ["Overview", "Forecast", "To review", "Bills"], "/bills"],
     ["/avalanche", "Debt", ["Payoff plan", "Debts", "Debt report"], "/avalanche"],
     ["/debts", "Debt", ["Payoff plan", "Debts", "Debt report"], "/debts"],
     // Debt's report, not Spending's /reports hub.
@@ -589,7 +589,7 @@ describe("the phone drawer reaches every page the section rows reach", () => {
         "Wish list /wishlist",
         "Reports /reports",
       ],
-      ["Forecast /forecast/overview", "Forecast /forecast", "Reconcile /review", "Bills /bills"],
+      ["Forecast /forecast/overview", "Forecast /forecast", "To review /review", "Bills /bills"],
       ["Debt /avalanche", "Debts /debts", "Debt report /reports/debt"],
     ]);
   });
@@ -616,7 +616,7 @@ describe("the phone drawer reaches every page the section rows reach", () => {
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 
-  it("puts the forecast inbox count on the drawer's Reconcile row and the queue on Categories", async () => {
+  it("puts the forecast inbox count on the drawer's Review row and the queue on Categories", async () => {
     reviewCount = 4;
     queueTotal = 3;
     mount("/banking");
@@ -713,11 +713,11 @@ describe("the review count is a finding or it is nothing", () => {
     reviewCount = 0;
     mount("/review");
     expect(screen.queryByTestId("topnav-review-badge")).toBeNull();
-    // and no zero pill on the Reconcile tab either
-    expect(screen.getByTestId("sectionnav-review").textContent).toBe("Reconcile");
+    // and no zero pill on the Review tab either
+    expect(screen.getByTestId("sectionnav-review").textContent).toBe("To review");
   });
 
-  // ⚠️ ONCE. In Forecast the Reconcile tab carries the count; everywhere else
+  // ⚠️ ONCE. In Forecast the Review tab carries the count; everywhere else
   // the header pill does, at every width.
   it.each<[string, string[], string[]]>([
     ["/review", ["reconcile"], ["reconcile"]],
@@ -749,7 +749,7 @@ describe("the review count is a finding or it is nothing", () => {
       expect(screen.queryByTestId("topnav-review-badge")).toBeNull();
       cleanup();
       mount("/review");
-      expect(screen.getByTestId("sectionnav-review").textContent).toBe("Reconcile");
+      expect(screen.getByTestId("sectionnav-review").textContent).toBe("To review");
       expect(screen.queryByTestId("topnav-review-badge")).toBeNull();
     } finally {
       spineMissing = false;
@@ -765,11 +765,11 @@ describe("(F1) the Review badge adds the categorization queue", () => {
     expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("7 items to review");
   });
 
-  it("each count sits on the item that owns its page: Reconcile = forecast, Categories (in More) = queue", () => {
+  it("each count sits on the item that owns its page: Review = forecast, Categories (in More) = queue", () => {
     reviewCount = 4;
     queueTotal = 3;
     mount("/review");
-    expect(screen.getByTestId("sectionnav-review").textContent).toBe("Reconcile4");
+    expect(screen.getByTestId("sectionnav-review").textContent).toBe("To review4");
     expect(screen.getByTestId("morenav-review/categories").textContent).toBe("Categories3");
   });
 

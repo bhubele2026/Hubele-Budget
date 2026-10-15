@@ -31,14 +31,13 @@ import type {
   WindowConfig,
   WindowPoint,
 } from "@/components/account-page/balance-trend-chart";
+import { cardOwedMoves, type CardMoveInput } from "./cardBalanceWalk";
 
 // The product's data horizon (kept for callers; the window no longer floors on it).
 export const MAY_2026: MonthKey = { year: 2026, month: 4 };
 
-export type BalanceWindowTxn = {
-  occurredOn: string;
-  amount: string | number;
-};
+/** (Q3) A card row: `source` says its sign, `pending` keeps it out (`cardBalanceWalk.ts`). */
+export type BalanceWindowTxn = CardMoveInput;
 
 export type BuildBalanceWindowArgs = {
   /** Whether a usable anchor exists; null window when false. */
@@ -69,6 +68,25 @@ export function buildBalanceWindow(
   } = args;
 
   if (!anchorPresent) return null;
+
+  // ⭐ (Q3) Each row as its change to what the card OWES (posted rows only,
+  // every source on the owed sign) — the same rows and signs as the month-end
+  // closure (`balanceAtEndOf`) and the per-row "bal", so a week's point and a
+  // row's figure can never disagree. Cents, so a point is exact.
+  const moves = cardOwedMoves(transactions).map((m) => ({
+    day: m.occurredOn.slice(0, 10),
+    month: monthKeyFromISO(m.occurredOn),
+    cents: Math.round(m.owed * 100),
+  }));
+  const intraMonthThrough = (mk: MonthKey, day: string): number => {
+    let c = 0;
+    for (const t of moves) {
+      if (compareMonth(t.month, mk) === 0 && t.day <= day) c += t.cents;
+    }
+    return c;
+  };
+  const pointAt = (prevMonthEnd: number, intraCents: number): number =>
+    (Math.round(prevMonthEnd * 100) + intraCents) / 100 + 0;
 
   // (W4) The 12 months ENDING THIS MONTH: it rolls forward with the clock (the
   // old window was pinned to May 2026 and ran out in April 2027, leaving the
@@ -103,8 +121,8 @@ export function buildBalanceWindow(
   // opening balance). Earlier months stay empty; nothing is invented.
   let firstDay = "2026-05-01";
   let firstTxn: string | null = null;
-  for (const t of transactions) {
-    const d = t.occurredOn.slice(0, 10);
+  for (const t of moves) {
+    const d = t.day;
     if (firstTxn === null || d < firstTxn) firstTxn = d;
   }
   if (firstTxn !== null) {
@@ -148,18 +166,9 @@ export function buildBalanceWindow(
       sat = addDays(sat, 7);
       continue;
     }
-    let intraMonth = 0;
-    for (const t of transactions) {
-      if (
-        compareMonth(monthKeyFromISO(t.occurredOn), satMk) === 0 &&
-        t.occurredOn.slice(0, 10) <= satDay
-      ) {
-        intraMonth += Number(t.amount) || 0;
-      }
-    }
     series.push({
       x: sat.getTime(),
-      balance: prevMonthEnd + intraMonth,
+      balance: pointAt(prevMonthEnd, intraMonthThrough(satMk, satDay)),
       label: sat.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
@@ -192,18 +201,9 @@ export function buildBalanceWindow(
     };
     const prevMonthEnd = balanceAtEndOf(shiftMonth(todayMk, -1));
     if (prevMonthEnd !== null) {
-      let intraMonth = 0;
-      for (const t of transactions) {
-        if (
-          compareMonth(monthKeyFromISO(t.occurredOn), todayMk) === 0 &&
-          t.occurredOn.slice(0, 10) <= todayDay
-        ) {
-          intraMonth += Number(t.amount) || 0;
-        }
-      }
       series.push({
         x: todayMidMs,
-        balance: prevMonthEnd + intraMonth,
+        balance: pointAt(prevMonthEnd, intraMonthThrough(todayMk, todayDay)),
         label: todayMid.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",

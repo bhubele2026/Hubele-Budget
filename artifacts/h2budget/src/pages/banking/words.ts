@@ -1,8 +1,10 @@
 import type {
+  BankingReviewBucket,
   BankingReviewBucketName,
   BankingReviewKind,
   BankingReviewPlanFate,
   BankingReviewPlanned,
+  BankingReviewPlanOutcome,
   BankingReviewReason,
   BankingReviewRow,
   BankingReviewVarianceKind,
@@ -12,12 +14,31 @@ import { formatCurrency } from "@/lib/utils";
 /** (W3) The words on the Banking review. Short; the owner asked for fewer. */
 
 export const BUCKETS: Array<{ name: BankingReviewBucketName; title: string; line: string }> = [
-  { name: "unmatched", title: "Unmatched", line: "Paid, but not on the plan" },
-  { name: "amountDifference", title: "Different amount", line: "Paid a different amount than planned" },
-  { name: "timingDifference", title: "Different date", line: "Paid on a different day" },
+  { name: "unmatched", title: "Not on the plan", line: "Money in or out the plan did not list" },
+  { name: "amountDifference", title: "Received or paid a different amount", line: "On the plan, but not the planned amount" },
+  { name: "timingDifference", title: "On a different day", line: "On the plan, on another day" },
   { name: "confirmedUnplanned", title: "Marked not in plan", line: "You marked these not in the plan" },
   { name: "uncertain", title: "Not sure", line: "H2 can't tell yet" },
 ];
+
+/**
+ * (Q5) One bucket in words for a screen reader (and the tooltip): the count,
+ * then money in and money out apart. The server's `net` (in − out) is never
+ * called a total moved: in and out are both said.
+ */
+export function bucketAria(
+  title: string,
+  b: Pick<BankingReviewBucket, "count" | "moneyIn" | "moneyOut"> & Partial<Pick<BankingReviewBucket, "varianceIn" | "varianceOut">>,
+): string {
+  // The variance leads, as on the card (the brief): the same lines the card shows, then the count, then in and out.
+  const parts = [sideWords("in", b.varianceIn), sideWords("out", b.varianceOut)].filter((x): x is string => !!x);
+  parts.push(`${b.count} ${b.count === 1 ? "row" : "rows"}`);
+  if (!isZeroMoney(b.moneyIn)) parts.push(`money in ${formatCurrency(b.moneyIn)}`);
+  if (!isZeroMoney(b.moneyOut)) parts.push(`money out ${formatCurrency(b.moneyOut)}`);
+  return `${title}: ${parts.join(", ")}`;
+}
+
+export const isZeroMoney = (v: string | null | undefined): boolean => Math.round(Number(v ?? 0) * 100) === 0;
 
 export const isBucketName = (raw: string | null | undefined): raw is BankingReviewBucketName =>
   BUCKETS.some((b) => b.name === raw);
@@ -73,13 +94,53 @@ export function fateWords(fate: BankingReviewPlanFate): string {
 }
 
 /**
- * ⭐ (F5 round 2) A planned item's fate as the household reads it: a card week
- * whose unpaid purchases moved on reads "Carried to Oct 15" (never "Missed"); one
- * paid in part reads "Part paid · $210.00 still owed". Otherwise `fateWords`.
+ * (Q5) A planned item's outcome in the direction of its money: income is
+ * "Received / Received, different amount / Not received yet", a payment is
+ * "Paid / Paid, different amount / Not paid yet". The server names it
+ * (`outcome`, core `bankReviewPlanOutcome`); older answers fall back to `fate`.
  */
-export function plannedFateWords(p: Pick<BankingReviewPlanned, "fate" | "carriedTo" | "onCurve" | "remainder">): string {
+export function outcomeWords(outcome: BankingReviewPlanOutcome, direction: "in" | "out"): string {
+  const inn = direction === "in";
+  switch (outcome) {
+    case "received":
+      return "Received";
+    case "received_different":
+      return "Received, different amount";
+    case "not_received_yet":
+      return "Not received yet";
+    case "paid":
+      return "Paid";
+    case "paid_different":
+      return "Paid, different amount";
+    case "not_paid_yet":
+      return "Not paid yet";
+    case "suggested":
+      return inn ? "Maybe received" : "Maybe paid";
+    case "skipped":
+      return "Skipped";
+    case "missed":
+      return "Missed";
+    case "carried":
+      return "Carried";
+    case "not_due":
+      return "Not due yet";
+    default:
+      return "Not decided";
+  }
+}
+
+/**
+ * ⭐ (F5 round 2, Q5) A planned item's fate as the household reads it: a card week
+ * whose unpaid purchases moved on reads "Carried to Oct 15" (never "Missed"); one
+ * paid in part reads "Part paid · $210.00 still owed". Otherwise the direction-aware
+ * outcome (`Received, different amount` for a paycheck, `Paid, different amount` for a bill).
+ */
+export function plannedFateWords(
+  p: Pick<BankingReviewPlanned, "fate" | "carriedTo" | "onCurve" | "remainder"> & { outcome?: BankingReviewPlanOutcome; direction?: "in" | "out" },
+): string {
   if (p.fate === "carried") return p.carriedTo ? `Carried to ${dayWords(p.carriedTo)}` : "Carried";
   if (p.fate === "paid_on_evidence" && p.onCurve && p.remainder != null && Number(p.remainder) !== 0) return `Part paid · ${unsigned(p.remainder)} still owed`;
+  if (p.outcome) return outcomeWords(p.outcome, p.direction ?? "out");
   return fateWords(p.fate);
 }
 

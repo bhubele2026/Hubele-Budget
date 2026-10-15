@@ -252,12 +252,16 @@ describe("⭐ F6 round 3 · an expired hold counts nowhere — every reader", ()
     expect((await withRule(false, () => findSupersededPendingForRange(HH, "2026-10-01", "2026-10-15"))).expiredIds.size).toBe(0);
   });
 
-  it("GET /transactions: every row is listed; the expired holds say so (expiredHold), the rest do not", async () => {
-    const rows = await get<Array<{ id: string; expiredHold: boolean }>>("/transactions?from=2026-10-01&to=2026-10-15&limit=100");
+  it("GET /transactions: every row is listed; the expired holds say so (expiredHold), the rest do not — (F6 round 5, finding 3) the car hold the snapshot held and its reversal are counted rows (expiredPair), as in the register", async () => {
+    type Flags = { id: string; expiredHold: boolean; expiredPair: boolean };
+    const rows = await get<Flags[]>("/transactions?from=2026-10-01&to=2026-10-15&limit=100");
     expect(rows).toHaveLength(11);
-    expect(rows.filter((r) => r.expiredHold).map((r) => r.id).sort()).toEqual(expiredIds());
-    const off = await withRule(false, () => get<Array<{ id: string; expiredHold: boolean }>>("/transactions?from=2026-10-01&to=2026-10-15&limit=100"));
-    expect(off.every((r) => r.expiredHold === false)).toBe(true);
+    expect(rows.filter((r) => r.expiredHold).map((r) => r.id).sort()).toEqual(
+      ["tavernHold", "hotelHold", "hotelReversal", "parkingHold"].map((k) => id[k]!).sort(),
+    );
+    expect(rows.filter((r) => r.expiredPair).map((r) => r.id).sort()).toEqual([id.carHold!, id.carReversal!].sort());
+    const off = await withRule(false, () => get<Flags[]>("/transactions?from=2026-10-01&to=2026-10-15&limit=100"));
+    expect(off.every((r) => r.expiredHold === false && r.expiredPair === false)).toBe(true);
   });
 
   it("⭐ the bank balance (the cash ledger): the unpaired tavern hold adds 0 and the hotel pair adds 0; the car reversal still counts (the snapshot held its hold) — 3,433.00 (base 3,368.82)", async () => {
@@ -449,13 +453,15 @@ describe("⭐ F6 round 3 · an expired hold counts nowhere — every reader", ()
     expect(baseNet.breakdown.expenses).toBe("199.18");
   });
 
-  it("finding 4 — the GET /forecast bundle (Forecast › Reconcile): every checking row is sent; the expired ones say so (the same answer as GET /transactions)", async () => {
-    const bundle = await get<{ transactions: Array<{ id: string; expiredHold: boolean }> }>("/forecast");
-    const checkingExpired = ["carHold", "carReversal", "tavernHold", "hotelHold", "hotelReversal"].map((k) => id[k]!).sort();
+  it("finding 4 — the GET /forecast bundle (Forecast › Reconcile): every checking row is sent; the expired ones say so (the same answer as GET /transactions) — (F6 round 5) the held car pair is expiredPair, not expiredHold", async () => {
+    type Flags = { id: string; expiredHold: boolean; expiredPair: boolean };
+    const bundle = await get<{ transactions: Flags[] }>("/forecast");
+    const checkingExpired = ["tavernHold", "hotelHold", "hotelReversal"].map((k) => id[k]!).sort();
     expect(bundle.transactions.filter((t) => t.expiredHold).map((t) => t.id).sort()).toEqual(checkingExpired);
+    expect(bundle.transactions.filter((t) => t.expiredPair).map((t) => t.id).sort()).toEqual([id.carHold!, id.carReversal!].sort());
     expect(bundle.transactions.some((t) => t.id === id.tavernPosted && !t.expiredHold)).toBe(true);
-    const base = await withRule(false, () => get<{ transactions: Array<{ id: string; expiredHold: boolean }> }>("/forecast"));
-    expect(base.transactions.every((t) => t.expiredHold === false)).toBe(true);
+    const base = await withRule(false, () => get<{ transactions: Flags[] }>("/forecast"));
+    expect(base.transactions.every((t) => t.expiredHold === false && t.expiredPair === false)).toBe(true);
   });
 
   it("nothing was deleted or rewritten: all eleven rows are still there, the holds still pending", async () => {

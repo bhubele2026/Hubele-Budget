@@ -457,6 +457,89 @@ describe("F2 · this week — known purchases vs the plan; unresolved apart; the
   });
 });
 
+describe("Q1 · the week contract — one name, one figure, on every surface", () => {
+  it("⭐ position, spine, breakdown and the Banking household quote the same known / unresolved / provisional / left, to the cent", async () => {
+    const [b, pos, spine, bank] = await Promise.all([
+      get(WEEK),
+      get("/money/position"),
+      get("/spine"),
+      get("/banking/review?from=2026-10-01&to=2026-10-14&rowsPerBucket=1"),
+    ]);
+    // By hand (file header): known 279.76 · unconfirmed 1,315.40 · provisional · left 300 − 279.76 = 20.24.
+    expect(pos).toMatchObject({ knownWeek: "279.76", unresolvedWeek: "1315.40", provisional: true, remainingWeekKnown: "20.24" });
+    // The cautious figures are unchanged (they still count the unconfirmed rows).
+    expect(pos).toMatchObject({ spentWeekDiscretionary: "1595.16", remainingWeek: "-1295.16", withinPlan: "over" });
+    expect(cents(pos.knownWeek) + cents(pos.unresolvedWeek)).toBe(cents(pos.spentWeekDiscretionary));
+    // The breakdown's own figures.
+    expect([b.known, b.unresolved.amount, b.provisional, b.remaining]).toEqual([pos.knownWeek, pos.unresolvedWeek, pos.provisional, pos.remainingWeekKnown]);
+    // The spine: field for field.
+    expect(spine.position).toMatchObject({
+      knownWeek: pos.knownWeek,
+      unresolvedWeek: pos.unresolvedWeek,
+      provisional: pos.provisional,
+      remainingWeekKnown: pos.remainingWeekKnown,
+      remainingWeek: pos.remainingWeek,
+    });
+    // Banking's household block: the cautious total kept, the contract beside it.
+    expect(() => GetBankingReviewResponse.parse(bank)).not.toThrow();
+    expect(bank.household).toMatchObject({
+      spentWeek: "1595.16",
+      remainingWeek: "-1295.16",
+      knownWeek: "279.76",
+      unresolvedWeek: "1315.40",
+      provisional: true,
+      remainingWeekKnown: "20.24",
+      weekPlan: "300.00",
+    });
+  });
+});
+
+describe("Q1 · Banking fields — in and out apart, each count with its scope, plans in their own direction", () => {
+  it("each bucket: moneyIn and moneyOut are positive magnitudes and net = in − out; the inbox says what it counts", async () => {
+    const r = await get("/banking/review?from=2026-10-01&to=2026-10-14&rowsPerBucket=50");
+    expect(() => GetBankingReviewResponse.parse(r)).not.toThrow();
+    let sawIn = false;
+    let sawOut = false;
+    for (const b of ["amountDifference", "timingDifference", "confirmedUnplanned", "uncertain", "unmatched"]) {
+      const k = r.notInPlan[b];
+      expect(cents(k.moneyIn), b).toBeGreaterThanOrEqual(0);
+      expect(cents(k.moneyOut), b).toBeGreaterThanOrEqual(0);
+      expect(cents(k.net), b).toBe(cents(k.moneyIn) - cents(k.moneyOut));
+      // The rows listed (every one, at 50 a bucket) add up to in and out apart.
+      if (!k.truncated) {
+        const rows: Json[] = k.rows;
+        expect(rows.filter((x) => cents(x.amount) > 0).reduce((a, x) => a + cents(x.amount), 0), b).toBe(cents(k.moneyIn));
+        expect(rows.filter((x) => cents(x.amount) < 0).reduce((a, x) => a - cents(x.amount), 0), b).toBe(cents(k.moneyOut));
+      }
+      if (cents(k.moneyIn) > 0) sawIn = true;
+      if (cents(k.moneyOut) > 0) sawOut = true;
+    }
+    // Not vacuous: money in (the payroll credit) and money out both sit in the buckets.
+    expect([sawIn, sawOut]).toEqual([true, true]);
+    expect(r.reviewInbox).toMatchObject({
+      unresolvedScope: "this account · this period",
+      unresolvedFrom: "2026-10-01",
+      unresolvedTo: "2026-10-14",
+      badgeScope: "this calendar month, forecast account",
+    });
+    expect(r.reviewInbox.unresolvedInRange).toEqual(expect.any(Number));
+  });
+
+  it("⭐ the paycheck reads received a different amount (income words); the bills read paid / not paid yet", async () => {
+    const r = await get("/banking/review?from=2026-10-01&to=2026-10-14&rowsPerBucket=1");
+    const planned = r.planned as Json[];
+    const paycheck = planned.find((p) => p.itemId === item.paycheck && p.scheduledDate === "2026-10-09");
+    // 2,391.40 arrived against 2,500.00 planned.
+    expect(paycheck).toMatchObject({ eventKind: "income", direction: "in", varianceKind: "less_than_expected", outcome: "received_different" });
+    for (const p of planned) {
+      if (p.direction === "in") expect(p.outcome, p.label).not.toMatch(/^(paid|paid_different|not_paid_yet)$/);
+      else expect(p.outcome, p.label).not.toMatch(/^(received|received_different|not_received_yet)$/);
+    }
+    // Every planned occurrence carries one.
+    expect(planned.every((p) => typeof p.outcome === "string")).toBe(true);
+  });
+});
+
 describe("F2 · banking review — direction-aware", () => {
   it("a payroll credit filed under Dining reads as money IN with a classification issue; its plan is income, less than expected", async () => {
     // The forecast took the paycheck as arrived (rule 4, automatic): an amount difference, in CASH terms.

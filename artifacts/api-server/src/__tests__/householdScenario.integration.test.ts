@@ -522,6 +522,8 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
     expect(res.baseline).toEqual({
       safeToSpendNow: EXPECTED.S4.safeToSpendNow,
       remainingWeek: EXPECTED.S4.remainingWeek,
+      // (Q5 fix) no unconfirmed rows this week: the plan against what counts toward it is the same figure
+      remainingWeekKnown: EXPECTED.S4.remainingWeek,
       availableUntilPayday: EXPECTED.S4.availableUntilPayday,
       lowest: "1700.00",
       lowestDate: "2026-10-13",
@@ -530,6 +532,7 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
     expect(res.proposed).toEqual({
       safeToSpendNow: "0.00",
       remainingWeek: "-186.60",
+      remainingWeekKnown: "-186.60",
       availableUntilPayday: "1480.00",
       lowest: "1400.00",
       lowestDate: "2026-10-13",
@@ -538,6 +541,7 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
     expect(res.delta).toEqual({
       safeToSpendNow: "-113.40",
       remainingWeek: "-300.00",
+      remainingWeekKnown: "-300.00",
       availableUntilPayday: "0.00",
       lowest: "-300.00",
       lowestDate: null,

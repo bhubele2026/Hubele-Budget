@@ -468,6 +468,42 @@ describe("GET /debt-plan", () => {
     }
   });
 
+  // ⭐ (F6 round 5, review finding 5 — D6) A checking payment tagged to the debt
+  // while pending, that POSTED under another name (an untagged row): round 4
+  // dropped the expired tagged row and paid-down read 0. The tag now counts on
+  // its one posted twin (same account, money out, the cents to canSupersede's
+  // cap, 0–7 days later, not answered, tagged or claimed) — read so, nothing written.
+  it("⭐ (F6 round 5) a tagged payment that posted under another name counts once, on the posted row: 200 (round 4: 0; base: 200 on the pending row)", async () => {
+    const visa = await addDebt({ name: "Visa" });
+    await addTxn({ occurredOn: addDaysISO(TODAY, -12), amount: "-200.00", debtId: visa.id, description: "VISA EPAY ACH PMT", pending: true });
+    const posted = await addTxn({ occurredOn: addDaysISO(TODAY, -10), amount: "-200.00", description: "VISA CARD ONLINE PMT 8812" });
+    const payments = async () => (await loadConfirmedPayments(HH, { overdueAssumedPaid: [] }, addDaysISO(TODAY, -20), TODAY)).map((p) => [p.txnId, p.amount, p.debtId]);
+    expect(await payments()).toEqual([[posted.id, 200, visa.id]]);
+    // Nothing was written: the posted row is still untagged.
+    expect((await claimRow(posted.id)).debtId).toBeNull();
+    vi.stubEnv("EXPIRED_HOLDS_RULE", "off");
+    try {
+      expect((await payments()).map(([, amount]) => amount)).toEqual([200]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("(F6 round 5) a tagged payment that failed (no posted twin) is still no payment; with two possible twins it is not guessed", async () => {
+    const visa = await addDebt({ name: "Visa" });
+    await addTxn({ occurredOn: addDaysISO(TODAY, -12), amount: "-200.00", debtId: visa.id, description: "VISA EPAY ACH PMT", pending: true });
+    const amounts = async () => (await loadConfirmedPayments(HH, { overdueAssumedPaid: [] }, addDaysISO(TODAY, -20), TODAY)).map((p) => p.amount);
+    expect(await amounts()).toEqual([]);
+    // A posted row 8 days later is no twin (the window is 0–7 days).
+    await addTxn({ occurredOn: addDaysISO(TODAY, -4), amount: "-200.00", description: "VISA CARD ONLINE PMT 8812" });
+    expect(await amounts()).toEqual([]);
+    // Two posted rows that could each be it: neither is taken. (F6 round 6: a
+    // twin is the same cents ± $1.00 — the second row is −200.40, was −210.00.)
+    await addTxn({ occurredOn: addDaysISO(TODAY, -10), amount: "-200.00", description: "VISA CARD ONLINE PMT 8812" });
+    await addTxn({ occurredOn: addDaysISO(TODAY, -9), amount: "-200.40", description: "CITY WATER WEB PMT" });
+    expect(await amounts()).toEqual([]);
+  });
+
   it("is household-scoped: another household's debts and payments never appear", async () => {
     const mine = await addDebt({ name: "Visa" });
     const theirs = await addDebt({ name: "Their card", balance: "900.00" }, HH_OTHER, OTHER);

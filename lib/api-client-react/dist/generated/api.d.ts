@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexCardPayoffMode, AmexSummary, AmexWeeklyPayoff, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BankingReview, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, Category, CategoryDecision, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, CreateWeekAdjustmentBody, CreateWishlistItemBody, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, EvaluateAffordBody, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexSummaryParams, GetAmexWeeklyPayoffParams, GetBankingReviewParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetMetricsParams, GetPeriodBreakdownParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, Goal, GoalCreate, GoalDeleteResult, GoalList, GoalUpdate, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategorizationReviewParams, ListCategoryDecisionsParams, ListDashboardBudgetsParams, ListGoalsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleHistory, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MemoryItem, MemoryList, MetricsRecomputeResult, MetricsResponse, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PlanUnsafe, PutMemoryBody, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecomputeMetricsParams, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewProposals, ReviewQueue, ReviewQueueCount, ReviewRefusal, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetAmexCardPayoffModeBody, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, UpdateWishlistItemBody, VersionInfo, WaysBack, WeekAdjustment, WeeklySettlement, WeeklySettlementInput, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexCardPayoffMode, AmexSummary, AmexWeeklyPayoff, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BankingReview, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, Category, CategoryDecision, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, CreateWeekAdjustmentBody, CreateWishlistItemBody, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DirectionRefusal, DuplicateTransactionCount, EvaluateAffordBody, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexSummaryParams, GetAmexWeeklyPayoffParams, GetBankingReviewParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetMetricsParams, GetPeriodBreakdownParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, Goal, GoalCreate, GoalDeleteResult, GoalList, GoalUpdate, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategorizationReviewParams, ListCategoryDecisionsParams, ListDashboardBudgetsParams, ListGoalsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleHistory, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MemoryItem, MemoryList, MetricsRecomputeResult, MetricsResponse, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PlanUnsafe, PutMemoryBody, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecomputeMetricsParams, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewProposals, ReviewQueue, ReviewQueueCount, ReviewRefusal, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetAmexCardPayoffModeBody, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, UpdateWishlistItemBody, VersionInfo, WaysBack, WeekAdjustment, WeeklySettlement, WeeklySettlementInput, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -467,7 +467,7 @@ export declare const useCreateTransaction: <TError = ErrorType<unknown>, TContex
 }, TContext>;
 export declare const getUpdateTransactionUrl: (id: string) => string;
 export declare const updateTransaction: (id: string, transactionInput: TransactionInput, options?: RequestInit) => Promise<UpdateTransactionResponse>;
-export declare const getUpdateTransactionMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+export declare const getUpdateTransactionMutationOptions: <TError = ErrorType<ReviewRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateTransaction>>, TError, {
         id: string;
         data: BodyType<TransactionInput>;
@@ -479,8 +479,8 @@ export declare const getUpdateTransactionMutationOptions: <TError = ErrorType<un
 }, TContext>;
 export type UpdateTransactionMutationResult = NonNullable<Awaited<ReturnType<typeof updateTransaction>>>;
 export type UpdateTransactionMutationBody = BodyType<TransactionInput>;
-export type UpdateTransactionMutationError = ErrorType<unknown>;
-export declare const useUpdateTransaction: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+export type UpdateTransactionMutationError = ErrorType<ReviewRefusal>;
+export declare const useUpdateTransaction: <TError = ErrorType<ReviewRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateTransaction>>, TError, {
         id: string;
         data: BodyType<TransactionInput>;
@@ -557,7 +557,7 @@ rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
  */
 export declare const getRecategorizeTransactionsByPatternUrl: () => string;
 export declare const recategorizeTransactionsByPattern: (recategorizeByPatternInput: RecategorizeByPatternInput, options?: RequestInit) => Promise<RecategorizeByPatternResult>;
-export declare const getRecategorizeTransactionsByPatternMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+export declare const getRecategorizeTransactionsByPatternMutationOptions: <TError = ErrorType<DirectionRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>, TError, {
         data: BodyType<RecategorizeByPatternInput>;
     }, TContext>;
@@ -567,7 +567,7 @@ export declare const getRecategorizeTransactionsByPatternMutationOptions: <TErro
 }, TContext>;
 export type RecategorizeTransactionsByPatternMutationResult = NonNullable<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>>;
 export type RecategorizeTransactionsByPatternMutationBody = BodyType<RecategorizeByPatternInput>;
-export type RecategorizeTransactionsByPatternMutationError = ErrorType<unknown>;
+export type RecategorizeTransactionsByPatternMutationError = ErrorType<DirectionRefusal>;
 /**
  * @summary Bulk re-categorize past transactions whose description matches a
 mapping rule's pattern and that currently sit in the rule's old
@@ -577,7 +577,7 @@ rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
 "Misc / Buffer" onto the user's real per-debt category).
 
  */
-export declare const useRecategorizeTransactionsByPattern: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+export declare const useRecategorizeTransactionsByPattern: <TError = ErrorType<DirectionRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>, TError, {
         data: BodyType<RecategorizeByPatternInput>;
     }, TContext>;
@@ -721,7 +721,7 @@ rule-learning toast is only meaningful for one-off edits.
  */
 export declare const getBulkUpdateTransactionsUrl: () => string;
 export declare const bulkUpdateTransactions: (bulkUpdateTransactionsInput: BulkUpdateTransactionsInput, options?: RequestInit) => Promise<BulkUpdateTransactionsResult>;
-export declare const getBulkUpdateTransactionsMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+export declare const getBulkUpdateTransactionsMutationOptions: <TError = ErrorType<DirectionRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateTransactions>>, TError, {
         data: BodyType<BulkUpdateTransactionsInput>;
     }, TContext>;
@@ -731,7 +731,7 @@ export declare const getBulkUpdateTransactionsMutationOptions: <TError = ErrorTy
 }, TContext>;
 export type BulkUpdateTransactionsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkUpdateTransactions>>>;
 export type BulkUpdateTransactionsMutationBody = BodyType<BulkUpdateTransactionsInput>;
-export type BulkUpdateTransactionsMutationError = ErrorType<unknown>;
+export type BulkUpdateTransactionsMutationError = ErrorType<DirectionRefusal>;
 /**
  * @summary Apply the same patch to a list of transactions in a single
 request. Replaces the per-row PATCH /transactions/{id} fan-out
@@ -746,7 +746,7 @@ bulk recategorize is an explicit user-driven action and the
 rule-learning toast is only meaningful for one-off edits.
 
  */
-export declare const useBulkUpdateTransactions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+export declare const useBulkUpdateTransactions: <TError = ErrorType<DirectionRefusal>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateTransactions>>, TError, {
         data: BodyType<BulkUpdateTransactionsInput>;
     }, TContext>;
@@ -3390,6 +3390,92 @@ export declare function useGetReviewProposals<TData = Awaited<ReturnType<typeof 
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * @summary (Q2) The fixes the owner applied, newest first (at most 20; owner only)
+ */
+export declare const getListAppliedReviewProposalsUrl: () => string;
+export declare const listAppliedReviewProposals: (options?: RequestInit) => Promise<AppliedCorrections>;
+export declare const getListAppliedReviewProposalsQueryKey: () => readonly ["/api/review/proposals/applied"];
+export declare const getListAppliedReviewProposalsQueryOptions: <TData = Awaited<ReturnType<typeof listAppliedReviewProposals>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAppliedReviewProposals>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listAppliedReviewProposals>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListAppliedReviewProposalsQueryResult = NonNullable<Awaited<ReturnType<typeof listAppliedReviewProposals>>>;
+export type ListAppliedReviewProposalsQueryError = ErrorType<void>;
+/**
+ * @summary (Q2) The fixes the owner applied, newest first (at most 20; owner only)
+ */
+export declare function useListAppliedReviewProposals<TData = Awaited<ReturnType<typeof listAppliedReviewProposals>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAppliedReviewProposals>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * The proposal is recomputed and must be the one the owner saw: the body echoes its proposalHash and the ids of its listed rows (a truncated proposal applies to the rows it lists). income_category and transfer file every row under the target category through the user-decision path (the row locked, a user decision with its flags before and after); loan_payment also does (when the proposal names a category) and marks each row matched to its occurrence; bill_match marks it matched. An occurrence two rows would answer goes to the row dated nearest it. Merchant memory learns once per fix, sign-aware. Every category goes through the direction guard. One record keeps everything the undo needs. dryRun=1 writes nothing and answers each row before and after, the answers the fix would replace, and the figures before and after — this week's and this month's breakdown (actual, known, unresolved), the Budget months the rows fall in, and the Banking review's buckets (before only; see limitations) — read by the same builders as the screens, through the plan the apply writes.
+ * @summary (Q2) Apply one proposed fix in one transaction — or, with dryRun=1, show what it would change (owner only)
+ */
+export declare const getApplyReviewProposalUrl: (key: string, params?: ApplyReviewProposalParams) => string;
+export declare const applyReviewProposal: (key: string, applyReviewProposalInput: ApplyReviewProposalInput, params?: ApplyReviewProposalParams, options?: RequestInit) => Promise<CorrectionPreview | AppliedCorrection>;
+export declare const getApplyReviewProposalMutationOptions: <TError = ErrorType<void | CorrectionRefusal>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof applyReviewProposal>>, TError, {
+        key: string;
+        data: BodyType<ApplyReviewProposalInput>;
+        params?: ApplyReviewProposalParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof applyReviewProposal>>, TError, {
+    key: string;
+    data: BodyType<ApplyReviewProposalInput>;
+    params?: ApplyReviewProposalParams;
+}, TContext>;
+export type ApplyReviewProposalMutationResult = NonNullable<Awaited<ReturnType<typeof applyReviewProposal>>>;
+export type ApplyReviewProposalMutationBody = BodyType<ApplyReviewProposalInput>;
+export type ApplyReviewProposalMutationError = ErrorType<void | CorrectionRefusal>;
+/**
+ * @summary (Q2) Apply one proposed fix in one transaction — or, with dryRun=1, show what it would change (owner only)
+ */
+export declare const useApplyReviewProposal: <TError = ErrorType<void | CorrectionRefusal>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof applyReviewProposal>>, TError, {
+        key: string;
+        data: BodyType<ApplyReviewProposalInput>;
+        params?: ApplyReviewProposalParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof applyReviewProposal>>, TError, {
+    key: string;
+    data: BodyType<ApplyReviewProposalInput>;
+    params?: ApplyReviewProposalParams;
+}, TContext>;
+/**
+ * Puts back every row's category, lock, provisional flag, transfer flag, its person's override and allowance flags; deletes the answers the fix created and restores the ones it replaced (same ids); reopens the review-queue items it answered; marks its decisions undone; restores the merchant memory (or, when more was learned since, switches off the rule it taught). Refuses, writing nothing, when a row it filed or an answer it wrote changed since (changed_since, naming them).
+ * @summary (Q2) Undo one applied fix, whole and exactly (owner only)
+ */
+export declare const getUndoAppliedReviewProposalUrl: (id: string) => string;
+export declare const undoAppliedReviewProposal: (id: string, options?: RequestInit) => Promise<CorrectionUndo>;
+export declare const getUndoAppliedReviewProposalMutationOptions: <TError = ErrorType<void | CorrectionRefusal>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoAppliedReviewProposal>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof undoAppliedReviewProposal>>, TError, {
+    id: string;
+}, TContext>;
+export type UndoAppliedReviewProposalMutationResult = NonNullable<Awaited<ReturnType<typeof undoAppliedReviewProposal>>>;
+export type UndoAppliedReviewProposalMutationError = ErrorType<void | CorrectionRefusal>;
+/**
+ * @summary (Q2) Undo one applied fix, whole and exactly (owner only)
+ */
+export declare const useUndoAppliedReviewProposal: <TError = ErrorType<void | CorrectionRefusal>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoAppliedReviewProposal>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof undoAppliedReviewProposal>>, TError, {
+    id: string;
+}, TContext>;
 /**
  * Upserts the household's carry-over for one week (unique on household, week and kind). amountCents is whole cents and must be negative: an adjustment can only LOWER a week. weekStart must be a Sunday, this week or later. The money position subtracts it from that week's remainingWeek.
  * @summary Start a week lower — carry an overage into it (household owner only)

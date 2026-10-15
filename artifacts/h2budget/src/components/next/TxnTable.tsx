@@ -6,6 +6,13 @@ import { AccountChip } from "./AccountChip";
 import { formatDisplayAmount } from "@/lib/amountDisplay";
 import { th, td, tdNum, emptyNote } from "@/ui";
 import { shortDate } from "./shortDate";
+import { CATEGORY_NONE } from "@/lib/categoryLabel";
+
+/** (Q4) null = no category; "" = the category list is still loading (blank, not "Uncategorized"). */
+function CategoryWord({ value }: { value: string | null | undefined }) {
+  if (value === "") return <span className="inline-block h-3 w-16 animate-pulse rounded bg-platinum-2 align-middle" aria-hidden data-testid="txn-category-loading" />;
+  return <>{value || CATEGORY_NONE}</>;
+}
 
 export interface TxnRow {
   id: string;
@@ -105,7 +112,7 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-neutral-500">
                 <span className="font-mono tabular-nums">{shortDate(r.date)}</span>
                 <AccountChip identity={r.identity} size="sm" wrap />
-                <span>{r.category || "Uncategorized"}</span>
+                <CategoryWord value={r.category} />
                 <span aria-hidden>·</span>
                 <span>{statusOf(r)}</span>
                 {!r.href && r.note ? <span className="text-neutral-600" data-testid="txn-note">{r.note}</span> : null}
@@ -152,7 +159,7 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
                 </td>
                 <td className={cn(td, "py-1")}><AccountChip identity={r.identity} size="sm" /></td>
                 <td className={cn(td, "py-1 text-neutral-600")}>
-                  {r.category || "Uncategorized"}
+                  <CategoryWord value={r.category} />
                   {r.flag ? <span className="chip warn ml-2" data-testid="txn-flag">{r.flag}</span> : null}
                 </td>
                 <td className={cn(td, "py-1 text-neutral-600")}>{statusOf(r)}</td>

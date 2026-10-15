@@ -64,15 +64,28 @@ export function amexPlanLine(plan: AmexSummary["planLink"]): AmexPlanLine | null
   }
 }
 
-/** "Adds $560.00 to this week's household plan" (never the card's own budget). */
+/** " (includes $Y unconfirmed)" when the server's unconfirmed part is above $0; nothing at $0. */
+function unconfirmedWords(unresolved: string): string {
+  return Math.round(Number(unresolved) * 100) > 0 ? ` (includes ${formatCurrency(unresolved)} unconfirmed)` : "";
+}
+
+/**
+ * "Adds $560.00 to this week's household plan" — never the card's own budget.
+ * (Q5) The amount is the plan's pool (weekly-flagged + unfiled), the cautious total, so the
+ * unconfirmed part is said only when there is one. (hh-split) The part is the server's own split
+ * of the same figure (`weeklyUnresolved` / `monthlyUnresolved`, GET /money/period-breakdown's
+ * `unresolved` for the card): "(includes $Y unconfirmed)" at $Y > 0, nothing at $0. The monthly
+ * part says it only when the monthly figure has one. Never a figure worked out here.
+ */
 export function householdLine(
   hc: AmexSummary["householdContribution"],
   mode: RangeMode,
   isThisWeek: boolean,
 ): string {
   const week = formatCurrency(hc.weeklyPlan);
-  if (mode === "wk" && isThisWeek) return `Adds ${week} to this week's household plan`;
-  return `Adds ${week} weekly and ${formatCurrency(hc.monthlyPlan)} monthly to the household plan`;
+  const weekUnconfirmed = unconfirmedWords(hc.weeklyUnresolved);
+  if (mode === "wk" && isThisWeek) return `Adds ${week} to this week's household plan${weekUnconfirmed}`;
+  return `Adds ${week} weekly${weekUnconfirmed} and ${formatCurrency(hc.monthlyPlan)} monthly${unconfirmedWords(hc.monthlyUnresolved)} to the household plan`;
 }
 
 /** A row's place on the card's ledger, by the server's own rule (classification only). */

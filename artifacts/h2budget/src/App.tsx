@@ -14,7 +14,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { ClerkProvider, Show, useAuth, useClerk } from "@clerk/react";
-import { getSpine, getGetSpineQueryKey } from "@workspace/api-client-react";
+import { getSpine, getGetSpineQueryKey, getMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 
@@ -483,6 +483,19 @@ function ProtectedShell() {
     if (!isLoaded || !isSignedIn) return;
     return askForSpineAgainIfFailed(queryClient);
   }, [isLoaded, isSignedIn]);
+
+  // (Q4) Who is signed in (`/me`) decides whether a plan control or its denial is
+  // drawn. Asked here, once, under the key `useOwner` reads, so a page finds the
+  // answer already there instead of drawing the denial while it loads.
+  const meKnown = isLoaded ? Boolean(isSignedIn) : HAD_AUTH_HINT;
+  useEffect(() => {
+    if (!meKnown) return;
+    void queryClient
+      .prefetchQuery({ queryKey: getGetMeQueryKey(), queryFn: () => getMe(), staleTime: 30 * 60_000, retry: false })
+      .catch(() => {
+        /* a 401 before Clerk refreshes the cookie is asked again with the rest */
+      });
+  }, [meKnown]);
 
   // ⭐ OPTIMISTIC ROUTES. Clerk hasn't answered yet, but this browser has been
   // signed in before: mount the real routes NOW so each page's queries start at

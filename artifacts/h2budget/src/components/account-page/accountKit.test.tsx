@@ -151,6 +151,20 @@ describe("AccountTransactionRow", () => {
       />,
     );
 
+  it("(Q6a) is never faded: a state is a chip, the checkbox names the merchant, edit and delete sit in the row menu", () => {
+    const onEdit = vi.fn();
+    row({ stateLabel: "Ignored", onEdit, onDelete: () => {} });
+    const el = screen.getByTestId("row-tx-t1");
+    expect(el.className).not.toMatch(/opacity/);
+    expect(screen.getByTestId("chip-state-t1").textContent).toBe("Ignored");
+    expect(screen.getByRole("checkbox", { name: "Select HY-VEE #1234" })).toBeTruthy();
+    expect(screen.queryByTestId("button-edit-tx-t1")).toBeNull();
+    const btn = screen.getByRole("button", { name: "More actions for HY-VEE #1234" });
+    fireEvent.keyDown(btn, { key: "Enter" });
+    fireEvent.keyDown(screen.getByTestId("button-edit-tx-t1"), { key: "Enter" });
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
   it("is a compact 40 px row on the container grid it is given", () => {
     row({ gridClass: LEDGER_GRID_WIDE_ACTIONS, cardLabel: "Chase · Plaid ••5526", cardAccent: "checking" });
     const el = screen.getByTestId("row-tx-t1");

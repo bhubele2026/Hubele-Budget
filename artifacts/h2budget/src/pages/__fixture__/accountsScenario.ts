@@ -42,6 +42,11 @@ const item = (id: string, institutionName: string, institutionSlug: string, last
   id: `item-${id}`, itemId: `plaid-item-${id}`, institutionId: null, institutionName, institutionSlug,
   lastSyncedAt, lastSyncError: null, lastSyncErrorCode: null, stillPreparing: false, stillPreparingSince: null,
   consentExpirationAt: null, lastBankTxOn, accounts,
+  // The server's one rule (computeBankFreshness): silent for 48 hours is stale, else ok.
+  freshness: (() => {
+    const stale = Date.parse(NOW) - Date.parse(lastSyncedAt) > 48 * 3_600_000;
+    return { state: stale ? "stale" : "ok", stale, staleReason: stale ? "old" : null, fetchedAt: lastSyncedAt, lastContactAt: lastSyncedAt, lastFailureAt: null };
+  })(),
 });
 
 export const ITEMS = [

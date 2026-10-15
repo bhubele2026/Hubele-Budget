@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 // wouter patches history.pushState/replaceState to fire events (as in the app); this listens to them.
 import "wouter";
-import { installScrollRestoration, RESTORE_GIVE_UP_MS } from "./scrollRestore";
+import { installScrollRestoration, pageDataPending, RESTORE_GIVE_UP_MS } from "./scrollRestore";
 
 /**
  * (W1) Scroll restoration for the shell's one scroller: a fresh push starts at
@@ -93,7 +93,7 @@ describe("scroll restoration", () => {
     expect(scroller.scrollTop).toBe(1200);
   });
 
-  it("gives up after about 1.5 s when the page never gets tall enough", () => {
+  it("gives up after the timeout when the page never gets tall enough", () => {
     userScrollTo(1200);
     push("/amex");
     height = 400;
@@ -151,5 +151,68 @@ describe("scroll restoration", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe("(Q4) restoring waits for the current scope's data, not just height", () => {
+  let settled = true;
+  beforeEach(() => {
+    uninstall();
+    settled = true;
+    uninstall = installScrollRestoration(() => scroller, () => settled);
+  });
+
+  it("tall enough but the rows are still another scope's: it waits, then restores", () => {
+    userScrollTo(1200);
+    push("/amex");
+    settled = false; // the new page is tall (previous rows), its own data is out
+    back("/transactions?month=2026-09-01");
+    vi.advanceTimersByTime(600);
+    expect(scroller.scrollTop).toBe(0);
+    settled = true;
+    vi.advanceTimersByTime(100);
+    expect(scroller.scrollTop).toBe(1200);
+  });
+
+  it("waits longer than the old 1.5 s, and still gives up", () => {
+    expect(RESTORE_GIVE_UP_MS).toBeGreaterThan(1500);
+    userScrollTo(1200);
+    push("/amex");
+    settled = false;
+    back("/transactions?month=2026-09-01");
+    vi.advanceTimersByTime(2500);
+    settled = true;
+    vi.advanceTimersByTime(100);
+    expect(scroller.scrollTop).toBe(1200);
+
+    // Never settled: it gives up and leaves the page alone.
+    userScrollTo(0);
+    push("/amex");
+    userScrollTo(300);
+    settled = false;
+    back("/transactions?month=2026-09-01");
+    scroller.scrollTop = 0;
+    vi.advanceTimersByTime(RESTORE_GIVE_UP_MS + 200);
+    settled = true;
+    vi.advanceTimersByTime(200);
+    expect(scroller.scrollTop).toBe(0);
+  });
+});
+
+describe("pageDataPending", () => {
+  const cache = (queries: unknown[]) => ({ getQueryCache: () => ({ getAll: () => queries }) });
+  const q = (o: { observers?: unknown[]; data?: unknown; fetchStatus?: string }) => ({
+    observers: o.observers ?? [{ getCurrentResult: () => ({ isPlaceholderData: false }) }],
+    state: { data: o.data, fetchStatus: o.fetchStatus ?? "idle" },
+  });
+  it("a mounted query still on another key's data is pending", () => {
+    expect(pageDataPending(cache([q({ data: 1, observers: [{ getCurrentResult: () => ({ isPlaceholderData: true }) }] })]))).toBe(true);
+  });
+  it("a mounted query with nothing yet and a request out is pending", () => {
+    expect(pageDataPending(cache([q({ data: undefined, fetchStatus: "fetching" })]))).toBe(true);
+  });
+  it("a background refresh of data already shown is not pending; neither is an unmounted query", () => {
+    expect(pageDataPending(cache([q({ data: 1, fetchStatus: "fetching" })]))).toBe(false);
+    expect(pageDataPending(cache([q({ observers: [], data: undefined, fetchStatus: "fetching" })]))).toBe(false);
   });
 });

@@ -682,7 +682,13 @@ export const GetDashboardResponse = zod.object({
         .boolean()
         .optional()
         .describe(
-          "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+          "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere. (F6 round 5)\nA reversal is never a payment or a transfer, and each credit takes the\nmost recent expired charge on or before it. A hold the bank snapshot\nheld and its reversal are not expiredHold: see expiredPair.\n",
+        ),
+      expiredPair: zod
+        .boolean()
+        .optional()
+        .describe(
+          "(F6 round 5) An expired hold the bank snapshot already held, or the\nreversal paired with it. The bank balance counts the reversal (the\nmoney came back), so the register counts both (they net to 0) and\nneither is labelled - but neither is spending, and neither is asked\nabout in review. Cash walks (the Reconcile running balance, cash\nflow) count it; spending sums and review skip it. The same test on\nGET \/transactions, the GET \/forecast bundle and the ledger rows.\n",
         ),
     }),
   ),
@@ -853,7 +859,13 @@ export const ListTransactionsResponseItem = zod.object({
     .boolean()
     .optional()
     .describe(
-      "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+      "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere. (F6 round 5)\nA reversal is never a payment or a transfer, and each credit takes the\nmost recent expired charge on or before it. A hold the bank snapshot\nheld and its reversal are not expiredHold: see expiredPair.\n",
+    ),
+  expiredPair: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(F6 round 5) An expired hold the bank snapshot already held, or the\nreversal paired with it. The bank balance counts the reversal (the\nmoney came back), so the register counts both (they net to 0) and\nneither is labelled - but neither is spending, and neither is asked\nabout in review. Cash walks (the Reconcile running balance, cash\nflow) count it; spending sums and review skip it. The same test on\nGET \/transactions, the GET \/forecast bundle and the ledger rows.\n",
     ),
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
@@ -1072,7 +1084,13 @@ export const UpdateTransactionResponse = zod
       .boolean()
       .optional()
       .describe(
-        "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+        "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere. (F6 round 5)\nA reversal is never a payment or a transfer, and each credit takes the\nmost recent expired charge on or before it. A hold the bank snapshot\nheld and its reversal are not expiredHold: see expiredPair.\n",
+      ),
+    expiredPair: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(F6 round 5) An expired hold the bank snapshot already held, or the\nreversal paired with it. The bank balance counts the reversal (the\nmoney came back), so the register counts both (they net to 0) and\nneither is labelled - but neither is spending, and neither is asked\nabout in review. Cash walks (the Reconcile running balance, cash\nflow) count it; spending sums and review skip it. The same test on\nGET \/transactions, the GET \/forecast bundle and the ledger rows.\n",
       ),
   })
   .and(
@@ -1353,7 +1371,13 @@ export const ClearTransferOverrideResponse = zod.object({
     .boolean()
     .optional()
     .describe(
-      "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+      "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere. (F6 round 5)\nA reversal is never a payment or a transfer, and each credit takes the\nmost recent expired charge on or before it. A hold the bank snapshot\nheld and its reversal are not expiredHold: see expiredPair.\n",
+    ),
+  expiredPair: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(F6 round 5) An expired hold the bank snapshot already held, or the\nreversal paired with it. The bank balance counts the reversal (the\nmoney came back), so the register counts both (they net to 0) and\nneither is labelled - but neither is spending, and neither is asked\nabout in review. Cash walks (the Reconcile running balance, cash\nflow) count it; spending sums and review skip it. The same test on\nGET \/transactions, the GET \/forecast bundle and the ledger rows.\n",
     ),
 });
 
@@ -1933,7 +1957,13 @@ export const GetTransactionsLedgerResponse = zod.object({
           .boolean()
           .optional()
           .describe(
-            "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+            "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere. (F6 round 5)\nA reversal is never a payment or a transfer, and each credit takes the\nmost recent expired charge on or before it. A hold the bank snapshot\nheld and its reversal are not expiredHold: see expiredPair.\n",
+          ),
+        expiredPair: zod
+          .boolean()
+          .optional()
+          .describe(
+            "(F6 round 5) An expired hold the bank snapshot already held, or the\nreversal paired with it. The bank balance counts the reversal (the\nmoney came back), so the register counts both (they net to 0) and\nneither is labelled - but neither is spending, and neither is asked\nabout in review. Cash walks (the Reconcile running balance, cash\nflow) count it; spending sums and review skip it. The same test on\nGET \/transactions, the GET \/forecast bundle and the ledger rows.\n",
           ),
       })
       .and(
@@ -2326,6 +2356,33 @@ export const ListDebtsResponseItem = zod.object({
       zod.null(),
     ])
     .optional(),
+  paidAs: zod
+    .union([
+      zod
+        .object({
+          effectiveMode: zod.enum([
+            "in_full_weekly",
+            "in_full_monthly",
+            "debt_plan",
+            "unset",
+          ]),
+          source: zod.enum([
+            "chosen",
+            "default_no_debt",
+            "default_debt_inactive",
+            "default_debt_active",
+            "needs_choice",
+          ]),
+        })
+        .describe(
+          "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      '(Q1) For a debt linked to an Amex card: how that card is paid — the one definition the Amex band and summary read (CardPaidAs). An archived debt\'s card reads in_full_weekly (default_debt_inactive), never \"on the payoff plan\". Null for a debt no Amex card links. GET \/debts always sends it; the single-debt responses leave it out.',
+    ),
 });
 export const ListDebtsResponse = zod.array(ListDebtsResponseItem);
 
@@ -2468,6 +2525,33 @@ export const LinkDebtToPlaidResponse = zod.object({
       zod.null(),
     ])
     .optional(),
+  paidAs: zod
+    .union([
+      zod
+        .object({
+          effectiveMode: zod.enum([
+            "in_full_weekly",
+            "in_full_monthly",
+            "debt_plan",
+            "unset",
+          ]),
+          source: zod.enum([
+            "chosen",
+            "default_no_debt",
+            "default_debt_inactive",
+            "default_debt_active",
+            "needs_choice",
+          ]),
+        })
+        .describe(
+          "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      '(Q1) For a debt linked to an Amex card: how that card is paid — the one definition the Amex band and summary read (CardPaidAs). An archived debt\'s card reads in_full_weekly (default_debt_inactive), never \"on the payoff plan\". Null for a debt no Amex card links. GET \/debts always sends it; the single-debt responses leave it out.',
+    ),
 });
 
 export const UnlinkDebtFromPlaidParams = zod.object({
@@ -2590,6 +2674,33 @@ export const UnlinkDebtFromPlaidResponse = zod.object({
       zod.null(),
     ])
     .optional(),
+  paidAs: zod
+    .union([
+      zod
+        .object({
+          effectiveMode: zod.enum([
+            "in_full_weekly",
+            "in_full_monthly",
+            "debt_plan",
+            "unset",
+          ]),
+          source: zod.enum([
+            "chosen",
+            "default_no_debt",
+            "default_debt_inactive",
+            "default_debt_active",
+            "needs_choice",
+          ]),
+        })
+        .describe(
+          "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      '(Q1) For a debt linked to an Amex card: how that card is paid — the one definition the Amex band and summary read (CardPaidAs). An archived debt\'s card reads in_full_weekly (default_debt_inactive), never \"on the payoff plan\". Null for a debt no Amex card links. GET \/debts always sends it; the single-debt responses leave it out.',
+    ),
 });
 
 export const RefreshDebtFromPlaidParams = zod.object({
@@ -2712,6 +2823,33 @@ export const RefreshDebtFromPlaidResponse = zod.object({
       zod.null(),
     ])
     .optional(),
+  paidAs: zod
+    .union([
+      zod
+        .object({
+          effectiveMode: zod.enum([
+            "in_full_weekly",
+            "in_full_monthly",
+            "debt_plan",
+            "unset",
+          ]),
+          source: zod.enum([
+            "chosen",
+            "default_no_debt",
+            "default_debt_inactive",
+            "default_debt_active",
+            "needs_choice",
+          ]),
+        })
+        .describe(
+          "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      '(Q1) For a debt linked to an Amex card: how that card is paid — the one definition the Amex band and summary read (CardPaidAs). An archived debt\'s card reads in_full_weekly (default_debt_inactive), never \"on the payoff plan\". Null for a debt no Amex card links. GET \/debts always sends it; the single-debt responses leave it out.',
+    ),
 });
 
 export const ListPlaidLiabilityAccountsQueryParams = zod.object({
@@ -3000,6 +3138,33 @@ export const UpdateDebtResponse = zod.object({
       zod.null(),
     ])
     .optional(),
+  paidAs: zod
+    .union([
+      zod
+        .object({
+          effectiveMode: zod.enum([
+            "in_full_weekly",
+            "in_full_monthly",
+            "debt_plan",
+            "unset",
+          ]),
+          source: zod.enum([
+            "chosen",
+            "default_no_debt",
+            "default_debt_inactive",
+            "default_debt_active",
+            "needs_choice",
+          ]),
+        })
+        .describe(
+          "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+        ),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      '(Q1) For a debt linked to an Amex card: how that card is paid — the one definition the Amex band and summary read (CardPaidAs). An archived debt\'s card reads in_full_weekly (default_debt_inactive), never \"on the payoff plan\". Null for a debt no Amex card links. GET \/debts always sends it; the single-debt responses leave it out.',
+    ),
 });
 
 export const DeleteDebtParams = zod.object({
@@ -4210,8 +4375,19 @@ export const UpdateSettingsResponse = zod.object({
     .optional(),
 });
 
+export const getForecastQueryFromMonthRegExp = new RegExp(
+  "^\\d{4}-(0[1-9]|1[0-2])$",
+);
+
 export const GetForecastQueryParams = zod.object({
   days: zod.coerce.number().optional(),
+  fromMonth: zod.coerce
+    .string()
+    .regex(getForecastQueryFromMonthRegExp)
+    .optional()
+    .describe(
+      "(Q5 round 3) YYYY-MM. Start the register's data at the first of this month when that is earlier than the first of last month (the default start); up to 12 months back. Review uses it for an older month.",
+    ),
 });
 
 export const GetForecastResponse = zod.object({
@@ -4344,7 +4520,13 @@ export const GetForecastResponse = zod.object({
         .boolean()
         .optional()
         .describe(
-          "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+          "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere. (F6 round 5)\nA reversal is never a payment or a transfer, and each credit takes the\nmost recent expired charge on or before it. A hold the bank snapshot\nheld and its reversal are not expiredHold: see expiredPair.\n",
+        ),
+      expiredPair: zod
+        .boolean()
+        .optional()
+        .describe(
+          "(F6 round 5) An expired hold the bank snapshot already held, or the\nreversal paired with it. The bank balance counts the reversal (the\nmoney came back), so the register counts both (they net to 0) and\nneither is labelled - but neither is spending, and neither is asked\nabout in review. Cash walks (the Reconcile running balance, cash\nflow) count it; spending sums and review skip it. The same test on\nGET \/transactions, the GET \/forecast bundle and the ledger rows.\n",
         ),
     }),
   ),
@@ -5247,6 +5429,12 @@ export const GetForecastBankBalanceExplainResponse = zod
           .describe(
             "Newest failed transactions or balance refresh not yet followed by a success of the same kind (PRODUCT_NOT_READY is not a failure)",
           ),
+        fetchedAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "(Q5 round 3) Set on \/forecast\/bank-balance-explain: when the bank last told us anything, by the server's one rule (= spine.bankConfidence.fetchedAt)",
+          ),
         stale: zod.boolean(),
         staleReason: zod
           .union([
@@ -5943,6 +6131,32 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
   weekEnd: zod.string(),
   cards: zod.array(
     zod.object({
+      paidAs: zod
+        .union([
+          zod
+            .object({
+              effectiveMode: zod.enum([
+                "in_full_weekly",
+                "in_full_monthly",
+                "debt_plan",
+                "unset",
+              ]),
+              source: zod.enum([
+                "chosen",
+                "default_no_debt",
+                "default_debt_inactive",
+                "default_debt_active",
+                "needs_choice",
+              ]),
+            })
+            .describe(
+              "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+            ),
+          zod.null(),
+        ])
+        .describe(
+          "(Q1) How this card is paid (CardPaidAs); null only for a card the payoff roster does not know",
+        ),
       accountId: zod.string(),
       plaidAccountId: zod.string().nullable(),
       debtId: zod.string().nullable(),
@@ -5989,6 +6203,32 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
   debtLinkedCards: zod
     .array(
       zod.object({
+        paidAs: zod
+          .union([
+            zod
+              .object({
+                effectiveMode: zod.enum([
+                  "in_full_weekly",
+                  "in_full_monthly",
+                  "debt_plan",
+                  "unset",
+                ]),
+                source: zod.enum([
+                  "chosen",
+                  "default_no_debt",
+                  "default_debt_inactive",
+                  "default_debt_active",
+                  "needs_choice",
+                ]),
+              })
+              .describe(
+                "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+              ),
+            zod.null(),
+          ])
+          .describe(
+            '(Q1) How this card is paid (CardPaidAs). A debt row links it, but that alone never means \"on the payoff plan\": an archived debt\'s card is in_full_weekly (default_debt_inactive). Null only for a card the payoff roster does not know.',
+          ),
         accountId: zod.string().describe("The card's Plaid account_id"),
         name: zod.string().describe("Plaid's name for the card"),
         mask: zod.string().nullable(),
@@ -6037,6 +6277,65 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
           .string()
           .nullable()
           .describe("The linked debt the answer read"),
+        paidAs: zod
+          .object({
+            effectiveMode: zod.enum([
+              "in_full_weekly",
+              "in_full_monthly",
+              "debt_plan",
+              "unset",
+            ]),
+            source: zod.enum([
+              "chosen",
+              "default_no_debt",
+              "default_debt_inactive",
+              "default_debt_active",
+              "needs_choice",
+            ]),
+          })
+          .describe(
+            "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+          ),
+        payDown: zod
+          .object({
+            available: zod.boolean(),
+            reason: zod
+              .union([
+                zod.literal("no_debt"),
+                zod.literal("debt_not_active"),
+                zod.literal("debt_terms_missing"),
+                zod.literal(null),
+              ])
+              .nullable(),
+          })
+          .describe(
+            '(Q6b) Can \"Paying down\" take effect on this card? The server\'s own rule (resolvePayoffMode with debt_plan), so no screen re-derives it. reason when not available: no_debt (no debt row links the card) · debt_not_active (its debt is archived, paid or zero) · debt_terms_missing (active, but no APR and no minimum).',
+          ),
+        defaultMode: zod
+          .object({
+            mode: zod
+              .union([
+                zod.literal("in_full"),
+                zod.literal("debt_plan"),
+                zod.literal(null),
+              ])
+              .nullable(),
+            reason: zod
+              .enum([
+                "set_by_owner",
+                "no_debt",
+                "debt_not_active",
+                "debt_active",
+                "debt_terms_missing",
+                "debt_plan_without_active_debt",
+              ])
+              .describe(
+                "(F1) Why the card is paid that way: set_by_owner; no_debt \/ debt_not_active (default in_full: no debt row, or none active — archived, paid, zero balance); debt_active (default debt_plan: an active debt with an APR or a minimum); debt_terms_missing (unresolved: an active debt with neither); debt_plan_without_active_debt (unresolved: the owner chose debt_plan but no active revolving debt would pay it).",
+              ),
+          })
+          .describe(
+            '(Q6b r3) What \"Use the default\" would resolve to (resolvePayoffMode with no explicit choice). mode null = the default cannot tell either (an active debt with no APR and no minimum): going back to it pauses plans.',
+          ),
       }),
     )
     .optional()
@@ -6093,6 +6392,65 @@ export const SetAmexCardPayoffModeResponse = zod.object({
       "(F1) Why the card is paid that way: set_by_owner; no_debt \/ debt_not_active (default in_full: no debt row, or none active — archived, paid, zero balance); debt_active (default debt_plan: an active debt with an APR or a minimum); debt_terms_missing (unresolved: an active debt with neither); debt_plan_without_active_debt (unresolved: the owner chose debt_plan but no active revolving debt would pay it).",
     ),
   debtId: zod.string().nullable().describe("The linked debt the answer read"),
+  paidAs: zod
+    .object({
+      effectiveMode: zod.enum([
+        "in_full_weekly",
+        "in_full_monthly",
+        "debt_plan",
+        "unset",
+      ]),
+      source: zod.enum([
+        "chosen",
+        "default_no_debt",
+        "default_debt_inactive",
+        "default_debt_active",
+        "needs_choice",
+      ]),
+    })
+    .describe(
+      "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+    ),
+  payDown: zod
+    .object({
+      available: zod.boolean(),
+      reason: zod
+        .union([
+          zod.literal("no_debt"),
+          zod.literal("debt_not_active"),
+          zod.literal("debt_terms_missing"),
+          zod.literal(null),
+        ])
+        .nullable(),
+    })
+    .describe(
+      '(Q6b) Can \"Paying down\" take effect on this card? The server\'s own rule (resolvePayoffMode with debt_plan), so no screen re-derives it. reason when not available: no_debt (no debt row links the card) · debt_not_active (its debt is archived, paid or zero) · debt_terms_missing (active, but no APR and no minimum).',
+    ),
+  defaultMode: zod
+    .object({
+      mode: zod
+        .union([
+          zod.literal("in_full"),
+          zod.literal("debt_plan"),
+          zod.literal(null),
+        ])
+        .nullable(),
+      reason: zod
+        .enum([
+          "set_by_owner",
+          "no_debt",
+          "debt_not_active",
+          "debt_active",
+          "debt_terms_missing",
+          "debt_plan_without_active_debt",
+        ])
+        .describe(
+          "(F1) Why the card is paid that way: set_by_owner; no_debt \/ debt_not_active (default in_full: no debt row, or none active — archived, paid, zero balance); debt_active (default debt_plan: an active debt with an APR or a minimum); debt_terms_missing (unresolved: an active debt with neither); debt_plan_without_active_debt (unresolved: the owner chose debt_plan but no active revolving debt would pay it).",
+        ),
+    })
+    .describe(
+      '(Q6b r3) What \"Use the default\" would resolve to (resolvePayoffMode with no explicit choice). mode null = the default cannot tell either (an active debt with no APR and no minimum): going back to it pauses plans.',
+    ),
 });
 
 /**
@@ -6197,6 +6555,72 @@ export const GetAmexSummaryResponse = zod.object({
             .describe(
               "(F1) How the card is paid. `mode` null = not chosen yet (the hook bills it like in_full meanwhile, and plans are paused); `source` says whether the owner chose it or it is the default from the card's debt row. A card on the debt plan answers to its debt (`planLink`); a card paid in full answers to its hook.",
             ),
+          paidAs: zod
+            .union([
+              zod
+                .object({
+                  effectiveMode: zod.enum([
+                    "in_full_weekly",
+                    "in_full_monthly",
+                    "debt_plan",
+                    "unset",
+                  ]),
+                  source: zod.enum([
+                    "chosen",
+                    "default_no_debt",
+                    "default_debt_inactive",
+                    "default_debt_active",
+                    "needs_choice",
+                  ]),
+                })
+                .describe(
+                  "(Q1) How a card is paid — ONE definition for every screen (the Amex band, the Amex summary, the weekly payoff, the debts list), from the payoff rule and the card's cadence. effectiveMode: in_full_weekly \/ in_full_monthly (the everyday hook pays its purchases at the card's cadence) · debt_plan (its minimum and the avalanche extra pay it) · unset (not resolved: the owner must choose; billed like in full meanwhile, plans paused). source: chosen (the owner's choice) · default_no_debt · default_debt_inactive (its debt rows are archived, paid or zero: paid in full) · default_debt_active (an active debt with an APR or a minimum) · needs_choice (unset). A screen splits cards by effectiveMode, never by whether a debt row exists.",
+                ),
+              zod.null(),
+            ])
+            .describe(
+              "(Q1) How this card is paid — the one definition (CardPaidAs); null only for a card the payoff roster does not know",
+            ),
+          payDown: zod
+            .object({
+              available: zod.boolean(),
+              reason: zod
+                .union([
+                  zod.literal("no_debt"),
+                  zod.literal("debt_not_active"),
+                  zod.literal("debt_terms_missing"),
+                  zod.literal(null),
+                ])
+                .nullable(),
+            })
+            .describe(
+              '(Q6b) Can \"Paying down\" take effect on this card? The server\'s own rule (resolvePayoffMode with debt_plan), so no screen re-derives it. reason when not available: no_debt (no debt row links the card) · debt_not_active (its debt is archived, paid or zero) · debt_terms_missing (active, but no APR and no minimum).',
+            ),
+          defaultMode: zod
+            .object({
+              mode: zod
+                .union([
+                  zod.literal("in_full"),
+                  zod.literal("debt_plan"),
+                  zod.literal(null),
+                ])
+                .nullable(),
+              reason: zod
+                .enum([
+                  "set_by_owner",
+                  "no_debt",
+                  "debt_not_active",
+                  "debt_active",
+                  "debt_terms_missing",
+                  "debt_plan_without_active_debt",
+                ])
+                .describe(
+                  "(F1) Why the card is paid that way: set_by_owner; no_debt \/ debt_not_active (default in_full: no debt row, or none active — archived, paid, zero balance); debt_active (default debt_plan: an active debt with an APR or a minimum); debt_terms_missing (unresolved: an active debt with neither); debt_plan_without_active_debt (unresolved: the owner chose debt_plan but no active revolving debt would pay it).",
+                ),
+            })
+            .describe(
+              '(Q6b r3) What \"Use the default\" would resolve to (resolvePayoffMode with no explicit choice). mode null = the default cannot tell either (an active debt with no APR and no minimum): going back to it pauses plans.',
+            ),
           purchases: zod
             .object({
               amount: zod
@@ -6283,8 +6707,30 @@ export const GetAmexSummaryResponse = zod.object({
     .object({
       weeklyPlan: zod
         .string()
-        .describe("Weekly-flagged + unfiled spending (the weekly cap's pool)"),
+        .describe(
+          "Weekly-flagged + unfiled spending (the weekly cap's pool): the cautious total",
+        ),
+      weeklyKnown: zod
+        .string()
+        .describe(
+          "(hh-split) weeklyPlan without its unresolved rows — Counts toward plan",
+        ),
+      weeklyUnresolved: zod
+        .string()
+        .describe(
+          '(hh-split) weeklyPlan − weeklyKnown — Unconfirmed; \"0.00\" when none',
+        ),
       monthlyPlan: zod.string().describe("Monthly-flagged spending"),
+      monthlyKnown: zod
+        .string()
+        .describe(
+          "(hh-split) monthlyPlan without its unresolved rows — Counts toward plan",
+        ),
+      monthlyUnresolved: zod
+        .string()
+        .describe(
+          '(hh-split) monthlyPlan − monthlyKnown — Unconfirmed; \"0.00\" when none',
+        ),
       unfiled: zod
         .string()
         .describe("The part of weeklyPlan not filed to an allowance yet"),
@@ -6295,7 +6741,7 @@ export const GetAmexSummaryResponse = zod.object({
         ),
     })
     .describe(
-      "What the card(s) added to the HOUSEHOLD's allowances over the period — the household's plan, never this card's budget. Refunds net per account, never below zero.",
+      "What the card(s) added to the HOUSEHOLD's allowances over the period — the household's plan, never this card's budget. Refunds net per account, never below zero. (hh-split) Each plan figure is the cautious total, split by the F2 evidence rule exactly as GET \/money\/period-breakdown splits `actual` (`evidenceSplitCents`, the same money context and the same forecast suggestions): known + unresolved = the plan figure, to the cent. For one card and a week, weeklyPlan \/ weeklyKnown \/ weeklyUnresolved = that breakdown's actual \/ known \/ unresolved.amount with `account=` the card.",
     ),
   planLink: zod
     .object({
@@ -6559,6 +7005,45 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
   refreshProductDisabledAt: zod.string().nullish(),
+  freshness: zod
+    .object({
+      state: zod.enum([
+        "ok",
+        "stale",
+        "refresh_failed",
+        "needs_reconnect",
+        "never",
+      ]),
+      stale: zod.boolean(),
+      staleReason: zod
+        .union([
+          zod.literal("refresh_failed"),
+          zod.literal("old"),
+          zod.literal("manual_old"),
+          zod.literal(null),
+        ])
+        .nullable(),
+      fetchedAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "When the bank last told us anything: the later of its newest balance reading and its last successful sync",
+        ),
+      lastContactAt: zod
+        .string()
+        .nullable()
+        .describe("The last successful sync"),
+      lastFailureAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "The newest transactions or balance failure not yet followed by a success of the same kind",
+        ),
+    })
+    .optional()
+    .describe(
+      "(Q1) This connection's freshness by the bank balance's own rule\n(computeBankFreshness): never read failure from lastSyncError (the\nliabilities refresh writes it too). GET \/plaid\/items always sends\nit; the single-item mutation responses leave it out.\n",
+    ),
   autoUpdates: zod
     .object({
       on: zod.boolean(),
@@ -6624,6 +7109,45 @@ export const ListPlaidItemsResponseItem = zod.object({
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
   refreshProductDisabledAt: zod.string().nullish(),
+  freshness: zod
+    .object({
+      state: zod.enum([
+        "ok",
+        "stale",
+        "refresh_failed",
+        "needs_reconnect",
+        "never",
+      ]),
+      stale: zod.boolean(),
+      staleReason: zod
+        .union([
+          zod.literal("refresh_failed"),
+          zod.literal("old"),
+          zod.literal("manual_old"),
+          zod.literal(null),
+        ])
+        .nullable(),
+      fetchedAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "When the bank last told us anything: the later of its newest balance reading and its last successful sync",
+        ),
+      lastContactAt: zod
+        .string()
+        .nullable()
+        .describe("The last successful sync"),
+      lastFailureAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "The newest transactions or balance failure not yet followed by a success of the same kind",
+        ),
+    })
+    .optional()
+    .describe(
+      "(Q1) This connection's freshness by the bank balance's own rule\n(computeBankFreshness): never read failure from lastSyncError (the\nliabilities refresh writes it too). GET \/plaid\/items always sends\nit; the single-item mutation responses leave it out.\n",
+    ),
   autoUpdates: zod
     .object({
       on: zod.boolean(),
@@ -6704,6 +7228,45 @@ export const ClearPlaidItemRefreshDisabledResponse = zod.object({
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
   refreshProductDisabledAt: zod.string().nullish(),
+  freshness: zod
+    .object({
+      state: zod.enum([
+        "ok",
+        "stale",
+        "refresh_failed",
+        "needs_reconnect",
+        "never",
+      ]),
+      stale: zod.boolean(),
+      staleReason: zod
+        .union([
+          zod.literal("refresh_failed"),
+          zod.literal("old"),
+          zod.literal("manual_old"),
+          zod.literal(null),
+        ])
+        .nullable(),
+      fetchedAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "When the bank last told us anything: the later of its newest balance reading and its last successful sync",
+        ),
+      lastContactAt: zod
+        .string()
+        .nullable()
+        .describe("The last successful sync"),
+      lastFailureAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "The newest transactions or balance failure not yet followed by a success of the same kind",
+        ),
+    })
+    .optional()
+    .describe(
+      "(Q1) This connection's freshness by the bank balance's own rule\n(computeBankFreshness): never read failure from lastSyncError (the\nliabilities refresh writes it too). GET \/plaid\/items always sends\nit; the single-item mutation responses leave it out.\n",
+    ),
   autoUpdates: zod
     .object({
       on: zod.boolean(),
@@ -6876,6 +7439,45 @@ export const DismissPlaidExpirationWarningResponse = zod.object({
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
   refreshProductDisabledAt: zod.string().nullish(),
+  freshness: zod
+    .object({
+      state: zod.enum([
+        "ok",
+        "stale",
+        "refresh_failed",
+        "needs_reconnect",
+        "never",
+      ]),
+      stale: zod.boolean(),
+      staleReason: zod
+        .union([
+          zod.literal("refresh_failed"),
+          zod.literal("old"),
+          zod.literal("manual_old"),
+          zod.literal(null),
+        ])
+        .nullable(),
+      fetchedAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "When the bank last told us anything: the later of its newest balance reading and its last successful sync",
+        ),
+      lastContactAt: zod
+        .string()
+        .nullable()
+        .describe("The last successful sync"),
+      lastFailureAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "The newest transactions or balance failure not yet followed by a success of the same kind",
+        ),
+    })
+    .optional()
+    .describe(
+      "(Q1) This connection's freshness by the bank balance's own rule\n(computeBankFreshness): never read failure from lastSyncError (the\nliabilities refresh writes it too). GET \/plaid\/items always sends\nit; the single-item mutation responses leave it out.\n",
+    ),
   autoUpdates: zod
     .object({
       on: zod.boolean(),
@@ -7643,6 +8245,8 @@ export const RecomputeMetricsResponse = zod.object({
  * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readMonthAllowance (as GET /money/period-breakdown?period=month: plan, actual, remaining, over) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
+export const getSpineResponseBankConfidencePendingCountMin = 0;
+
 export const GetSpineResponse = zod.object({
   asOf: zod.string().describe("ISO timestamp the snapshot was read"),
   bank: zod.object({
@@ -7856,6 +8460,19 @@ export const GetSpineResponse = zod.object({
         .string()
         .nullable()
         .describe("MoneyPosition.remainingWeek"),
+      knownWeek: zod
+        .string()
+        .describe("(Q1) MoneyPosition.knownWeek — Counts toward plan"),
+      unresolvedWeek: zod
+        .string()
+        .describe("(Q1) MoneyPosition.unresolvedWeek — Unconfirmed"),
+      provisional: zod.boolean().describe("(Q1) MoneyPosition.provisional"),
+      remainingWeekKnown: zod
+        .string()
+        .nullable()
+        .describe(
+          "(Q1) MoneyPosition.remainingWeekKnown; null when the plan is not set",
+        ),
       availableUntilPayday: zod
         .string()
         .nullable()
@@ -7926,6 +8543,86 @@ export const GetSpineResponse = zod.object({
     })
     .describe(
       "(S3) This month's monthly allowance — the same function GET \/money\/period-breakdown?period=month answers with (plan.amount, actual, and S6: remaining, over — allowancePeriodFigures, the breakdown's own call). A screen quotes remaining \/ over; it never subtracts plan − actual itself. Never a debt balance, credit or a limit.",
+    ),
+  bankConfidence: zod
+    .object({
+      fetchedAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "When the bank last told us anything (the server freshness rule's own instant): a Plaid balance → the later of its re-read and the last successful sync; a typed balance → its own time. Null with no snapshot. Staleness is bank.stale \/ bank.staleReason.",
+        ),
+      bankBalance: zod
+        .string()
+        .nullable()
+        .describe(
+          "The bank's own figure as read (= bank.snapshot.balance); null with no snapshot",
+        ),
+      bankAsOf: zod
+        .string()
+        .nullable()
+        .describe(
+          "When it was read (= bank.snapshot.at); null with no snapshot",
+        ),
+      h2Balance: zod
+        .string()
+        .nullable()
+        .describe(
+          "H2's balance today: the snapshot rolled forward through the ledger (= bank.balance)",
+        ),
+      check: zod
+        .object({
+          status: zod.enum([
+            "matches",
+            "off_by",
+            "resolved_since",
+            "not_checked",
+          ]),
+          reason: zod
+            .union([
+              zod.literal("never"),
+              zod.literal("not_forecast_account"),
+              zod.literal("anchor_too_old"),
+              zod.literal("balance_unavailable"),
+              zod.literal(null),
+            ])
+            .nullable(),
+          stale: zod.boolean(),
+          staleReason: zod
+            .union([
+              zod.literal("age"),
+              zod.literal("anchor_changed"),
+              zod.literal("rows_since"),
+              zod.literal(null),
+            ])
+            .nullable(),
+          checkedAt: zod.string().nullable(),
+          difference: zod
+            .string()
+            .nullable()
+            .describe(
+              '|bank − H2| at the check (\"0.00\" when it matched); null when not compared',
+            ),
+          direction: zod
+            .union([
+              zod.literal("bank_higher"),
+              zod.literal("bank_lower"),
+              zod.literal(null),
+            ])
+            .nullable(),
+        })
+        .describe(
+          "(Q1) The last manual Sync's check of the bank's balance against H2's — GET \/banking\/review balanceCheck for the forecast account, field for field (see BankingReviewBalanceCheck).",
+        ),
+      pendingCount: zod
+        .number()
+        .min(getSpineResponseBankConfidencePendingCountMin)
+        .describe(
+          "Pending rows H2's balance counts on the forecast account, dated through today (a pending row its posted row replaced is not one; nor, F6, an expired hold or its reversal — a hold the snapshot held and its reversal count in the balance but are not pending) — GET \/banking\/review cashFlow.pendingCount over the same rows",
+        ),
+    })
+    .describe(
+      '(Q1) Can the bank balance be trusted — the forecast account (readBankConfidence). The household\'s own cash, like `bank`: never a debt, a limit or credit. A screen says \"Matches bank\" \/ \"Off by $X\" \/ \"Not checked\" from `check` only, never from the review count; \"Updated 2 h ago\" from `fetchedAt`; \"N pending\" from `pendingCount`.',
     ),
 });
 
@@ -8007,7 +8704,31 @@ export const GetMoneyPositionResponse = zod
       ),
     unplannedWeek: zod.string(),
     monthlyWeek: zod.string(),
-    remainingWeek: zod.string().nullable(),
+    remainingWeek: zod
+      .string()
+      .nullable()
+      .describe(
+        "Cautious: weekCap + weekAdjustment − spentWeekDiscretionary; null when the plan is not set",
+      ),
+    knownWeek: zod
+      .string()
+      .describe(
+        "(Q1) Counts toward plan: spentWeekDiscretionary without its unresolved rows (the F2 evidence rule), refunds netted per account and never below zero, exactly as spentWeekDiscretionary is",
+      ),
+    unresolvedWeek: zod
+      .string()
+      .describe("(Q1) Unconfirmed: spentWeekDiscretionary − knownWeek (≥ 0)"),
+    provisional: zod
+      .boolean()
+      .describe(
+        "(Q1) unresolvedWeek > max($25, 5% of the cap; $25 with no cap)",
+      ),
+    remainingWeekKnown: zod
+      .string()
+      .nullable()
+      .describe(
+        '(Q1) weekCap + weekAdjustment − knownWeek (negative when over); null when the plan is not set — never \"0.00\"',
+      ),
     paceAllowedToday: zod
       .string()
       .nullable()
@@ -8044,7 +8765,7 @@ export const GetMoneyPositionResponse = zod
       .nullable(),
   })
   .describe(
-    "(PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed; weekAdjustment is the household's own carry-over for this week, never positive, 0 when none). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).",
+    "(PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed; weekAdjustment is the household's own carry-over for this week, never positive, 0 when none). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)). (Q1) The week contract (names in avalanche-core glossary.ts): knownWeek (\"Counts toward plan\") = spentWeekDiscretionary without the F2 evidence rule's unresolved rows, netted the same way; unresolvedWeek (\"Unconfirmed\") = spentWeekDiscretionary − knownWeek; provisional = unresolvedWeek > max($25, 5% of the cap); remainingWeekKnown = weekCap + weekAdjustment − knownWeek, null with no cap. Each equals GET \/money\/period-breakdown's current week (known, unresolved.amount, provisional, remaining) to the cent. remainingWeek, withinPlan and safeToSpendNow stay cautious.",
   );
 
 /**
@@ -8085,7 +8806,16 @@ export const EvaluateAffordResponse = zod.object({
   dateISO: zod.string(),
   baseline: zod.object({
     safeToSpendNow: zod.string().nullable(),
-    remainingWeek: zod.string().nullable(),
+    remainingWeek: zod
+      .string()
+      .nullable()
+      .describe("The cautious total's remaining (includes unconfirmed)"),
+    remainingWeekKnown: zod
+      .string()
+      .nullable()
+      .describe(
+        "(Q5 fix) The plan against what counts toward it (= the position's remainingWeekKnown); null with no cap",
+      ),
     availableUntilPayday: zod.string().nullable(),
     lowest: zod
       .string()
@@ -8100,7 +8830,16 @@ export const EvaluateAffordResponse = zod.object({
   }),
   proposed: zod.object({
     safeToSpendNow: zod.string().nullable(),
-    remainingWeek: zod.string().nullable(),
+    remainingWeek: zod
+      .string()
+      .nullable()
+      .describe("The cautious total's remaining (includes unconfirmed)"),
+    remainingWeekKnown: zod
+      .string()
+      .nullable()
+      .describe(
+        "(Q5 fix) The plan against what counts toward it (= the position's remainingWeekKnown); null with no cap",
+      ),
     availableUntilPayday: zod.string().nullable(),
     lowest: zod
       .string()
@@ -8116,6 +8855,7 @@ export const EvaluateAffordResponse = zod.object({
   delta: zod.object({
     safeToSpendNow: zod.string().nullable(),
     remainingWeek: zod.string().nullable(),
+    remainingWeekKnown: zod.string().nullable(),
     availableUntilPayday: zod.string().nullable(),
     lowest: zod.string(),
     lowestDate: zod
@@ -8547,6 +9287,8 @@ export const getWaysBackResponseOverByMin = 0;
 
 export const getWaysBackResponseDaysLeftMax = 7;
 
+export const getWaysBackResponseTrimsItemHistoryPeriodsMin = 0;
+
 export const GetWaysBackResponse = zod
   .object({
     weekStart: zod.string(),
@@ -8579,13 +9321,19 @@ export const GetWaysBackResponse = zod
           .number()
           .nullable()
           .describe(
-            "Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts. (F3) Each week read only to today's weekday (Sunday through usualThrough's weekday): the usual by today.",
+            "Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents, refunds netted the same way; null when no week counts. (F3) Each week read only to today's weekday (Sunday through usualThrough's weekday): the usual by today. (Q1) Null when fewer than 2 of the weeks hold rows of the category (historyPeriods); (Final #10) also when fewer than half of them do (4 of 8).",
           ),
         usualFullWeek: zod
           .number()
           .nullable()
           .describe(
-            "(F3) The same median over the whole 8 weeks, whole cents; null when no week counts",
+            "(F3) The same median over the whole 8 weeks, whole cents; null when no week counts. (Q1) Null with historyPeriods < 2 (Final #10: or below half of the weeks)",
+          ),
+        historyPeriods: zod
+          .number()
+          .min(getWaysBackResponseTrimsItemHistoryPeriodsMin)
+          .describe(
+            '(Q1) How many of the 8 weeks hold rows of the category. Below 2, or (Final #10) below half of the weeks, usualWeek and usualFullWeek are null (\"Not enough history\").',
           ),
       }),
     ),
@@ -8655,6 +9403,8 @@ export const GetPeriodBreakdownQueryParams = zod.object({
       "Rows listed per group, largest first (each group's amount and count still cover every row).",
     ),
 });
+
+export const getPeriodBreakdownResponseCategoriesItemHistoryPeriodsMin = 0;
 
 export const GetPeriodBreakdownResponse = zod
   .object({
@@ -8761,19 +9511,25 @@ export const GetPeriodBreakdownResponse = zod
             .string()
             .nullable()
             .describe(
-              "Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left. (F3) For the current period each prior period is read only to the same point (usualBasis same_days, through usualThrough): the usual by today, not a whole period.",
+              'Median of the category\'s amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left. (F3) For the current period each prior period is read only to the same point (usualBasis same_days, through usualThrough): the usual by today, not a whole period. (Q1) Null when fewer than 2 of those prior periods hold rows of the category (historyPeriods < 2): \"Not enough history\", never \"0.00\". (Final #10) Also null when fewer than half of them do (4 of 8 weeks, 2 of 3 months). With enough history a real \"0.00\" stays.',
             ),
           usualFullPeriod: zod
             .string()
             .nullable()
             .describe(
-              '(F3) The same median over the whole prior periods (\"a full month usually\"); equals usual for a past period',
+              '(F3) The same median over the whole prior periods (\"a full month usually\"); equals usual for a past period. (Q1) Null with historyPeriods < 2 (Final #10: or below half of the prior periods)',
             ),
           aboveUsual: zod
             .string()
             .nullable()
             .describe(
-              "max(0, amount − usual); null when usual is null. (F3) Against the to-date usual for the current period",
+              "max(0, amount − usual); null when usual is null (including too little history). (F3) Against the to-date usual for the current period",
+            ),
+          historyPeriods: zod
+            .number()
+            .min(getPeriodBreakdownResponseCategoriesItemHistoryPeriodsMin)
+            .describe(
+              '(Q1) How many of the prior periods usual reads (8 weeks, 3 months, after tracking began) hold rows of this category. Below 2, or (Final #10) below half of those periods, usual, usualFullPeriod and aboveUsual are null: the screen says \"Not enough history\".',
             ),
           rows: zod
             .array(
@@ -9644,6 +10400,8 @@ export const GetBankingReviewQueryParams = zod.object({
     .describe("Rows per page of `bucket`, 1 to 100."),
 });
 
+export const getBankingReviewResponseCashFlowPendingCountMin = 0;
+
 export const GetBankingReviewResponse = zod
   .object({
     account: zod.object({
@@ -9705,6 +10463,12 @@ export const GetBankingReviewResponse = zod
               zod.literal(null),
             ])
             .nullable(),
+          fetchedAt: zod
+            .string()
+            .nullable()
+            .describe(
+              "(Q5 fix) When the bank last told us anything, by the server's one rule (= spine.bankConfidence.fetchedAt): a Plaid balance, the later of its re-read and the last successful sync; a typed balance, its own time",
+            ),
           lastContactAt: zod.string().nullable(),
           lastFailureAt: zod.string().nullable(),
           stale: zod.boolean(),
@@ -9729,6 +10493,12 @@ export const GetBankingReviewResponse = zod
         net: zod.string(),
         count: zod.number(),
         pendingNet: zod.string().describe("What the counted pending rows add"),
+        pendingCount: zod
+          .number()
+          .min(getBankingReviewResponseCashFlowPendingCountMin)
+          .describe(
+            "(Q1) How many counted pending rows there are (a pending row its posted row replaced is not one; nor, F6, an expired hold or its reversal, even a held pair the balance counts); the spine's bankConfidence.pendingCount reads the same rule",
+          ),
         supersededExcluded: zod.number(),
         otherExcluded: zod.number(),
       })
@@ -9870,6 +10640,24 @@ export const GetBankingReviewResponse = zod
             .describe(
               "(F2) Income: more_than_expected \/ less_than_expected (received more or less than planned). Expense: over_planned \/ under_planned (paid more or less than planned). Null when there is no variance or it is 0.",
             ),
+          outcome: zod
+            .enum([
+              "received",
+              "received_different",
+              "not_received_yet",
+              "paid",
+              "paid_different",
+              "not_paid_yet",
+              "suggested",
+              "skipped",
+              "missed",
+              "carried",
+              "not_due",
+              "not_decided",
+            ])
+            .describe(
+              "(Q1) What happened to the plan, in its own direction (the web words it; `fate` keeps how the ledger decided it). Money in: received · received_different (a different amount, or part) · not_received_yet. Money out: paid · paid_different · not_paid_yet. Either: suggested (a row may be it), skipped, missed, carried (an everyday hook week whose unpaid purchases moved on), not_due, not_decided (before the window the ledger reads). From fate: matched \/ paid_on_evidence → received or paid (…_different with a cash variance); partial → …_different; on_curve \/ overdue_outside \/ income_not_arrived → not_…_yet.",
+            ),
         }),
       )
       .describe(
@@ -9878,9 +10666,21 @@ export const GetBankingReviewResponse = zod
     notInPlan: zod.object({
       amountDifference: zod.object({
         count: zod.number(),
-        moneyIn: zod.string(),
-        moneyOut: zod.string(),
-        net: zod.string(),
+        moneyIn: zod
+          .string()
+          .describe(
+            '(Q1) Money in: Σ of the bucket\'s deposits, a positive magnitude (\"0.00\" when none)',
+          ),
+        moneyOut: zod
+          .string()
+          .describe(
+            '(Q1) Money out: Σ of the bucket\'s payments and purchases, a positive magnitude (\"0.00\" when none)',
+          ),
+        net: zod
+          .string()
+          .describe(
+            'moneyIn − moneyOut (signed). Not \"total moved\": a screen shows in and out apart',
+          ),
         pendingNet: zod.string(),
         rows: zod
           .array(
@@ -10034,51 +10834,51 @@ export const GetBankingReviewResponse = zod
             zod.object({
               spending: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               card_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               debt_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               transfer: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               income: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               refund: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               other: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -10090,23 +10890,23 @@ export const GetBankingReviewResponse = zod
             zod.object({
               needs_review: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               suggested_match: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -10118,9 +10918,21 @@ export const GetBankingReviewResponse = zod
       }),
       timingDifference: zod.object({
         count: zod.number(),
-        moneyIn: zod.string(),
-        moneyOut: zod.string(),
-        net: zod.string(),
+        moneyIn: zod
+          .string()
+          .describe(
+            '(Q1) Money in: Σ of the bucket\'s deposits, a positive magnitude (\"0.00\" when none)',
+          ),
+        moneyOut: zod
+          .string()
+          .describe(
+            '(Q1) Money out: Σ of the bucket\'s payments and purchases, a positive magnitude (\"0.00\" when none)',
+          ),
+        net: zod
+          .string()
+          .describe(
+            'moneyIn − moneyOut (signed). Not \"total moved\": a screen shows in and out apart',
+          ),
         pendingNet: zod.string(),
         rows: zod
           .array(
@@ -10274,51 +11086,51 @@ export const GetBankingReviewResponse = zod
             zod.object({
               spending: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               card_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               debt_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               transfer: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               income: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               refund: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               other: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -10330,23 +11142,23 @@ export const GetBankingReviewResponse = zod
             zod.object({
               needs_review: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               suggested_match: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -10358,9 +11170,21 @@ export const GetBankingReviewResponse = zod
       }),
       confirmedUnplanned: zod.object({
         count: zod.number(),
-        moneyIn: zod.string(),
-        moneyOut: zod.string(),
-        net: zod.string(),
+        moneyIn: zod
+          .string()
+          .describe(
+            '(Q1) Money in: Σ of the bucket\'s deposits, a positive magnitude (\"0.00\" when none)',
+          ),
+        moneyOut: zod
+          .string()
+          .describe(
+            '(Q1) Money out: Σ of the bucket\'s payments and purchases, a positive magnitude (\"0.00\" when none)',
+          ),
+        net: zod
+          .string()
+          .describe(
+            'moneyIn − moneyOut (signed). Not \"total moved\": a screen shows in and out apart',
+          ),
         pendingNet: zod.string(),
         rows: zod
           .array(
@@ -10514,51 +11338,51 @@ export const GetBankingReviewResponse = zod
             zod.object({
               spending: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               card_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               debt_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               transfer: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               income: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               refund: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               other: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -10570,23 +11394,23 @@ export const GetBankingReviewResponse = zod
             zod.object({
               needs_review: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               suggested_match: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -10598,9 +11422,21 @@ export const GetBankingReviewResponse = zod
       }),
       uncertain: zod.object({
         count: zod.number(),
-        moneyIn: zod.string(),
-        moneyOut: zod.string(),
-        net: zod.string(),
+        moneyIn: zod
+          .string()
+          .describe(
+            '(Q1) Money in: Σ of the bucket\'s deposits, a positive magnitude (\"0.00\" when none)',
+          ),
+        moneyOut: zod
+          .string()
+          .describe(
+            '(Q1) Money out: Σ of the bucket\'s payments and purchases, a positive magnitude (\"0.00\" when none)',
+          ),
+        net: zod
+          .string()
+          .describe(
+            'moneyIn − moneyOut (signed). Not \"total moved\": a screen shows in and out apart',
+          ),
         pendingNet: zod.string(),
         rows: zod
           .array(
@@ -10754,51 +11590,51 @@ export const GetBankingReviewResponse = zod
             zod.object({
               spending: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               card_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               debt_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               transfer: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               income: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               refund: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               other: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -10810,23 +11646,23 @@ export const GetBankingReviewResponse = zod
             zod.object({
               needs_review: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               suggested_match: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -10838,9 +11674,21 @@ export const GetBankingReviewResponse = zod
       }),
       unmatched: zod.object({
         count: zod.number(),
-        moneyIn: zod.string(),
-        moneyOut: zod.string(),
-        net: zod.string(),
+        moneyIn: zod
+          .string()
+          .describe(
+            '(Q1) Money in: Σ of the bucket\'s deposits, a positive magnitude (\"0.00\" when none)',
+          ),
+        moneyOut: zod
+          .string()
+          .describe(
+            '(Q1) Money out: Σ of the bucket\'s payments and purchases, a positive magnitude (\"0.00\" when none)',
+          ),
+        net: zod
+          .string()
+          .describe(
+            'moneyIn − moneyOut (signed). Not \"total moved\": a screen shows in and out apart',
+          ),
         pendingNet: zod.string(),
         rows: zod
           .array(
@@ -10994,51 +11842,51 @@ export const GetBankingReviewResponse = zod
             zod.object({
               spending: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               card_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               debt_payment: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               transfer: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               income: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               refund: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               other: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -11050,23 +11898,23 @@ export const GetBankingReviewResponse = zod
             zod.object({
               needs_review: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               suggested_match: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
                 count: zod.number(),
-                moneyIn: zod.string(),
-                moneyOut: zod.string(),
-                net: zod.string(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
                 pendingNet: zod.string(),
               }),
             }),
@@ -11107,13 +11955,32 @@ export const GetBankingReviewResponse = zod
           "(Σ buckets' net + asPlanned.net + (F6 round 4) counted expired holds' net) − cashFlow.net; always \"0.00\". A counted expired hold is one the bank snapshot held, and its reversal: the balance counts the pair (net 0), no bucket lists it.",
         ),
     }),
-    reviewInbox: zod.object({
-      unresolvedInRange: zod
-        .number()
-        .describe("Rows placed here (dated through today"),
-      badgeCount: zod.number().describe("The Review badge (spine.reviewCount)"),
-      badgeScope: zod.enum(["this calendar month, forecast account"]),
-    }),
+    reviewInbox: zod
+      .object({
+        unresolvedInRange: zod
+          .number()
+          .describe("Rows placed here (dated through today"),
+        unresolvedScope: zod
+          .enum(["this account · this period"])
+          .describe(
+            "(Q1) What unresolvedInRange counts: this review's account (account) and period",
+          ),
+        unresolvedFrom: zod
+          .string()
+          .describe(
+            "(Q1) The first day unresolvedInRange reads (= period.from)",
+          ),
+        unresolvedTo: zod
+          .string()
+          .describe("(Q1) The last day unresolvedInRange reads (= period.to)"),
+        badgeCount: zod
+          .number()
+          .describe("The Review badge (spine.reviewCount)"),
+        badgeScope: zod.enum(["this calendar month, forecast account"]),
+      })
+      .describe(
+        "(Q1) Two counts, each with its own scope — never one under the other's label: unresolvedInRange (this review's account and period) and badgeCount (the Review badge: this calendar month, the forecast account).",
+      ),
     balanceTie: zod
       .object({
         status: zod.enum(["ties", "drift", "not_checked"]),
@@ -11227,7 +12094,9 @@ export const GetBankingReviewResponse = zod
           weekEnd: zod.string(),
           spentWeek: zod
             .string()
-            .describe("GET \/money\/position spentWeekDiscretionary"),
+            .describe(
+              "GET \/money\/position spentWeekDiscretionary — the cautious total (includes unconfirmed)",
+            ),
           weekPlan: zod
             .string()
             .nullable()
@@ -11238,7 +12107,26 @@ export const GetBankingReviewResponse = zod
             .string()
             .nullable()
             .describe(
-              "GET \/money\/position remainingWeek; null when the plan is not set",
+              "GET \/money\/position remainingWeek (cautious); null when the plan is not set",
+            ),
+          knownWeek: zod
+            .string()
+            .describe(
+              "(Q1) GET \/money\/position knownWeek — Counts toward plan (confirmed purchases)",
+            ),
+          unresolvedWeek: zod
+            .string()
+            .describe(
+              "(Q1) GET \/money\/position unresolvedWeek — Unconfirmed; knownWeek + unresolvedWeek = spentWeek",
+            ),
+          provisional: zod
+            .boolean()
+            .describe("(Q1) GET \/money\/position provisional"),
+          remainingWeekKnown: zod
+            .string()
+            .nullable()
+            .describe(
+              "(Q1) GET \/money\/position remainingWeekKnown; null when the plan is not set",
             ),
         }),
         zod.null(),
@@ -11422,6 +12310,11 @@ export const GetReviewProposalsResponse = zod.object({
   items: zod.array(
     zod.object({
       key: zod.string().describe("Stable for the same rows and target"),
+      proposalHash: zod
+        .string()
+        .describe(
+          "(Q2) A fingerprint of what the fix would do (key, kind, action, target, and each listed row's id, amount, pending state, category and occurrence). POST \/review\/proposals\/{key}\/apply echoes it.",
+        ),
       kind: zod.enum([
         "loan_payment",
         "transfer",
@@ -11441,15 +12334,26 @@ export const GetReviewProposalsResponse = zod.object({
                 "Signed: negative is money out (a workbook Amex charge is positive)",
               ),
             pending: zod.boolean(),
+            source: zod
+              .string()
+              .describe(
+                "(Q2) The row's ledger source (plaid:chase, plaid:amex, manual, …), for its link",
+              ),
             account: zod
               .object({
                 id: zod.string().nullable().describe("plaid_accounts.id"),
                 institution: zod.string().nullable(),
                 name: zod.string().nullable(),
                 mask: zod.string().nullable(),
+                externalId: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "(Q2) The account's external Plaid id — the ledgers' plaidAccountId filter, so a screen can link straight to the row",
+                  ),
               })
               .describe(
-                "The account the row is on (a split part keeps its parent's); all null for a row with no linked account",
+                "The account the row is on; all null for a row with no linked account",
               ),
             category: zod.union([
               zod.object({
@@ -11519,6 +12423,548 @@ export const GetReviewProposalsResponse = zod.object({
         .describe("The existing app actions that apply it"),
     }),
   ),
+});
+
+/**
+ * @summary (Q2) The fixes the owner applied, newest first (at most 20; owner only)
+ */
+export const listAppliedReviewProposalsResponseItemsMax = 20;
+
+export const ListAppliedReviewProposalsResponse = zod.object({
+  items: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        proposalKey: zod.string(),
+        kind: zod.enum([
+          "loan_payment",
+          "transfer",
+          "bill_match",
+          "income_category",
+        ]),
+        label: zod.string(),
+        rowCount: zod.number(),
+        filedCount: zod.number(),
+        matchedCount: zod.number(),
+        appliedAt: zod.string(),
+        undoneAt: zod.string().nullable(),
+        undoable: zod.boolean(),
+      }),
+    )
+    .max(listAppliedReviewProposalsResponseItemsMax),
+});
+
+/**
+ * The proposal is recomputed and must be the one the owner saw: the body echoes its proposalHash and the ids of its listed rows (a truncated proposal applies to the rows it lists). income_category and transfer file every row under the target category through the user-decision path (the row locked, a user decision with its flags before and after); loan_payment also does (when the proposal names a category) and marks each row matched to its occurrence; bill_match marks it matched. An occurrence two rows would answer goes to the row dated nearest it. Merchant memory learns once per fix, sign-aware. Every category goes through the direction guard. One record keeps everything the undo needs. dryRun=1 writes nothing and answers each row before and after, the answers the fix would replace, and the figures before and after — this week's and this month's breakdown (actual, known, unresolved), the Budget months the rows fall in, and the Banking review's buckets (before only; see limitations) — read by the same builders as the screens, through the plan the apply writes.
+ * @summary (Q2) Apply one proposed fix in one transaction — or, with dryRun=1, show what it would change (owner only)
+ */
+export const ApplyReviewProposalParams = zod.object({
+  key: zod.coerce.string().describe("The proposal's key (URL-encoded)"),
+});
+
+export const ApplyReviewProposalQueryParams = zod.object({
+  dryRun: zod
+    .enum(["1", "true"])
+    .optional()
+    .describe("Preview only: nothing is written"),
+});
+
+export const applyReviewProposalBodyRowIdsMax = 20;
+
+export const applyReviewProposalBodyProposalHashMax = 64;
+
+export const ApplyReviewProposalBody = zod.object({
+  rowIds: zod
+    .array(zod.string())
+    .min(1)
+    .max(applyReviewProposalBodyRowIdsMax)
+    .describe("The proposal's listed row ids, as shown"),
+  proposalHash: zod.string().min(1).max(applyReviewProposalBodyProposalHashMax),
+});
+
+export const ApplyReviewProposalResponse = zod.union([
+  zod
+    .object({
+      dryRun: zod.literal(true),
+      proposal: zod.object({
+        key: zod.string(),
+        kind: zod.enum([
+          "loan_payment",
+          "transfer",
+          "bill_match",
+          "income_category",
+        ]),
+        proposalHash: zod.string(),
+        action: zod.enum([
+          "file_as_bill_payment",
+          "file_as_debt_payment",
+          "file_as_transfer",
+          "confirm_bill_match",
+          "file_under_income_category",
+        ]),
+        label: zod.string(),
+      }),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string(),
+          displayName: zod.string(),
+          amount: zod.string(),
+          pending: zod.boolean(),
+          source: zod.string(),
+          account: zod
+            .object({
+              id: zod.string().nullable().describe("plaid_accounts.id"),
+              institution: zod.string().nullable(),
+              name: zod.string().nullable(),
+              mask: zod.string().nullable(),
+              externalId: zod
+                .string()
+                .nullable()
+                .describe(
+                  "(Q2) The account's external Plaid id — the ledgers' plaidAccountId filter, so a screen can link straight to the row",
+                ),
+            })
+            .describe(
+              "The account the row is on; all null for a row with no linked account",
+            ),
+          before: zod
+            .object({
+              categoryId: zod.string().nullable(),
+              categoryLockedByUser: zod.boolean(),
+              categoryProvisional: zod.boolean(),
+              isTransfer: zod.boolean(),
+              isTransferUserOverridden: zod.boolean(),
+              weeklyAllowance: zod.boolean(),
+              monthlyAllowance: zod.boolean(),
+              unplannedAllowance: zod.boolean(),
+            })
+            .describe("(Q2) The columns a fix writes on a row"),
+          after: zod
+            .object({
+              categoryId: zod.string().nullable(),
+              categoryLockedByUser: zod.boolean(),
+              categoryProvisional: zod.boolean(),
+              isTransfer: zod.boolean(),
+              isTransferUserOverridden: zod.boolean(),
+              weeklyAllowance: zod.boolean(),
+              monthlyAllowance: zod.boolean(),
+              unplannedAllowance: zod.boolean(),
+            })
+            .describe("(Q2) The columns a fix writes on a row"),
+          resolution: zod
+            .union([
+              zod.object({
+                recurringItemId: zod.string(),
+                occurrenceDate: zod.string(),
+                status: zod.enum(["matched"]),
+              }),
+              zod.null(),
+            ])
+            .describe(
+              "The answer the fix writes for the row (mark matched); null when none",
+            ),
+          resolutionSkipped: zod
+            .union([
+              zod.literal("no_occurrence"),
+              zod.literal("occurrence_shared"),
+              zod.literal(null),
+            ])
+            .nullable()
+            .describe(
+              "Why a row the fix marks matched gets no answer of its own (no occurrence in reach, or another listed row answers it)",
+            ),
+          decisionId: zod
+            .string()
+            .nullish()
+            .describe(
+              "(applied only) The user decision the fix wrote for the row",
+            ),
+        }),
+      ),
+      replaces: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            status: zod.string(),
+            recurringItemId: zod.string().nullable(),
+            occurrenceDate: zod.string().nullable(),
+            matchedTxnId: zod.string().nullable(),
+          }),
+        )
+        .describe(
+          "The answers (resolutions) the fix would delete to write its own",
+        ),
+      learnsMemory: zod
+        .boolean()
+        .describe(
+          "Whether the fix teaches merchant memory (once, from its first row, sign-aware)",
+        ),
+      figures: zod.object({
+        week: zod.object({
+          before: zod
+            .object({
+              start: zod.string(),
+              end: zod.string(),
+              plan: zod
+                .string()
+                .nullable()
+                .describe("Null when no plan is set"),
+              actual: zod.string(),
+              known: zod.string().describe("Counts toward plan"),
+              unresolved: zod.string().describe("Unconfirmed"),
+              remaining: zod.string().nullable(),
+              over: zod.string().nullable(),
+            })
+            .describe(
+              "The period breakdown's own figures (GET \/money\/period-breakdown, household scope)",
+            ),
+          after: zod
+            .object({
+              start: zod.string(),
+              end: zod.string(),
+              plan: zod
+                .string()
+                .nullable()
+                .describe("Null when no plan is set"),
+              actual: zod.string(),
+              known: zod.string().describe("Counts toward plan"),
+              unresolved: zod.string().describe("Unconfirmed"),
+              remaining: zod.string().nullable(),
+              over: zod.string().nullable(),
+            })
+            .describe(
+              "The period breakdown's own figures (GET \/money\/period-breakdown, household scope)",
+            ),
+        }),
+        month: zod.object({
+          before: zod
+            .object({
+              start: zod.string(),
+              end: zod.string(),
+              plan: zod
+                .string()
+                .nullable()
+                .describe("Null when no plan is set"),
+              actual: zod.string(),
+              known: zod.string().describe("Counts toward plan"),
+              unresolved: zod.string().describe("Unconfirmed"),
+              remaining: zod.string().nullable(),
+              over: zod.string().nullable(),
+            })
+            .describe(
+              "The period breakdown's own figures (GET \/money\/period-breakdown, household scope)",
+            ),
+          after: zod
+            .object({
+              start: zod.string(),
+              end: zod.string(),
+              plan: zod
+                .string()
+                .nullable()
+                .describe("Null when no plan is set"),
+              actual: zod.string(),
+              known: zod.string().describe("Counts toward plan"),
+              unresolved: zod.string().describe("Unconfirmed"),
+              remaining: zod.string().nullable(),
+              over: zod.string().nullable(),
+            })
+            .describe(
+              "The period breakdown's own figures (GET \/money\/period-breakdown, household scope)",
+            ),
+        }),
+        budgetMonths: zod.array(
+          zod.object({
+            monthStart: zod.string(),
+            before: zod
+              .object({
+                income: zod.string().describe("summary.income.actual"),
+                expenses: zod.string().describe("summary.expenses.actual"),
+                net: zod.string().describe("summary.net.actual"),
+                lines: zod.array(
+                  zod.object({
+                    categoryId: zod.string(),
+                    name: zod.string(),
+                    kind: zod.string(),
+                    actual: zod.string(),
+                  }),
+                ),
+              })
+              .describe(
+                "The Budget month's own summary (GET \/budget\/months\/{monthStart}) and the lines the fix moves",
+              ),
+            after: zod
+              .object({
+                income: zod.string().describe("summary.income.actual"),
+                expenses: zod.string().describe("summary.expenses.actual"),
+                net: zod.string().describe("summary.net.actual"),
+                lines: zod.array(
+                  zod.object({
+                    categoryId: zod.string(),
+                    name: zod.string(),
+                    kind: zod.string(),
+                    actual: zod.string(),
+                  }),
+                ),
+              })
+              .describe(
+                "The Budget month's own summary (GET \/budget\/months\/{monthStart}) and the lines the fix moves",
+              ),
+          }),
+        ),
+        banking: zod
+          .array(
+            zod.object({
+              account: zod.object({
+                id: zod.string().nullable(),
+                institution: zod.string().nullable(),
+                name: zod.string().nullable(),
+                mask: zod.string().nullable(),
+              }),
+              from: zod.string(),
+              to: zod.string(),
+              before: zod
+                .object({
+                  buckets: zod.object({
+                    amountDifference: zod.object({
+                      count: zod.number(),
+                      moneyIn: zod.string(),
+                      moneyOut: zod.string(),
+                      net: zod.string(),
+                    }),
+                    timingDifference: zod.object({
+                      count: zod.number(),
+                      moneyIn: zod.string(),
+                      moneyOut: zod.string(),
+                      net: zod.string(),
+                    }),
+                    confirmedUnplanned: zod.object({
+                      count: zod.number(),
+                      moneyIn: zod.string(),
+                      moneyOut: zod.string(),
+                      net: zod.string(),
+                    }),
+                    uncertain: zod.object({
+                      count: zod.number(),
+                      moneyIn: zod.string(),
+                      moneyOut: zod.string(),
+                      net: zod.string(),
+                    }),
+                    unmatched: zod.object({
+                      count: zod.number(),
+                      moneyIn: zod.string(),
+                      moneyOut: zod.string(),
+                      net: zod.string(),
+                    }),
+                  }),
+                  asPlanned: zod.object({
+                    count: zod.number(),
+                    net: zod.string(),
+                  }),
+                  unresolvedInRange: zod.number(),
+                })
+                .describe(
+                  "The Banking review's own buckets (GET \/banking\/review) for the account and the rows' dates",
+                ),
+              after: zod
+                .union([
+                  zod
+                    .object({
+                      buckets: zod.object({
+                        amountDifference: zod.object({
+                          count: zod.number(),
+                          moneyIn: zod.string(),
+                          moneyOut: zod.string(),
+                          net: zod.string(),
+                        }),
+                        timingDifference: zod.object({
+                          count: zod.number(),
+                          moneyIn: zod.string(),
+                          moneyOut: zod.string(),
+                          net: zod.string(),
+                        }),
+                        confirmedUnplanned: zod.object({
+                          count: zod.number(),
+                          moneyIn: zod.string(),
+                          moneyOut: zod.string(),
+                          net: zod.string(),
+                        }),
+                        uncertain: zod.object({
+                          count: zod.number(),
+                          moneyIn: zod.string(),
+                          moneyOut: zod.string(),
+                          net: zod.string(),
+                        }),
+                        unmatched: zod.object({
+                          count: zod.number(),
+                          moneyIn: zod.string(),
+                          moneyOut: zod.string(),
+                          net: zod.string(),
+                        }),
+                      }),
+                      asPlanned: zod.object({
+                        count: zod.number(),
+                        net: zod.string(),
+                      }),
+                      unresolvedInRange: zod.number(),
+                    })
+                    .describe(
+                      "The Banking review's own buckets (GET \/banking\/review) for the account and the rows' dates",
+                    ),
+                  zod.null(),
+                ])
+                .describe(
+                  "(Q1) The same review as the fix would leave it: its rows' filing and answers patched, on the forecast ledger rebuilt with the fix (the applied result, to the cent). Null was the Q2 limitation banking_after_not_previewed; it is no longer sent.",
+                ),
+            }),
+          )
+          .describe(
+            "One per checking or savings account the rows are on. (Final #7) A row on a card has no Banking review: it gets no entry here (its own before and after are in rows; the week, month and Budget figures carry it).",
+          ),
+      }),
+      limitations: zod
+        .array(
+          zod.enum([
+            "forecast_pairs_as_before",
+            "banking_after_not_previewed",
+            "listed_rows_only",
+          ]),
+        )
+        .describe(
+          "listed_rows_only — a truncated proposal applies to its listed rows. (Q1) The forecast ledger and the Banking review are rebuilt with the fix for the preview, so forecast_pairs_as_before and banking_after_not_previewed are no longer sent (kept in the enum for older clients).",
+        ),
+    })
+    .describe("(Q2) What a fix would change. Nothing was written."),
+  zod
+    .object({
+      dryRun: zod.literal(false),
+      applicationId: zod.string().describe("Pass it to undo"),
+      appliedAt: zod.string(),
+      proposal: zod.object({
+        key: zod.string(),
+        kind: zod.enum([
+          "loan_payment",
+          "transfer",
+          "bill_match",
+          "income_category",
+        ]),
+        proposalHash: zod.string(),
+        action: zod.enum([
+          "file_as_bill_payment",
+          "file_as_debt_payment",
+          "file_as_transfer",
+          "confirm_bill_match",
+          "file_under_income_category",
+        ]),
+        label: zod.string(),
+      }),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string(),
+          displayName: zod.string(),
+          amount: zod.string(),
+          pending: zod.boolean(),
+          source: zod.string(),
+          account: zod
+            .object({
+              id: zod.string().nullable().describe("plaid_accounts.id"),
+              institution: zod.string().nullable(),
+              name: zod.string().nullable(),
+              mask: zod.string().nullable(),
+              externalId: zod
+                .string()
+                .nullable()
+                .describe(
+                  "(Q2) The account's external Plaid id — the ledgers' plaidAccountId filter, so a screen can link straight to the row",
+                ),
+            })
+            .describe(
+              "The account the row is on; all null for a row with no linked account",
+            ),
+          before: zod
+            .object({
+              categoryId: zod.string().nullable(),
+              categoryLockedByUser: zod.boolean(),
+              categoryProvisional: zod.boolean(),
+              isTransfer: zod.boolean(),
+              isTransferUserOverridden: zod.boolean(),
+              weeklyAllowance: zod.boolean(),
+              monthlyAllowance: zod.boolean(),
+              unplannedAllowance: zod.boolean(),
+            })
+            .describe("(Q2) The columns a fix writes on a row"),
+          after: zod
+            .object({
+              categoryId: zod.string().nullable(),
+              categoryLockedByUser: zod.boolean(),
+              categoryProvisional: zod.boolean(),
+              isTransfer: zod.boolean(),
+              isTransferUserOverridden: zod.boolean(),
+              weeklyAllowance: zod.boolean(),
+              monthlyAllowance: zod.boolean(),
+              unplannedAllowance: zod.boolean(),
+            })
+            .describe("(Q2) The columns a fix writes on a row"),
+          resolution: zod
+            .union([
+              zod.object({
+                recurringItemId: zod.string(),
+                occurrenceDate: zod.string(),
+                status: zod.enum(["matched"]),
+              }),
+              zod.null(),
+            ])
+            .describe(
+              "The answer the fix writes for the row (mark matched); null when none",
+            ),
+          resolutionSkipped: zod
+            .union([
+              zod.literal("no_occurrence"),
+              zod.literal("occurrence_shared"),
+              zod.literal(null),
+            ])
+            .nullable()
+            .describe(
+              "Why a row the fix marks matched gets no answer of its own (no occurrence in reach, or another listed row answers it)",
+            ),
+          decisionId: zod
+            .string()
+            .nullish()
+            .describe(
+              "(applied only) The user decision the fix wrote for the row",
+            ),
+        }),
+      ),
+      replaced: zod.array(
+        zod.object({
+          id: zod.string(),
+          status: zod.string(),
+          recurringItemId: zod.string().nullable(),
+          occurrenceDate: zod.string().nullable(),
+          matchedTxnId: zod.string().nullable(),
+        }),
+      ),
+      learnedMemory: zod.boolean(),
+    })
+    .describe("(Q2) A fix, applied"),
+]);
+
+/**
+ * Puts back every row's category, lock, provisional flag, transfer flag, its person's override and allowance flags; deletes the answers the fix created and restores the ones it replaced (same ids); reopens the review-queue items it answered; marks its decisions undone; restores the merchant memory (or, when more was learned since, switches off the rule it taught). Refuses, writing nothing, when a row it filed or an answer it wrote changed since (changed_since, naming them).
+ * @summary (Q2) Undo one applied fix, whole and exactly (owner only)
+ */
+export const UndoAppliedReviewProposalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UndoAppliedReviewProposalResponse = zod.object({
+  applicationId: zod.string(),
+  undoneAt: zod.string(),
+  rows: zod.number().describe("Rows put back"),
+  answersRemoved: zod.number(),
+  answersRestored: zod.number(),
+  memory: zod.enum(["none", "restored", "disabled", "kept"]),
 });
 
 /**

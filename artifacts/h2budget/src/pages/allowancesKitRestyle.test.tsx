@@ -541,3 +541,59 @@ describe("Allowances — an expired hold counts nowhere on the page (F6 round 4)
   });
 });
 
+
+// ⭐ (F6 round 6, completeness finding 1) A HELD PAIR — a hold the bank snapshot
+// held, and its reversal — comes from the server `expiredHold: false,
+// expiredPair: true`: counted in cash, in no spending total. Listed in a drill,
+// it carries its own quiet label, so the rows a group lists add up to its
+// header (round 5: listed bare beside the header's $49.37 — $101.37 on screen).
+describe("Allowances — a held pair is labelled in the drill (F6 round 6)", () => {
+  const PAIR_TXNS: Tx[] = [
+    { ...tx({ id: "p1", amount: "-52.00", occurredOn: "2026-05-06", monthlyAllowance: true }), expiredPair: true } as Tx,
+    tx({ id: "r3", amount: "-49.37", occurredOn: "2026-05-07", monthlyAllowance: true }),
+    { ...tx({ id: "p2", amount: "-80.00", occurredOn: "2026-05-11", weeklyAllowance: true, weeklyBucket: "groceries" }), expiredPair: true } as Tx,
+    tx({ id: "w1", amount: "-120.25", occurredOn: "2026-05-11", weeklyAllowance: true, weeklyBucket: "groceries" }),
+  ];
+  const amountOf = (id: string) => -Number(PAIR_TXNS.find((t) => t.id === id)!.amount);
+
+  async function openGroup(bucket: string, group: string): Promise<HTMLElement> {
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.click(screen.getByTestId(`allowance-bucket-${bucket}`));
+    const g = screen.getByTestId(`allowance-group-${group}`);
+    fireEvent.click(g);
+    return g;
+  }
+  /** The ids a group lists, and the ones without a label. */
+  function listed(): { all: string[]; unlabelled: string[] } {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-testid^='allowance-txn-']"));
+    const all = rows.map((r) => r.getAttribute("data-testid")!.slice("allowance-txn-".length));
+    const unlabelled = rows
+      .filter((r) => !r.querySelector("[data-testid^='label-expired-']"))
+      .map((r) => r.getAttribute("data-testid")!.slice("allowance-txn-".length));
+    return { all, unlabelled };
+  }
+
+  it("monthly: 'Uncategorized 2 · $49.37'; the pair row says 'Hold and its reversal · not counted here'; the unlabelled rows add to the header", async () => {
+    txns = PAIR_TXNS;
+    renderPage();
+    const group = await openGroup("monthly", "_uncat");
+    expect(group.textContent).toContain(usd(49.37));
+    expect(screen.getByTestId("label-expired-pair-p1").textContent).toBe("Hold and its reversal · not counted here");
+    expect(screen.queryByTestId("label-expired-hold-p1")).toBeNull();
+    expect(screen.queryByTestId("label-expired-pair-r3")).toBeNull();
+    const { all, unlabelled } = listed();
+    expect(all.sort()).toEqual(["p1", "r3"]);
+    expect(unlabelled.reduce((s, id) => s + amountOf(id), 0)).toBeCloseTo(49.37, 2);
+  });
+
+  it("weekly: the groceries group reads $120.25 and lists the pair row labelled", async () => {
+    txns = PAIR_TXNS;
+    renderPage();
+    const group = await openGroup("weekly", "groceries");
+    expect(group.textContent).toContain(usd(120.25));
+    expect(screen.getByTestId("label-expired-pair-p2")).toBeTruthy();
+    const { all, unlabelled } = listed();
+    expect(all.sort()).toEqual(["p2", "w1"]);
+    expect(unlabelled.reduce((s, id) => s + amountOf(id), 0)).toBeCloseTo(120.25, 2);
+  });
+});

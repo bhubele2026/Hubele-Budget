@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  asksForAnswer,
   buildLineRegister,
   filterForecastTxns,
   type Transaction,
@@ -271,3 +272,22 @@ describe("Forecast Reconcile: an expired hold is in neither the inbox nor the ru
   });
 });
 
+
+// ⭐ (F6 round 5, review finding 3) A hold the bank snapshot held and its
+// reversal (`expiredPair`, `expiredHold: false`): the bank balance counts the
+// reversal — the money came back — so the running balance walks it (round 4 read
+// low by it); but neither asks for an answer, as the review badge never asks.
+describe("Forecast Reconcile: a held hold's reversal walks the balance and asks for no answer", () => {
+  const checking = new Set<string>([CHASE_ACCT]);
+  it("a car hold −80 (05-01, inside the 05-02 read) and its +80 reversal (05-08) beside a +1,000 payroll: the balance after the payroll is 2,080.00 (round 4: 2,000.00); the inbox and the list hold the payroll only", () => {
+    const hold = { ...txn("hold", "2026-05-01", "-80.00", { plaidAccountId: CHASE_ACCT, source: "plaid:chase" }), expiredHold: false, expiredPair: true };
+    const back = { ...txn("back", "2026-05-08", "80.00", { plaidAccountId: CHASE_ACCT, source: "plaid:chase" }), expiredHold: false, expiredPair: true };
+    const pay = { ...txn("pay", "2026-05-09", "1000.00", { plaidAccountId: CHASE_ACCT, source: "plaid:chase" }), expiredHold: false };
+    const filtered = filterForecastTxns([hold, back, pay], checking, TODAY);
+    expect(filtered.map((t) => t.id)).toEqual(["hold", "back", "pay"]);
+    const { rows, allBank } = buildLineRegister({ ...baseOpts, snapshotISO: "2026-05-02", txns: filtered, resolutions: [] });
+    expect(rows.find((r) => r.kind === "bank" && r.txn.id === "pay")?.runningBalance).toBe(2080);
+    expect(rows.filter((r) => r.kind === "bank").map((r) => (r as { txn: { id: string } }).txn.id)).toEqual(["pay"]);
+    expect(allBank.filter((b) => b.status === "pending_bank" && asksForAnswer(b.txn)).map((b) => b.txn.id)).toEqual(["pay"]);
+  });
+});

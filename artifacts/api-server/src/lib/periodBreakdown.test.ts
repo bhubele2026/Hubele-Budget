@@ -15,6 +15,8 @@ import {
   BREAKDOWN_ROWS_MAX,
   MOVEMENT_RULES,
   PFC_CARD_PAYMENT,
+  USUAL_MIN_HISTORY_PERIODS,
+  usualHistoryNeeded,
   allowancePeriodFigures,
   allowanceRowOf,
   classifyMovement,
@@ -338,6 +340,85 @@ describe("periodBreakdown — the week", () => {
       rowsPerGroup: 10,
     });
     expect(fresh.categories[0]).toMatchObject({ usualCents: null, aboveUsualCents: null });
+    // (Q1) The worked weeks hold Groceries rows in 4 of the 8 (9/6, 9/13, 9/20, 9/27).
+    expect(b.categories[0]!.historyPeriods).toBe(4);
+    expect(fresh.categories[0]!.historyPeriods).toBe(0);
+  });
+
+  it("⭐ (Q1) not enough history: fewer than 2 prior weeks with rows of the category → usual, full usual and above usual null", () => {
+    expect(USUAL_MIN_HISTORY_PERIODS).toBe(2);
+    const starts = priorPeriodStarts("week", "2026-10-04", "2026-05-01");
+    const hist = (rows: Array<[string, string, string]>) =>
+      rows.map(([d, a, c], i) => ({
+        ...input(row({ id: `h${i}`, occurredOn: d, amount: a, categoryId: c, weeklyAllowance: true })),
+        periodStart: priorWeekOf(d),
+      }));
+    const week = (history: ReturnType<typeof hist>) =>
+      periodBreakdown({
+        period: "week",
+        rows: [
+          input(row({ id: "food", amount: "-90.00", categoryId: "cat-food", weeklyAllowance: true })),
+          input(row({ id: "gas", amount: "-30.00", categoryId: "cat-gas", weeklyAllowance: true })),
+        ],
+        planCents: 30000,
+        carryOverCents: null,
+        history: { starts, rows: history },
+        categoryNames: NAMES,
+        rowsPerGroup: 10,
+        sameDaysThrough: "2026-10-07",
+      });
+    // Gas: one prior week. Before Q1 the median of [0 ×7, 50.00] read "Usual $0.00 · above usual $30.00".
+    const one = week(hist([["2026-09-28", "-50.00", "cat-gas"]]));
+    const gas = one.categories.find((c) => c.categoryId === "cat-gas")!;
+    expect(gas).toMatchObject({ usualCents: null, usualFullPeriodCents: null, aboveUsualCents: null, historyPeriods: 1 });
+    // Groceries: none at all.
+    expect(one.categories.find((c) => c.categoryId === "cat-food")).toMatchObject({ usualCents: null, aboveUsualCents: null, historyPeriods: 0 });
+    // ⭐ (Final #10) Gas in two prior weeks of eight: below half → not enough history.
+    // Before: the median of [0 ×6, 20.00, 50.00] read "Usual $0.00 · above usual $30.00".
+    const two = week(hist([["2026-09-28", "-50.00", "cat-gas"], ["2026-09-21", "-20.00", "cat-gas"]]));
+    expect(two.categories.find((c) => c.categoryId === "cat-gas")).toMatchObject({
+      usualCents: null,
+      usualFullPeriodCents: null,
+      aboveUsualCents: null,
+      historyPeriods: 2,
+    });
+    // Three of eight: still below half.
+    const three = week(hist([["2026-09-28", "-50.00", "cat-gas"], ["2026-09-21", "-20.00", "cat-gas"], ["2026-09-14", "-40.00", "cat-gas"]]));
+    expect(three.categories.find((c) => c.categoryId === "cat-gas")).toMatchObject({ usualCents: null, historyPeriods: 3 });
+    // Five of eight (Mondays: every row is to-date): quoted. [0 ×3, 20, 30, 40, 50, 60] → floor((20+30)/2) = 25.00.
+    const fiveRows: Array<[string, string, string]> = [
+      ["2026-09-28", "-50.00", "cat-gas"],
+      ["2026-09-21", "-20.00", "cat-gas"],
+      ["2026-09-14", "-40.00", "cat-gas"],
+      ["2026-09-07", "-30.00", "cat-gas"],
+      ["2026-08-31", "-60.00", "cat-gas"],
+    ];
+    const five = week(hist(fiveRows));
+    expect(five.categories.find((c) => c.categoryId === "cat-gas")).toMatchObject({
+      usualCents: 2500,
+      usualFullPeriodCents: 2500,
+      aboveUsualCents: 500,
+      historyPeriods: 5,
+    });
+    // Exactly half (four of eight) is enough: [0 ×4, 20, 30, 40, 50] → floor((0+20)/2) = 10.00.
+    const four = week(hist(fiveRows.slice(0, 4)));
+    expect(four.categories.find((c) => c.categoryId === "cat-gas")).toMatchObject({ usualCents: 1000, historyPeriods: 4 });
+    // A short window (tracking began three weeks before): half of 3 rounds up to 2 — two weeks are enough.
+    const short = periodBreakdown({
+      period: "week",
+      rows: [input(row({ id: "gas", amount: "-30.00", categoryId: "cat-gas", weeklyAllowance: true }))],
+      planCents: 30000,
+      carryOverCents: null,
+      history: { starts: priorPeriodStarts("week", "2026-10-04", "2026-09-13"), rows: hist([["2026-09-28", "-50.00", "cat-gas"], ["2026-09-21", "-20.00", "cat-gas"]]) },
+      categoryNames: NAMES,
+      rowsPerGroup: 10,
+      sameDaysThrough: "2026-10-07",
+    });
+    expect(short.categories[0]).toMatchObject({ usualCents: 2000, historyPeriods: 2 });
+    expect([usualHistoryNeeded(8), usualHistoryNeeded(3), usualHistoryNeeded(1), usualHistoryNeeded(0)]).toEqual([4, 2, 2, 2]);
+    // The figures and their identities do not move: only the usual columns.
+    expect(one.actualCents).toBe(12000);
+    expect(groupsPlusFloor(one)).toBe(one.actualCents);
   });
 
   it("⭐ on seeded weeks the figure IS computePosition's: spent, remaining and over, to the cent; Σ groups + floor = actual", () => {
@@ -384,6 +465,68 @@ describe("periodBreakdown — the week", () => {
       expect(groupsPlusFloor(b), `week ${w}`).toBe(b.actualCents);
       expect(b.refundFloorAdjustmentCents).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it("⭐ (Q1) the week contract: on seeded weeks with unresolved rows, the position's knownWeek / unresolvedWeek / provisional / remainingWeekKnown ARE the breakdown's known / unresolved / provisional / remaining", () => {
+    let seed = 11;
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    let sawUnresolved = 0;
+    let sawProvisional = 0;
+    for (let w = 0; w < 400; w += 1) {
+      const rows: BreakdownRowInput<string>[] = [];
+      const n = Math.floor(rnd() * 12);
+      for (let i = 0; i < n; i += 1) {
+        const onAmex = rnd() < 0.4;
+        const refund = rnd() < 0.2;
+        const mag = Math.round(1 + rnd() * 15000) / 100;
+        const r = row({
+          id: `q${w}r${i}`,
+          occurredOn: `2026-10-0${4 + Math.floor(rnd() * 6)}`,
+          source: onAmex ? "plaid:amex" : "plaid:chase",
+          plaidAccountId: onAmex ? AMEX : CHECKING,
+          amount: refund ? mag : -mag,
+          description: refund ? "STORE REFUND" : "STORE",
+          categoryId: [null, "cat-food", "cat-gas"][Math.floor(rnd() * 3)]!,
+          weeklyAllowance: rnd() < 0.4,
+          unplannedAllowance: rnd() < 0.1,
+        });
+        // The evidence rule's class, as the server tags it (an outflow may be unresolved).
+        const evidenceClass = !refund && rnd() < 0.35 ? ("unresolved" as const) : rnd() < 0.5 ? ("known_purchase" as const) : null;
+        rows.push({ ...input(r), evidenceClass });
+      }
+      const cap = rnd() < 0.2 ? null : Math.round(rnd() * 50000);
+      const adj = rnd() < 0.3 ? -Math.round(rnd() * 5000) : null;
+      const b = periodBreakdown({ period: "week", rows, planCents: cap, carryOverCents: adj, history: empty, categoryNames: NAMES, rowsPerGroup: 50 });
+      const pos = computePosition(positionInputs(rows, cap, adj));
+      const c = (v: string | null) => (v == null ? null : Math.round(Number(v) * 100));
+      expect(c(pos.knownWeek), `week ${w}`).toBe(b.knownCents);
+      expect(c(pos.unresolvedWeek), `week ${w}`).toBe(b.unresolved.cents);
+      expect(pos.provisional, `week ${w}`).toBe(b.provisional);
+      expect(c(pos.remainingWeekKnown), `week ${w}`).toBe(b.remainingCents);
+      // known + unresolved = the cautious total, to the cent; the cautious figures do not move.
+      expect(c(pos.knownWeek)! + c(pos.unresolvedWeek)!, `week ${w}`).toBe(c(pos.spentWeekDiscretionary));
+      expect(c(pos.remainingWeek), `week ${w}`).toBe(cap == null ? null : cap + (adj ?? 0) - b.actualCents);
+      if (b.unresolved.cents > 0) sawUnresolved += 1;
+      if (b.provisional) sawProvisional += 1;
+    }
+    // Not vacuous.
+    expect(sawUnresolved).toBeGreaterThan(50);
+    expect(sawProvisional).toBeGreaterThan(20);
+  });
+
+  it("(Q1) no plan: remainingWeekKnown is null (never \"0.00\"); knownWeek and unresolvedWeek still say what was spent", () => {
+    const rows = [
+      { ...input(row({ id: "u", amount: "-40.00" })), evidenceClass: "unresolved" as const },
+      { ...input(row({ id: "k", amount: "-12.50", weeklyAllowance: true, categoryId: "cat-food" })), evidenceClass: "known_purchase" as const },
+    ];
+    const pos = computePosition(positionInputs(rows, null, null));
+    expect(pos).toMatchObject({ spentWeekDiscretionary: "52.50", knownWeek: "12.50", unresolvedWeek: "40.00", provisional: true, remainingWeekKnown: null, remainingWeek: null });
+    // A row with no class (the afford check's purchase, an old caller) counts as known.
+    const plain = computePosition({ ...positionInputs([], 30000, null), weekRows: [{ coverage: "needs_classification", spend: 9 }] });
+    expect(plain).toMatchObject({ knownWeek: "9.00", unresolvedWeek: "0.00", provisional: false, remainingWeekKnown: "291.00", remainingWeek: "291.00" });
   });
 });
 
@@ -446,7 +589,8 @@ function positionInputs(rows: readonly BreakdownRowInput<string>[], capCents: nu
     cashBuffer: "0",
     reservesHeld: 0,
     weekCap: capCents == null ? null : capCents / 100,
-    weekRows: rows.map((r) => r.allowance),
+    // (Q1) Each row carries its evidence class, as `loadPositionInputs` hands it over.
+    weekRows: rows.map((r) => ({ ...r.allowance, evidenceClass: r.evidenceClass ?? null })),
     freshness: { stale: false, staleReason: null, asOfBank: null },
     status: "no_data",
     weekAdjustmentCents: adj,

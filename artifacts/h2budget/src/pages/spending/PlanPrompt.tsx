@@ -8,10 +8,12 @@ import {
 } from "@workspace/api-client-react/features";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { OWN_INVALIDATION } from "@/lib/mutationInvalidation";
 import { PlanDryRunPreview } from "@/components/plan/PlanDryRunPreview";
 import { parsePositiveDollars, planErrorWords } from "@/lib/planWords";
 import { formatCurrency } from "@/lib/utils";
 import { btn, btnSecondary, fieldLabel, input } from "@/ui";
+import type { Owner } from "@/hooks/useOwner";
 import { startWords, type PeriodView } from "./periodDates";
 
 /**
@@ -35,6 +37,9 @@ interface Pick {
   custom: boolean;
 }
 
+/** How long a typed amount rests before its dry run is asked for. */
+export const TYPED_DEBOUNCE_MS = 150;
+
 const WORD: Record<PeriodView, { plan: string; noun: string }> = {
   week: { plan: "weekly", noun: "this week" },
   month: { plan: "monthly", noun: "this month" },
@@ -50,14 +55,16 @@ export function PlanPrompt({
   /** The current period's first day: the plan's `effectiveFrom`. */
   start: string;
   prefills: readonly AllowancePlanPrefill[];
-  canSet: boolean;
+  /** (Q4) true | false | "unknown": unknown shows a placeholder, never the denial. */
+  canSet: Owner;
 }) {
   const period = view === "week" ? "weekly" : "monthly";
   const w = WORD[view];
   const qc = useQueryClient();
   const { toast } = useToast();
   const create = useCreateAllowancePlan();
-  const check = useCreateAllowancePlan();
+  // The dry run writes nothing: it must not refetch the spine and every screen (FixDialog does the same).
+  const check = useCreateAllowancePlan({ mutation: { meta: OWN_INVALIDATION } });
   const [dry, setDry] = useState<{ amount: string; data: AllowancePlanDryRun | null; failed: boolean } | null>(null);
   const [pick, setPick] = useState<Pick | null>(null);
   const [typed, setTyped] = useState("");
@@ -65,7 +72,7 @@ export function PlanPrompt({
 
   const typedAmount = pick?.custom ? parsePositiveDollars(typed) : pick ? pick.amount : null;
   useEffect(() => {
-    if (!typedAmount || !canSet) {
+    if (!typedAmount || canSet !== true) {
       setDry(null);
       return;
     }
@@ -78,7 +85,8 @@ export function PlanPrompt({
           onError: () => live && setDry({ amount: typedAmount, data: null, failed: true }),
         },
       );
-    const t = setTimeout(run, pick?.custom ? 400 : 0);
+    // A typed amount waits a beat (one request per pause); a tapped amount asks at once.
+    const t = setTimeout(run, pick?.custom ? TYPED_DEBOUNCE_MS : 0);
     return () => {
       live = false;
       clearTimeout(t);
@@ -91,6 +99,9 @@ export function PlanPrompt({
   const seen = new Set<string>(primary ? [primary.amount] : []);
   const others = mine.filter((p) => (seen.has(p.amount) ? false : (seen.add(p.amount), true)));
 
+  if (canSet === "unknown") {
+    return <div className="skeleton h-6 w-2/3 rounded" aria-busy="true" data-testid="plan-prompt-owner-unknown" />;
+  }
   if (!canSet) {
     return (
       <p className="text-body text-neutral-600" data-testid="plan-prompt-readonly">

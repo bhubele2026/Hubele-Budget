@@ -18,6 +18,12 @@ const payoffModeView = (m: CardPayoffModeView) => ({
   source: m.source,
   reason: m.reason,
   debtId: m.debtId,
+  // (Q1) The one definition every screen words.
+  paidAs: m.paidAs,
+  // (Q6b) Whether "Paying down" can take effect, from the server's own rule.
+  payDown: m.payDown,
+  // (Q6b r3) What "Use the default" would resolve to.
+  defaultMode: m.defaultMode,
 });
 
 const router: IRouter = Router();
@@ -172,7 +178,17 @@ router.get("/amex/weekly-payoff", requireAuth, async (req, res): Promise<void> =
   ]);
 
   // (F1) Additive: how every card is paid. `cards` and the combined totals are unchanged.
-  res.json({ ...payoff, payoffModes: modes.map(payoffModeView) });
+  // ⭐ (Q1) Every card — band and debt-linked alike — carries the one definition
+  // (`paidAs`), so the band splits by how a card is paid, never by "has a debt
+  // row": an archived-debt card is in full, not "on the payoff plan". Which cards
+  // sit in `cards` and every figure are unchanged (the hook reads them).
+  const paidAsById = new Map(modes.map((m) => [m.accountId, m.paidAs] as const));
+  res.json({
+    ...payoff,
+    cards: payoff.cards.map((c) => ({ ...c, paidAs: paidAsById.get(c.accountId) ?? null })),
+    debtLinkedCards: payoff.debtLinkedCards.map((c) => ({ ...c, paidAs: paidAsById.get(c.accountId) ?? null })),
+    payoffModes: modes.map(payoffModeView),
+  });
 });
 
 /**

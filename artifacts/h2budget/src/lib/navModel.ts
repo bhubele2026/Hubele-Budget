@@ -87,7 +87,7 @@ export const SECTIONS: Section[] = [
       { name: "Overview", href: "/forecast/overview" },
       { name: "Forecast", href: "/forecast", owns: [{ path: "/forecast" }, { path: "/next/forecast" }] },
       // /review/categories and /review/suggestions are More's, by the longer path.
-      { name: "Reconcile", href: "/review" },
+      { name: "To review", href: "/review" },
       { name: "Bills", href: "/bills" },
     ],
   },

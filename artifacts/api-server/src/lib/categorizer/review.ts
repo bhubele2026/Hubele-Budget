@@ -8,14 +8,23 @@ import {
   merchantMemoryTable,
   plaidAccountsTable,
   transactionsTable,
+  type DecisionRowFlags,
 } from "@workspace/db";
 import { categoryDirectionConflict, isCardLedgerRow, type DirectionConflict } from "@workspace/avalanche-core";
 import { merchantSignature } from "../merchantNameExtract";
 import { uncategorizedCategoryIds } from "../pendingFiling";
 import { spendContextOf } from "../spendContext";
+import type { Exec } from "./db";
 import { DIRECTION_EXPLANATION } from "./direction";
 import { rowsWithSignatures, type RetroactiveCandidates } from "./memory";
-import { categoryBelongs, recordHandFiling, setCategoryByHand } from "./userDecisions";
+import {
+  DECISION_FLAG_COLUMNS,
+  DECISION_FLAG_KEYS,
+  categoryBelongs,
+  decisionFlagsOf,
+  recordHandFiling,
+  setCategoryByHand,
+} from "./userDecisions";
 
 const OPEN = and(
   inArray(categoryDecisionsTable.band, ["provisional", "queue"]),
@@ -245,8 +254,67 @@ export async function queuePickConflict(
   txnId: string,
   categoryId: string,
 ): Promise<DirectionConflict | null> {
-  const [row] = await db
+  return (await directionConflictsOf(householdId, [txnId], categoryId)).get(txnId) ?? null;
+}
+
+/**
+ * (Q2) What a write sets on the row BESIDE the category, among the fields the
+ * direction rule reads: the guard judges the row as the write leaves it (a body
+ * that also marks the row a transfer is never a conflict).
+ */
+export interface DirectionRowPatch {
+  amount?: string;
+  source?: string;
+  description?: string;
+  isTransfer?: boolean;
+  debtId?: string | null;
+  isExternalCardPayment?: boolean;
+  reimbursable?: boolean;
+}
+
+/** (Q2) The fields of a request body the direction rule reads (absent keys stay absent). */
+export function directionPatchOf(body: Record<string, unknown>): DirectionRowPatch {
+  const out: DirectionRowPatch = {};
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k) && body[k] !== undefined;
+  if (has("amount")) out.amount = String(body.amount);
+  if (has("source")) out.source = String(body.source);
+  if (has("description")) out.description = String(body.description);
+  if (has("isTransfer")) out.isTransfer = body.isTransfer === true;
+  if (has("debtId")) out.debtId = (body.debtId as string | null) ?? null;
+  if (has("isExternalCardPayment")) out.isExternalCardPayment = body.isExternalCardPayment === true;
+  if (has("reimbursable")) out.reimbursable = body.reimbursable === true;
+  return out;
+}
+
+/**
+ * ⭐ (Q2) THE DIRECTION GUARD FOR MANY ROWS AT ONCE — the queue's rule
+ * (`categoryDirectionConflict`) for every row a write would file under
+ * `categoryId`, in three reads (the rows, the categories, the accounts). Only
+ * the conflicting rows are in the map; a row not in the household is skipped.
+ * PATCH, bulk-update, recategorize-by-pattern, the agent's set_category and a
+ * proposed fix all ask it before they write anything.
+ *
+ * ⚠️ THE ONE EXCEPTION (Q2, kept by Q1 on purpose): a PATTERN UNDO —
+ * `POST /transactions/recategorize-by-pattern` carrying `lockedIds` — is not
+ * judged. It restores each row's OWN earlier filing (what the rows carried
+ * before the pattern moved them), not a new pick; judging it could strand the
+ * rows in the very category the Undo exists to leave. Every other write that
+ * files money against its direction answers 409 `direction_conflict`.
+ * (Documented again in reviewCorrections.ts and at the route.)
+ */
+export async function directionConflictsOf(
+  householdId: string,
+  txnIds: readonly string[],
+  categoryId: string,
+  opts: { patch?: DirectionRowPatch; exec?: Exec } = {},
+): Promise<Map<string, DirectionConflict>> {
+  const out = new Map<string, DirectionConflict>();
+  const ids = [...new Set(txnIds)];
+  if (ids.length === 0) return out;
+  const exec = opts.exec ?? db;
+  const rows = await exec
     .select({
+      id: transactionsTable.id,
       amount: transactionsTable.amount,
       source: transactionsTable.source,
       isTransfer: transactionsTable.isTransfer,
@@ -259,10 +327,11 @@ export async function queuePickConflict(
       plaidAccountId: transactionsTable.plaidAccountId,
     })
     .from(transactionsTable)
-    .where(and(eq(transactionsTable.id, txnId), eq(transactionsTable.householdId, householdId)));
-  if (!row) return null;
-  const [cats, account] = await Promise.all([
-    db
+    .where(and(inArray(transactionsTable.id, ids), eq(transactionsTable.householdId, householdId)));
+  if (rows.length === 0) return out;
+  const accountIds = [...new Set(rows.map((r) => r.plaidAccountId).filter((a): a is string => !!a))];
+  const [cats, accounts] = await Promise.all([
+    exec
       .select({
         id: budgetCategoriesTable.id,
         name: budgetCategoriesTable.name,
@@ -271,17 +340,37 @@ export async function queuePickConflict(
       })
       .from(budgetCategoriesTable)
       .where(eq(budgetCategoriesTable.householdId, householdId)),
-    row.plaidAccountId
-      ? db
-          .select({ type: plaidAccountsTable.type })
+    accountIds.length > 0
+      ? exec
+          .select({ accountId: plaidAccountsTable.accountId, type: plaidAccountsTable.type })
           .from(plaidAccountsTable)
-          .where(and(eq(plaidAccountsTable.householdId, householdId), eq(plaidAccountsTable.accountId, row.plaidAccountId)))
-      : Promise.resolve([] as { type: string | null }[]),
+          .where(and(eq(plaidAccountsTable.householdId, householdId), inArray(plaidAccountsTable.accountId, accountIds)))
+      : Promise.resolve([] as { accountId: string; type: string | null }[]),
   ]);
-  return categoryDirectionConflict(row, categoryId, spendContextOf(cats), {
-    isCardAccount: isCardLedgerRow(row.source, account[0]?.type ?? null),
-    uncategorizedIds: uncategorizedCategoryIds(cats),
-  });
+  const typeOf = new Map(accounts.map((a) => [a.accountId, a.type] as const));
+  const spendCtx = spendContextOf(cats);
+  const uncategorizedIds = uncategorizedCategoryIds(cats);
+  for (const r of rows) {
+    const row = { ...r, ...(opts.patch ?? {}) };
+    const conflict = categoryDirectionConflict(row, categoryId, spendCtx, {
+      isCardAccount: isCardLedgerRow(row.source, r.plaidAccountId ? (typeOf.get(r.plaidAccountId) ?? null) : null),
+      uncategorizedIds,
+    });
+    if (conflict) out.set(r.id, conflict);
+  }
+  return out;
+}
+
+/** (Q2) The 409 body a refused write answers with: the first conflict in words, and every row's. */
+export function directionRefusalOf(conflicts: ReadonlyMap<string, DirectionConflict>): {
+  error: string;
+  code: "direction_conflict";
+  conflict: DirectionConflict;
+  conflicts: Array<{ id: string; conflict: DirectionConflict }>;
+} {
+  const list = [...conflicts].map(([id, conflict]) => ({ id, conflict })).sort((a, b) => a.id.localeCompare(b.id));
+  const first = list[0]!.conflict;
+  return { error: DIRECTION_EXPLANATION[first], code: "direction_conflict", conflict: first, conflicts: list };
 }
 
 async function openDecision(householdId: string, decisionId: string) {
@@ -342,6 +431,8 @@ export async function resolveDecision(
     previousCategoryId: set.previousCategoryId,
     categoryId: target,
     answering: { decisionId: d.id, resolution },
+    flagsBefore: set.flagsBefore,
+    flagsAfter: set.flagsAfter,
   });
   return done(resolution, target, filed?.decisionId ?? null, filed?.retroactiveCandidates ?? null);
 }
@@ -365,11 +456,32 @@ export function undoRefusal(
 }
 
 /**
+ * (Q2) The flags an undo puts back: each one the decision CHANGED (before ≠
+ * after) and the row still holds as the decision left it. A flag someone set
+ * since is theirs and stays. Empty for a decision written before 0210 (no
+ * snapshot): its undo restores the category only, as it always did.
+ */
+export function flagsToRestore(
+  d: { flagsBefore: DecisionRowFlags | null; flagsAfter: DecisionRowFlags | null },
+  current: DecisionRowFlags,
+): Partial<DecisionRowFlags> {
+  const out: Partial<DecisionRowFlags> = {};
+  if (!d.flagsBefore || !d.flagsAfter) return out;
+  for (const k of DECISION_FLAG_KEYS) {
+    if (d.flagsBefore[k] !== d.flagsAfter[k] && current[k] === d.flagsAfter[k]) out[k] = d.flagsBefore[k];
+  }
+  return out;
+}
+
+/**
  * ⭐ Undo: restore `previous_category_id`, clear provisional, stamp
  * `undone_at`, disable the memory the decision created. Refuses a locked row
  * for an automatic decision (locked rows never move) and a row whose category
  * changed since. Undoing a person's own decision restores the lock it had
  * before (true when an earlier live hand decision exists).
+ * (Q2) It also restores the transfer flag, its person's override and the three
+ * allowance flags the decision moved (`flagsToRestore`): undoing a Transfer
+ * pick makes the row spending again, with the allowance it had.
  */
 export async function undoDecision(
   householdId: string,
@@ -385,6 +497,7 @@ export async function undoDecision(
         categoryId: transactionsTable.categoryId,
         locked: transactionsTable.categoryLockedByUser,
         refundOfTxnId: transactionsTable.refundOfTxnId,
+        ...DECISION_FLAG_COLUMNS,
       })
       .from(transactionsTable)
       .where(and(eq(transactionsTable.id, d.transactionId), eq(transactionsTable.householdId, householdId)))
@@ -415,6 +528,7 @@ export async function undoDecision(
       set.categoryLockedByUser = !!earlier && d.previousCategoryId != null;
     }
     if (d.source === "refund" && t.refundOfTxnId) set.refundOfTxnId = null;
+    if (wrote) Object.assign(set, flagsToRestore(d, decisionFlagsOf(t)));
     await tx
       .update(transactionsTable)
       .set(set)

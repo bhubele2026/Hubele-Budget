@@ -3,6 +3,7 @@ import { and, eq, ne, sql, asc, desc, lt, gte, inArray, isNull, notInArray } fro
 import { findSupersededPendingForRange } from "../lib/supersededPending";
 import { uncategorizedCategoryIds } from "../lib/pendingFiling";
 import { aggregateBudgetMonth } from "../lib/budgetActuals";
+import { patchRows, patchSupersede, type CorrectionOverlay } from "../lib/correctionOverlay";
 import { reconcileMonthSpend, type MonthSpendReconciliation } from "../lib/spendingReconcile";
 import { TRACKING_START } from "../lib/spendingFacts";
 import { todayDate } from "../lib/billsSummary";
@@ -1705,13 +1706,40 @@ router.get(
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const monthStart = params.data.monthStart;
+    res.json(
+      await buildBudgetMonthView(
+        { householdId: req.householdId!, householdOwnerId: req.householdOwnerId!, userId: req.userId!, log: req.log },
+        params.data.monthStart,
+      ),
+    );
+  },
+);
 
+/** (Q2) Who asks for a Budget month: the household, its owner, the signed-in user, and the request's log. */
+export interface BudgetMonthViewContext {
+  householdId: string;
+  householdOwnerId: string;
+  userId: string;
+  log?: { warn?: (obj: unknown, msg?: string) => void } | undefined;
+}
+
+/**
+ * ⭐ `GET /budget/months/:monthStart`'s whole answer — the handler's body,
+ * moved here unchanged (Q2) so a proposed fix's dry run reads the Budget month
+ * through the very same code. `opts.overlay` (a dry run only) reads the month's
+ * rows as the fix would leave them (`patchRows` / `patchSupersede`); without it
+ * nothing differs from the route. Writes nothing.
+ */
+export async function buildBudgetMonthView(
+  ctx: BudgetMonthViewContext,
+  monthStart: string,
+  opts: { overlay?: CorrectionOverlay | null } = {},
+) {
     // Hard floor: data starts April 2026. A bookmarked URL or stale client
     // requesting an earlier month gets an empty payload rather than a
     // computed (and meaningless) view. Skipped before any work below.
     if (monthStart < "2026-04-01") {
-      res.json({
+      return {
         monthStart,
         note: null,
         lines: [],
@@ -1729,13 +1757,12 @@ router.get(
         replacedPendingIds: [],
         inheritedCategories: [],
         spendingReconciliation: null,
-      });
-      return;
+      };
     }
 
-    const householdId = req.householdId!;
-    const householdOwnerId = req.householdOwnerId!;
-    const userId = req.userId!;
+    const householdId = ctx.householdId;
+    const householdOwnerId = ctx.householdOwnerId;
+    const userId = ctx.userId;
 
     // (PR-E) A GET WRITES NOTHING. The ensure / migrate / sync passes that used
     // to run here (system categories, the v2 category migration, the auto_debts
@@ -1930,7 +1957,8 @@ router.get(
               sql`${transactionsTable.occurredOn} < ${monthEndStr}`,
             ),
           );
-        return { supersede, monthRows };
+        // (Q2) A dry run reads the rows and the pairs' filing as a proposed fix would leave them.
+        return { supersede: patchSupersede(supersede, opts.overlay), monthRows: patchRows(monthRows, opts.overlay) };
       },
       { isolationLevel: "repeatable read", accessMode: "read only" },
     );
@@ -2182,7 +2210,7 @@ router.get(
         },
       );
       if (recon.unexplained !== 0) {
-        req.log?.warn?.(
+        ctx.log?.warn?.(
           { householdId, monthStart, unexplainedCents: recon.unexplained },
           "[budget] the month's spending reconciliation does not close",
         );
@@ -2248,7 +2276,7 @@ router.get(
 
     const planBySource = rollUpPlanBySource(responseLines);
 
-    res.json({
+    return {
       monthStart,
       note: month?.note ?? null,
       monthPinned,
@@ -2260,9 +2288,10 @@ router.get(
       replacedPendingIds: replacedInMonth,
       inheritedCategories: monthSpend.inheritedCategories,
       spendingReconciliation,
-    });
-  },
-);
+    };
+}
+
+export type BudgetMonthView = Awaited<ReturnType<typeof buildBudgetMonthView>>;
 
 /** (WP6) The reconciliation in dollars (two-decimal strings), as `SpendingReconciliation` serves it. */
 function presentReconciliation(r: MonthSpendReconciliation, through: string | null) {

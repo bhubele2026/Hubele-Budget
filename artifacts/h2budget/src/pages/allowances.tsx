@@ -136,8 +136,8 @@ function formatTxnDate(iso: string): string {
 // bank/Chase charges negative — both count as spend.
 import { expenseMagnitude as expenseAmount } from "@/lib/bucketSpend";
 import { planRefusalReason } from "@/lib/planWords";
-import { countedRows, isCounted } from "@/lib/countedRows";
-import { ExpiredHoldLabel } from "@/components/expired-hold-label";
+import { countedSpendRows, isCountedSpend } from "@/lib/countedRows";
+import { ExpiredHoldLabel, ExpiredPairLabel } from "@/components/expired-hold-label";
 
 // How many COMPLETED weeks in a row, ending last week, did they blow the
 // weekly allowance? Walks back week-by-week from the last finished Sun–Sat
@@ -310,8 +310,8 @@ function TxnRow({
           {formatTxnDate(t.occurredOn)}
         </span>
         <span className="truncate text-neutral-700">{t.description}</span>
-        {/* (F6 round 4) Listed, labelled, in no total. */}
-        {t.expiredHold ? <ExpiredHoldLabel id={t.id} /> : null}
+        {/* (F6 round 4) Listed, labelled, in no total. (Round 6) A held pair too: counted in cash, not here. */}
+        {t.expiredHold ? <ExpiredHoldLabel id={t.id} /> : t.expiredPair ? <ExpiredPairLabel id={t.id} /> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {onChangeBucket && subLabels && (
@@ -879,7 +879,8 @@ export default function AllowancesPage() {
   // ⭐ (F6 round 4, finding 2) Every sum below — the streaks, the 8-week bars,
   // the drill-down groups — reads only the rows that count: an expired hold is
   // listed (labelled) but adds nothing, as the server's totals above leave it out.
-  const countedTxns = useMemo(() => countedRows(txns), [txns]);
+  // (F6 round 5) Nor does a held hold or its reversal (`isCountedSpend`).
+  const countedTxns = useMemo(() => countedSpendRows(txns), [txns]);
 
   const weekStartISO = fmtISO(weekStart);
 
@@ -1054,7 +1055,7 @@ export default function AllowancesPage() {
       return {
         key: sub,
         label: SUB_LABEL[sub],
-        amount: list.reduce((s, t) => (isCounted(t) ? s + expenseAmount(t) : s), 0),
+        amount: list.reduce((s, t) => (isCountedSpend(t) ? s + expenseAmount(t) : s), 0),
         txns: list,
       };
     });
@@ -1076,7 +1077,7 @@ export default function AllowancesPage() {
             cid === "_uncat"
               ? "Uncategorized"
               : catNameById.get(cid) ?? "Uncategorized",
-          amount: list.reduce((s, t) => (isCounted(t) ? s + expenseAmount(t) : s), 0),
+          amount: list.reduce((s, t) => (isCountedSpend(t) ? s + expenseAmount(t) : s), 0),
           txns: list.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1)),
         }))
         .sort((a, b) => b.amount - a.amount);

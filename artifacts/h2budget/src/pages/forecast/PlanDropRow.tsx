@@ -144,18 +144,10 @@ export function PlanDropRow({
   return (
     <div
       ref={droppable.setNodeRef}
-      role="button"
-      tabIndex={0}
+      // (Q5) The row is a plain container (a click anywhere still selects it); the keyboard
+      // control is the real button on its name below. A role="button" row holding buttons
+      // is nested-interactive (axe).
       onClick={() => onSelect(row)}
-      onKeyDown={(e) => {
-        // Only the row itself: Enter/Space on a button inside the row belongs
-        // to that button (preventDefault here would swallow its click).
-        if (e.target !== e.currentTarget) return;
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect(row);
-        }
-      }}
       data-suggested-drop={showSuggestion ? "true" : undefined}
       data-drop-eligible={
         isDragActive ? (isEligible ? "true" : "false") : undefined
@@ -189,7 +181,17 @@ export function PlanDropRow({
       <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-auto">
         <div className="min-w-0">
           <div className="flex items-center gap-2 truncate text-body font-medium text-neutral-700">
-            <span className="truncate">{row.label}</span>
+            <button
+              type="button"
+              className="min-w-0 truncate text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(row);
+              }}
+              data-testid={`plan-row-open-${testKey}`}
+            >
+              {row.label}
+            </button>
             {payoff && (
               <TooltipProvider>
                 <Tooltip>

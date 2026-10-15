@@ -10,6 +10,11 @@ import type { BankingReviewFreshnessStaleReason } from "./bankingReviewFreshness
 export interface BankingReviewFreshness {
     /** @nullable */
     source: BankingReviewFreshnessSource;
+    /**
+     * (Q5 fix) When the bank last told us anything, by the server's one rule (= spine.bankConfidence.fetchedAt): a Plaid balance, the later of its re-read and the last successful sync; a typed balance, its own time
+     * @nullable
+     */
+    fetchedAt: string | null;
     /** @nullable */
     lastContactAt: string | null;
     /** @nullable */

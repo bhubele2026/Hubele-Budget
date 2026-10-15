@@ -182,7 +182,7 @@ export default function AccountsPanel() {
                               ) : null}
                             </span>
                           ) : isCash && spine?.bank.source && spine.bank.asOfDate ? (
-                            <span data-testid="dash-account-state"><FreshnessLine bank={spine.bank} /></span>
+                            <span data-testid="dash-account-state"><FreshnessLine bank={spine.bank} fetchedAt={spine.bankConfidence?.fetchedAt} /></span>
                           ) : (
                             <>
                               <span className={cn("font-semibold", st === "ok" ? "text-neutral-600" : "text-bad-ink")} data-testid="dash-account-state">

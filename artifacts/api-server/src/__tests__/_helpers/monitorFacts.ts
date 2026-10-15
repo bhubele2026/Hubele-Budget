@@ -24,6 +24,11 @@ export function calmPosition(over: Partial<MoneyPosition> = {}): MoneyPosition {
     unplannedWeek: "0.00",
     monthlyWeek: "0.00",
     remainingWeek: "150.00",
+    // (Q1) The week contract: nothing unconfirmed, so known = the cautious total.
+    knownWeek: "100.00",
+    unresolvedWeek: "0.00",
+    provisional: false,
+    remainingWeekKnown: "150.00",
     paceAllowedToday: "142.86",
     withinPlan: "yes",
     safeToSpendNow: "150.00",

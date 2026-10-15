@@ -6,7 +6,7 @@ import {
   type SpendTxn,
 } from "@/lib/avalanche";
 import type { PlaidItemDetail } from "@workspace/api-client-react";
-import { isCounted } from "@/lib/countedRows";
+import { isCountedSpend } from "@/lib/countedRows";
 
 /**
  * ⭐ "INCOME FILED UNDER AN EXPENSE CATEGORY" — a deterministic review flag.
@@ -137,12 +137,13 @@ export function directionConflictOfTxn(
 /**
  * Money in, filed under an expense category (see the header). (F6 round 4) Never
  * an expired hold (`isCounted`): it counts nowhere, so there is nothing to re-file.
+ * (F6 round 5) Nor a held hold's reversal (`isCountedSpend`): never asked about.
  */
 export function isInflowFiledAsExpense(
   txn: DirectionTxn,
   categoriesById: ReadonlyMap<string, DirectionCategory>,
   opts: { isCardAccount: boolean },
 ): boolean {
-  if (!isCounted(txn)) return false;
+  if (!isCountedSpend(txn)) return false;
   return directionConflictOfTxn(txn, categoriesById, opts) === "inflow_into_expense";
 }

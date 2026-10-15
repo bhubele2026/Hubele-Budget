@@ -25,6 +25,7 @@ import { householdTodayISO } from "../../lib/householdClock";
 import { logger } from "../../lib/logger";
 import { addWishlistItem } from "../../lib/wishlist";
 import { categoryBelongs, recordHandFiling, setCategoryByHand } from "../../lib/categorizer/userDecisions";
+import { queuePickConflict } from "../../lib/categorizer/review";
 import { listMemory, cleanKey, upsertAgentMemory, MEMORY_VALUE_MAX, MEMORY_KEY_MAX } from "../../lib/agentMemory";
 import {
   createProposal,
@@ -443,9 +444,16 @@ export function makeToolDefs(ctx: ToolContext): ToolDef[] {
         if (!writeBudgetLeft()) return failure("too_many_changes_in_one_answer");
         writes += 1;
         if (ctx.userAskedToChange) {
+          // (Q2) The review queue's direction guard: never files money against its direction.
+          if (await queuePickConflict(householdId, t.id, i.categoryId)) return failure("direction_conflict");
           const set = await setCategoryByHand(householdId, t.id, i.categoryId);
           if (!set) return notFound();
-          const filed = await recordHandFiling(householdId, actorUserId, t.id, { previousCategoryId: set.previousCategoryId, categoryId: i.categoryId });
+          const filed = await recordHandFiling(householdId, actorUserId, t.id, {
+            previousCategoryId: set.previousCategoryId,
+            categoryId: i.categoryId,
+            flagsBefore: set.flagsBefore,
+            flagsAfter: set.flagsAfter,
+          });
           const actionId = await action("set_category", "transaction", t.id, "applied", { categoryId: set.previousCategoryId }, { categoryId: i.categoryId, decisionId: filed?.decisionId ?? null }, !!filed);
           return toResult({ applied: true, actionId, undoable: !!filed, txn: t.id, categoryId: i.categoryId });
         }

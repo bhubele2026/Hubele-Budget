@@ -7,13 +7,21 @@
  */
 
 /**
- * What the card(s) added to the HOUSEHOLD's allowances over the period — the household's plan, never this card's budget. Refunds net per account, never below zero.
+ * What the card(s) added to the HOUSEHOLD's allowances over the period — the household's plan, never this card's budget. Refunds net per account, never below zero. (hh-split) Each plan figure is the cautious total, split by the F2 evidence rule exactly as GET /money/period-breakdown splits `actual` (`evidenceSplitCents`, the same money context and the same forecast suggestions): known + unresolved = the plan figure, to the cent. For one card and a week, weeklyPlan / weeklyKnown / weeklyUnresolved = that breakdown's actual / known / unresolved.amount with `account=` the card.
  */
 export interface AmexSummaryHouseholdContribution {
-  /** Weekly-flagged + unfiled spending (the weekly cap's pool) */
+  /** Weekly-flagged + unfiled spending (the weekly cap's pool): the cautious total */
   weeklyPlan: string;
+  /** (hh-split) weeklyPlan without its unresolved rows — Counts toward plan */
+  weeklyKnown: string;
+  /** (hh-split) weeklyPlan − weeklyKnown — Unconfirmed; "0.00" when none */
+  weeklyUnresolved: string;
   /** Monthly-flagged spending */
   monthlyPlan: string;
+  /** (hh-split) monthlyPlan without its unresolved rows — Counts toward plan */
+  monthlyKnown: string;
+  /** (hh-split) monthlyPlan − monthlyKnown — Unconfirmed; "0.00" when none */
+  monthlyUnresolved: string;
   /** The part of weeklyPlan not filed to an allowance yet */
   unfiled: string;
   /** Where the household week is reviewed: always /spending/week */

@@ -23,7 +23,7 @@ if (!Element.prototype.scrollIntoView) {
 
 vi.mock("recharts", () => import("@/test-recharts-stub"));
 vi.mock("wouter", () => ({
-  Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  Link: ({ children, href, ...rest }: { children: React.ReactNode; href: string; "data-testid"?: string }) => <a href={href} data-testid={rest["data-testid"]}>{children}</a>,
   useLocation: () => ["/amex", () => undefined] as const,
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
@@ -37,6 +37,7 @@ vi.mock("@/components/matched-rule-chip", () => ({ MatchedRuleChip: () => null }
 vi.mock("@/components/add-card-to-avalanche", () => ({ AddToAvalanche: () => <span>add</span> }));
 
 const state = vi.hoisted(() => ({
+  wideTxns: undefined as Array<Record<string, unknown>> | undefined, // the 12-month read; undefined = still loading
   monthTxns: undefined as Array<Record<string, unknown>> | undefined,
   items: undefined as unknown[] | undefined,
   payoff: undefined as unknown,
@@ -44,6 +45,8 @@ const state = vi.hoisted(() => ({
   listParams: [] as Array<Record<string, unknown>>,
   summary: undefined as unknown,
   summaryParams: [] as Array<Record<string, unknown>>,
+  summaryError: false,
+  refetch: vi.fn(),
 }));
 
 const today = new Date();
@@ -101,7 +104,14 @@ const PAYOFF = {
 vi.mock("@workspace/api-client-react/features", () => ({
   useGetAmexSummary: (params: Record<string, unknown>) => {
     state.summaryParams.push(params);
-    return { data: state.summary, isError: false, isLoading: false };
+    // (Q4) The server echoes the card and the days it read; the page shows an answer only for what it asked.
+    const s = state.summary as { scope: Record<string, unknown>; period: Record<string, unknown> } | undefined;
+    const data = s && {
+      ...s,
+      scope: { ...s.scope, accountId: params.accountId === "all" ? null : params.accountId },
+      period: { ...s.period, from: params.from, to: params.to },
+    };
+    return { data: state.summaryError ? undefined : data, isError: state.summaryError, isLoading: false, refetch: state.refetch };
   },
   getGetAmexSummaryQueryKey: (p: unknown) => ["/api/amex/summary", p],
 }));
@@ -121,8 +131,8 @@ vi.mock("@workspace/api-client-react", () => {
     getGetAmexWeeklyPayoffQueryKey: () => ["/api/amex/weekly-payoff"],
     useListTransactions: (params: { limit?: number } = {}) => {
       state.listParams.push(params as Record<string, unknown>);
-      if ((params.limit ?? 0) >= 5000) return { data: undefined, isLoading: true };
-      return { data: state.monthTxns, isLoading: state.monthTxns === undefined };
+      if ((params.limit ?? 0) >= 5000) return { data: state.wideTxns, isLoading: state.wideTxns === undefined, isSuccess: state.wideTxns !== undefined, isPlaceholderData: false, isFetching: false };
+      return { data: state.monthTxns, isLoading: state.monthTxns === undefined, isSuccess: state.monthTxns !== undefined, isPlaceholderData: false, isFetching: false };
     },
     useListCategories: () => ({ data: [] }),
     useListDebts: () => ({ data: [] }),
@@ -188,7 +198,8 @@ function summaryFixture(over: Record<string, unknown> = {}) {
     otherCredits: total("10.00", 1),
     otherCharges: total("5.00", 1),
     notMine: total("0.00", 0),
-    householdContribution: { weeklyPlan: "560.00", monthlyPlan: "45.00", unfiled: "0.00", link: "/spending/week" },
+    // (hh-split) The server's own split of the same figure: $40.00 of the $560.00 is unconfirmed.
+    householdContribution: { weeklyPlan: "560.00", weeklyKnown: "520.00", weeklyUnresolved: "40.00", monthlyPlan: "45.00", monthlyKnown: "45.00", monthlyUnresolved: "0.00", unfiled: "0.00", link: "/spending/week" },
     planLink: { kind: "weekly_hook", payoff: "600.00", payoffDate: todayIso, basis: "plan", debtId: null, name: null, minimum: null, avalancheRank: null, status: null },
     needsAttention: {
       unplanned: {
@@ -214,6 +225,8 @@ beforeEach(() => {
   state.listParams = [];
   state.summary = summaryFixture();
   state.summaryParams = [];
+  state.summaryError = false;
+  state.refetch.mockReset();
 });
 afterEach(() => cleanup());
 
@@ -229,7 +242,8 @@ describe("Amex page — the card selector (W4)", () => {
     const gold = tile("ext-gold");
     expect(gold.textContent).toContain(BRAND_LABEL.blue);
     expect(gold.textContent).toContain("••2002");
-    expect(gold.textContent).toContain("On the payoff plan");
+    // (Q6b) "On the payoff plan" only for a card whose paidAs is debt_plan; this fixture has none.
+    expect(gold.textContent).not.toContain("On the payoff plan");
     expect(screen.getByTestId("amex-tile-all")).toBeTruthy();
     expect(tile("ext-plat").textContent).toContain("••1005");
   });
@@ -321,9 +335,22 @@ describe("Amex page — summary first (W4)", () => {
     render(tree());
     await ready();
     const line = screen.getByTestId("amex-household-line");
-    expect(line.textContent).toContain("Adds $560.00 to this week's household plan");
+    // (hh-split) The unconfirmed part is the server's own figure, said exactly.
+    expect(line.textContent).toContain("Adds $560.00 to this week's household plan (includes $40.00 unconfirmed)");
+    expect(line.textContent).not.toContain("may include");
     expect(line.textContent).not.toMatch(/card'?s? (budget|allowance)/i);
     expect(within(screen.getByTestId("amex-household-line")).getByRole("link").getAttribute("href")).toBe("/spending/week");
+  });
+
+  it("(hh-split) nothing unconfirmed: the household line says nothing about it", async () => {
+    state.summary = summaryFixture({
+      householdContribution: { weeklyPlan: "560.00", weeklyKnown: "560.00", weeklyUnresolved: "0.00", monthlyPlan: "45.00", monthlyKnown: "45.00", monthlyUnresolved: "0.00", unfiled: "0.00", link: "/spending/week" },
+    });
+    render(tree());
+    await ready();
+    const line = screen.getByTestId("amex-household-line");
+    expect(line.textContent).toContain("Adds $560.00 to this week's household plan · ");
+    expect(line.textContent).not.toMatch(/unconfirmed/i);
   });
 
   it("a figure opens its rows: Payments filters the activity to payments; again clears it", async () => {
@@ -423,5 +450,110 @@ describe("Amex page — the activity and the chart (W4)", () => {
     render(tree());
     await ready();
     expect(screen.queryByText(/forward/i)).toBeNull();
+  });
+});
+
+
+describe("Amex page — the top summary and the journey fixes (Q6b)", () => {
+  it("the page opens at the top: nothing scrolls when it loads or a card opens", async () => {
+    const spy = vi.spyOn(Element.prototype, "scrollIntoView");
+    try {
+      render(tree());
+      await ready();
+      fireEvent.click(within(tile("ext-plat")).getAllByRole("button")[0]!);
+      await waitFor(() => expect(screen.queryByTestId("row-amex-g1")).toBeNull());
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("?tx= scrolls once, to the row, from the top of the view; the row is marked", async () => {
+    window.history.replaceState(null, "", "/amex?card=ext-plat&tx=p1");
+    const spy = vi.spyOn(Element.prototype, "scrollIntoView");
+    try {
+      render(tree());
+      await waitFor(() => expect(document.querySelector('[data-focused="true"]')).toBeTruthy());
+      await new Promise((r) => setTimeout(r, 50));
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0]![0]).toMatchObject({ block: "start" });
+      // The row clears the sticky stack: pinned pane + day head + a gap.
+      const row = document.querySelector('[data-focused="true"]') as HTMLElement;
+      expect(row.style.scrollMarginTop).toContain("--page-sticky-top");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("the summary names the card and the period once; owed says when; household links to the matching spending page", async () => {
+    window.history.replaceState(null, "", "/amex?card=ext-plat");
+    state.summary = summaryFixture({ scope: { ...CARD_SCOPE, mask: "1005" }, owed: { current: "842.10", statement: null, asOf: "2026-10-14T15:00:00Z", source: "plaid" } });
+    render(tree());
+    await ready();
+    const sum = screen.getByTestId("amex-summary");
+    expect(sum.textContent).toContain("Platinum ••1005");
+    expect(screen.getByRole("heading", { name: "Platinum ••1005" })).toBeTruthy();
+    expect(screen.getByTestId("amex-fig-owed").textContent).toContain("as of Oct 14");
+    const link = screen.getByTestId("amex-household-link");
+    expect(link.textContent).toContain("Why are we over?");
+    expect(link.getAttribute("href")).toBe("/spending/week");
+    expect(screen.getByTestId("amex-review-count").textContent).toBe("1 to review");
+  });
+
+  it("Month sends 'Why are we over?' to the month", async () => {
+    window.history.replaceState(null, "", "/amex?mode=month");
+    render(tree());
+    await ready();
+    // (Q6b) The month the Summary shows, not the current one.
+    expect(screen.getByTestId("amex-household-link").getAttribute("href")).toMatch(/^\/spending\/month\?start=\d{4}-\d{2}-01$/);
+  });
+
+  it("the summary sits above the card selector, which shows name and owed only", async () => {
+    render(tree());
+    await ready();
+    const sum = screen.getByTestId("amex-summary");
+    const all = screen.getByTestId("amex-tile-all");
+    expect(sum.compareDocumentPosition(all) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tile("ext-plat").textContent).not.toMatch(/Purchases|cleared/);
+  });
+
+  it("an error says so with Retry, never $0", async () => {
+    state.summaryError = true;
+    render(tree());
+    await ready();
+    const err = screen.getByTestId("amex-summary-error");
+    expect(err.textContent).toContain("The summary did not load.");
+    expect(screen.queryByTestId("amex-fig-owed")).toBeNull();
+    fireEvent.click(within(err).getByTestId("amex-summary-retry"));
+    expect(state.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a pending row says Pending", async () => {
+    state.monthTxns = [...ROWS(), makeTxn({ id: "pend1", description: "PENDINGROW", source: "plaid", plaidAccountId: "ext-plat", amount: "-9.00", pending: true })];
+    render(tree());
+    await waitFor(() => expect(screen.getByTestId("row-amex-pend1")).toBeTruthy());
+    expect(screen.getByTestId("chip-pending-pend1").textContent).toBe("Pending");
+    expect(screen.getByTestId("chip-pending-mobile-pend1").textContent).toBe("Pending");
+    expect(screen.queryByTestId("chip-pending-p1")).toBeNull();
+  });
+
+  it("(Q6b) a single card whose summary failed is still titled by that card", async () => {
+    window.history.replaceState(null, "", "/amex?card=ext-plat");
+    state.summaryError = true;
+    render(tree());
+    await ready();
+    expect(screen.getByTestId("amex-summary-error")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^Platinum ••1005$/ })).toBeTruthy();
+    expect(screen.getByTestId("amex-summary").textContent).not.toContain("All cards");
+  });
+
+  it("(Q6b) a ?tx= whose row never appears is dropped from the URL and its status goes away", async () => {
+    window.history.replaceState(null, "", "/amex?card=ext-plat&tx=nope");
+    render(tree());
+    await waitFor(() => expect(screen.getByTestId("row-amex-p1")).toBeTruthy());
+    expect(screen.getByTestId("amex-row-link-status")).toBeTruthy();
+    await waitFor(() => expect(window.location.search).not.toContain("tx="), { timeout: 4000 });
+    await waitFor(() => expect(screen.queryByTestId("amex-row-link-status")).toBeNull());
+    expect(window.location.search).toContain("card=ext-plat");
   });
 });

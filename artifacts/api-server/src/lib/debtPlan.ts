@@ -34,7 +34,7 @@ import type { CashSignal } from "./cashSignal";
 import { AVALANCHE_EXTRA_EVENT_ITEM_ID } from "./debtMinSchedule";
 import { withPendingPayments } from "./debtPending";
 import { depositoryAccountIds } from "./debtPaymentConfirm";
-import { findExpiredHoldsAmong } from "./supersededPending";
+import { readAnsweredRows } from "./supersededPending";
 import { householdTodayISO } from "./householdClock";
 
 /**
@@ -200,17 +200,28 @@ export async function loadConfirmedPayments(
   // ⭐ (F6 round 4) A payment still pending more than 7 days after its date,
   // never replaced, is an expired hold: it counts nowhere — no payment made,
   // whether a tag, an answer or a claim names it (owner's rule, 2026-10-15).
-  const expired = await findExpiredHoldsAmong(householdId, rowsRead);
-  const rows = rowsRead.filter((r) => !expired.has(r.id));
-  return rows
-    .map((r) => ({
-      txnId: r.id,
-      debtId: via.get(r.id)!.debtId,
-      occurredOn: r.occurredOn,
-      amount: Math.abs(Number(r.amount) || 0),
-      via: via.get(r.id)!.via,
-    }))
-    .sort((a, b) => a.occurredOn.localeCompare(b.occurredOn) || a.txnId.localeCompare(b.txnId));
+  // ⭐ (F6 round 5, finding 5) An answer or a debt tag on such a row whose
+  // payment POSTED under another name counts on that posted row instead
+  // (`readAnsweredRows`, the forecast's read: one posted twin, not answered,
+  // tagged or claimed) — read so, nothing written. A claim's confirming row
+  // that expired is still no payment.
+  const { expired, postedTwinOf } = await readAnsweredRows(householdId, rowsRead, undefined, {
+    movable: (r) => via.get(r.id)?.via === "resolution" || via.get(r.id)?.via === "debt_tag",
+  });
+  const payments: ConfirmedPayment[] = [];
+  for (const r of rowsRead) {
+    const v = via.get(r.id)!;
+    if (!expired.has(r.id)) {
+      payments.push({ txnId: r.id, debtId: v.debtId, occurredOn: r.occurredOn, amount: Math.abs(Number(r.amount) || 0), via: v.via });
+      continue;
+    }
+    const twin = postedTwinOf.get(r.id);
+    // A twin something else already names counts on its own (each bank row once).
+    if (!twin || via.has(twin.id) || twin.occurredOn < fromISO || twin.occurredOn > toISO) continue;
+    via.set(twin.id, v);
+    payments.push({ txnId: twin.id, debtId: v.debtId, occurredOn: twin.occurredOn, amount: Math.abs(Number(twin.amount) || 0), via: v.via });
+  }
+  return payments.sort((a, b) => a.occurredOn.localeCompare(b.occurredOn) || a.txnId.localeCompare(b.txnId));
 }
 
 /**

@@ -317,7 +317,15 @@ export default function BillsPage() {
     }).format(d);
   }, [currentMonth]);
 
-  const { data: summary, isLoading } = useGetBillsSummary({ month: currentMonth });
+  const summaryQ = useGetBillsSummary({ month: currentMonth });
+  const { data: summary, isLoading } = summaryQ;
+  // (Q4) The summary has no month echo: a placeholder is the last month's answer. It stays
+  // on screen (no blank page) but is SAID to be that month's until this one lands.
+  const billsSwitching = summaryQ.isPlaceholderData === true;
+  const [shownMonth, setShownMonth] = useState(currentMonth);
+  useEffect(() => {
+    if (summaryQ.data && !summaryQ.isPlaceholderData) setShownMonth(currentMonth);
+  }, [summaryQ.data, summaryQ.isPlaceholderData, currentMonth]);
   const { data: debts } = useListDebts();
   const { data: avaSettings } = useGetAvalancheSettings();
   const { data: resolvedExtra } = useGetAvalancheExtra();
@@ -717,6 +725,11 @@ export default function BillsPage() {
             >
               {monthName}
             </span>
+            {billsSwitching ? (
+              <span role="status" className="text-micro text-neutral-600" data-testid="bills-switching">
+                Showing {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date(shownMonth + "T00:00:00"))} while {monthName} loads
+              </span>
+            ) : null}
             <button
               type="button"
               className={btnLink}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyCashRows,
+  heldExpiredPairs,
   isBankRow,
   type CashAnchor,
   type CashRow,
@@ -329,3 +330,122 @@ describe("classifyCashRows — expired holds (F6 round 3)", () => {
     expect(byId(off).v).toMatchObject({ reason: "counted", contribution: 80, reversalOf: null });
   });
 });
+
+// ⭐ (F6 round 5) The review of round 4 (findings 2, 3, 6). Same clock: snapshot
+// read 05-01 10:00 CT, today 05-14. Synthetic rows.
+describe("classifyCashRows — the credit chooses its hold (F6 round 5)", () => {
+  const p = (id: string, on: string, amount: number, extra: Partial<CashRow> = {}) => row(id, on, amount, { pending: true, ...extra });
+
+  it("⭐ finding 6: a leftover hold the snapshot holds never takes a newer hold's reversal — the bank adds the young rows only (round 4: +100 too high)", () => {
+    // 04-15 −100: a leftover hold whose final posted lower (never paired), held by
+    // the 05-01 read. 05-04 −100: a hold after the read, now 10 days old. 05-08
+    // +100: its reversal. Plus a young purchase.
+    const leftover = p("leftover", "2026-04-15", -100, { description: "SHELL OIL 57444" });
+    const rows = [p("fresh", "2026-05-04", -100, { description: "SHELL OIL 57444" }), p("back", "2026-05-08", 100, { description: "SHELL OIL 57444" }), p("cafe", "2026-05-12", -12)];
+    const r = classifyCashRows(rows, { anchor: ANCHOR, accountExternalId: CHASE, todayISO: TODAY, expiredHolds: true, priorRows: [leftover] });
+    expect(byId(r).back).toMatchObject({ reason: "expired", contribution: 0, reversalOf: "fresh" });
+    expect(byId(r).fresh!.reason).toBe("expired");
+    // Only the cafe: the same as the base (−100 + 100 − 12) and as the control without the leftover hold.
+    expect(r.throughToday).toEqual({ rowCount: 1, net: -12 });
+    const base = classifyCashRows(rows, { anchor: ANCHOR, accountExternalId: CHASE, todayISO: TODAY, expiredHolds: false, priorRows: [leftover] });
+    expect(base.throughToday.net).toBe(-12);
+    expect(classify(rows).throughToday.net).toBe(-12);
+  });
+
+  it("⭐ finding 2: a pending card payment of an expired hold's cents is no reversal — it counts", () => {
+    const rows = [p("h", "2026-05-04", -150, { description: "HARBOR HOTEL HOLD" }), p("pay", "2026-05-12", 150, { description: "PAYMENT - THANK YOU", debtId: "debt-1" })];
+    const r = byId(classify(rows));
+    expect(r.h!.reason).toBe("expired");
+    expect(r.pay).toMatchObject({ reason: "counted", contribution: 150, reversalOf: null });
+  });
+
+  it("the register's run (no anchor) pairs as the anchored rule does: `pairingAnchor` prefers the charge the snapshot does not hold", () => {
+    // `late` is dated 05-03 but reached the ledger before the 05-01 read (held
+    // ahead); `after` 05-02 arrived after it. Both 10+ days old; the credit 05-09.
+    const late = p("late", "2026-05-03", -60, { createdAt: new Date("2026-04-30T17:00:00Z") });
+    const after = p("after", "2026-05-02", -60, { createdAt: noon("2026-05-02") });
+    const back = p("back", "2026-05-09", 60);
+    const anchored = byId(classify([after, late, back]));
+    expect(anchored.back!.reversalOf).toBe("after");
+    const register = classifyCashRows([after, late, back], { anchor: null, accountExternalId: CHASE, todayISO: TODAY, expiredHolds: true, pairingAnchor: ANCHOR });
+    expect(byId(register).back!.reversalOf).toBe("after");
+    // Without a snapshot: the most recent charge.
+    expect(byId(classify([after, late, back], null)).back!.reversalOf).toBe("late");
+  });
+});
+
+// ⭐ (F6 round 6) The review of round 5: bank today on the findings' own
+// households (synthetic rows; checking 2,000.00 at the read; today 10/15).
+describe("classifyCashRows — a maximum matching, the lead's order (F6 round 6)", () => {
+  const TODAY6 = "2026-10-15";
+  const at = (iso: string) => new Date(iso);
+  const p = (id: string, on: string, amount: number, description: string, extra: Partial<CashRow> = {}) =>
+    row(id, on, amount, { pending: true, description, ...extra });
+  const bankToday = (rows: CashRow[], anchor: CashAnchor, expiredHolds = true) =>
+    2000 + classifyCashRows(rows, { anchor, accountExternalId: CHASE, todayISO: TODAY6, expiredHolds }).throughToday.net;
+
+  it("⭐ finding 6 (the greedy case): HARBOR INN −75 on 9/01 and 9/20, 'Hotel Transaction' +75 on 9/25 and 10/12, payroll +1,500 — bank 3,500 = base (round 5: 3,575)", () => {
+    const anchor: CashAnchor = { at: at("2026-08-30T14:00:00Z"), day: "2026-08-30" };
+    const rows = [
+      p("h0901", "2026-09-01", -75, "HARBOR INN"),
+      p("h0920", "2026-09-20", -75, "HARBOR INN"),
+      p("v0925", "2026-09-25", 75, "Hotel Transaction"),
+      p("v1012", "2026-10-12", 75, "Hotel Transaction"),
+      row("payroll", "2026-10-09", 1500, { description: "PAYROLL ACME" }),
+    ];
+    expect(bankToday(rows, anchor)).toBe(3500);
+    expect(bankToday(rows, anchor, false)).toBe(3500);
+    const r = byId(classifyCashRows(rows, { anchor, accountExternalId: CHASE, todayISO: TODAY6, expiredHolds: true }));
+    expect(r.v1012).toMatchObject({ reason: "expired", reversalOf: "h0920" });
+    expect(r.v0925).toMatchObject({ reason: "expired", reversalOf: "h0901" });
+  });
+
+  it("⭐ finding 7 (the named older held case): MARRIOTT −100 held (10/01), SHELL −100 stuck (10/05; its final −42.10), MARRIOTT +100 (10/10), payroll — bank 3,557.90 = the truth (round 5: 3,457.90)", () => {
+    // Read Sat 10/03 09:00 CT.
+    const anchor: CashAnchor = { at: at("2026-10-03T14:00:00Z"), day: "2026-10-03" };
+    const rows = [
+      p("marriott", "2026-10-01", -100, "MARRIOTT HOTEL 4471", { createdAt: at("2026-10-01T17:00:00Z") }),
+      p("shell", "2026-10-05", -100, "SHELL OIL 57444"),
+      row("shellFinal", "2026-10-06", -42.1, { description: "SHELL SERVICE STATION", createdAt: at("2026-10-07T17:00:00Z") }),
+      row("payroll", "2026-10-09", 1500, { description: "PAYROLL ACME" }),
+      p("back", "2026-10-10", 100, "MARRIOTT HOTEL 4471"),
+    ];
+    expect(bankToday(rows, anchor)).toBeCloseTo(3557.9, 2);
+    // The control (no stuck pump hold): the same.
+    expect(bankToday(rows.filter((r) => r.id !== "shell"), anchor)).toBeCloseTo(3557.9, 2);
+    // The base (kill switch): the stuck hold counts.
+    expect(bankToday(rows, anchor, false)).toBeCloseTo(3457.9, 2);
+    const r = byId(classifyCashRows(rows, { anchor, accountExternalId: CHASE, todayISO: TODAY6, expiredHolds: true }));
+    expect(r.back).toMatchObject({ reason: "counted", contribution: 100, reversalOf: "marriott" });
+    expect(r.shell!.reason).toBe("expired");
+  });
+
+  it("⭐ finding 5: MURPHY USA PREPAY −60 (10/04) and its +60 (10/11), payroll — bank 3,500 = base (round 5: 3,560)", () => {
+    // Read Fri 10/02 09:00 CT.
+    const anchor: CashAnchor = { at: at("2026-10-02T14:00:00Z"), day: "2026-10-02" };
+    const rows = [
+      p("hold", "2026-10-04", -60, "MURPHY USA PREPAY 7134"),
+      row("payroll", "2026-10-09", 1500, { description: "PAYROLL ACME" }),
+      p("back", "2026-10-11", 60, "MURPHY USA PREPAY 7134"),
+    ];
+    expect(bankToday(rows, anchor)).toBe(3500);
+    expect(bankToday(rows, anchor, false)).toBe(3500);
+    expect(byId(classifyCashRows(rows, { anchor, accountExternalId: CHASE, todayISO: TODAY6, expiredHolds: true })).back).toMatchObject({ reason: "expired", reversalOf: "hold" });
+  });
+});
+
+describe("heldExpiredPairs — the register's, the list's and the bundle's one test (F6 round 5, finding 3)", () => {
+  const rowOf = (rows: CashRow[]) => (id: string) => rows.find((r) => r.id === id);
+
+  it("a hold the snapshot holds and its reversal are a pair; a hold after it is not; no anchor, none", () => {
+    const held = row("h", "2026-04-30", -80, { pending: true });
+    const notHeld = row("n", "2026-05-04", -50, { pending: true });
+    const rows = [held, notHeld];
+    const holdOf = new Map([["v1", "h"], ["v2", "n"]]);
+    expect([...heldExpiredPairs(holdOf, rowOf(rows), ANCHOR)].sort()).toEqual(["h", "v1"]);
+    expect(heldExpiredPairs(holdOf, rowOf(rows), null).size).toBe(0);
+    // A hold not on the snapshot's account (rowOf answers undefined) is never held.
+    expect(heldExpiredPairs(new Map([["v", "elsewhere"]]), rowOf(rows), ANCHOR).size).toBe(0);
+  });
+});
+

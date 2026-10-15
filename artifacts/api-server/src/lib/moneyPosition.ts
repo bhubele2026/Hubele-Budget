@@ -23,6 +23,13 @@
 //   the cap        `allowance_plans` through `everydayPlanFromRows`, with the
 //                  week's override from `preferences.weeklyAllowanceOverrides`.
 //   freshness      `computeBankFreshness` — the spine's own bank verdict.
+//   known          (Q1) the week's rows through the F2 evidence rule
+//                  (`classifyEvidence`, `rowEvidence.ts`) with the bills THIS
+//                  ledger only suggests (`billSuggestionsOf`): each week row
+//                  carries its class, and `computePosition` splits the pool
+//                  with `evidenceSplitCents` — the call the period breakdown's
+//                  `known` is. No second read: the rows, the money context and
+//                  the ledger are the ones above. (`glossary.ts` names them.)
 //   reserves       (PR-C) `reservesHeld` — money the active goals hold back in
 //                  checking (`lib/goals.ts`); a goal backed by a savings
 //                  account never enters it.
@@ -60,6 +67,9 @@ import {
 import { loadAllowancePlans, planRowsOf } from "./allowancePlans";
 import { TRACKING_START } from "./spendingFacts";
 import { reservesHeld as loadReservesHeld } from "./goals";
+import { suggestionsAfter, tier2PairedAfter, type CorrectionOverlay } from "./correctionOverlay";
+import { billSuggestionsOf, evidenceContextOf, rowEvidenceOf } from "./rowEvidence";
+import type { BillSuggestionRef } from "@workspace/avalanche-core";
 
 /** The horizon the spine and the Forecast tile ask for; the position reads the same curve. */
 export const POSITION_HORIZON_DAYS = 90;
@@ -76,6 +86,11 @@ export interface BuildMoneyPositionOptions {
    * week.
    */
   supersede?: Promise<MoneyContextSupersede> | MoneyContextSupersede;
+  /**
+   * (Q2) A proposed fix's dry run: the week's rows and confirmed matches as the
+   * fix would leave them (`correctionOverlay.ts`). Never set outside a dry run.
+   */
+  overlay?: CorrectionOverlay | null;
 }
 
 /** The ledger's events on the curve, as the position reads them. */
@@ -134,6 +149,12 @@ export interface MoneyPositionRead {
   money: MoneyContext;
   /** (S3) The household's allowance plan rows this read capped the week with. */
   allowancePlans: AllowancePlan[];
+  /**
+   * (Q1) The bills this ledger only SUGGESTS for rows (`billSuggestionsOf`, a
+   * dry run's overlay applied): the evidence rule read them for the week's
+   * `knownWeek`, and the current week's breakdown reads the same map.
+   */
+  billSuggestions: ReadonlyMap<string, BillSuggestionRef>;
 }
 
 /**
@@ -211,13 +232,23 @@ export async function loadPositionInputs(
     householdId,
     { start: from, end: week.end },
     {
-      tier2PairedTxnIds: tier2PairedTxnIdsOf(ledger),
+      // (Q2) A dry run drops the pairs with an occurrence the fix answers.
+      tier2PairedTxnIds: opts.overlay ? tier2PairedAfter(ledger.matches, opts.overlay) : tier2PairedTxnIdsOf(ledger),
       ...(opts.supersede ? { supersede: await opts.supersede } : {}),
+      ...(opts.overlay ? { overlay: opts.overlay } : {}),
     },
   );
   // (B6) `allowanceRowOf`: a refund carries the coverage it nets and a negative
   // amount, and its account, so `computePosition` nets it there.
-  const weekRows = weekMovement.map(({ row, m }) => allowanceRowOf(row, m));
+  // (Q1) Each row with the F2 evidence rule's class (the breakdown's own
+  // inputs: this money context, this ledger's suggestions), so the position
+  // splits its pool into known / unresolved exactly as the breakdown does.
+  const billSuggestions = suggestionsAfter(billSuggestionsOf(ledger, money.supersede), opts.overlay);
+  const evidenceCtx = evidenceContextOf(money, billSuggestions);
+  const weekRows = weekMovement.map(({ row, m }) => ({
+    ...allowanceRowOf(row, m),
+    evidenceClass: rowEvidenceOf(row, m, evidenceCtx)?.class ?? null,
+  }));
 
   const plan = everydayPlanFromRows(week.start, planRowsOf(planRows), money.settings.weeklyAllowanceOverrides);
   // (Lead's ruling on PR-B1 Q2) A $0 week — no plan, a $0 plan, or a $0
@@ -260,6 +291,7 @@ export async function loadPositionInputs(
     weekMovement,
     money,
     allowancePlans: planRows,
+    billSuggestions,
   };
 }
 

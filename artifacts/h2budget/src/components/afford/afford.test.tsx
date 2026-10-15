@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, within, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, within, waitFor, fireEvent, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -42,6 +42,7 @@ import { AffordLauncher } from "./AffordLauncher";
 const fig = (safe: string, week: string, payday: string, lowest: string, over: Record<string, string | null> = {}) => ({
   safeToSpendNow: safe,
   remainingWeek: week,
+  remainingWeekKnown: week,
   availableUntilPayday: payday,
   lowest,
   lowestDate: "2026-10-13",
@@ -54,8 +55,8 @@ const result = (over: Record<string, unknown> = {}) =>
   ({
     amount: "300.00",
     dateISO: "2026-10-10",
-    baseline: fig("144.50", "144.50", "2124.50", "2624.50"),
-    proposed: fig("0.00", "-155.50", "1824.25", "2324.50"),
+    baseline: fig("144.50", "144.50", "2124.50", "2624.50", { remainingWeekKnown: "244.50" }),
+    proposed: fig("0.00", "-155.50", "1824.25", "2324.50", { remainingWeekKnown: "-55.50" }),
     delta: {},
     category: { categoryId: "c1", remainingBefore: "274.50", remainingAfter: "-25.50" },
     debt: { affected: false, cut: "0.00", cutMonth: null, debtFreeMonthShift: 0, interestDelta: "0.00" },
@@ -168,7 +169,9 @@ describe("Afford launcher and sheet", () => {
   it("each delta shows both figures, to the cent", async () => {
     await check(result());
     expect(figures(screen.getByTestId("delta-payday"))).toEqual([["$2,124.50", "2124.50"], ["$1,824.25", "1824.25"]]);
-    expect(figures(screen.getByTestId("delta-week"))).toEqual([["$144.50", "144.50"], ["-$155.50", "-155.50"]]);
+    // (Q5 fix) "This week's plan … left" is the KNOWN figure, not the cautious total.
+    expect(screen.getByTestId("delta-week").textContent).toContain("This week's plan");
+    expect(figures(screen.getByTestId("delta-week"))).toEqual([["$244.50", "244.50"], ["-$55.50", "-55.50"]]);
     expect(screen.getByTestId("delta-category").textContent).toContain("Dining");
   });
 
@@ -210,5 +213,27 @@ describe("Afford launcher and sheet", () => {
       expect(mocks.createWish).toHaveBeenCalledWith({ data: { title: "Standing desk", amount: 300, categoryId: "c1" } }),
     );
     expect((await screen.findByTestId("afford-added")).textContent).toContain("Added to the wish list");
+  });
+});
+
+describe("(Q4) a late answer to an old question is dropped", () => {
+  it("the inputs changed while the check was out: its answer never lands beside the new inputs", async () => {
+    let resolveOld: (v: unknown) => void = () => {};
+    mocks.afford = vi.fn().mockImplementation(() => new Promise((r) => (resolveOld = r)));
+    await open();
+    fireEvent.change(screen.getByTestId("afford-amount"), { target: { value: "300" } });
+    fireEvent.click(screen.getByTestId("afford-check"));
+    // The person edits the amount while it is out.
+    fireEvent.change(screen.getByTestId("afford-amount"), { target: { value: "450" } });
+    await act(async () => resolveOld(result()));
+    expect(screen.queryByTestId("afford-result")).toBeNull();
+  });
+
+  it("with the inputs unchanged, the answer lands", async () => {
+    mocks.afford = vi.fn().mockResolvedValue(result());
+    await open();
+    fireEvent.change(screen.getByTestId("afford-amount"), { target: { value: "300" } });
+    fireEvent.click(screen.getByTestId("afford-check"));
+    expect(await screen.findByTestId("afford-result")).toBeTruthy();
   });
 });

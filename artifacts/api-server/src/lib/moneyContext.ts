@@ -65,6 +65,7 @@ import { carriedPfcEvidence, effectiveFiling, uncategorizedCategoryIds, type Fil
 import { discoverAmexCards, type AmexCardCadence } from "./amexCardCadence";
 import { loadCardAccountIds } from "./cardAccounts";
 import { addDaysISO } from "./householdClock";
+import { patchRows, patchSupersede, type CorrectionOverlay } from "./correctionOverlay";
 
 export interface MoneyContextRange {
   /** ISO date, inclusive. */
@@ -126,6 +127,12 @@ export interface LoadMoneyContextOptions {
    * the forecast ledger's `matches`. Omitted = empty.
    */
   tier2PairedTxnIds?: ReadonlySet<string>;
+  /**
+   * ⭐ (Q2) A proposed fix's dry run: the rows, the pending pairs' filing and
+   * the confirmed matches as the fix would leave them (`correctionOverlay.ts`).
+   * Never set outside a dry run.
+   */
+  overlay?: CorrectionOverlay | null;
 }
 
 /** One confirmed match: the matched transaction and its own date. */
@@ -148,10 +155,15 @@ export interface ConfirmedMatchRow {
 export async function loadConfirmedMatchRows(
   householdId: string,
   range: MoneyContextRange,
+  overlay?: CorrectionOverlay | null,
 ): Promise<ConfirmedMatchRow[]> {
   const reachStart = addDaysISO(range.start, -SUPERSEDE_MAX_DAYS);
-  return db
-    .select({ txnId: transactionsTable.id, occurredOn: transactionsTable.occurredOn })
+  const rows = await db
+    .select({
+      txnId: transactionsTable.id,
+      occurredOn: transactionsTable.occurredOn,
+      resolutionId: forecastResolutionsTable.id,
+    })
     .from(forecastResolutionsTable)
     .innerJoin(
       transactionsTable,
@@ -168,6 +180,13 @@ export async function loadConfirmedMatchRows(
         lte(transactionsTable.occurredOn, range.end),
       ),
     );
+  // (Q2) A dry run: without the resolutions the fix deletes, with the ones it adds.
+  const kept = overlay ? rows.filter((r) => !overlay.removedResolutionIds.has(r.resolutionId)) : rows;
+  const out: ConfirmedMatchRow[] = kept.map((r) => ({ txnId: r.txnId, occurredOn: r.occurredOn }));
+  for (const m of overlay?.addMatched ?? []) {
+    if (m.occurredOn >= reachStart && m.occurredOn <= range.end) out.push({ txnId: m.txnId, occurredOn: m.occurredOn });
+  }
+  return out;
 }
 
 /**
@@ -249,10 +268,10 @@ export async function loadMoneyContext(
         .where(eq(settingsTable.userId, ownerUserId))
     : Promise.resolve([]);
 
-  const [settingsRow, matchRows, supersede, ledgerAccounts, cardCadence, cats, cardAccountIds] =
+  const [settingsRow, matchRows, supersedeRead, ledgerAccounts, cardCadence, cats, cardAccountIds] =
     await Promise.all([
       settingsRead,
-      loadConfirmedMatchRows(householdId, range),
+      loadConfirmedMatchRows(householdId, range, opts.overlay),
       opts.supersede
         ? Promise.resolve(opts.supersede)
         : findSupersededPendingForRange(householdId, range.start, range.end),
@@ -277,6 +296,8 @@ export async function loadMoneyContext(
       loadCardAccountIds(householdId),
     ]);
 
+  // (Q2) A dry run reads the pending rows' filing as the fix would leave it.
+  const supersede = patchSupersede(supersedeRead, opts.overlay);
   const s = settingsRow[0];
   const prefs = (s?.preferences as Record<string, unknown> | null | undefined) ?? {};
   const weeklyAllowanceOverrides =
@@ -326,6 +347,8 @@ export interface MovementRowRead extends EvidenceRow {
 export interface LoadMovementRowsOptions {
   /** An extra SQL filter on `transactions` (the proposals read only rows that can carry evidence). */
   where?: SQL;
+  /** (Q2) A proposed fix's dry run: each row as the fix would leave it. */
+  overlay?: CorrectionOverlay | null;
 }
 
 /**
@@ -376,7 +399,7 @@ export async function loadMovementRows(
       ),
     );
   const rows: MovementRowRead[] = [];
-  for (const row of txns) {
+  for (const row of patchRows(txns, opts.overlay)) {
     // A replaced pending row, and (F6 round 3) an expired hold or its reversal, count nowhere.
     if (countsNowhere(money.supersede, row.id)) continue;
     const replaced = money.supersede.replacedBy.get(row.id);
@@ -407,6 +430,6 @@ export async function loadAllowanceWindow(
   opts: LoadMoneyContextOptions = {},
 ): Promise<{ money: MoneyContext; movement: ClassifiedMovement[] }> {
   const money = await loadMoneyContext(householdId, range, opts);
-  const rows = await loadMovementRows(householdId, range.start, range.end, money);
+  const rows = await loadMovementRows(householdId, range.start, range.end, money, { overlay: opts.overlay });
   return { money, movement: rows.map((row) => ({ row, m: classifyMovement(row, money, { explain: true }) })) };
 }

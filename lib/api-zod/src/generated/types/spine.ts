@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SpineBank } from "./spineBank";
+import type { SpineBankConfidence } from "./spineBankConfidence";
 import type { SpineDebt } from "./spineDebt";
 import type { SpineForecast } from "./spineForecast";
 import type { SpineMonthAllowance } from "./spineMonthAllowance";
@@ -30,4 +31,5 @@ export interface Spine {
   reviewCount: number;
   position: SpinePosition;
   monthAllowance: SpineMonthAllowance;
+  bankConfidence: SpineBankConfidence;
 }

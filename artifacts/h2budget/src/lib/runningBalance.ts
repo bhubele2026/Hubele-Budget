@@ -6,7 +6,7 @@ export type RowLike = {
   amount: string | number;
   occurredAt?: string | null;
   /** (F6 round 3) The server's answer: an expired hold counts nowhere. */
-  expiredHold?: boolean;
+  expiredHold?: boolean | null;
 };
 
 /**

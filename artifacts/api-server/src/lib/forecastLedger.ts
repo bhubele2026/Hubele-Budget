@@ -10,7 +10,7 @@ import {
 } from "@workspace/db";
 import { resolveSnapshotAccount, type SnapshotAccountResolution } from "./resolveSnapshotAccount";
 import { ledgerActualRowsWhere, readReversalHoldRows, toCashRow } from "./ledgerCashRows";
-import { expiredHoldsRuleOn, findExpiredHoldsAmong } from "./supersededPending";
+import { expiredHoldsRuleOn, readAnsweredRows } from "./supersededPending";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
 import { remapOrphanResolutions, type ResolutionSchedule } from "./resolutionRemap";
@@ -55,6 +55,7 @@ import {
   type PlanOverride,
 } from "./everydayHooks";
 import { inFullDebtIdsFor } from "./cardPayoffMode";
+import { patchRows, type CorrectionOverlay } from "./correctionOverlay";
 import {
   addDays,
   expandItem,
@@ -464,9 +465,22 @@ export async function buildForecastLedger(
      * ledger with one on its own); nothing is written.
      */
     planOverride?: PlanOverride | null;
+    /**
+     * ⭐ (Q1, the Q2 follow-up) A proposed fix's dry run
+     * (`POST /review/proposals/:key/apply?dryRun=1`): the ledger is built as if
+     * the fix were written — its rows read with the columns it writes
+     * (`patchRows`, on the actual rows, the matcher's candidate rows, the cards'
+     * rows and the hooks' allowance window) and the household's answers without
+     * the ones it deletes and with the `matched` ones it inserts. So the
+     * preview's pairing is the ledger's own, not the ledger before the fix.
+     * Never shared (`computeCashSignalWithOverlay` builds it on its own); never
+     * set outside a dry run; nothing is written.
+     */
+    correctionOverlay?: CorrectionOverlay | null;
   } = {},
 ): Promise<ForecastLedger> {
   ledgerBuilds += 1;
+  const overlay = opts.correctionOverlay ?? null;
   // ⭐ (P2) THE INDEPENDENT READS, AT ONCE. None of these depends on another
   // (each is keyed on the household or the owner alone), and the ledger never
   // writes, so reading them together changes nothing but the wait: they used
@@ -479,7 +493,7 @@ export async function buildForecastLedger(
     debtsList,
     hookSettings,
     [avaSettingsRow],
-    resolutionsStored,
+    resolutionsAsStored,
     { expandDebtMin, expandAvalancheExtra, resolutionScheduleLookup, AVALANCHE_EXTRA_EVENT_ITEM_ID },
   ] = await Promise.all([
     db.select().from(forecastSettingsTable).where(eq(forecastSettingsTable.userId, ownerUserId)),
@@ -490,6 +504,25 @@ export async function buildForecastLedger(
     db.select().from(forecastResolutionsTable).where(eq(forecastResolutionsTable.householdId, householdId)),
     import("./debtMinSchedule"),
   ]);
+  // (Q1) A dry run reads the answers as the fix leaves them: its neighbours
+  // gone, its `matched` answers in (the same columns `writeForecastResolution`
+  // inserts). Without an overlay: the stored answers, untouched.
+  const resolutionsStored = overlay
+    ? [
+        ...resolutionsAsStored.filter((r) => !overlay.removedResolutionIds.has(r.id)),
+        ...overlay.addMatched.map((m, i) => ({
+          id: `correction-overlay-${i}-${m.txnId}`,
+          userId: ownerUserId,
+          householdId,
+          recurringItemId: m.recurringItemId,
+          occurrenceDate: m.occurrenceDate,
+          status: "matched",
+          matchedTxnId: m.txnId,
+          rescheduledTo: null,
+          createdAt: new Date(),
+        })),
+      ]
+    : resolutionsAsStored;
   const cashBuffer = Number(settings?.cashBuffer ?? 500) || 0;
   const daysAhead = opts.horizonDays ?? settings?.daysAhead ?? 90;
   // ⭐ (F1) The debts linked to a card the owner pays IN FULL: their `debt:`
@@ -787,7 +820,7 @@ export async function buildForecastLedger(
   // actual rows (their bounds come from the settings and today only), and the
   // rows the resolutions name (`matchedIds`, above). Each result is used
   // exactly where its read used to be.
-  const [snapshotAccount, actualRowsAll, matchedTxns] = await Promise.all([
+  const [snapshotAccount, actualRowsAsStored, matchedTxns] = await Promise.all([
     snapshotAccountRead,
     db
       .select()
@@ -821,6 +854,8 @@ export async function buildForecastLedger(
           )
       : Promise.resolve([]),
   ]);
+  // (Q1) A dry run's rows carry the columns the fix writes (no amount or date moves).
+  const actualRowsAll = patchRows(actualRowsAsStored, overlay);
   const configuredCheckingExternalId = snapshotAccount.externalId;
   let bankToday = startBalanceAtAnchor;
   const actuals: LedgerActual[] = [];
@@ -877,32 +912,49 @@ export async function buildForecastLedger(
 
   // ⭐ (F6 round 4, finding 9) AN ANSWER ON AN EXPIRED HOLD NAMES NO ROW. A
   // "matched" or "partial" answer whose row is an expired hold or its reversal
-  // (`findExpiredHoldsAmong`: still pending more than 7 days after its date and
-  // never replaced — a payment that failed, or that posted under another row) is
-  // read as if it had not been given: it settles no plan key, its row pays no
-  // Weekly Spend week (`hookMatchedRows`, `matchedTxnByKey`) and no partial
-  // (`partialTxnByKey`), and it lends no payee name (`confirmedRowsByItem`). The
-  // occurrence drags again, and a posted twin or a card credit pays it once
-  // through the evidence path — the hold counts nowhere, the forecast included
-  // (owner's rule, 2026-10-15). Before it, such an answer paid its week with
-  // money that never left, or a second time beside the posted payment. Kill
-  // switch: `EXPIRED_HOLDS_RULE=off` (no row is then expired: every answer reads
-  // as before). Usually no query: only an answer naming a pending row reads.
-  const expiredAnswerRows = await findExpiredHoldsAmong(householdId, matchedTxns, db, { today: todayISO });
+  // (still pending more than 7 days after its date and never replaced — a
+  // payment that failed, or that posted under another row) is read as if it had
+  // not been given: it settles no plan key, its row pays no Weekly Spend week
+  // (`hookMatchedRows`, `matchedTxnByKey`) and no partial (`partialTxnByKey`),
+  // and it lends no payee name (`confirmedRowsByItem`). The occurrence drags
+  // again, and a posted twin or a card credit pays it once through the evidence
+  // path — the hold counts nowhere, the forecast included (owner's rule,
+  // 2026-10-15). Kill switch: `EXPIRED_HOLDS_RULE=off` (no row is then expired:
+  // every answer reads as before). Usually no query: only an answer naming a
+  // pending row reads.
+  // ⭐ (F6 round 5, finding 5) …UNLESS ITS PAYMENT POSTED UNDER ANOTHER NAME. When
+  // the expired row has exactly one POSTED TWIN (`readAnsweredRows`: same
+  // account, money out, the same cents to `canSupersede`'s cap, dated 0–7 days
+  // after it, not answered, tagged or claimed), the answer counts on that posted
+  // row instead — read so, nothing written: it settles its plan, pays its week,
+  // and the posted row is taken once (round 4 counted the bill again beside it).
+  const namedTxns: Array<{ id: string; source: string | null; plaidAccountId: string | null; amount: string; description: string | null; occurredOn: string; pending: boolean | null }> = matchedTxns;
+  const answeredRows = namedTxns.filter((t) =>
+    resolutionsAll.some((r) => (r.status === "matched" || r.status === "partial") && r.matchedTxnId === t.id),
+  );
+  const answerRead = await readAnsweredRows(householdId, answeredRows, db, { today: todayISO });
   const resolutionsLive =
-    expiredAnswerRows.size === 0
+    answerRead.expired.size === 0
       ? resolutionsAll
-      : resolutionsAll.filter(
-          (r) => !((r.status === "matched" || r.status === "partial") && r.matchedTxnId && expiredAnswerRows.has(r.matchedTxnId)),
-        );
+      : resolutionsAll.flatMap((r) => {
+          if (!((r.status === "matched" || r.status === "partial") && r.matchedTxnId && answerRead.expired.has(r.matchedTxnId))) return [r];
+          const twin = answerRead.postedTwinOf.get(r.matchedTxnId);
+          return twin ? [{ ...r, matchedTxnId: twin.id }] : [];
+        });
+  // The rows the answers now name: the posted twins join the rows read above.
+  const answerTxns = [
+    ...namedTxns,
+    ...[...answerRead.postedTwinOf.values()].filter((twin, i, all) => all.findIndex((x) => x.id === twin.id) === i && !namedTxns.some((t) => t.id === twin.id)),
+  ];
 
   const matchedTxnBankSet = new Set<string>();
   const resolvedTxnAmount = new Map<string, number>();
   const resolvedTxnDescription = new Map<string, string | null>();
   // (F5 round 2) The day of each row an answer names: a "matched" hook row pays from it.
   const resolvedTxnDate = new Map<string, string>();
-  // (P2) `matchedTxns` is read above (empty when no resolution names a row).
-  for (const t of matchedTxns) {
+  // (P2) `matchedTxns` is read above (empty when no resolution names a row);
+  // (F6 round 5) with the posted twins an answer moved to.
+  for (const t of answerTxns) {
     resolvedTxnAmount.set(t.id, Number(t.amount) || 0);
     resolvedTxnDate.set(t.id, t.occurredOn);
     resolvedTxnDescription.set(t.id, t.description ?? null);
@@ -1135,6 +1187,7 @@ export async function buildForecastLedger(
       settings: hookSettings,
       periods: hookCardPeriodsOf(hookOccurrences, todayISO),
       credits: creditsFrom !== null && creditsFrom <= todayISO ? { from: creditsFrom, to: todayISO } : null,
+      overlay,
     });
   })();
   // Awaited inside the row read below; a household with no rows to read still settles it there.
@@ -1230,17 +1283,21 @@ export async function buildForecastLedger(
   const hookCheckingOutflows: HookCheckingOutflow[] = [];
   const pendingTxnIds = new Set<string>();
   if (matchPlans.length > 0 || listingPlans.length > 0 || hookCadenceByItem.size > 0 || ledgerMinimumEvents.length > 0) {
-    const candidateRowsAll = await db
-      .select()
-      .from(transactionsTable)
-      .where(
-        and(
-          eq(transactionsTable.householdId, householdId),
-          inForecastWhere(todayISO),
-          gte(transactionsTable.occurredOn, addDaysISO(rowReadFromISO, -SUPERSEDE_MAX_DAYS)),
-          lte(transactionsTable.occurredOn, addDaysISO(todayISO, SUPERSEDE_MAX_DAYS)),
+    const candidateRowsAll = patchRows(
+      await db
+        .select()
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.householdId, householdId),
+            inForecastWhere(todayISO),
+            gte(transactionsTable.occurredOn, addDaysISO(rowReadFromISO, -SUPERSEDE_MAX_DAYS)),
+            lte(transactionsTable.occurredOn, addDaysISO(todayISO, SUPERSEDE_MAX_DAYS)),
+          ),
         ),
-      );
+      // (Q1) A dry run's candidates carry the columns the fix writes (a category the matcher reads).
+      overlay,
+    );
     const candidateCashRows = candidateRowsAll.map(toCashRow);
     const classified = classifyCashRows(candidateCashRows, {
       anchor: null,
@@ -1489,6 +1546,8 @@ export async function buildForecastLedger(
     cards: hookCards,
     creditPairs,
     matchedRows: hookMatchedRows,
+    // (Q1) A dry run's allowance window reads the rows as the fix leaves them.
+    overlay,
   });
   // (F1) The payment row behind an occurrence the evidence paid (all or part), signed like the bank.
   const hookTxnAmount = new Map<string, number>();

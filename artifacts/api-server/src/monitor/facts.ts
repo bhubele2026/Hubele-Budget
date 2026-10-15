@@ -14,6 +14,7 @@ import { buildSpendingFacts, TRACKING_START } from "../lib/spendingFacts";
 import { householdTodayISO } from "../lib/householdClock";
 import { merchantSignature } from "../lib/merchantNameExtract";
 import { loadGoalsWithCurrent } from "../lib/goals";
+import { readAnsweredRows } from "../lib/supersededPending";
 import type { BillFacts, BillPayment, CategoryFacts, MonitorFacts, RecentRow } from "./types";
 
 // (AI-3) ONE READ of everything the detectors need, assembled once per run.
@@ -79,6 +80,9 @@ export async function loadMonitorFacts(
         txnId: transactionsTable.id,
         date: transactionsTable.occurredOn,
         amount: transactionsTable.amount,
+        // (F6 round 5, finding 4) An answer on an expired hold names no payment.
+        pending: transactionsTable.pending,
+        plaidAccountId: transactionsTable.plaidAccountId,
       })
       .from(forecastResolutionsTable)
       .innerJoin(transactionsTable, eq(forecastResolutionsTable.matchedTxnId, transactionsTable.id))
@@ -146,7 +150,24 @@ export async function loadMonitorFacts(
     if (list) list.push(p);
     else payments.set(itemId, [p]);
   };
+  // ⭐ (F6 round 5, finding 4) A "matched" answer whose row is an expired hold —
+  // still pending more than 7 days after its date, never replaced — pays no
+  // bill here either, as in Bills and the forecast (`readAnsweredRows`, their
+  // read): bill_increase never reads a payment that did not happen. When that
+  // payment posted under another name, the answer counts on the posted row
+  // (finding 5). Kill switch off: every answer reads as before.
+  const answerRead = await readAnsweredRows(
+    householdId,
+    resolutions.map((r) => ({ id: r.txnId, pending: r.pending, plaidAccountId: r.plaidAccountId, occurredOn: r.date, amount: r.amount })),
+    db,
+    { today: todayISO },
+  );
   for (const r of resolutions) {
+    if (answerRead.expired.has(r.txnId)) {
+      const twin = answerRead.postedTwinOf.get(r.txnId);
+      if (twin) addPayment(r.itemId!, { date: twin.occurredOn, amount: Math.abs(num(twin.amount)), source: "matched", txnId: twin.id });
+      continue;
+    }
     addPayment(r.itemId!, { date: r.date, amount: Math.abs(num(r.amount)), source: "matched", txnId: r.txnId });
   }
   for (const m of cash.ledger.matches) {

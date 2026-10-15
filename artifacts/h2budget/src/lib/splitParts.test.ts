@@ -149,3 +149,18 @@ describe("(F6 round 4, findings 6 and 12) Reports › Cash flow money flow leave
   });
 });
 
+
+describe("(F6 round 5, finding 3) a held hold and its reversal (expiredPair): the money flow counts both (cash, net 0); the Budget drill (spending) neither", () => {
+  it("a car hold −80 the snapshot held and its +80 reversal: in the cash flow, out of the drill", () => {
+    const rows = [
+      tx("carHold", "2026-09-01", "-80.00", "g", { pending: true, expiredPair: true }),
+      tx("carBack", "2026-09-08", "80.00", "g", { pending: true, expiredPair: true, description: "Car Rental Transaction" }),
+      tx("posted", "2026-09-07", "-90.00", "g"),
+    ];
+    const flow = monthMoneyFlow(rows, "2026-09", NAMES);
+    expect(flow.expenseByCat).toEqual(new Map([["Groceries", 170]]));
+    expect(flow.incomeByDesc).toEqual(new Map([["Car", 80]]));
+    const drill = groupTxnsByCategory(rows, OPTS).get("g")!;
+    expect(drill.map((r) => r.id)).toEqual(["posted"]);
+  });
+});

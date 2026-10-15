@@ -14,6 +14,13 @@
 //   The 8 weeks from 8/16, read Sunday–Wednesday: [0,0,0,20,30,0,40,10]
 //   → sorted [0,0,0,0,10,20,30,40] → floor((0 + 10) / 2) = 5.00; whole weeks
 //   [0,0,0,20,100,0,40,100] → floor((0 + 20) / 2) = 10.00; above usual 55.00.
+//   (Dining's rows sit in 4 of the 8 weeks — exactly half: quoted.)
+// ⭐ (Final #10) A usual needs rows in at least HALF of the window's periods:
+//   Coffee in 2 of the 8 weeks (9/21 15.00, 9/29 25.00; this week 10/13 30.00):
+//     Q1 quoted [0 ×6, 15, 25] → "usual 0.00 · above usual 30.00"; now null,
+//     "Not enough history".
+//   Fuel in 5 of the 8 (8/17 40 · 8/24 50 · 9/01 30 · 9/08 20 · 9/22 60, all
+//     Mon/Tue; this week 10/13 45.00): [0,0,0,20,30,40,50,60] → 25.00; above 20.00.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -101,7 +108,7 @@ beforeAll(async () => {
   await db
     .insert(plaidAccountsTable)
     .values({ ...owned, itemId: item!.id, accountId: cardExt, name: "Amex Gold", mask: "7007", type: "credit", subtype: "credit card" });
-  for (const n of ["Groceries", "Dining"]) {
+  for (const n of ["Groceries", "Dining", "Coffee", "Fuel"]) {
     const [c] = await db.insert(budgetCategoriesTable).values({ ...owned, name: `${n} ${OWNER.slice(-4)}`, kind: "expense", groupName: "Everyday" }).returning();
     cat[n] = c!.id;
   }
@@ -109,11 +116,12 @@ beforeAll(async () => {
     { householdId: HH, memberUserId: null, period: "weekly", amount: "300.00", effectiveFrom: "2026-05-01", source: "owner" },
     { householdId: HH, memberUserId: null, period: "monthly", amount: "400.00", effectiveFrom: "2026-05-01", source: "owner" },
   ]);
-  const row = (on: string, amount: string, category: "Groceries" | "Dining", flag: "monthly" | "weekly") => ({
+  const NAMES = { Groceries: "GREEN GROCER", Dining: "CORNER BISTRO", Coffee: "BEAN COUNTER COFFEE", Fuel: "QUICK FUEL 0042" } as const;
+  const row = (on: string, amount: string, category: keyof typeof NAMES, flag: "monthly" | "weekly") => ({
     ...owned,
     occurredOn: on,
     createdAt: createdAtStartOfHouseholdDay(on),
-    description: category === "Groceries" ? "GREEN GROCER" : "CORNER BISTRO",
+    description: NAMES[category],
     amount,
     plaidAccountId: cardExt,
     source: "plaid:amex",
@@ -136,6 +144,16 @@ beforeAll(async () => {
     row("2026-10-04", "-10.00", "Dining", "weekly"),
     row("2026-10-08", "-90.00", "Dining", "weekly"),
     row("2026-10-12", "-60.00", "Dining", "weekly"),
+    // (Final #10) Coffee: 2 of the 8 weeks. Fuel: 5 of the 8.
+    row("2026-09-21", "-15.00", "Coffee", "weekly"),
+    row("2026-09-29", "-25.00", "Coffee", "weekly"),
+    row("2026-10-13", "-30.00", "Coffee", "weekly"),
+    row("2026-08-17", "-40.00", "Fuel", "weekly"),
+    row("2026-08-24", "-50.00", "Fuel", "weekly"),
+    row("2026-09-01", "-30.00", "Fuel", "weekly"),
+    row("2026-09-08", "-20.00", "Fuel", "weekly"),
+    row("2026-09-22", "-60.00", "Fuel", "weekly"),
+    row("2026-10-13", "-45.00", "Fuel", "weekly"),
   ]);
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -181,5 +199,30 @@ describe("(F3) usual, read to the same point", () => {
     expect(w).toMatchObject({ usualBasis: "same_days", usualThrough: "2026-10-14" });
     const trim = w.trims.find((t: Json) => t.categoryId === cat.Dining);
     expect(trim).toMatchObject({ spentWeek: 6000, usualWeek: 500, usualFullWeek: 1000 });
+  });
+});
+
+describe("(Final #10) a usual needs rows in at least half of the window's periods", () => {
+  it("⭐ this week: Coffee in 2 of 8 weeks → no usual (\"Not enough history\"); Fuel in 5 of 8 → usual 25.00, 20.00 above; Dining (4 of 8) keeps its usual", async () => {
+    const b = await get("/money/period-breakdown?period=week&start=2026-10-11");
+    expect(() => GetPeriodBreakdownResponse.parse(b)).not.toThrow();
+    const of = (id: string) => b.categories.find((c: Json) => c.categoryId === id);
+    // Q1 read Coffee as "usual 0.00 · above usual 30.00" (six empty weeks counted 0).
+    expect(of(cat.Coffee!)).toMatchObject({ amount: "30.00", usual: null, usualFullPeriod: null, aboveUsual: null, historyPeriods: 2 });
+    expect(of(cat.Fuel!)).toMatchObject({ amount: "45.00", usual: "25.00", usualFullPeriod: "25.00", aboveUsual: "20.00", historyPeriods: 5 });
+    expect(of(cat.Dining!)).toMatchObject({ usual: "5.00", historyPeriods: 4 });
+    // Only the usual columns move: the week's figures are the rows' sum.
+    expect(b.actual).toBe("135.00");
+
+    // The ways back: the same rule, the same figures.
+    const w = await get("/money/ways-back");
+    expect(() => GetWaysBackResponse.parse(w)).not.toThrow();
+    const trim = (id: string) => w.trims.find((t: Json) => t.categoryId === id);
+    expect(trim(cat.Coffee!)).toMatchObject({ spentWeek: 3000, usualWeek: null, usualFullWeek: null, historyPeriods: 2 });
+    expect(trim(cat.Fuel!)).toMatchObject({ spentWeek: 4500, usualWeek: 2500, usualFullWeek: 2500, historyPeriods: 5 });
+    for (const id of [cat.Coffee!, cat.Fuel!, cat.Dining!]) {
+      const c = of(id);
+      expect(c.usual == null ? null : Math.round(Number(c.usual) * 100), id).toBe(trim(id).usualWeek);
+    }
   });
 });

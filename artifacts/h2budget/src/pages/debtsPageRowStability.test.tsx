@@ -208,6 +208,13 @@ describe("Debts page — reserved-slot row stability (#639)", () => {
 });
 
 describe("Debts page — C5 composition", () => {
+  it("(Final W11) the table's scroll region is keyboard reachable and named", () => {
+    renderPage();
+    const region = screen.getByLabelText("Debts table");
+    expect(region.getAttribute("role")).toBe("region");
+    expect(region.getAttribute("tabindex")).toBe("0");
+    expect(region.className).toContain("overflow-x-auto");
+  });
   it("has an h1 'Debts' (the e2e specs wait for it), three span-4 stats and a span-12 creditors panel", () => {
     extraAmount = "0";
     const { container } = renderPage();

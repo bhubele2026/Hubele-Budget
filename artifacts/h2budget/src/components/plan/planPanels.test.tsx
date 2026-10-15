@@ -113,6 +113,12 @@ describe("Weekly plan panel", () => {
     expect(screen.getByTestId("member-plan").querySelector("input")).toBeNull();
   });
 
+  it("(Final W5) before /me answers, the source word is not 'set by you'", () => {
+    m.isOwner = undefined;
+    mount(<WeekPlanPanel />);
+    expect(screen.getByTestId("limit-source-word").textContent).toBe("");
+  });
+
   it("a derived plan reads 'suggested'", () => {
     m.plans = { plans: [plan("p1", null, "weekly", "350.00", "derived")], suggested: suggested() };
     mount(<WeekPlanPanel />);

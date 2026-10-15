@@ -50,7 +50,7 @@ afterEach(() => { cleanup(); calls.length = 0; });
 const view = (selected = "all") =>
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <AmexCardBand selected={selected} onSelect={() => undefined} period={{ from: "2026-10-11", to: "2026-10-17" }} periodLabel="Oct 11 – 17" />
+      <AmexCardBand selected={selected} onSelect={() => undefined} period={{ from: "2026-10-11", to: "2026-10-17" }} />
     </QueryClientProvider>,
   );
 
@@ -59,28 +59,42 @@ describe("AmexCardBand figures (W7)", () => {
     view();
     const all = screen.getByTestId("amex-tile-all");
     expect(within(all).getByTestId("amex-owed-all").textContent).toBe("$2,952.85");
-    expect(within(all).getByTestId("amex-purchases-all").textContent).toContain("$475.60");
+    expect(within(all).queryByTestId("amex-purchases-all")).toBeNull(); // (Q6b) the band selects; purchases live in the Summary
     expect(all.textContent).not.toContain("$612.30");
     expect(all.textContent).not.toMatch(/combined/i);
   });
 
-  it("every card tile — the debt-linked one too — shows its own owed and period purchases", () => {
+  it("every card tile — the debt-linked one too — shows its own owed (purchases are in the Summary)", () => {
     view();
     const blue = document.querySelector('[data-account-id="hs-amex-blue-2002"]') as HTMLElement;
     const plat = document.querySelector('[data-account-id="hs-amex-plat-1001"]') as HTMLElement;
     expect(within(blue).getByTestId("amex-owed-hs-amex-blue-2002").textContent).toBe("$612.30");
-    expect(within(blue).getByTestId("amex-purchases-hs-amex-blue-2002").textContent).toContain("$90.90");
     expect(within(plat).getByTestId("amex-owed-hs-amex-plat-1001").textContent).toBe("$2,340.55");
-    expect(within(plat).getByTestId("amex-purchases-hs-amex-plat-1001").textContent).toContain("$384.70");
+    expect(blue.textContent).not.toContain("$90.90");
   });
 
-  it("the band asks for the Summary's own period, by the external account id; the ring is named as the weekly plan's", () => {
+  it("the band asks for the Summary's own period, by the external account id; no ring, no duplicated figures", () => {
     view("hs-amex-blue-2002");
     expect(calls.every((c) => c.from === "2026-10-11" && c.to === "2026-10-17")).toBe(true);
     // One call, for "all": no per-card summary queries.
     expect(new Set(calls.map((c) => c.accountId))).toEqual(new Set(["all"]));
-    expect(screen.getByText("cleared this wk")).toBeTruthy();
+    expect(screen.queryByText("cleared this wk")).toBeNull();
     expect(screen.getByText("add")).toBeTruthy(); // + Add to avalanche stays
     expect(document.querySelector('[data-account-id="hs-amex-blue-2002"]')!.className).toContain("ring-2");
+  });
+});
+
+describe("(Q6b) embedded: the period's purchases stay on the tiles", () => {
+  it("showPurchases adds each tile's purchases from the same summary; off, the tile has none", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AmexCardBand selected="all" onSelect={() => undefined} period={{ from: "2026-10-11", to: "2026-10-17" }} showPurchases />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId("amex-band-purchases-all").textContent).toContain("475.60");
+    expect(screen.getByTestId("amex-band-purchases-hs-amex-blue-2002").textContent).toContain("90.90");
+    cleanup();
+    view();
+    expect(screen.queryByTestId("amex-band-purchases-all")).toBeNull();
   });
 });

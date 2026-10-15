@@ -15,7 +15,7 @@ import type { MoneyPositionWithinPlan } from "./moneyPositionWithinPlan";
 import type { PositionWeekAdjustment } from "./positionWeekAdjustment";
 
 /**
- * (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed; weekAdjustment is the household's own carry-over for this week, never positive, 0 when none). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).
+ * (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed; weekAdjustment is the household's own carry-over for this week, never positive, 0 when none). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)). (Q1) The week contract (names in avalanche-core glossary.ts): knownWeek ("Counts toward plan") = spentWeekDiscretionary without the F2 evidence rule's unresolved rows, netted the same way; unresolvedWeek ("Unconfirmed") = spentWeekDiscretionary − knownWeek; provisional = unresolvedWeek > max($25, 5% of the cap); remainingWeekKnown = weekCap + weekAdjustment − knownWeek, null with no cap. Each equals GET /money/period-breakdown's current week (known, unresolved.amount, provisional, remaining) to the cent. remainingWeek, withinPlan and safeToSpendNow stay cautious.
  */
 export interface MoneyPosition {
   todayISO: string;
@@ -50,8 +50,22 @@ export interface MoneyPosition {
   needsClassificationWeek: string;
   unplannedWeek: string;
   monthlyWeek: string;
-  /** @nullable */
+  /**
+   * Cautious: weekCap + weekAdjustment − spentWeekDiscretionary; null when the plan is not set
+   * @nullable
+   */
   remainingWeek: string | null;
+  /** (Q1) Counts toward plan: spentWeekDiscretionary without its unresolved rows (the F2 evidence rule), refunds netted per account and never below zero, exactly as spentWeekDiscretionary is */
+  knownWeek: string;
+  /** (Q1) Unconfirmed: spentWeekDiscretionary − knownWeek (≥ 0) */
+  unresolvedWeek: string;
+  /** (Q1) unresolvedWeek > max($25, 5% of the cap; $25 with no cap) */
+  provisional: boolean;
+  /**
+   * (Q1) weekCap + weekAdjustment − knownWeek (negative when over); null when the plan is not set — never "0.00"
+   * @nullable
+   */
+  remainingWeekKnown: string | null;
   /**
    * weekCap × days elapsed (today included) ÷ 7
    * @nullable

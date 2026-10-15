@@ -8,7 +8,7 @@
 // `amexAnchorRoute`, `amexAnchorPerCard`, `amexAnchorPlaidBalance` and the B4
 // scenario (`amexCheckingScenario`) integration tests.
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -17,8 +17,10 @@ import {
   transactionsTable,
   settingsTable,
 } from "@workspace/db";
+import { normalizeCardAmount } from "@workspace/avalanche-core";
 import { AMEX_TXN_SOURCES } from "./amexAnchor";
 import { householdTodayISO } from "./householdClock";
+import { expiredHoldsRuleOn, findExpiredHoldsAmong } from "./supersededPending";
 
 /** What `GET /amex/anchor` answers. */
 export interface AmexAnchorAnswer {
@@ -54,7 +56,8 @@ async function isHouseholdCreditCard(householdId: string, externalId: string): P
  *                   or whose plaid_account_id matches an Amex transaction.
  *   2) `anchor`   — a previously persisted value at
  *                   `settings.preferences.amexAnchor`.
- *   3) `computed` — net change of all `source='amex'` transactions from $0.
+ *   3) `computed` — net change of all Amex rows (`amex` + `plaid:amex`) from $0,
+ *                   each source put on the owed sign first (Q3).
  *   4) `missing`  — no Amex data at all.
  * (Plaid's stored liability balance, `plaid`, is read before all of these
  * whenever the cards in scope have one — #651 below.)
@@ -416,8 +419,14 @@ export async function resolveAmexAnchor(
       source: "missing" as const,
     };
   }
-  const [agg] = await db
+  // ⭐ (Q3) Summed PER SOURCE, then put on the owed sign (`normalizeCardAmount`,
+  // the one card-sign rule `refreshAmexAnchor` already uses): the workbook
+  // (`amex`) stores a purchase positive, Plaid (`plaid:amex`) negative. The raw
+  // column summed across both netted a Plaid purchase against a workbook one,
+  // and gave a Plaid-only household a negative balance. Cents, so the sum is exact.
+  const bySource = await db
     .select({
+      source: transactionsTable.source,
       net: sql<string>`coalesce(sum(${transactionsTable.amount})::text, '0')`,
       cnt: sql<number>`count(*)::int`,
       latest: sql<string | null>`max(${transactionsTable.occurredOn})::text`,
@@ -428,11 +437,56 @@ export async function resolveAmexAnchor(
         eq(transactionsTable.householdId, householdId),
         inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
       ),
-    );
+    )
+    .groupBy(transactionsTable.source);
+  const agg = {
+    cnt: bySource.reduce((n, r) => n + Number(r.cnt ?? 0), 0),
+    owedCents: bySource.reduce(
+      (c, r) => c + Math.round(normalizeCardAmount(r.source, r.net) * 100),
+      0,
+    ),
+    latest: bySource.reduce<string | null>(
+      (l, r) => (r.latest && (!l || r.latest > l) ? r.latest : l),
+      null,
+    ),
+  };
 
-  if (agg && (agg.cnt ?? 0) > 0) {
+  if (agg.cnt > 0) {
+    // ⭐ (F6 round 5, finding 1) An expired hold counts nowhere, this sum
+    // included: the page subtracts only the rows that count (`isCounted`) when
+    // it walks back from this balance, so a sum holding an expired hold read
+    // every month before high by it. Only a pending Plaid row can be one: no
+    // read when none is. Kill switch off: the sum of every row, as before.
+    // (F6 ⇄ Q3 merge) Taken off on the owed sign (`normalizeCardAmount`, per
+    // row's source), the same sign the sum above is on.
+    const pendingRows = expiredHoldsRuleOn()
+      ? await db
+          .select({
+            id: transactionsTable.id,
+            source: transactionsTable.source,
+            pending: transactionsTable.pending,
+            plaidAccountId: transactionsTable.plaidAccountId,
+            occurredOn: transactionsTable.occurredOn,
+            amount: transactionsTable.amount,
+          })
+          .from(transactionsTable)
+          .where(
+            and(
+              eq(transactionsTable.householdId, householdId),
+              inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
+              eq(transactionsTable.pending, true),
+              isNotNull(transactionsTable.plaidAccountId),
+            ),
+          )
+      : [];
+    const expired = await findExpiredHoldsAmong(householdId, pendingRows);
+    const expiredOwedCents = pendingRows.reduce(
+      (sum, r) => sum + (expired.has(r.id) ? Math.round(normalizeCardAmount(r.source, r.amount) * 100) : 0),
+      0,
+    );
     return {
-      amexEndingBalance: Number(agg.net),
+      // `+ 0`: never a negative zero.
+      amexEndingBalance: (agg.owedCents - expiredOwedCents) / 100 + 0,
       // A bare household day (YYYY-MM-DD), never an instant: this balance already
       // holds every Amex row dated through its latest day. Sent as UTC midnight it
       // read as 7pm the evening before in Chicago, and the browser added that

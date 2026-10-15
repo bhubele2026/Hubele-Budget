@@ -3,7 +3,13 @@
 // retroactive candidates — it never applies them.
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { db, budgetCategoriesTable, categoryDecisionsTable, transactionsTable } from "@workspace/db";
+import {
+  db,
+  budgetCategoriesTable,
+  categoryDecisionsTable,
+  transactionsTable,
+  type DecisionRowFlags,
+} from "@workspace/db";
 import { isTransferCategory } from "../excludedCategory";
 import type { Exec } from "./db";
 import { learnFromChoice, retroactiveCandidates, type RetroactiveCandidates } from "./memory";
@@ -12,6 +18,38 @@ export interface UserChange {
   transactionId: string;
   previousCategoryId: string | null;
   categoryId: string | null;
+  /** (Q2) The row's five flags before and after the write, so an undo can put back what it moved. */
+  flagsBefore?: DecisionRowFlags | null;
+  flagsAfter?: DecisionRowFlags | null;
+}
+
+/** (Q2) The five row flags a hand pick can move — the columns `DecisionRowFlags` keeps. */
+export const DECISION_FLAG_COLUMNS = {
+  isTransfer: transactionsTable.isTransfer,
+  isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
+  weeklyAllowance: transactionsTable.weeklyAllowance,
+  monthlyAllowance: transactionsTable.monthlyAllowance,
+  unplannedAllowance: transactionsTable.unplannedAllowance,
+} as const;
+
+export const DECISION_FLAG_KEYS = Object.keys(DECISION_FLAG_COLUMNS) as Array<keyof DecisionRowFlags>;
+
+/** (Q2) A row's five flags, read off any object that carries them. */
+export function decisionFlagsOf(row: DecisionRowFlags): DecisionRowFlags {
+  return {
+    isTransfer: row.isTransfer === true,
+    isTransferUserOverridden: row.isTransferUserOverridden === true,
+    weeklyAllowance: row.weeklyAllowance === true,
+    monthlyAllowance: row.monthlyAllowance === true,
+    unplannedAllowance: row.unplannedAllowance === true,
+  };
+}
+
+/** (Q2) The flags `setCategoryByHand` (and PATCH with `{ categoryId }`) leaves on a row. */
+export function flagsAfterHandPick(before: DecisionRowFlags, pickingTransfer: boolean): DecisionRowFlags {
+  return pickingTransfer
+    ? { isTransfer: true, isTransferUserOverridden: true, weeklyAllowance: false, monthlyAllowance: false, unplannedAllowance: false }
+    : { ...before, isTransfer: false, isTransferUserOverridden: true };
 }
 
 /** Record `user` decisions for hand writes and close the rows' open queue items. */
@@ -46,6 +84,8 @@ export async function recordUserDecisions(
           resolution: "corrected",
           resolvedVia: "user",
           createdMemoryId: opts.createdMemoryId ?? null,
+          flagsBefore: c.flagsBefore ?? null,
+          flagsAfter: c.flagsAfter ?? null,
           createdAt: now,
         })),
       )
@@ -79,35 +119,72 @@ export async function categoryBelongs(householdId: string, categoryId: string): 
  * with `{ categoryId }`: lock, clear provisional, mark the transfer flag as a
  * person's (picking the Transfer category makes it a transfer and clears the
  * allowance flags; any other category makes it not one).
+ * (Q2) Returns the row's five flags before and after, for the `user` decision.
  */
 export async function setCategoryByHand(
   householdId: string,
   txnId: string,
   categoryId: string,
-): Promise<{ previousCategoryId: string | null } | null> {
+): Promise<{ previousCategoryId: string | null; flagsBefore: DecisionRowFlags; flagsAfter: DecisionRowFlags } | null> {
   const pickingTransfer = await isTransferCategory(householdId, categoryId);
-  return db.transaction(async (tx) => {
-    const [before] = await tx
-      .select({ categoryId: transactionsTable.categoryId })
-      .from(transactionsTable)
-      .where(and(eq(transactionsTable.id, txnId), eq(transactionsTable.householdId, householdId)))
-      .for("update");
-    if (!before) return null;
-    await tx
-      .update(transactionsTable)
-      .set({
-        categoryId,
-        categoryLockedByUser: true,
-        categoryProvisional: false,
-        isTransferUserOverridden: true,
-        isTransfer: pickingTransfer,
-        ...(pickingTransfer
-          ? { weeklyAllowance: false, monthlyAllowance: false, unplannedAllowance: false }
-          : {}),
-      })
-      .where(and(eq(transactionsTable.id, txnId), eq(transactionsTable.householdId, householdId)));
-    return { previousCategoryId: before.categoryId };
-  });
+  return db.transaction((tx) => writeCategoryByHand(tx, householdId, txnId, categoryId, pickingTransfer));
+}
+
+/**
+ * (Q2) `setCategoryByHand`'s write on an open transaction (the caller locks
+ * nothing else): the row is locked FOR UPDATE, read, and written. Null when
+ * the row is not the household's.
+ */
+export async function writeCategoryByHand(
+  tx: Exec,
+  householdId: string,
+  txnId: string,
+  categoryId: string,
+  pickingTransfer: boolean,
+): Promise<{ previousCategoryId: string | null; flagsBefore: DecisionRowFlags; flagsAfter: DecisionRowFlags } | null> {
+  const [before] = await tx
+    .select({ categoryId: transactionsTable.categoryId, ...DECISION_FLAG_COLUMNS })
+    .from(transactionsTable)
+    .where(and(eq(transactionsTable.id, txnId), eq(transactionsTable.householdId, householdId)))
+    .for("update");
+  if (!before) return null;
+  const flagsBefore = decisionFlagsOf(before);
+  const flagsAfter = flagsAfterHandPick(flagsBefore, pickingTransfer);
+  await tx
+    .update(transactionsTable)
+    .set(handPickPatch(categoryId, pickingTransfer))
+    .where(and(eq(transactionsTable.id, txnId), eq(transactionsTable.householdId, householdId)));
+  return { previousCategoryId: before.categoryId, flagsBefore, flagsAfter };
+}
+
+/**
+ * ⭐ (Q2) THE COLUMNS A HAND PICK WRITES — the one definition `writeCategoryByHand`
+ * writes and a proposed fix's dry run reads (`correctionOverlay.ts`), so the
+ * preview and the write can never disagree: the category, locked, not
+ * provisional, the transfer flag a person's (Transfer picked: a transfer, the
+ * allowance flags cleared; any other category: not a transfer).
+ */
+export function handPickPatch(
+  categoryId: string,
+  pickingTransfer: boolean,
+): {
+  categoryId: string;
+  categoryLockedByUser: true;
+  categoryProvisional: false;
+  isTransferUserOverridden: true;
+  isTransfer: boolean;
+  weeklyAllowance?: false;
+  monthlyAllowance?: false;
+  unplannedAllowance?: false;
+} {
+  return {
+    categoryId,
+    categoryLockedByUser: true,
+    categoryProvisional: false,
+    isTransferUserOverridden: true,
+    isTransfer: pickingTransfer,
+    ...(pickingTransfer ? { weeklyAllowance: false, monthlyAllowance: false, unplannedAllowance: false } : {}),
+  };
 }
 
 export interface HandFilingResult {
@@ -131,6 +208,9 @@ export async function recordHandFiling(
     previousCategoryId: string | null;
     categoryId: string | null;
     answering?: { decisionId: string; resolution: "accepted" | "corrected" };
+    /** (Q2) The row's five flags before and after the write (undo restores what moved). */
+    flagsBefore?: DecisionRowFlags | null;
+    flagsAfter?: DecisionRowFlags | null;
   },
 ): Promise<HandFilingResult | null> {
   const [txn] = await db
@@ -169,7 +249,15 @@ export async function recordHandFiling(
       tx,
       householdId,
       actor,
-      [{ transactionId: txnId, previousCategoryId: opts.previousCategoryId, categoryId: opts.categoryId }],
+      [
+        {
+          transactionId: txnId,
+          previousCategoryId: opts.previousCategoryId,
+          categoryId: opts.categoryId,
+          flagsBefore: opts.flagsBefore ?? null,
+          flagsAfter: opts.flagsAfter ?? null,
+        },
+      ],
       { createdMemoryId },
     );
     return {

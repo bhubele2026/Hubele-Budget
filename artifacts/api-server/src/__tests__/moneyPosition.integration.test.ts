@@ -263,6 +263,12 @@ describe("GET /money/position — household A, worked by hand", () => {
       unplannedWeek: "40.00",
       monthlyWeek: "30.00",
       remainingWeek: "144.50",
+      // (Q1) Nothing in this week is unconfirmed (no contrary Plaid evidence, no
+      // suggested bill): known = the cautious total, left = remaining.
+      knownWeek: "105.50",
+      unresolvedWeek: "0.00",
+      provisional: false,
+      remainingWeekKnown: "144.50",
       paceAllowedToday: "142.86",
       withinPlan: "yes",
       safeToSpendNow: "144.50",

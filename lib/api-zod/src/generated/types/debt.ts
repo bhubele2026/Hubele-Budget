@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { CardPaidAs } from "./cardPaidAs";
 import type { DebtAprSource } from "./debtAprSource";
 import type { DebtBalanceSource } from "./debtBalanceSource";
 import type { DebtMinPaymentSource } from "./debtMinPaymentSource";
@@ -125,4 +126,6 @@ This is the real statement — not the card's current balance.
  */
   statement?: DebtStatement | null;
   plaidAccount?: DebtPlaidAccount | null;
+  /** (Q1) For a debt linked to an Amex card: how that card is paid — the one definition the Amex band and summary read (CardPaidAs). An archived debt's card reads in_full_weekly (default_debt_inactive), never "on the payoff plan". Null for a debt no Amex card links. GET /debts always sends it; the single-debt responses leave it out. */
+  paidAs?: CardPaidAs | null;
 }

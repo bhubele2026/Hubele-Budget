@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import type { AccountAccentName } from "@/lib/accountIdentity";
@@ -31,6 +31,8 @@ export type PanelProps = {
    *  whose view tabs fill a phone-width head). */
   title: ReactNode;
   sub?: string;
+  /** (Q6b) Lets code move keyboard focus to the heading (tabIndex -1, visible ring) after a jump or a retry. */
+  titleRef?: Ref<HTMLHeadingElement>;
   accent?: AccountAccentName;
   actions?: ReactNode;
   to?: string;
@@ -61,7 +63,13 @@ export function Panel(props: PanelProps) {
       {props.title}
     </Link>
   ) : (
-    <h2 className="text-title font-semibold text-brand-navy">{props.title}</h2>
+    <h2
+      ref={props.titleRef}
+      tabIndex={props.titleRef ? -1 : undefined}
+      className={cn("text-title font-semibold text-brand-navy", props.titleRef && "rounded-control focus:outline-none focus:ring-2 focus:ring-brand-navy/40")}
+    >
+      {props.title}
+    </h2>
   );
   return (
     <section

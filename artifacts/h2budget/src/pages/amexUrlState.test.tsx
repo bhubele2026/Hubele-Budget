@@ -22,6 +22,7 @@ if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = functi
 
 const state = vi.hoisted(() => ({
   rows: [] as Array<Record<string, unknown>>,
+  wide: undefined as Array<Record<string, unknown>> | null | undefined, // null = the 12-month read is still loading
   params: [] as Array<Record<string, unknown>>,
   items: undefined as unknown[] | undefined,
   payoff: undefined as unknown,
@@ -55,7 +56,9 @@ vi.mock("@workspace/api-client-react", () => {
     // Every list read is recorded; the month read answers the rows, the wide one too.
     useListTransactions: (params: Record<string, unknown> = {}) => {
       state.params.push(params);
-      return { data: state.rows, isLoading: false };
+      // The 12-month trend read (limit 5000) may be answered apart from the month's rows.
+      const isWide = state.wide !== undefined && params.limit === 5000;
+      return { data: isWide ? (state.wide ?? undefined) : state.rows, isLoading: isWide && state.wide === null, isPlaceholderData: false };
     },
     useListCategories: () => ({ data: [] }),
     useListDebts: () => ({ data: [] }),
@@ -157,6 +160,7 @@ beforeEach(() => {
   window.localStorage.clear();
   window.history.replaceState(null, "", "/amex");
   state.rows = [];
+  state.wide = undefined;
   state.params = [];
   state.items = ITEMS;
   state.payoff = PAYOFF;
@@ -177,6 +181,17 @@ describe("(W1) the Amex page's view is in the address", () => {
     window.history.replaceState(null, "", "/amex?accountId=ext-plat");
     show();
     await waitFor(() => expect(screen.getByTestId("row-amex-p1")).toBeTruthy());
+    expect((document.querySelector('[data-account-id="ext-plat"] button[aria-pressed]') as HTMLElement).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("(Q6b r3) a card with no rows in the opened month stays chosen: the 12-month rows know it", async () => {
+    window.history.replaceState(null, "", "/amex?card=ext-plat&month=2026-09-01");
+    state.rows = [];
+    state.wide = null; // the month answered (no rows) before the 12-month read did
+    show();
+    await waitFor(() => expect(state.params.length).toBeGreaterThan(0));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(new URLSearchParams(window.location.search).get("card")).toBe("ext-plat");
     expect((document.querySelector('[data-account-id="ext-plat"] button[aria-pressed]') as HTMLElement).getAttribute("aria-pressed")).toBe("true");
   });
 

@@ -13,6 +13,7 @@ import {
   type SpendContext,
 } from "./spendingFilter";
 import { findSupersededPendingForRange, notCountedIdsOf } from "./supersededPending";
+import { patchRows, type CorrectionOverlay } from "./correctionOverlay";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
@@ -688,6 +689,8 @@ export async function readCardPeriods(
   roster: Pick<AmexCardCadence, "cardRows" | "excludedTxnIds" | "cadenceFor">,
   periods: readonly CardPeriod[],
   credits: { from: string; to: string } | null,
+  /** (Q1) A proposed fix's dry run: each card row read with the columns it writes (`patchRows`). */
+  opts: { overlay?: CorrectionOverlay | null } = {},
 ): Promise<CardPeriodsRead> {
   const charges = new Map<string, Map<string, number>>();
   const externalIds = roster.cardRows.map((c) => c.accountId).filter((v): v is string => !!v);
@@ -695,7 +698,7 @@ export async function readCardPeriods(
   const bounds = [...periods.flatMap((p) => [p.start, p.end]), ...(credits ? [credits.from, credits.to] : [])].sort();
   const from = bounds[0]!;
   const to = bounds[bounds.length - 1]!;
-  const [cats, txns, replacedPendingIds] = await Promise.all([
+  const [cats, txnsAsStored, replacedPendingIds] = await Promise.all([
     db
       .select({ id: budgetCategoriesTable.id, name: budgetCategoriesTable.name, debtId: budgetCategoriesTable.debtId, kind: budgetCategoriesTable.kind })
       .from(budgetCategoriesTable)
@@ -731,6 +734,7 @@ export async function readCardPeriods(
     // the rows the card cap reads — neither added to nor taken off owed-now.
     findSupersededPendingForRange(householdId, from, to).then(notCountedIdsOf),
   ]);
+  const txns = patchRows(txnsAsStored, opts.overlay);
   const categoriesById = new Map<string, { name: string; debtId: string | null; kind: string }>();
   const debtCategoryIds = new Set<string>();
   for (const c of cats) {

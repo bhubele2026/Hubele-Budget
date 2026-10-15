@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useTxDeepLink } from "@/hooks/useTxDeepLink";
+import { ledgerLoaded, useTxDeepLink } from "@/hooks/useTxDeepLink";
+import { pinRowInView, stickyClearance } from "@/lib/pinRow";
 import { Link, useLocation } from "wouter";
 import {
   useListTransactions,
@@ -20,9 +21,10 @@ import { Panel } from "@/components/next/Panel";
 import { useNearViewport } from "@/hooks/useNearViewport";
 import { AMEX_MONTH_LIMIT, amexAllScope, amexMonthParams, amexSummaryParams } from "./amexQueries";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
-import { RowDateControls } from "@/components/row-date-controls";
+import { RowMenu } from "@/components/row-menu";
+import { displayAmount, formatDisplayAmount } from "@/lib/amountDisplay";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
-import { AccountTransactionRow, ExpiredHoldLabel } from "@/components/account-page/transaction-row";
+import { AccountTransactionRow, ExpiredHoldLabel, ROW_SCROLL_MARGIN_TOP } from "@/components/account-page/transaction-row";
 import { SplitByCategoryHost } from "@/components/splits/SplitByCategoryHost";
 import {
   useBulkRecategorizePrompt,
@@ -32,6 +34,7 @@ import {
 import { customFetch } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { btnSm, card, emptyNote } from "@/ui";
+import { scoped, amexSummaryMatches } from "@/lib/queryState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -69,8 +72,8 @@ import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
-import { formatCurrency, formatRelativeTime } from "@/lib/utils";
-import { householdDayOfAt, householdToday } from "@/lib/householdDay";
+import { formatCurrency } from "@/lib/utils";
+import { householdToday } from "@/lib/householdDay";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PostLinkProgressBanner } from "@/components/post-link-progress";
@@ -88,12 +91,9 @@ import { replaceUrlParam, useUrlState } from "@/hooks/useUrlState";
 import { modeParam, monthParam, pickParam, urlHasMonth } from "@/lib/ledgerUrl";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
 import { isCounted } from "@/lib/countedRows";
-import { AMEX_BALANCE_DISTINCTION } from "@/lib/reportsBalances";
-import {
-  compareNewestFirst,
-  computeRunningBalances,
-  sortNewestFirst,
-} from "@/lib/runningBalance";
+import { compareNewestFirst } from "@/lib/runningBalance";
+import { cardWalkNote, walkCardBalancesBack } from "@/lib/cardBalanceWalk";
+import { AmexCardBalances } from "@/components/amex-card-balances";
 import {
   AccountPageHeader,
   AccountFilterBar,
@@ -107,6 +107,7 @@ import {
   monthKeyOf,
   monthKeyFromISO,
   compareMonth,
+  formatMonthLong,
   shiftMonth,
   monthFirstISO,
   monthLastISO,
@@ -114,7 +115,7 @@ import {
   type WindowConfig,
 } from "@/components/account-page";
 import { AmexLogo } from "@/components/brand-logos";
-import { AmexCardBand } from "@/components/amex-card-band";
+import { AmexCardBand, useAmexCardTitle } from "@/components/amex-card-band";
 import { AmexSummaryPanel, AmexNeedsAttention } from "@/components/amex-summary";
 import { useGetAmexSummary, getGetAmexSummaryQueryKey } from "@workspace/api-client-react/features";
 import {
@@ -129,7 +130,7 @@ import { cardOrderOf, identityOf, type AccountAccentName } from "@/lib/accountId
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { currentWeekRange, type RangeMode } from "@/lib/timeRange";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
-import { asOfWords, cardOwedView, needsLiability } from "@/lib/cardBalance";
+import { cardOwedView, needsLiability } from "@/lib/cardBalance";
 
 /** The identity accent's dot (the same tokens as `AccountChip`). */
 const ACCENT_DOT: Record<AccountAccentName, string> = {
@@ -156,8 +157,30 @@ function ymd(d: Date) {
   return householdToday(d);
 }
 
-function parseAbs(amount: string) {
-  return Math.abs(parseFloat(amount) || 0);
+/** The ledger sign rule (`amountDisplay.ts`): a purchase reads "-$12.00", a payment or refund "+$12.00". */
+function signedAmount(t: { amount: string; source?: string | null }) {
+  return formatDisplayAmount(displayAmount(t.amount, null, t.source));
+}
+
+/**
+ * A day's money out and money in, apart, in cents: never one sum of absolute values.
+ * (F6 round 3) An expired hold is listed but not in the day's totals (`isCounted`).
+ */
+function dayInOut(items: { amount: string; source?: string | null; expiredHold?: boolean | null }[]) {
+  let out = 0;
+  let inn = 0;
+  for (const t of items) {
+    if (!isCounted(t)) continue;
+    const c = Math.round(displayAmount(t.amount, null, t.source) * 100);
+    if (c < 0) out += -c;
+    else inn += c;
+  }
+  return { out: out / 100, in: inn / 100 };
+}
+
+/** The state chip a row carries instead of fading: Ignored wins over Reviewed. */
+function rowStateLabel(t: { reviewed?: boolean }, isIgnored: boolean): "Ignored" | "Reviewed" | null {
+  return isIgnored ? "Ignored" : t.reviewed ? "Reviewed" : null;
 }
 
 function parseSigned(amount: string) {
@@ -228,7 +251,7 @@ function ExternalCardChip({
       type="button"
       data-testid={`button-mark-external-card-${testIdSuffix}`}
       title="Mark this payment as going to a card outside our avalanche"
-      className="chip gray press inline-flex items-center gap-1 opacity-70 hover:opacity-100 hover:text-brand-navy"
+      className="chip gray press inline-flex items-center gap-1 hover:text-brand-navy"
       onClick={(e) => {
         e.stopPropagation();
         onToggle(true);
@@ -297,7 +320,9 @@ export default function AmexPage({
       if (a) return a;
     }
     return "all";
-  }, { url: !embedded });
+  }, { url: !embedded, push: true });
+  // (Q4) A band click is a choice of place, like the section tabs: ONE history
+  // entry per card, so Back returns to the card before.
   const setCardFilter = setCardFilterUrl;
   useEffect(() => {
     if (embedded) setCardFilter(accountId ?? "all");
@@ -400,12 +425,17 @@ export default function AmexPage({
     [rangeMode, selectedMonth],
   );
   const summaryParams = amexSummaryParams(cardFilter, summaryPeriod);
-  const summaryQ = useGetAmexSummary(summaryParams, {
+  const summaryRaw = useGetAmexSummary(summaryParams, {
     query: {
       queryKey: getGetAmexSummaryQueryKey(summaryParams),
       enabled: !embedded && summaryPeriod != null,
     },
   });
+  // (Q4) The summary on screen is the one for THIS card and period. While the
+  // new one loads, the old scope's answer (the all-cards owed) is held back:
+  // under another card's heading it is a wrong number.
+  const summaryScoped = scoped(summaryRaw, (s) => amexSummaryMatches(s, summaryParams));
+  const summaryQ = { ...summaryRaw, data: summaryScoped.data };
   // (P4) The summary answers the anchor question while it is enabled and has
   // not failed; embedded (summary off) or failed, the anchor is asked directly.
   const summaryAnswersAnchor = !embedded && summaryPeriod != null && !summaryQ.isError;
@@ -480,13 +510,18 @@ export default function AmexPage({
   // on the *initial* fetch — `isFetching` would, but we don't gate on
   // it). Only the focused month query opts in; the wider 12-month
   // trend query stays lazy to avoid extra work on every focus.
-  const { data: monthTxns, isLoading } = useListTransactions(monthQueryParams, {
+  const monthQ = useListTransactions(monthQueryParams, {
     query: {
       queryKey: getListTransactionsQueryKey(monthQueryParams),
       // Inherits TXN_CACHE (2 min); sync + txn mutations invalidate the
       // key, so always-refetch only re-pulled a large payload per mount.
     },
   });
+  // (Q4) Rows of ANOTHER month (kept while this month loads) are not this
+  // month's rows: they would be filtered to nothing ("No transactions match").
+  const monthTxns = monthQ.isPlaceholderData ? undefined : monthQ.data;
+  const isLoading = monthQ.isLoading;
+  const monthSwitching = monthQ.isPlaceholderData === true;
   const { data: categories } = useListCategories();
   const { data: debts, isError: debtsFailed } = useListDebts();
   // Combined statement balance across the live Amex cards — used as the
@@ -527,14 +562,27 @@ export default function AmexPage({
       ),
     enabled: cardFilter !== "all" && !summaryAnswersAnchor,
     staleTime: 60_000,
+    // (Q4) Another card's anchor is not this card's: no kept-over answer.
+    placeholderData: undefined,
   });
   // (P4) The summary's `owed` is the anchor's own answer (same call, same
   // card), so where the summary is on, the anchor comes from it. The last
   // answer for THIS card is kept across month changes (owed is the card's
   // current balance, not the period's), so the figure never blinks.
-  const owedRef = useRef<{ card: string; owed: NonNullable<typeof summaryQ.data>["owed"] } | null>(null);
-  if (summaryQ.data) owedRef.current = { card: cardFilter, owed: summaryQ.data.owed };
-  const owedHere = owedRef.current?.card === cardFilter ? owedRef.current.owed : null;
+  // (Q4) Derived, not written during render: the answer for this card and
+  // period, else the last answer for THIS card (kept in state, keyed by card).
+  const [owedKept, setOwedKept] = useState<{ card: string; owed: NonNullable<typeof summaryQ.data>["owed"] } | null>(null);
+  const owedNow = summaryQ.data?.owed;
+  useEffect(() => {
+    if (owedNow) setOwedKept((prev) =>
+        prev && prev.card === cardFilter && JSON.stringify(prev.owed) === JSON.stringify(owedNow) ? prev : { card: cardFilter, owed: owedNow },
+      );
+  }, [owedNow, cardFilter]);
+  const owedHere = owedNow
+    ? owedNow
+    : owedKept?.card === cardFilter
+      ? owedKept.owed
+      : null;
   const anchorFromSummary: AnchorResp | undefined =
     summaryAnswersAnchor && owedHere
       ? {
@@ -567,9 +615,12 @@ export default function AmexPage({
     compareMonth(selectedMonth, currentMonth) !== 0 ||
     (!monthPinnedFromUrlRef.current && monthTxns !== undefined && monthTxns.length === 0) ||
     anchorNeedsRows;
-  const { data: wideTxns, isError: trendFailed } = useListTransactions(trendQueryParams, {
+  const wideQ = useListTransactions(trendQueryParams, {
     query: { queryKey: getListTransactionsQueryKey(trendQueryParams), enabled: trendNeeded },
   });
+  const trendFailed = wideQ.isError;
+  // (Q4) Another window's rows are not this window's.
+  const wideTxns = wideQ.isPlaceholderData ? undefined : wideQ.data;
   const updateTx = useUpdateTransaction();
   const bulkUpdateTx = useBulkUpdateTransactions();
   const buildRuleUndoAction = useRuleActionUndo();
@@ -779,7 +830,7 @@ export default function AmexPage({
   // Group by day (descending). Within each day, sort newest-first via
   // the canonical comparator so the per-row "bal $X" running statement
   // balance shown beside each row matches the order in which
-  // `computeRunningBalances` walked the list.
+  // `walkCardBalancesBack` walked the list.
   const groups = useMemo(() => {
     const map = new Map<string, Transaction[]>();
     for (const t of filtered) {
@@ -796,17 +847,17 @@ export default function AmexPage({
   // once its month's rows have loaded, and mark it. Both layouts render the
   // row; the visible one is the one scrolled to.
   const focusedRef = useRef<string | null>(null);
+  const pinCancelRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => pinCancelRef.current?.(), []);
+  const nodesFor = (id: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="row-amex-${id}"], [data-testid="row-amex-mobile-${id}"]`));
   useEffect(() => {
     if (!focusTx) {
       focusedRef.current = null;
       return;
     }
     if (typeof document === "undefined") return;
-    const nodes = Array.from(
-      document.querySelectorAll<HTMLElement>(
-        `[data-testid="row-amex-${focusTx}"], [data-testid="row-amex-mobile-${focusTx}"]`,
-      ),
-    );
+    const nodes = nodesFor(focusTx);
     const el = nodes.find((n) => n.offsetParent !== null) ?? nodes[0];
     if (!el) return;
     el.setAttribute("data-focused", "true");
@@ -815,7 +866,17 @@ export default function AmexPage({
     // Scroll once per row; the mark is re-applied whenever the rows re-render.
     if (focusedRef.current !== focusTx) {
       focusedRef.current = focusTx;
-      el.scrollIntoView?.({ block: "center" });
+      // One scroll, after the row exists, below the pinned pane (the row's own
+      // scroll-margin-top clears the sticky stack).
+      el.scrollIntoView?.({ block: "start" });
+      // Content above the row (the chart slot, the summary) can still change
+      // height: hold the row where it landed until the person scrolls.
+      pinCancelRef.current?.();
+      pinCancelRef.current = pinRowInView(
+        () => nodesFor(focusTx).find((n) => n.offsetParent !== null) ?? null,
+        // The live bottom of the pinned pane + the row's day head, read each frame.
+        { clearance: (row) => stickyClearance(row, paneRef.current) },
+      );
     }
     return () => {
       el.removeAttribute("data-focused");
@@ -824,31 +885,20 @@ export default function AmexPage({
     };
   }, [focusTx, groups]);
 
-  // Per-month totals: split by sign of `amount`. Charges are positive
-  // (expenses on the card), payments/credits are negative.
-  const monthTotals = useMemo(() => {
-    let charges = 0;
-    let paymentsAndCredits = 0;
-    for (const t of filtered) {
-      // (F6 round 4) An expired hold counts nowhere.
-      if (!isCounted(t)) continue;
-      const a = parseSigned(t.amount);
-      if (a >= 0) charges += a;
-      else paymentsAndCredits += a; // negative
-    }
-    const netChange = charges + paymentsAndCredits; // charges - |payments|
-    return { charges, paymentsAndCredits, netChange };
-  }, [filtered]);
-
   // Distinct Plaid account IDs present on the Amex-source transactions.
   // These identify the actual Amex card account(s) feeding this page.
+  // (Q6b r3 review B) Plus every card the band knows (GET /amex/weekly-payoff): a newly
+  // linked or dormant card has no rows yet, and the band still offers it.
   const amexPlaidAccountIds = useMemo(() => {
     const s = new Set<string>();
     for (const t of wideAll) {
       if (t.plaidAccountId) s.add(t.plaidAccountId);
     }
+    // `accountId` is the external Plaid account_id on both (`plaidAccountId` there is the internal row id).
+    for (const c of amexPayoff?.cards ?? []) s.add(c.accountId);
+    for (const c of amexPayoff?.debtLinkedCards ?? []) s.add(c.accountId);
     return s;
-  }, [wideAll]);
+  }, [wideAll, amexPayoff]);
 
   // (#373) Mirror the Chase page's per-page item scoping. Map the Amex
   // card(s) currently shown back to their owning Plaid item id(s) so the
@@ -958,12 +1008,17 @@ export default function AmexPage({
     if (cardFilter === "all") return;
     if (embedded) return;
     if (monthTxns === undefined || plaidItemsForScope === undefined) return;
+    // (Q6b r3) The options come from the 12-month rows: wait for them, or a card with no rows in
+    // this month (or a failed wide read) drops to "All cards" on its own.
+    if (wideTxns === undefined) return;
+    // (Q6b r3 review B) …and for the band's cards, so a card with no rows yet is kept.
+    if (amexPayoff === undefined) return;
     if (!cardFilterOptions.some((o) => o.value === cardFilter)) {
-      setCardFilter("all");
+      setCardFilter("all", { replace: true });
     }
-  }, [cardFilter, cardFilterOptions, embedded, monthTxns, plaidItemsForScope]);
+  }, [cardFilter, cardFilterOptions, embedded, monthTxns, plaidItemsForScope, wideTxns, amexPayoff]);
 
-  const { runSync, isPending: isAmexSyncing } = usePlaidSync();
+  const { runSync } = usePlaidSync();
   const handleRefreshAmex = () => {
     if (relevantPlaidItemIds.length === 0) return;
     // Sync every Amex-owning Plaid item in scope so multi-card / multi-
@@ -1228,88 +1283,23 @@ export default function AmexPage({
   // in the day list. Computed off the full month (pre-filter) so that
   // typing in Search / picking a category doesn't reshuffle the
   // displayed balances.
-  const runningBalanceMap = useMemo(() => {
-    if (endingBalance.value === null) return new Map<string, number>();
-    // (#748) When a single card is selected, walk only that card's
-    // rows so the per-row "bal $X" matches the card-scoped ending
-    // balance shown in the tile. Falls through to all rows when
-    // cardFilter === "all" (current behavior).
-    const series =
+  // ⭐ (Q3) ONE CARD'S rows, walked as what the card OWES
+  // (`walkCardBalancesBack`): a purchase raised it, a payment or a refund
+  // lowered it, whatever sign the row's source stores. Posted rows only — a
+  // pending row shows no "bal". "All cards" has none: the cards' balances are
+  // read at different times, from different sources, and a combined walk
+  // would mix them; each card's balance shows in the panel instead.
+  const cardMonthRows = useMemo(
+    () =>
       cardFilter === "all"
-        ? monthScoped
-        : monthScoped.filter((t) => (t.plaidAccountId ?? "") === cardFilter);
-    // (F6 round 3) The walk skips an expired hold (`computeRunningBalances`): it shows no "bal".
-    return computeRunningBalances(sortNewestFirst(series), endingBalance.value);
-  }, [monthScoped, endingBalance.value, cardFilter]);
-
-  const endingBalanceMeta = useMemo(() => {
-    if (
-      endingBalance.source !== "debt" &&
-      endingBalance.source !== "anchor" &&
-      endingBalance.source !== "computed" &&
-      endingBalance.source !== "plaid"
-    ) {
-      return null;
-    }
-    const sourceLabel =
-      endingBalance.source === "debt"
-        ? "Card's current balance"
-        : endingBalance.source === "anchor"
-          ? "From saved anchor"
-          : endingBalance.source === "plaid"
-            ? "Live from Plaid"
-            : "Calculated";
-    let asOfLabel: string | null = null;
-    if (endingBalance.asOf) {
-      // Label the household day of the anchor. The computed source sends a bare
-      // day, and `new Date("2026-09-10")` is UTC midnight — the day before once
-      // shown in Central time.
-      const d = new Date(`${householdDayOfAt(endingBalance.asOf)}T12:00:00Z`);
-      if (!Number.isNaN(d.getTime())) {
-        asOfLabel = d.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          timeZone: "UTC",
-        });
-      }
-    }
-    // (#498) For the live Plaid fallback, lead the footer with a
-    // human-friendly "Updated X ago" so users can see at a glance how
-    // fresh the balance actually is — the absolute date is preserved
-    // in the tooltip below.
-    const relativeAsOf =
-      endingBalance.source === "plaid"
-        ? formatRelativeTime(endingBalance.asOf)
-        : "";
-    // (#651) While the user's "Refresh from Plaid" click is in flight,
-    // override the stale "Updated X ago" with a live "Refreshing…" label
-    // so they get clear, immediate feedback that the new fetch is
-    // running. Once the response lands the memo recomputes against the
-    // fresh asOf and snaps to "Updated just now".
-    const footer =
-      endingBalance.source === "plaid"
-        ? isAmexSyncing
-          ? `${sourceLabel} · Refreshing…`
-          : relativeAsOf
-            ? `${sourceLabel} · Updated ${relativeAsOf}`
-            : sourceLabel
-        : asOfLabel
-          ? `${sourceLabel} · as of ${asOfLabel}`
-          : sourceLabel;
-    const baseTooltip =
-      endingBalance.source === "computed"
-        ? `${footer}\nRunning sum of imported transactions. Set an actual balance to anchor the chip to the real card.`
-        : endingBalance.source === "plaid" && asOfLabel
-          ? `${sourceLabel} · as of ${asOfLabel}\nFetched directly from Plaid's per-account balance. Click refresh to re-fetch.`
-          : footer;
-    // (#884) Append the shared note explaining that this tile shows the
-    // projected end-of-month balance while the Reports page shows the
-    // current live balance, so a mid-month difference between the two
-    // surfaces is expected — not a sync bug.
-    const tooltip = `${baseTooltip}\n\n${AMEX_BALANCE_DISTINCTION.amexTooltipNote}`;
-    return { sourceLabel, asOfLabel, relativeAsOf, footer, tooltip };
-  }, [endingBalance, isAmexSyncing]);
+        ? []
+        : monthScoped.filter((t) => (t.plaidAccountId ?? "") === cardFilter),
+    [monthScoped, cardFilter],
+  );
+  const runningBalanceMap = useMemo(() => {
+    if (cardFilter === "all" || endingBalance.value === null) return new Map<string, number>();
+    return walkCardBalancesBack(cardMonthRows, endingBalance.value);
+  }, [cardMonthRows, endingBalance.value, cardFilter]);
 
   // (WP3) Say what the register's "bal" runs on when it is the card's own
   // debt row, and put the netted Owed beside it, second: the account Summary
@@ -1323,18 +1313,25 @@ export default function AmexPage({
       if (cardAnchorPending) return null;
       return "No running balance or chart: this card has not reported a current balance yet.";
     }
-    if (cardScopedAnchor.resolvedSource === "plaid") {
-      const asOf = asOfWords(cardScopedAnchor.asOf);
-      return `Running balances start from the card's current balance, ${formatCurrency(cardScopedAnchor.anchor)}${asOf ? ` ${asOf}` : ""}.`;
-    }
-    if (!cardScopedDebt) return null;
-    const v = cardOwedView({ debt: cardScopedDebt });
-    if (!v.creditorCurrent) return null;
-    const asOf = asOfWords(v.creditorCurrent.asOf);
-    const lead = `Running balances start from the card's current balance, ${formatCurrency(v.creditorCurrent.balance)}${asOf ? ` ${asOf}` : ""}.`;
-    if (v.owed == null || !v.pending) return lead;
-    return `${lead} Owed after payments not yet posted: ${formatCurrency(v.owed)}.`;
-  }, [cardFilter, cardScopedDebt, cardScopedAnchor, cardAnchorPending, cardAnchorFailed]);
+    if (endingBalance.value === null) return null;
+    // (Q3) What the "bal" figures count from: the card's current balance and
+    // its date, or — for a month before it — that month's end. A debt row's
+    // figure prints the date the account Summary prints for it.
+    const debtView =
+      cardScopedAnchor.resolvedSource !== "plaid" && cardScopedDebt
+        ? cardOwedView({ debt: cardScopedDebt })
+        : null;
+    const lead = cardWalkNote({
+      anchor: { balance: cardScopedAnchor.anchor, asOf: cardScopedAnchor.asOf },
+      ...(debtView?.creditorCurrent ? { shownAsOf: debtView.creditorCurrent.asOf } : {}),
+      selectedMonth,
+      monthEndBalance: endingBalance.value,
+      monthRows: cardMonthRows,
+      fallbackMonth: currentMonth,
+    });
+    if (!debtView || debtView.owed == null || !debtView.pending) return lead;
+    return `${lead} Owed after payments not yet posted: ${formatCurrency(debtView.owed)}.`;
+  }, [cardFilter, cardScopedDebt, cardScopedAnchor, cardAnchorPending, cardAnchorFailed, endingBalance.value, selectedMonth, cardMonthRows, currentMonth]);
 
   // (#809) Forward-looking ending-balance window, pinned to a fixed
   // 12-month span that rolls forward by month. Credit-card spending
@@ -1343,15 +1340,19 @@ export default function AmexPage({
   // from the window start through today. Weeks ending after today are
   // omitted so the right portion of the chart stays genuinely blank —
   // no flat carry-forward of the last value.
+  // (Q3) One card only: "All cards" draws no combined line (see the per-row
+  // walk above); it lists each card's balance instead.
   const balanceWindow = useMemo<WindowConfig | null>(
     () =>
-      buildBalanceWindow({
-        anchorPresent: cardScopedAnchor.anchor !== null,
-        currentMonth,
-        balanceAtEndOf,
-        transactions: wideAllForBalance,
-      }),
-    [cardScopedAnchor.anchor, balanceAtEndOf, wideAllForBalance, currentMonth],
+      cardFilter === "all"
+        ? null
+        : buildBalanceWindow({
+            anchorPresent: cardScopedAnchor.anchor !== null,
+            currentMonth,
+            balanceAtEndOf,
+            transactions: wideAllForBalance,
+          }),
+    [cardFilter, cardScopedAnchor.anchor, balanceAtEndOf, wideAllForBalance, currentMonth],
   );
 
   const knownPayers = useMemo(() => {
@@ -1415,6 +1416,21 @@ export default function AmexPage({
   // also flips `occurredOnUserOverridden` server-side so the next Plaid
   // sync won't restamp it back to Plaid's date. Invalidates both the
   // source and destination budget months when the move crosses a boundary.
+  // Mark / unmark a card payment as going to a card outside the avalanche.
+  // One handler for the mobile and the desktop row.
+  const setExternalCard = (t: Transaction, v: boolean) =>
+    updateTx.mutate(
+      { id: t.id, data: { isExternalCardPayment: v } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+          qc.invalidateQueries({
+            queryKey: getGetBudgetMonthQueryKey(`${t.occurredOn.slice(0, 7)}-01`),
+          });
+        },
+      },
+    );
+
   const handleQuickDate = async (
     t: Transaction,
     raw: string,
@@ -1998,16 +2014,10 @@ export default function AmexPage({
     });
   };
 
-  // Smooth scroll to today on first load.
-  const todayRef = useRef<HTMLDivElement | null>(null);
+  // (Q6b) The page opens at the top, summary first: nothing scrolls on its own
+  // when a card opens or changes. The only scrolls are a `?tx=` deep link (one,
+  // in the focus effect above) and a "Needs attention" line.
   const scrolledRef = useRef(false);
-  useEffect(() => {
-    if (scrolledRef.current || isLoading) return;
-    if (todayRef.current) {
-      todayRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-      scrolledRef.current = true;
-    }
-  }, [isLoading, groups.length]);
 
   // (F8) `?tx=<id>` — an Ask answer's charge link — scrolls to that row once
   // the month is on screen, as the Chase page does (CH-09).
@@ -2015,6 +2025,16 @@ export default function AmexPage({
     ready: !isLoading,
     rowTestIds: (id) => [`row-amex-${id}`, `row-amex-mobile-${id}`],
     scrolledRef,
+    scroll: false,
+    // (Q6b) A row that never appears: once this card's month has loaded, drop the link
+    // (and its "for the row you opened" words); so does switching card first.
+    // Only a successful read of this scope counts: a failed fetch keeps the link for a reload.
+    loaded: ledgerLoaded(monthQ),
+    scopeKey: cardFilter,
+    onGiveUp: () => {
+      rowLinkMonthRef.current = null;
+      setFocusTx(null);
+    },
     deps: [groups.length],
   });
 
@@ -2073,6 +2093,8 @@ export default function AmexPage({
     if (id === cardFilter) return;
     navigate(id === "all" ? "/amex" : accountPageHref({ plaidAccountId: id }));
   };
+
+  const selectedCardTitle = useAmexCardTitle(cardFilter, cardMasks);
 
   const summaryPeriodLabel =
     rangeMode === "wk" && compareMonth(selectedMonth, currentMonth) === 0
@@ -2148,7 +2170,8 @@ export default function AmexPage({
               identity={selectedCardIdentity}
               meta={
                 selectedCardIdentity ? null : (
-                  <span className="chip gray" data-testid="amex-head-all-cards">
+                  // (Q6b) Same height as a card's identity chip, so choosing a card does not move the page below.
+                  <span className="chip gray py-1 text-label" data-testid="amex-head-all-cards">
                     All cards
                   </span>
                 )
@@ -2174,6 +2197,23 @@ export default function AmexPage({
 
         {lead}
 
+        {!embedded ? (
+          <>
+            <AmexSummaryPanel
+              summary={summaryQ.data}
+              failed={summaryQ.isError}
+              onRetry={() => void summaryRaw.refetch?.()}
+              periodLabel={summaryPeriodLabel}
+              allCards={cardFilter === "all"}
+              cardTitle={selectedCardTitle}
+              mode={rangeMode}
+              isThisWeek={compareMonth(selectedMonth, currentMonth) === 0}
+              figure={figure}
+              onFigure={setFigure}
+            />
+          </>
+        ) : null}
+
         {/* (#748 → drill) The card switcher is not a tablist — the per-card
             panels ARE the selector: tapping one filters the ledger to that
             card (drill); "All cards" clears it. */}
@@ -2183,20 +2223,11 @@ export default function AmexPage({
           masks={cardMasks}
           leadCount={lead ? 1 : 0}
           period={summaryPeriod}
-          periodLabel={summaryPeriodLabel}
+          showPurchases={embedded}
         />
 
         {!embedded ? (
           <>
-            <AmexSummaryPanel
-              summary={summaryQ.data}
-              failed={summaryQ.isError}
-              periodLabel={summaryPeriodLabel}
-              mode={rangeMode}
-              isThisWeek={compareMonth(selectedMonth, currentMonth) === 0}
-              figure={figure}
-              onFigure={setFigure}
-            />
             <AmexNeedsAttention
               summary={summaryQ.data}
               showCard={cardFilter === "all"}
@@ -2207,6 +2238,19 @@ export default function AmexPage({
 
         {ledgerPending ? (
           <LedgerChartSkeleton />
+        ) : cardFilter === "all" ? (
+          // (Q3) No combined running balance or chart: each card's own balance,
+          // labelled by card. The slot still starts the 12-month read when it
+          // nears the viewport, as the chart did (card list, first-load jump).
+          <div ref={trendSlotRef} className="span-12">
+            <AmexCardBalances
+              summary={summaryQ.data}
+              failed={summaryQ.isError}
+              pending={summaryQ.isFetching === true}
+              masks={cardMasks}
+              onSelect={embedded ? openCardFromBand : setCardFilter}
+            />
+          </div>
         ) : wideTxns === undefined && !trendFailed ? (
           // (P4) The 12-month pull has not started (the chart is still far
           // down the page) or is on its way: the chart says so.
@@ -2246,7 +2290,7 @@ export default function AmexPage({
                 data-testid="button-hide-reviewed"
                 onClick={() => setHideReviewed((v) => !v)}
               >
-                {hideReviewed ? "Showing pending only" : "Hide reviewed"}
+                {hideReviewed ? "Show reviewed" : "Hide reviewed"}
               </Button>
               {hideReviewed && (
                 <span className="text-micro text-neutral-500" data-testid="text-hide-reviewed-note">
@@ -2436,16 +2480,19 @@ export default function AmexPage({
             </div>
           )}
           {/* Day groups */}
-          {groups.length === 0 && (
+          {groups.length === 0 && (monthSwitching ? (
+            <div className={emptyNote} role="status" data-testid="amex-month-loading">
+              Loading {formatMonthLong(selectedMonth)}…
+            </div>
+          ) : (
             <div className={emptyNote} data-testid="amex-empty">
               No transactions match these filters.
             </div>
-          )}
+          ))}
           <DayGroupsList
             groups={groups}
             renderGroup={([dayKey, items], groupIndex) => {
-            // (F6 round 3) An expired hold is listed but not in the day's total.
-            const dayTotal = items.reduce((s, t) => (isCounted(t) ? s + parseAbs(t.amount) : s), 0);
+            const dayFlow = dayInOut(items);
             const ids = items.map((t) => t.id);
             const allSelected = ids.every((id) => selected.has(id));
             const someSelected = !allSelected && ids.some((id) => selected.has(id));
@@ -2458,14 +2505,23 @@ export default function AmexPage({
                 isToday={isToday}
                 todayAccent="blue"
                 variant="flush"
-                containerRef={(el) => {
-                  if (isToday) todayRef.current = el;
-                }}
                 selectionState={allSelected ? true : someSelected ? "indeterminate" : false}
                 onToggleAll={(on) => toggleDay(ids, on)}
-                totalNode={formatCurrency(dayTotal)}
+                totalNode={
+                  <span className="tabular-nums" data-testid={`day-total-${dayKey}`}>
+                    {dayFlow.out > 0 && <span>-{formatCurrency(dayFlow.out)} out</span>}
+                    {dayFlow.out > 0 && dayFlow.in > 0 && <span> · </span>}
+                    {dayFlow.in > 0 && <span>+{formatCurrency(dayFlow.in)} in</span>}
+                    {dayFlow.out === 0 && dayFlow.in === 0 && <span>{formatCurrency(0)}</span>}
+                  </span>
+                }
                 // Once per ledger, on the first day only.
-                columnHeader={groupIndex === 0 ? <LedgerColumns /> : undefined}
+                columnHeader={
+                  groupIndex === 0 ? (
+                    // (Q3) "All cards" shows no "bal": the column says only Amount.
+                    <LedgerColumns {...(cardFilter === "all" ? { amountLabel: "Amount" } : {})} />
+                  ) : undefined
+                }
               >
               {/* Mobile: stacked card layout (below md) */}
               <div className="divide-y divide-brand-line/70 md:hidden">
@@ -2480,17 +2536,17 @@ export default function AmexPage({
                     key={t.id}
                     className={cn(
                       "flex flex-col gap-2 px-4 py-3 text-body transition-colors hover:bg-brand-tint",
-                      (t.reviewed || isIgnored) && "opacity-50",
                     )}
                     data-reviewed={t.reviewed ? "true" : "false"}
                     data-ignored={isIgnored ? "true" : "false"}
                     data-testid={`row-amex-mobile-${t.id}`}
+                    style={{ scrollMarginTop: ROW_SCROLL_MARGIN_TOP }}
                   >
                     <div className="flex items-start gap-3">
                       <Checkbox
                         checked={selected.has(t.id)}
                         onCheckedChange={() => toggleOne(t.id)}
-                        aria-label="Select"
+                        aria-label={`Select ${t.displayName || t.description}`}
                         className="mt-1"
                       />
                       <div className="flex-1 min-w-0">
@@ -2502,6 +2558,15 @@ export default function AmexPage({
                             {t.displayName || t.description}
                           </span>
                           <MerchantRenamePopover tx={t} onSplit={() => setSplitTx(t)} />
+                          {/* (F6 ⇄ Q6b merge) An expired hold says so once ("Expired hold · not counted", below), not "Pending" too. */}
+                          {t.pending && !t.expiredHold ? (
+                            <span className="chip gray ml-1 shrink-0" data-testid={`chip-pending-mobile-${t.id}`}>Pending</span>
+                          ) : null}
+                          {rowStateLabel(t, isIgnored) ? (
+                            <span className="chip gray ml-1 shrink-0" data-testid={`chip-state-mobile-${t.id}`}>
+                              {rowStateLabel(t, isIgnored)}
+                            </span>
+                          ) : null}
                         </div>
                         {t.expiredHold ? <ExpiredHoldLabel id={t.id} /> : null}
                         {t.notes && (
@@ -2529,8 +2594,11 @@ export default function AmexPage({
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
-                        <div className="whitespace-nowrap font-mono text-label font-semibold tabular-nums text-brand-navy">
-                          {formatCurrency(parseAbs(t.amount))}
+                        <div
+                          className="whitespace-nowrap font-mono text-label font-semibold tabular-nums text-brand-navy"
+                          data-testid={`amount-mobile-${t.id}`}
+                        >
+                          {signedAmount(t)}
                         </div>
                         {runningBalanceMap.has(t.id) && (
                           <span
@@ -2545,7 +2613,7 @@ export default function AmexPage({
                     <div className="flex flex-wrap items-center gap-2 pl-7">
                       <CategoryPicker
                         value={t.categoryId ?? null}
-                        categories={categories ?? []}
+                        categories={categories}
                         description={t.description}
                         onChange={(id, remember) =>
                           setRowCategory(t.id, id, remember)
@@ -2553,13 +2621,12 @@ export default function AmexPage({
                       />
                       {/* Move a charge to the right Sun→Sat week.
                           Hidden on pending rows (Plaid restamps them). */}
-                      {!t.pending && (
-                        <RowDateControls
-                          tx={t}
-                          onMove={(raw) => handleQuickDate(t, raw)}
-                          disabled={updateTx.isPending}
-                        />
-                      )}
+                      <RowMenu
+                        tx={t}
+                        merchant={t.displayName || t.description}
+                        onMove={t.pending ? undefined : (raw) => handleQuickDate(t, raw)}
+                        disabled={updateTx.isPending}
+                      />
                       {/* (#607) Transfer rows are excluded from budget
                           actuals, so weekly/monthly/unplanned bubbles
                           would never affect any roll-up. Hide them on
@@ -2634,23 +2701,7 @@ export default function AmexPage({
                       )}
                       <ExternalCardChip
                         t={t}
-                        onToggle={(v) =>
-                          updateTx.mutate(
-                            { id: t.id, data: { isExternalCardPayment: v } },
-                            {
-                              onSuccess: () => {
-                                qc.invalidateQueries({
-                                  queryKey: getListTransactionsQueryKey(),
-                                });
-                                qc.invalidateQueries({
-                                  queryKey: getGetBudgetMonthQueryKey(
-                                    `${t.occurredOn.slice(0, 7)}-01`,
-                                  ),
-                                });
-                              },
-                            },
-                          )
-                        }
+                        onToggle={(v) => setExternalCard(t, v)}
                         testIdSuffix={`mobile-${t.id}`}
                       />
                       <MatchedRuleChip
@@ -2677,14 +2728,14 @@ export default function AmexPage({
                         tx={t}
                         selected={selected.has(t.id)}
                         onToggleSelect={() => toggleOne(t.id)}
-                        categories={categories ?? []}
+                        categories={categories}
                         onCategoryChange={(id, remember) =>
                           setRowCategory(t.id, id, remember)
                         }
                         onBucketToggle={(b, next) => onBubbleToggle(t, b, next)}
                         onQuickDate={(raw) => handleQuickDate(t, raw)}
                         disabled={updateTx.isPending}
-                        dimmed={t.reviewed || isIgnored}
+                        stateLabel={rowStateLabel(t, isIgnored)}
                         hideDate={t.pending}
                         testId={`row-amex-${t.id}`}
                         rowData={{
@@ -2703,17 +2754,24 @@ export default function AmexPage({
                         }
                         onSplit={() => setSplitTx(t)}
                         metaNode={
-                          t.notes ? (
-                            <div
-                              className="truncate text-micro text-neutral-500"
-                              title={t.notes}
-                            >
-                              {t.notes}
-                            </div>
-                          ) : null
+                          <>
+                            {/* (F6 ⇄ Q6b merge) An expired hold carries its own label (the shared row's "Expired hold · not counted"), not "Pending" too. */}
+                            {t.pending && !t.expiredHold ? (
+                              <span className="chip gray shrink-0" data-testid={`chip-pending-${t.id}`}>Pending</span>
+                            ) : null}
+                            {t.notes ? (
+                              <div
+                                className="truncate text-micro text-neutral-500"
+                                title={t.notes}
+                              >
+                                {t.notes}
+                              </div>
+                            ) : null}
+                          </>
                         }
                         chipsNode={
-                          t.isTransfer ? (
+                          <>
+                          {t.isTransfer ? (
                             <span
                               className="chip gray inline-flex items-center gap-1"
                               title={
@@ -2751,12 +2809,25 @@ export default function AmexPage({
                                 <X className="h-3 w-3" />
                               </button>
                             </span>
-                          ) : null
+                          ) : null}
+                          <ExternalCardChip
+                            t={t}
+                            onToggle={(v) => setExternalCard(t, v)}
+                            testIdSuffix={t.id}
+                          />
+                          <MatchedRuleChip
+                            categoryId={t.categoryId}
+                            matchedRuleId={t.matchedRuleId}
+                            rules={mappingRules}
+                            testIdSuffix={`amex-${t.id}`}
+                            variant="compact"
+                          />
+                          </>
                         }
                         amountNode={
                           <div className="flex flex-col items-end">
-                            <span className="font-semibold text-brand-navy">
-                              {formatCurrency(parseAbs(t.amount))}
+                            <span className="font-semibold text-brand-navy" data-testid={`amount-${t.id}`}>
+                              {signedAmount(t)}
                             </span>
                             {runningBalanceMap.has(t.id) && (
                               <span

@@ -259,7 +259,7 @@ export default function DebtsPage() {
           </Help>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Debts table">
           <table className="w-full">
             <thead>
               <tr>

@@ -15,7 +15,8 @@
 //   - a payment is a payment only, a refund a refund only; a pending row its
 //     posted row replaced counts once; a split parent counts once, on its card;
 //   - `householdContribution` = GET /money/period-breakdown for that account
-//     (week and month), to the cent;
+//     (week and month), to the cent; (hh-split) its known / unresolved split
+//     too, per card, and "all" = Σ cards;
 //   - per card, purchases − reimbursable + not mine − refunds = what spending
 //     facts count for the card (Σ = household spend for the week);
 //   - owed is the anchor's own answer; unknown is null, never "0.00".
@@ -294,6 +295,11 @@ describe("S5 · GET /amex/summary — one card's week", () => {
         accountId: ext.plat, name: "Everyday Plat", mask: "1001", institution: "American Express", brand: "silver", cadence: "weekly", debtLinked: false, debtId: null, owed: e.owed,
         // (F1) How the card is paid: no debt row → in full (the default).
         payoffMode: { mode: "in_full", source: "default", reason: "no_debt" },
+        // (Q1) The one definition every screen words.
+        paidAs: { effectiveMode: "in_full_weekly", source: "default_no_debt" },
+        // (Q6b) No debt row: Paying down cannot take effect, and the server says why.
+        payDown: { available: false, reason: "no_debt" },
+        defaultMode: { mode: "in_full", reason: "no_debt" },
         // (P3) The card's own purchases: one card in scope, so the top-level figure.
         purchases: { amount: s.purchases.amount, count: s.purchases.count },
       },
@@ -395,6 +401,45 @@ describe("S5 · GET /amex/summary — one card's week", () => {
     expect(blue.householdContribution.monthlyPlan).toBe(S5_EXPECTED.blueMonth.monthlyPlan);
   });
 
+  it("⭐ (hh-split) per card, this week: weeklyPlan / weeklyKnown / weeklyUnresolved = the card's breakdown actual / known / unresolved, to the cent; \"all\" = Σ cards", async () => {
+    const SPLIT = ["weeklyPlan", "weeklyKnown", "weeklyUnresolved", "monthlyPlan", "monthlyKnown", "monthlyUnresolved"] as const;
+    const perCard: Array<Record<(typeof SPLIT)[number], string>> = [];
+    for (const key of ["plat", "gold", "blue"] as const) {
+      const [s, b] = await Promise.all([
+        summary(ext[key]!),
+        get(`/money/period-breakdown?period=week&start=${S5_WEEK.from}&account=${rowId[key]}`),
+      ]);
+      // The household's current week: the breakdown reads it through the money position.
+      expect(b.isCurrent).toBe(true);
+      const hc = s.householdContribution;
+      expect([hc.weeklyPlan, hc.weeklyKnown, hc.weeklyUnresolved], key).toEqual([b.actual, b.known, b.unresolved.amount]);
+      // known + unresolved = the cautious figure, both cadences.
+      expect(cents(hc.weeklyKnown) + cents(hc.weeklyUnresolved), key).toBe(cents(hc.weeklyPlan));
+      expect(cents(hc.monthlyKnown) + cents(hc.monthlyUnresolved), key).toBe(cents(hc.monthlyPlan));
+      perCard.push(hc);
+    }
+    const all = (await summary("all")).householdContribution;
+    for (const f of SPLIT) expect(cents(all[f]), f).toBe(perCard.reduce((a, hc) => a + cents(hc[f]), 0));
+    // Not vacuous: the Platinum's AFFIRM row (Plaid: a loan payment) is the week's one unconfirmed row.
+    const platWeek = await get(`/money/period-breakdown?period=week&start=${S5_WEEK.from}&account=${rowId.plat}`);
+    expect((platWeek.unresolved.rows as any[]).map((r) => [r.id, r.amount, r.evidence?.reason])).toEqual([[ids.affirm, "25.00", "loan_payment"]]);
+    expect([all.weeklyPlan, all.weeklyKnown, all.weeklyUnresolved]).toEqual(["810.00", "785.00", "25.00"]);
+  });
+
+  it("(hh-split) per card, this month: monthlyPlan / monthlyKnown / monthlyUnresolved = the card's month breakdown, to the cent", async () => {
+    for (const key of ["plat", "gold", "blue"] as const) {
+      const [s, b] = await Promise.all([
+        summary(ext[key]!, "2026-10-01", "2026-10-31"),
+        get(`/money/period-breakdown?period=month&start=2026-10-01&account=${rowId[key]}`),
+      ]);
+      const hc = s.householdContribution;
+      expect([hc.monthlyPlan, hc.monthlyKnown, hc.monthlyUnresolved], key).toEqual([b.actual, b.known, b.unresolved.amount]);
+    }
+    // Not vacuous: the Blue card's AMAZON row is filed monthly (the household's own confirmation).
+    const blue = (await summary(ext.blue!, "2026-10-01", "2026-10-31")).householdContribution;
+    expect([blue.monthlyPlan, blue.monthlyKnown, blue.monthlyUnresolved]).toEqual(["45.00", "45.00", "0.00"]);
+  });
+
   it("per card, purchases − reimbursable + not mine − refunds = what spending facts count; Σ = the week's household spend", async () => {
     const facts = await buildSpendingFacts(HH[OWNER]!.householdId, S5_WEEK.from, S5_WEEK.to);
     let total = 0;
@@ -416,7 +461,16 @@ describe("S5 · the debt-linked card and every card", () => {
     expect(ac(s.payments)).toBe(e.payments);
     expect(s.planLink).toEqual({ ...e.plan, debtId: debtId.gold, payoff: null, payoffDate: null, basis: null });
     // Its purchases still count toward the household week — said, not hidden.
-    expect(s.householdContribution).toEqual({ weeklyPlan: "250.00", monthlyPlan: "0.00", unfiled: "250.00", link: "/spending/week" });
+    expect(s.householdContribution).toEqual({
+      weeklyPlan: "250.00",
+      weeklyKnown: "250.00",
+      weeklyUnresolved: "0.00",
+      monthlyPlan: "0.00",
+      monthlyKnown: "0.00",
+      monthlyUnresolved: "0.00",
+      unfiled: "250.00",
+      link: "/spending/week",
+    });
   });
 
   it("⭐ owed is null when the anchor does not know it — never 0.00 (Blue: no Plaid balance, no debt)", async () => {
@@ -484,7 +538,16 @@ describe("S5 · the debt-linked card and every card", () => {
     ]);
     expect(p.combinedWeekCharges).toBe(S5_EXPECTED.combinedWeekCharges);
     expect(p.debtLinkedCards).toEqual([
-      { accountId: ext.gold, name: "Gold Card", mask: "2002", debtId: debtId.gold, brand: "silver", cadence: "weekly", displayName: null },
+      {
+        accountId: ext.gold, name: "Gold Card", mask: "2002", debtId: debtId.gold, brand: "silver", cadence: "weekly", displayName: null,
+        // (Q1) Its active debt (an APR and a minimum) puts it on the debt plan.
+        paidAs: { effectiveMode: "debt_plan", source: "default_debt_active" },
+      },
+    ]);
+    // (Q1) The band cards say how they are paid too.
+    expect((p.cards as any[]).map((c) => [c.accountId, c.paidAs])).toEqual([
+      [ext.blue, { effectiveMode: "in_full_monthly", source: "default_no_debt" }],
+      [ext.plat, { effectiveMode: "in_full_weekly", source: "default_no_debt" }],
     ]);
   });
 

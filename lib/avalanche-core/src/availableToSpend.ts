@@ -56,6 +56,8 @@
 
 import { addDaysISO, dayOfWeekISO, householdDateOf, weekBounds } from "./householdTime";
 import { allowanceRemainingCents, allowanceTotals, type MovementCoverage } from "./householdMoney";
+import { evidenceSplitCents, isProvisional } from "./periodBreakdown";
+import type { EvidenceClass } from "./evidenceRule";
 
 /** How far ahead a paycheck still counts as "payday" for this figure. */
 export const PAYDAY_MAX_DAYS = 45;
@@ -107,6 +109,12 @@ export interface PositionWeekRow {
   spend: number;
   /** (B6) `netAccountOf(row)`: the account a refund nets on. Absent: one shared account. */
   account?: string;
+  /**
+   * (Q1) The F2 evidence rule's class for the row (`classifyEvidence`), or
+   * null / absent when it says nothing. Only `unresolved` matters: such a row
+   * leaves `knownWeek` (it stays in the cautious `spentWeekDiscretionary`).
+   */
+  evidenceClass?: EvidenceClass | null;
 }
 
 export interface PositionFreshness {
@@ -216,6 +224,22 @@ export interface MoneyPosition {
   monthlyWeek: string;
   /** weekCap + weekAdjustment − spentWeekDiscretionary (negative when over); null with no cap. */
   remainingWeek: string | null;
+  /**
+   * ⭐ (Q1) "Counts toward plan" (`glossary.ts`): `spentWeekDiscretionary`
+   * without its UNRESOLVED rows (the F2 evidence rule), netted the same way —
+   * `evidenceSplitCents`, the call GET /money/period-breakdown's `known` is.
+   */
+  knownWeek: string;
+  /** (Q1) "Unconfirmed": spentWeekDiscretionary − knownWeek (≥ 0). knownWeek + unresolvedWeek = spentWeekDiscretionary. */
+  unresolvedWeek: string;
+  /** (Q1) unresolvedWeek > max($25, 5% of the cap; $25 with no cap): the known comparison may change. */
+  provisional: boolean;
+  /**
+   * (Q1) weekCap + weekAdjustment − knownWeek (negative when over); null with
+   * no cap — never "0.00". The breakdown's `remaining`. `remainingWeek`,
+   * `withinPlan` and `safeToSpendNow` stay cautious (they read the whole pool).
+   */
+  remainingWeekKnown: string | null;
   /** How much of the cap an even pace allows by the end of today; null with no cap. */
   paceAllowedToday: string | null;
   withinPlan: WithinPlan | null;
@@ -362,6 +386,13 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
   const unfiled = netted.unfiledCents;
   const unplanned = netted.unplannedCents;
   const monthly = netted.monthlyCents;
+  // (Q1) The same pool split by the evidence rule — the period breakdown's own
+  // call, so `knownWeek` is its `known` to the cent. Its `actualCents` is
+  // `discretionary` by construction (both are the cap's pool, netted alike).
+  const split = evidenceSplitCents(
+    inputs.weekRows.map((r) => ({ allowance: r, evidenceClass: r.evidenceClass ?? null })),
+    "week",
+  );
 
   const capCents = toCents(inputs.weekCap);
   let remainingCents: number | null = null;
@@ -382,6 +413,10 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
     else if (remainingCents * 7 < capCents * daysLeftInclToday) withinPlan = "tight";
     else withinPlan = "yes";
   }
+
+  // (Q1) The plan against KNOWN purchases (the breakdown's `remaining`).
+  const remainingKnownCents =
+    capCents == null ? null : allowanceRemainingCents(capCents, adjustmentCents, split.knownCents);
 
   const safeCents =
     availableCents == null
@@ -426,6 +461,10 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
     unplannedWeek: money(unplanned),
     monthlyWeek: money(monthly),
     remainingWeek: remainingCents == null ? null : money(remainingCents),
+    knownWeek: money(split.knownCents),
+    unresolvedWeek: money(split.unresolvedCents),
+    provisional: isProvisional(split.unresolvedCents, capCents),
+    remainingWeekKnown: remainingKnownCents == null ? null : money(remainingKnownCents),
     paceAllowedToday: paceCents == null ? null : money(paceCents),
     withinPlan,
     safeToSpendNow: safeCents == null ? null : money(safeCents),

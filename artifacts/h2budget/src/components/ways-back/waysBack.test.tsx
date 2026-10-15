@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, within, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -70,7 +70,11 @@ describe("Ways back", () => {
     const rows = screen.getAllByTestId("way-trim-row");
     expect(rows[0].textContent).toContain("Dining");
     expect(rows[0].textContent).toContain("spent $90.00 this week · usual by Wed $50.00");
-    expect(rows[1].textContent).not.toContain("usual");
+    // (Q5) No usual (under 2 prior weeks with rows): "Not enough history", never "usual $0.00".
+    expect(rows[1].textContent).not.toMatch(/usual/);
+    expect(rows[1].textContent).toContain("spent $25.00 this week · Not enough history");
+    expect(within(rows[1]).getByTestId("way-trim-nohistory").textContent).toBe(" · Not enough history");
+    expect(rows[0].textContent).not.toContain("Not enough history");
     expect(screen.getByTestId("way-carry").textContent).toContain("Next week starts $40.00 lower, at $210.00.");
   });
 

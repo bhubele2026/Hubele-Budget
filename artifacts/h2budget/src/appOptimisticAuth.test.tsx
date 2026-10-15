@@ -25,6 +25,8 @@ vi.mock("@clerk/react/internal", () => ({ publishableKeyFromHost: () => "pk_test
 vi.mock("@clerk/themes", () => ({ shadcn: {} }));
 vi.mock("@workspace/api-client-react", () => ({
   getSpine: vi.fn(() => new Promise(() => {})),
+  getMe: vi.fn(() => new Promise(() => {})),
+  getGetMeQueryKey: () => ["/api/me"],
   getGetSpineQueryKey: () => ["/api/spine"],
 }));
 vi.mock("./components/layout", () => ({

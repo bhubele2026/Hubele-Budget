@@ -2,13 +2,20 @@
 // writes NOTHING. Every item is a proposal for the household owner to apply
 // himself with an app action that already exists (Review "mark matched",
 // Categories "change"). No silent recategorization of history.
+// (Q2) Or with one tap, through `POST /review/proposals/:key/apply`
+// (reviewCorrections.ts): previewed, applied in one transaction, undone whole.
+// Each item carries a `proposalHash` the apply echoes; each row its account's
+// external Plaid id and its source, so a screen can link straight to it.
 //
 // Over the last 120 household days, each proposal stands on evidence the rows
 // carry — Plaid's category, the forecast's own suggestion, an existing bill,
 // debt or income plan — never on a merchant name alone, and never as a blanket
 // rule ("every row named X"):
 //
-//   loan_payment     Plaid LOAN_PAYMENTS (not a card) rows the household has
+//   loan_payment     Plaid LOAN_PAYMENTS rows (not a card PAYMENT; a row ON a
+//                    card — a pay-later instalment — is one: (Final #7) its
+//                    fix previews with no Banking figures, the card having no
+//                    Banking review) the household has
 //                    not filed as a payment (`classifyEvidence` unresolved:
 //                    unfiled, or filed under an income category). Rows on one
 //                    account paying the same amount (within max($1, 1%)) are
@@ -35,6 +42,7 @@
 //
 // A row is in at most one proposal (loan_payment before bill_match).
 
+import { createHash } from "node:crypto";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import {
   budgetCategoriesTable,
@@ -96,15 +104,19 @@ interface AccountIdentity {
   institution: string | null;
   name: string | null;
   mask: string | null;
+  /** (Q2) The account's external Plaid id — what the ledgers' `plaidAccountId` filter and row links read. */
+  externalId: string | null;
 }
 
-interface ProposalRowOut {
+export interface ProposalRowOut {
   id: string;
   date: string;
   displayName: string;
   description: string;
   amount: string;
   pending: boolean;
+  /** (Q2) The row's ledger source (`plaid:chase`, `plaid:amex`, `manual`, …), for its link. */
+  source: string;
   account: AccountIdentity;
   category: { id: string; name: string } | null;
   /** The bill occurrence "mark matched" would name; null when none is in reach. */
@@ -113,6 +125,13 @@ interface ProposalRowOut {
 
 export interface ReviewProposal {
   key: string;
+  /**
+   * (Q2) A fingerprint of what the fix would do — its key, kind, action and
+   * target, and each listed row as it stands (id, amount, category, the
+   * occurrence it would answer). `POST /review/proposals/:key/apply` echoes it:
+   * a proposal that changed since it was shown is refused.
+   */
+  proposalHash: string;
   kind: ProposalKind;
   rows: ProposalRowOut[];
   rowCount: number;
@@ -263,7 +282,14 @@ export async function buildReviewProposals(householdId: string, ownerUserId: str
     description: row.description,
     amount: (Number(row.amount) || 0).toFixed(2),
     pending: row.pending,
-    account: (row.plaidAccountId ? accounts.get(row.plaidAccountId) : undefined) ?? { id: null, institution: null, name: null, mask: null },
+    source: row.source,
+    account: (row.plaidAccountId ? accounts.get(row.plaidAccountId) : undefined) ?? {
+      id: null,
+      institution: null,
+      name: null,
+      mask: null,
+      externalId: row.plaidAccountId || null,
+    },
     category: row.categoryId && catName.has(row.categoryId) ? { id: row.categoryId, name: catName.get(row.categoryId)! } : null,
     occurrence,
   });
@@ -296,10 +322,12 @@ export async function buildReviewProposals(householdId: string, ownerUserId: str
   ) => {
     const sorted = [...rowsOut].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : 1));
     for (const r of sorted) used.add(r.id);
+    const listed = sorted.slice(0, PROPOSAL_ROWS_MAX);
     proposals.push({
       key,
+      proposalHash: proposalHashOf(key, kind, action, listed),
       kind,
-      rows: sorted.slice(0, PROPOSAL_ROWS_MAX),
+      rows: listed,
       rowCount: sorted.length,
       truncated: sorted.length > PROPOSAL_ROWS_MAX,
       total: money(sorted.reduce((a, r) => a + centsOf(r.amount), 0)),
@@ -493,6 +521,29 @@ export async function buildReviewProposals(householdId: string, ownerUserId: str
   };
 }
 
+/**
+ * (Q2) The proposal's fingerprint (see `ReviewProposal.proposalHash`): sha-256
+ * over its key, kind, action and target, and each listed row's id, amount,
+ * pending state, category and occurrence. Hex, 32 characters.
+ */
+export function proposalHashOf(
+  key: string,
+  kind: ProposalKind,
+  action: ReviewProposal["action"],
+  rows: readonly ProposalRowOut[],
+): string {
+  const body = JSON.stringify([
+    key,
+    kind,
+    action.code,
+    action.target.kind,
+    action.target.id,
+    action.target.categoryId,
+    rows.map((r) => [r.id, r.amount, r.pending, r.category?.id ?? null, r.occurrence?.planKey ?? null]),
+  ]);
+  return createHash("sha256").update(body).digest("hex").slice(0, 32);
+}
+
 /** The first row of a series whose description carries a distinctive word of one of `names`. */
 function firstNameHit(series: readonly MovementRowRead[], names: readonly string[]): { row: MovementRowRead; name: string } | null {
   for (const r of series) {
@@ -514,7 +565,12 @@ async function loadAccountIdentitiesByExternalId(householdId: string): Promise<M
     .from(plaidAccountsTable)
     .leftJoin(plaidItemsTable, eq(plaidItemsTable.id, plaidAccountsTable.itemId))
     .where(eq(plaidAccountsTable.householdId, householdId));
-  return new Map(rows.map((r) => [r.accountId, { id: r.id, institution: r.institution ?? null, name: r.name ?? null, mask: r.mask ?? null }]));
+  return new Map(
+    rows.map((r) => [
+      r.accountId,
+      { id: r.id, institution: r.institution ?? null, name: r.name ?? null, mask: r.mask ?? null, externalId: r.accountId },
+    ]),
+  );
 }
 
 export type ReviewProposalsView = Awaited<ReturnType<typeof buildReviewProposals>>;

@@ -19,6 +19,7 @@ export {
   compareMonth,
   shiftMonth,
   formatMonthLabel,
+  formatMonthLong,
   monthFirstISO,
   monthLastISO,
 } from "./month-navigator";

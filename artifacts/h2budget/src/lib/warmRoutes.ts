@@ -44,6 +44,11 @@ export function warmHandlers(warm: (href: string) => void, href: string) {
 const pathOf = (href: string) => href.split("?")[0]!;
 const lazyWarm = (load: () => Promise<void>) => void load().catch(() => {});
 
+/** (Q4) Every ledger row's category word reads this list: warmed so it is not "Unknown" on the first paint. */
+function warmCategories(qc: QueryClient): void {
+  void qc.prefetchQuery({ queryKey: getListCategoriesQueryKey(), queryFn: () => listCategories() });
+}
+
 export function warmRoute(qc: QueryClient, rawHref: string): void {
   const href = pathOf(rawHref);
   // The route's JS chunk first: the data is no use before the page can render it.
@@ -58,8 +63,10 @@ export function warmRoute(qc: QueryClient, rawHref: string): void {
     return;
   } else if (href === "/transactions") {
     lazyWarm(async () => (await import("@/pages/transactions/warm")).warmChase(qc));
+    warmCategories(qc);
   } else if (href === "/amex") {
     lazyWarm(async () => (await import("@/pages/amexQueries")).warmAmex(qc));
+    warmCategories(qc);
   } else if (href === "/spending/week" || href === "/spending/month") {
     const view = href === "/spending/week" ? "week" : "month";
     lazyWarm(async () => (await import("@/pages/spending/periodParams")).warmPeriod(qc, view));

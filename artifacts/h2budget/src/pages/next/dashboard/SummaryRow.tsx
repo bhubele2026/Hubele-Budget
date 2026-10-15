@@ -11,6 +11,7 @@ import { debtForAccount, needsLiability } from "@/lib/cardBalance";
 import { joinNames, offPlanCards, offPlanWords, remainingDebtScope } from "@/lib/debtBalance";
 import { lowPointView } from "@/lib/lowPoint";
 import { useSpine } from "@/hooks/useSpine";
+import { hasCents, knownWithinPlan, weekStatus, weekStory } from "@/lib/weekFigures";
 import { cn } from "@/lib/utils";
 import { useAmexQ, useDebtsQ, useLiabilityAccountsQ, useMoneyPositionQ, usePlaidItemsQ } from "./queries";
 import { dayLabel, Kpi, LINK, money, PanelError, rise, weekdayLabel } from "./shared";
@@ -30,17 +31,19 @@ export { joinNames };
  * now says "Checking covers $X until <weekday>" too — recap/template.ts,
  * prompt recap.v3):
  *   - `safeToSpendNow`       → "Room to spend"
- *   - `remainingWeek`        → "This week's plan … left / over"
+ *   - `remainingWeekKnown`   → "This week's plan … left / over" (what counts toward it; unconfirmed beside)
  *   - `availableUntilPayday` → "Checking covers … until <payday> after the buffer"
  */
 export function roomLines(p: Spine["position"], buffer: string, reservesHeld?: string | null): { week: string; cover: string | null } {
-  const rem = p.remainingWeek == null ? null : Number(p.remainingWeek);
-  const week =
-    rem == null || !Number.isFinite(rem)
+  // (Q5) The plan is compared with what COUNTS TOWARD IT; the unconfirmed part is said beside it.
+  const w = weekStory(p);
+  const base =
+    !w.planSet || w.remainingKnown == null
       ? "No weekly plan set"
-      : rem < 0
-        ? `This week's plan ${money(-rem)} over`
-        : `This week's plan ${money(rem)} left`;
+      : w.remainingKnown < 0
+        ? `This week's plan ${money(-w.remainingKnown)} over${w.provisional ? " so far" : ""}`
+        : `This week's plan ${money(w.remainingKnown)} left${w.provisional ? " so far" : ""}`;
+  const week = w.planSet && hasCents(w.unconfirmed) ? `${base} · ${money(w.unconfirmed)} unconfirmed` : base;
   if (p.availableUntilPayday == null) return { week, cover: null };
   const until = p.horizonKind === "payday" && p.paydayDate ? `until ${weekdayLabel(p.paydayDate)}` : "until the week ends";
   const held = reservesHeld != null && Number(reservesHeld) > 0 ? ` and ${money(reservesHeld)} held for goals` : "";
@@ -74,7 +77,7 @@ function CheckingCell({ s }: { s: Spine }) {
       lines={noBank ? [] : [
         identity ? <AccountChip identity={identity} size="sm" wrap /> : <span>Checking</span>,
         <span className="inline-flex flex-wrap items-center gap-x-2 text-micro text-neutral-500" data-testid="dash-freshness">
-          <FreshnessLine bank={s.bank} />
+          <FreshnessLine bank={s.bank} fetchedAt={s.bankConfidence?.fetchedAt} />
           {since ? <span data-testid="dash-since-snapshot" className="block w-full">{since}</span> : null}
           <BankBalanceWhy />
         </span>,
@@ -99,7 +102,7 @@ function RoomCell({ s }: { s: Spine }) {
       tone={p.withinPlan === "over" ? "bad" : "neutral"}
       missing={missing}
       lines={[
-        <span data-testid="dash-room-week" className={cn(p.withinPlan === "over" && "font-semibold text-bad-ink")}>{week}</span>,
+        <span data-testid="dash-room-week" className={cn(weekStatus(knownWithinPlan(p), p.provisional).tone === "bad" && "font-semibold text-bad-ink")}>{week}</span>,
         cover ? (
           <span data-testid="dash-room-cover" className={cn(Number(p.availableUntilPayday) <= 0 && "font-semibold text-bad-ink")}>{cover}</span>
         ) : null,

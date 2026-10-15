@@ -183,9 +183,10 @@ describe("(S6 fix 3) GET /money/ways-back nets refunds like the week's figure", 
     expect(w.overBy).toBe(6000);
     // (F3) Every history row is a Tuesday or a Wednesday: read to Wednesday, the usual is the whole week's.
     expect(w.trims).toEqual([
-      { categoryId: GROCERIES, name: expect.stringMatching(/^Groceries/), spentWeek: 12000, usualWeek: 0, usualFullWeek: 0 },
-      { categoryId: DINING, name: expect.stringMatching(/^Dining/), spentWeek: 10000, usualWeek: 5500, usualFullWeek: 5500 },
-      { categoryId: FUN, name: expect.stringMatching(/^Fun/), spentWeek: 4000, usualWeek: 0, usualFullWeek: 0 },
+      // (Q1) Groceries and Fun have no row in the 8 weeks before: not enough history → null (was 0).
+      { categoryId: GROCERIES, name: expect.stringMatching(/^Groceries/), spentWeek: 12000, usualWeek: null, usualFullWeek: null, historyPeriods: 0 },
+      { categoryId: DINING, name: expect.stringMatching(/^Dining/), spentWeek: 10000, usualWeek: 5500, usualFullWeek: 5500, historyPeriods: 5 },
+      { categoryId: FUN, name: expect.stringMatching(/^Fun/), spentWeek: 4000, usualWeek: null, usualFullWeek: null, historyPeriods: 0 },
     ]);
   });
 

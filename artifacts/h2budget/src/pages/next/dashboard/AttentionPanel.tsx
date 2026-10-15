@@ -10,6 +10,7 @@ import { accountTypesOf, categoriesByIdOf, isCardTxn, isInflowFiledAsExpense } f
 import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
 import { useSpine } from "@/hooks/useSpine";
+import { knownWithinPlan, weekStory } from "@/lib/weekFigures";
 import { useCashSignalQ, usePlaidItemsQ } from "./queries";
 import { dueSoonOf, upcomingRows } from "./obligations";
 import { bankLines } from "./bankState";
@@ -104,11 +105,12 @@ export default function AttentionPanel() {
   // "Now" stands without the spine: a reconnect comes from the bank items and
   // a payment due from the cash signal; the spine adds the balance and the week.
   const now = useMemo(() => {
-    const rem = s?.position.remainingWeek == null ? null : Number(s.position.remainingWeek);
+    const week = s ? weekStory(s.position) : null;
     return attentionItems({
       bank: s?.bank,
-      withinPlan: s?.position.withinPlan ?? null,
-      overBy: rem != null && rem < 0 ? -rem : null,
+      withinPlan: s ? knownWithinPlan(s.position) : null,
+      overBy: week?.over && week.remainingKnown != null ? -week.remainingKnown : null,
+      provisional: week?.provisional ?? false,
       dueSoon: cash.data ? dueSoonOf(upcomingRows({ signal: cash.data, today, count: 50 }), today, addDaysISO(today, 1)) : [],
       today,
       reviewCount: 0, // the review queue has its own rows below

@@ -32,6 +32,7 @@ import {
 import { loadLatestStatements, type DebtStatementFact } from "../lib/debtLedger";
 import { confirmDebtPaymentClaims } from "../lib/debtPaymentConfirm";
 import { syncDebtBudgetAfterWrite } from "../lib/budgetDebtSync";
+import { loadCardPayoffModes, type PaidAs } from "../lib/cardPayoffMode";
 
 export { AprValidationError, validateAprDecimal };
 
@@ -299,7 +300,19 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  res.json(await shapeDebts(householdId, rows));
+  // ⭐ (Q1) A debt linked to an Amex card says how that card is paid — the
+  // one definition (`paidAs`, cardPayoffMode.ts) the Amex band and summary
+  // read — so an archived Platinum debt reads "in full weekly" here too, never
+  // "on the payoff plan". Null for a debt no Amex card links. Read only when a
+  // debt links an account.
+  const shaped = await shapeDebts(householdId, rows);
+  const paidAsByDebt = new Map<string, PaidAs>();
+  if (rows.some((r) => r.plaidAccountId)) {
+    for (const m of await loadCardPayoffModes(householdId, req.householdOwnerId!)) {
+      for (const id of m.linkedDebtIds) paidAsByDebt.set(id, m.paidAs);
+    }
+  }
+  res.json(shaped.map((d) => ({ ...d, paidAs: paidAsByDebt.get(d.id) ?? null })));
 });
 
 router.post("/debts", requireAuth, async (req, res): Promise<void> => {

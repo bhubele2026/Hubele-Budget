@@ -7,8 +7,11 @@
  */
 export interface BankingReviewTotals {
     count: number;
+    /** (Q1) A positive magnitude */
     moneyIn: string;
+    /** (Q1) A positive magnitude */
     moneyOut: string;
+    /** moneyIn − moneyOut (signed) */
     net: string;
     pendingNet: string;
 }

@@ -9,6 +9,7 @@ import {
   bankBalanceCheckOf,
   bankCheckLedger,
   classifyCashRows,
+  sameAnchorMoment,
   type BankBalanceCheckArgs,
   type BankCheckLedgerInputs,
   type CashAnchor,
@@ -214,6 +215,28 @@ describe("bankBalanceCheckOf — the review's answer", () => {
     });
     expect(bankBalanceCheckOf(args({ now: new Date("2026-10-21T19:00:01Z") }))).toMatchObject({ stale: true, staleReason: "age" });
     expect(bankBalanceCheckOf(args({ now: new Date("2026-10-21T18:59:59Z") }))).toMatchObject({ stale: false, staleReason: null });
+  });
+
+  it("(Final #13) the same anchor written another way is the same anchor: moments compare, not strings", () => {
+    const ties = { ...base, status: "ties" as const, unexplained: "0.00", predicted: "1069.90" };
+    // The check read "…T13:59:00-05:00"; the settings hold the same moment in Z form (and back).
+    const offset = { ...ties, anchor: { ...ties.anchor, at: "2026-10-14T13:59:00-05:00" } };
+    expect(bankBalanceCheckOf(args({ record: offset, currentAnchorAt: "2026-10-14T18:59:00.000Z" }))).toMatchObject({
+      status: "matches",
+      stale: false,
+      staleReason: null,
+    });
+    expect(bankBalanceCheckOf(args({ record: ties, currentAnchorAt: "2026-10-14T13:59:00-05:00" }))).toMatchObject({ stale: false, staleReason: null });
+    // A different moment in the offset form is still a newer anchor.
+    expect(bankBalanceCheckOf(args({ record: offset, currentAnchorAt: "2026-10-14T19:59:00.000Z" }))).toMatchObject({
+      stale: true,
+      staleReason: "anchor_changed",
+    });
+    // No anchor now: changed. A time that does not parse compares as written.
+    expect(bankBalanceCheckOf(args({ record: ties, currentAnchorAt: null }))).toMatchObject({ stale: true, staleReason: "anchor_changed" });
+    expect(sameAnchorMoment("not a time", "not a time")).toBe(true);
+    expect(sameAnchorMoment("not a time", "2026-10-14T18:59:00.000Z")).toBe(false);
+    expect(sameAnchorMoment("2026-10-14T18:59:00.000Z", "2026-10-14T18:59:00Z")).toBe(true);
   });
 
   it("not checked: never, another account, the forecast account changed, and the Sync's own reasons", () => {

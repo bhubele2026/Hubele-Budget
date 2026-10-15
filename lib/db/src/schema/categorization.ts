@@ -19,6 +19,20 @@ import { householdsTable, transactionsTable } from "./index";
 // (V1) `resolved_via` comes from 0111_category_decisions_resolved_via.sql.
 // (V7) resolution 'unreviewed' comes from 0116_category_decisions_unreviewed.sql.
 // (WP5b) `mapping_rule_history` (at the end) comes from 0170_mapping_rule_history.sql.
+// (Q2) `flags_before` / `flags_after` come from 0220_category_decision_flags.sql;
+// `correction_applications` (at the end) from 0221_correction_applications.sql.
+
+/**
+ * (Q2) The five row flags a hand category pick can move, as a `user` decision
+ * keeps them before and after its write (undo restores what it changed).
+ */
+export interface DecisionRowFlags {
+  isTransfer: boolean;
+  isTransferUserOverridden: boolean;
+  weeklyAllowance: boolean;
+  monthlyAllowance: boolean;
+  unplannedAllowance: boolean;
+}
 
 /**
  * One row per categorization decision: what the engine (or a person) decided
@@ -69,6 +83,10 @@ export const categoryDecisionsTable = pgTable(
     undoneAt: timestamp("undone_at", { withTimezone: true }),
     createdMemoryId: uuid("created_memory_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    /** (Q2) The row's five flags before this decision's write; null on older decisions. */
+    flagsBefore: jsonb("flags_before").$type<DecisionRowFlags>(),
+    /** (Q2) The row's five flags as this decision's write left them; null on older decisions. */
+    flagsAfter: jsonb("flags_after").$type<DecisionRowFlags>(),
   },
   (t) => [
     uniqueIndex("category_decisions_txn_hash_uq").on(t.transactionId, t.inputHash),
@@ -223,3 +241,41 @@ export const mappingRuleHistoryTable = pgTable(
   ],
 );
 export type MappingRuleHistoryRow = typeof mappingRuleHistoryTable.$inferSelect;
+
+/**
+ * (Q2) One proposed fix the owner applied (`POST /review/proposals/:key/apply`)
+ * — everything its undo needs to put back exactly: each row's columns before
+ * and after, the resolutions it created and the neighbours it deleted, the
+ * queue decisions it answered, the merchant memory before and after. Its own
+ * table, not `agent_actions` (whose rows name an agent run).
+ */
+export const correctionApplicationsTable = pgTable(
+  "correction_applications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    proposalKey: text("proposal_key").notNull(),
+    proposalKind: text("proposal_kind").notNull(),
+    proposalHash: text("proposal_hash").notNull(),
+    /** The proposal's target, as it was named (a bill, a debt or a category). */
+    label: text("label").notNull(),
+    actorUserId: text("actor_user_id").notNull(),
+    rows: jsonb("rows").notNull(),
+    resolutions: jsonb("resolutions").notNull(),
+    reopenedDecisionIds: jsonb("reopened_decision_ids").notNull(),
+    memory: jsonb("memory"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    undoneAt: timestamp("undone_at", { withTimezone: true }),
+    undoneBy: text("undone_by"),
+  },
+  (t) => [
+    index("correction_applications_household_created_idx").on(t.householdId, t.createdAt),
+    check(
+      "correction_applications_kind_check",
+      sql`${t.proposalKind} in ('loan_payment', 'transfer', 'bill_match', 'income_category')`,
+    ),
+  ],
+);
+export type CorrectionApplication = typeof correctionApplicationsTable.$inferSelect;

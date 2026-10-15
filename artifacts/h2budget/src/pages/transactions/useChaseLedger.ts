@@ -15,7 +15,7 @@ export type ChaseLedgerRead = {
   rows: LedgerRow[];
   /** The first page: counts, totals and balances (identical on every page). */
   first: LedgerPage | undefined;
-  /** Showing another filter's rows while this one loads. */
+  /** Another filter's rows are on hold while this one loads (`rows` is empty, `first` undefined). */
   isPlaceholderData: boolean;
   isLoading: boolean;
   isLoadingError: boolean;
@@ -50,7 +50,10 @@ export function useChaseLedger(filter: ChaseListFilter | null): ChaseLedgerRead 
       gcTime: LEDGER_CACHE.gcTime,
     },
   });
-  const pages = enabled ? q.data?.pages : undefined;
+  // (Q4) A placeholder is ANOTHER filter's pages (another account, range or
+  // category kept while this one loads): never this list's rows, counts or
+  // balances. `isPlaceholderData` says so; the page keeps its chrome and shows "Loading…".
+  const pages = enabled && !q.isPlaceholderData ? q.data?.pages : undefined;
   const rows = useMemo(() => flattenLedgerPages(pages), [pages]);
   const code = (q.error as { data?: { code?: unknown } } | null)?.data?.code;
   return {

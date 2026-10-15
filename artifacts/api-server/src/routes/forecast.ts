@@ -29,10 +29,11 @@ import {
   resolutionScheduleLookup,
 } from "../lib/debtMinSchedule";
 import { remapOrphanResolutions } from "../lib/resolutionRemap";
+import { writeForecastResolution } from "../lib/forecastResolutionWrite";
 import { readPausedReview } from "../lib/oneTimeBillMove";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
-import { findExpiredHoldsAmong } from "../lib/supersededPending";
+import { findExpiredLabelsAmong, readAnsweredRows, snapshotRefOf } from "../lib/supersededPending";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
 import { loadInFullDebtIds } from "../lib/cardPayoffMode";
 import {
@@ -262,7 +263,15 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // server-local midnight Date for the local-field arithmetic below.
   const now = new Date();
   const today = householdTodayDate(now);
-  const from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  let from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  // (Q5 round 3) `?fromMonth=YYYY-MM`: Review can open a month older than last month. Only earlier, at most 12 months
+  // back; without it (or when later than the default) the start is unchanged.
+  const fromMonthQ = typeof req.query.fromMonth === "string" ? /^(\d{4})-(0[1-9]|1[0-2])$/.exec(req.query.fromMonth) : null;
+  if (fromMonthQ) {
+    const asked = new Date(Number(fromMonthQ[1]), Number(fromMonthQ[2]) - 1, 1);
+    const oldest = new Date(today.getFullYear(), today.getMonth() - 12, 1);
+    if (asked < from) from = asked < oldest ? oldest : asked;
+  }
   const to = addDays(today, days);
   const fromISO = fmtISO(from);
   const toISO = fmtISO(to);
@@ -363,11 +372,23 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     );
   const txnsBank = txnsAll.filter((t) => isBankRow(t.source, t.plaidAccountId));
   // ⭐ (F6 round 4, finding 4) Each row says whether it is an expired hold — the
-  // same answer as GET /transactions (`findExpiredHoldsAmong`). It counts
-  // nowhere: the Reconcile register keeps it out of its inbox and its running
-  // balance (`filterForecastTxns`), as the review badge and the curve do.
-  const expiredTxnIds = await findExpiredHoldsAmong(householdId, txnsBank);
-  const txns = txnsBank.map((t) => ({ ...t, expiredHold: expiredTxnIds.has(t.id) }));
+  // same answer as GET /transactions. It counts nowhere: the Reconcile register
+  // keeps it out of its inbox and its running balance (`filterForecastTxns`), as
+  // the review badge and the curve do.
+  // ⭐ (F6 round 5, finding 3) With the register's test (`findExpiredLabelsAmong`
+  // → `heldExpiredPairs`): a hold the snapshot holds and its reversal are counted
+  // rows — `expiredHold: false` — marked `expiredPair`: the running balance counts
+  // them (as the bank balance does), the inbox never asks about them.
+  const labels = await findExpiredLabelsAmong(
+    householdId,
+    txnsBank,
+    snapshotRefOf(settings.bankSnapshotAt, configuredCheckingExternalId),
+  );
+  const txns = txnsBank.map((t) => ({
+    ...t,
+    expiredHold: labels.expiredHold.has(t.id),
+    expiredPair: labels.expiredPair.has(t.id),
+  }));
 
   const resolutionRows = await db
     .select({
@@ -383,6 +404,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       txnForecastFlag: transactionsTable.forecastFlag,
       txnSource: transactionsTable.source,
       txnPlaidAccountId: transactionsTable.plaidAccountId,
+      txnPending: transactionsTable.pending,
     })
     .from(forecastResolutionsTable)
     .leftJoin(
@@ -408,8 +430,38 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // user's last answer — the ledger and the review count read it the same way —
   // so the register never shows a question the paused bill cannot answer.
   const pausedItemIds = new Set(recurring.filter((r) => r.active !== "true").map((r) => r.id));
+  // ⭐ (F6 round 5, finding 5) The answers as the curve reads them
+  // (`buildForecastLedger`'s `resolutionsLive`, the same `readAnsweredRows`): a
+  // "matched" / "partial" answer whose row is an expired hold counts on that
+  // row's posted twin when its payment posted under another name, and is
+  // otherwise not given (the occurrence is open again) — so Reconcile and the
+  // curve agree. Read so; nothing written. Kill switch off: as stored.
+  const pausedRead = resolutionRows.map((r) => readPausedReview(r, pausedItemIds));
+  const answered = pausedRead.filter((r) => (r.status === "matched" || r.status === "partial") && r.matchedTxnId && r.txnDate != null);
+  const answerRead = await readAnsweredRows(
+    householdId,
+    answered.map((r) => ({ id: r.matchedTxnId!, pending: r.txnPending, plaidAccountId: r.txnPlaidAccountId, occurredOn: r.txnDate!, amount: r.txnAmount })),
+  );
+  const resolutionsRead = pausedRead.flatMap((r) => {
+    if (!((r.status === "matched" || r.status === "partial") && r.matchedTxnId && answerRead.expired.has(r.matchedTxnId))) return [r];
+    const twin = answerRead.postedTwinOf.get(r.matchedTxnId);
+    if (!twin) return [];
+    return [
+      {
+        ...r,
+        matchedTxnId: twin.id,
+        txnDate: twin.occurredOn,
+        txnDescription: twin.description,
+        txnAmount: twin.amount,
+        txnForecastFlag: twin.forecastFlag,
+        txnSource: twin.source,
+        txnPlaidAccountId: twin.plaidAccountId,
+        txnPending: twin.pending,
+      },
+    ];
+  });
   const resolutions = remapOrphanResolutions(
-    resolutionRows.map((r) => readPausedReview(r, pausedItemIds)),
+    resolutionsRead,
     resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt, { inFullDebtIds }),
   )
     .filter(
@@ -425,7 +477,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       (r) =>
         !r.matchedTxnId || isBankRow(r.txnSource, r.txnPlaidAccountId),
     )
-    .map(({ txnSource: _s, txnPlaidAccountId: _p, ...rest }) => rest);
+    .map(({ txnSource: _s, txnPlaidAccountId: _p, txnPending: _q, ...rest }) => rest);
 
   const closedRows = await db
     .select()
@@ -1081,94 +1133,19 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
   // (PR5) The neighbour delete keeps one resolution per plan occurrence and one
   // per bank row — except "Not this" (`not_match`) answers, which are about a
   // single plan/row PAIR and must survive other decisions on either side (a
-  // rejected suggestion must never come back). A `not_match` write only
-  // replaces the identical pair; any other write leaves `not_match` rows alone,
-  // except the exact pair it now confirms.
-  if (status === "not_match") {
-    // Rejecting a pair replaces that pair's earlier answers: a previous
-    // rejection, or a match / partial confirmation the user now takes back.
-    // (One-time bill move) It also answers a pending review on the same pair.
-    await db
-      .delete(forecastResolutionsTable)
-      .where(
-        and(
-          eq(forecastResolutionsTable.householdId, householdId),
-          inArray(forecastResolutionsTable.status, [
-            "not_match",
-            "matched",
-            "partial",
-            "needs_review",
-            "needs_review_partial",
-          ]),
-          eq(forecastResolutionsTable.recurringItemId, recurringItemId),
-          eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
-          eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
-        ),
-      );
-  } else {
-    if (recurringItemId && occurrenceDate) {
-      await db
-        .delete(forecastResolutionsTable)
-        .where(
-          and(
-            eq(forecastResolutionsTable.householdId, householdId),
-            eq(forecastResolutionsTable.recurringItemId, recurringItemId),
-            eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
-            ne(forecastResolutionsTable.status, "not_match"),
-            // (PR5 review) A partial confirmation and a reschedule of the same
-            // plan coexist: the remainder is due on the date the user moved it to.
-            ...(status === "partial" ? [ne(forecastResolutionsTable.status, "rescheduled")] : []),
-            // (One-time bill move) A move is not an answer: a pending review
-            // (`needs_review`, `needs_review_partial`) stays open beside it, like a
-            // partial, until it is answered.
-            ...(status === "rescheduled"
-              ? [
-                  ne(forecastResolutionsTable.status, "partial"),
-                  ne(forecastResolutionsTable.status, "needs_review"),
-                  ne(forecastResolutionsTable.status, "needs_review_partial"),
-                ]
-              : []),
-          ),
-        );
-    }
-    if (matchedTxnId) {
-      await db
-        .delete(forecastResolutionsTable)
-        .where(
-          and(
-            eq(forecastResolutionsTable.householdId, householdId),
-            eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
-            ne(forecastResolutionsTable.status, "not_match"),
-          ),
-        );
-    }
-    if (recurringItemId && occurrenceDate && matchedTxnId) {
-      await db
-        .delete(forecastResolutionsTable)
-        .where(
-          and(
-            eq(forecastResolutionsTable.householdId, householdId),
-            eq(forecastResolutionsTable.status, "not_match"),
-            eq(forecastResolutionsTable.recurringItemId, recurringItemId),
-            eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
-            eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
-          ),
-        );
-    }
-  }
-
-  const [row] = await db
-    .insert(forecastResolutionsTable)
-    .values({
-      userId,
-      householdId,
-      recurringItemId: recurringItemId ?? null,
-      occurrenceDate: occurrenceDate ?? null,
-      status,
-      matchedTxnId: matchedTxnId ?? null,
-      rescheduledTo: rescheduledTo ?? null,
-    })
-    .returning();
+  // rejected suggestion must never come back). (Q2) The deletes and the insert
+  // live in `writeForecastResolution` (lib/forecastResolutionWrite.ts), moved
+  // there unchanged and run here on the pool exactly as before; it also returns
+  // the rows it deleted, which a proposed fix keeps for its undo.
+  const { row } = await writeForecastResolution(db, {
+    userId,
+    householdId,
+    recurringItemId,
+    occurrenceDate,
+    status,
+    matchedTxnId,
+    rescheduledTo,
+  });
   res.json(row);
 });
 

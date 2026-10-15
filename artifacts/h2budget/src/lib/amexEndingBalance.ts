@@ -27,15 +27,13 @@ import {
   type MonthKey,
 } from "@/components/account-page/month-navigator";
 import { computeBalanceAtEndOf } from "./accountBalance";
-import { isCounted } from "./countedRows";
-import { householdDayOfAt } from "./householdDay";
+import { anchorDayAndMonth, cardOwedMoves, type CardMoveInput } from "./cardBalanceWalk";
 
-export type AmexTxnInput = {
-  occurredOn: string;
-  amount: string | number;
-  /** (F6 round 4) The server's answer on the list row: an expired hold counts nowhere. */
-  expiredHold?: boolean | null;
-};
+/**
+ * (Q3) A card row as the month-end walk reads it: its `source` says which sign
+ * its amount carries and `pending` keeps it out (`cardBalanceWalk.ts`).
+ */
+export type AmexTxnInput = CardMoveInput;
 
 export type AmexAnchor = {
   balance: number;
@@ -300,38 +298,50 @@ export function makeAmexBalanceAtEndOf(args: {
   if (!anchor) return () => null;
 
   // Household month (America/Chicago) of the anchor instant, as the server uses.
-  const anchorMonth = anchor.asOf
-    ? monthKeyFromISO(householdDayOfAt(anchor.asOf))
-    : (fallbackMonth ?? monthKeyOf(new Date()));
+  const anchorMonth = anchorDayAndMonth(
+    anchor.asOf,
+    fallbackMonth ?? monthKeyOf(new Date()),
+  ).month;
 
-  // ⭐ (F6 round 4, finding 3) An expired hold counts nowhere: not in a month's
-  // net change, not in the anchor month's rows — so the tile, the 12-month chart
-  // and the running-balance walk (`computeRunningBalances`, which skips it too)
-  // agree, and a month's walk starts at the month before's ending balance.
-  const counted = amexTransactions.filter(isCounted);
-  const netChangeByMonth = new Map<string, number>();
-  for (const t of counted) {
+  // ⭐ (Q3) Each row as its change to what the card OWES (`cardOwedMoves`:
+  // posted rows only, every source on the owed sign). The month walk below adds
+  // a month's change going forward and takes it off going back — right only
+  // for owed changes: a Plaid purchase is stored negative, and walked raw it
+  // lowered the balance it raised.
+  // (F6 round 4, finding 3 — merged) `cardOwedMoves` also skips an expired
+  // hold (`isCounted`): it counts nowhere, not in a month's net change, not in
+  // the anchor month's rows — so the tile, the 12-month chart and the per-row
+  // walk agree.
+  const moves = cardOwedMoves(amexTransactions).map((m) => ({
+    occurredOn: m.occurredOn,
+    amount: m.owed,
+  }));
+  const netCentsByMonth = new Map<string, number>();
+  for (const t of moves) {
     const mk = monthKeyFromISO(t.occurredOn);
     const k = `${mk.year}-${mk.month}`;
-    netChangeByMonth.set(
-      k,
-      (netChangeByMonth.get(k) ?? 0) + (Number(t.amount) || 0),
-    );
+    netCentsByMonth.set(k, (netCentsByMonth.get(k) ?? 0) + Math.round(t.amount * 100));
   }
+  const netChangeByMonth = new Map<string, number>();
+  for (const [k, c] of netCentsByMonth) netChangeByMonth.set(k, c / 100);
 
-  const anchorMonthTxns = counted.filter(
+  const anchorMonthTxns = moves.filter(
     (t) => compareMonth(monthKeyFromISO(t.occurredOn), anchorMonth) === 0,
   );
 
+  // Rounded to the cent: the month walk adds dollars, and a figure is never
+  // a float's 0.1 + 0.2.
   return (target: MonthKey) =>
-    computeBalanceAtEndOf({
-      anchorBalance: anchor.balance,
-      anchorMonth,
-      netChangeByMonth,
-      target,
-      anchorAt: anchor.asOf,
-      anchorMonthTxns,
-    });
+    Math.round(
+      computeBalanceAtEndOf({
+        anchorBalance: anchor.balance,
+        anchorMonth,
+        netChangeByMonth,
+        target,
+        anchorAt: anchor.asOf,
+        anchorMonthTxns,
+      }) * 100,
+    ) / 100 + 0;
 }
 
 /**

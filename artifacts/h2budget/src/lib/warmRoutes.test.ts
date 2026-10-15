@@ -18,6 +18,7 @@ import {
   getGetAvalancheSettingsQueryKey,
   getGetForecastCashSignalQueryKey,
   getGetForecastQueryKey,
+  getListCategoriesQueryKey,
   getListDebtsQueryKey,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
@@ -68,16 +69,18 @@ describe("warmRoute — each section warms its real first queries", () => {
 
   it("Chase register: the first ledger page", async () => {
     warmRoute(qc, "/transactions");
-    await settle();
     const filter = chaseFirstFilter(NOW, false)!;
-    expect(has(getGetTransactionsLedgerInfiniteQueryKey(toLedgerParams(filter)))).toBe(true);
+    await vi.waitFor(() => expect(has(getGetTransactionsLedgerInfiniteQueryKey(toLedgerParams(filter)))).toBe(true));
+    // (Q4) The categories every row's word reads are warmed with it.
+    expect(has(getListCategoriesQueryKey())).toBe(true);
     // The first page is 50 rows, never a 1,000-row three-year read.
     expect(keys.some((k) => k.includes('"limit":1000'))).toBe(false);
   });
 
   it("Amex: the all-cards summary and the month's rows", async () => {
     warmRoute(qc, "/amex");
-    await vi.waitFor(() => expect(keys.length).toBe(2));
+    await vi.waitFor(() => expect(keys.length).toBe(3));
+    expect(has(getListCategoriesQueryKey())).toBe(true); // (Q4) warmed with the card page
     const first = amexFirstParams(NOW);
     expect(has(getGetAmexSummaryQueryKey(first.summary))).toBe(true);
     expect(has(getListTransactionsQueryKey(first.month))).toBe(true);

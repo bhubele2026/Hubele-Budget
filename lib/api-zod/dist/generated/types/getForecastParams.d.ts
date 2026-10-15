@@ -7,5 +7,10 @@
  */
 export type GetForecastParams = {
     days?: number;
+    /**
+     * (Q5 round 3) YYYY-MM. Start the register's data at the first of this month when that is earlier than the first of last month (the default start); up to 12 months back. Review uses it for an older month.
+     * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+     */
+    fromMonth?: string;
 };
 //# sourceMappingURL=getForecastParams.d.ts.map

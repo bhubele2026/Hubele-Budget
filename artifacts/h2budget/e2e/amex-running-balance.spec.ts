@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type Route } from "@playwright/test";
 import {
   cleanupTestUsers,
   createTestUser,
@@ -6,41 +6,32 @@ import {
 } from "./helpers/clerk";
 
 /**
- * End-to-end coverage for the Amex per-row running statement balance
- * (task #299, follow-up #341). Pins the register-style "bal $X" math
- * shown beside each row on /amex so a future refactor of:
- *   - `computeRunningBalances` (lib/runningBalance.ts),
- *   - the canonical `compareNewestFirst` comparator,
- *   - the day-group sort in amex.tsx, or
- *   - the anchor resolution in `endingBalance` / `computeBalanceAtEndOf`
- * cannot silently break monotonicity or reconciliation again without
- * being caught here.
+ * End-to-end coverage for the Amex per-row running balance ("bal $X"),
+ * rewritten for Q3 (2026-10-14) with PLAID card rows (`plaid:amex`).
  *
- * Strategy:
- *   1. Provision a fresh user; seed a saved Amex anchor at a known value
- *      via POST /api/amex/anchor with asOf=now (so anchor month == current
- *      month → ending balance == anchor value with no further roll).
- *   2. Seed four same-day amex-source transactions on today's date with
- *      distinct `occurredAt` timestamps so the canonical newest-first
- *      comparator orders them deterministically (no id-tiebreaker
- *      reliance). Mix charges (positive amounts) and a payment
- *      (negative amount) to exercise both walk directions.
- *   3. Open /amex, wait for the newest row's running balance to read the
- *      anchor value (the ending-balance tile is never rendered — AX-33),
- *      then read the running-balance text from each row in
- *      both the desktop (`text-running-balance-${id}`) and mobile
- *      (`text-running-balance-mobile-${id}`) layouts. Both render
- *      simultaneously in the DOM (Tailwind `md:hidden` / `hidden md:block`),
- *      so the same data flows through both code paths.
- *   4. Assert per layout:
- *        - Newest row's "bal" exactly equals the anchor (the month's
- *          ending balance).
- *        - Walking newest → oldest, each next row's balance equals
- *          `prev_bal − prev_row_amount` (the canonical recurrence used
- *          by `computeRunningBalances`).
- *      That single recurrence covers both monotonicity for charges
- *      (balance walks down by the charge amount as we look further back)
- *      and the reverse for payments (balance walks back up).
+ * A card balance is what is OWED. Plaid stores a card row with the BANK sign:
+ * a purchase is NEGATIVE, a payment POSITIVE. The page used to walk card rows
+ * with the checking rule (`older = bal − amount`), so going back in time a
+ * purchase made the balance RISE. It now walks what is owed
+ * (`lib/cardBalanceWalk.ts`): `balanceBefore(row) = balanceAfter(row) −
+ * owedDelta(row)`, owedDelta = +purchase, −payment/refund/credit. The old
+ * spec seeded workbook rows (`source: "amex"`, purchases positive) on "All
+ * cards", the one shape where the checking rule happened to be right, and
+ * "All cards" no longer carries a combined running balance at all.
+ *
+ * Strategy (every read mocked at the network, synthetic values):
+ *   1. One Amex item with two credit cards (`/api/plaid/items`).
+ *   2. One card's rows today, with distinct `occurredAt` so the canonical
+ *      newest-first comparator orders them: three purchases (−50, −30, −20)
+ *      and an older payment (+100), plus a PENDING hold (−12) that must show
+ *      no "bal" and move nothing. Another card's purchase rides along.
+ *   3. `/api/amex/summary` answers the card's current balance ($1,000.00,
+ *      read today) — the anchor — and, for "All cards", each card's balance.
+ *   4. `/amex?card=<card>`: the newest posted row reads $1,000.00, each older
+ *      row = previous − owedDelta(previous), in both layouts and in DOM order;
+ *      the note names what the figures count back from.
+ *   5. `/amex` ("All cards"): no row carries a "bal", and each card's balance
+ *      is listed by card.
  */
 
 const provisionedUserIds: string[] = [];
@@ -49,47 +40,8 @@ test.afterAll(async () => {
   await cleanupTestUsers(provisionedUserIds);
 });
 
-type ApiResult<T> =
-  | { ok: true; status: number; body: T }
-  | { ok: false; status: number; body: unknown };
-
-async function apiCall<T>(
-  page: Page,
-  method: string,
-  path: string,
-  body?: unknown,
-): Promise<T> {
-  const result = await page.evaluate(
-    async (args): Promise<ApiResult<T>> => {
-      const res = await fetch(args.path, {
-        method: args.method,
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: args.body == null ? undefined : JSON.stringify(args.body),
-      });
-      let parsed: unknown = null;
-      const text = await res.text();
-      if (text) {
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          parsed = text;
-        }
-      }
-      if (!res.ok) {
-        return { ok: false, status: res.status, body: parsed };
-      }
-      return { ok: true, status: res.status, body: parsed as T };
-    },
-    { method, path, body },
-  );
-  if (!result.ok) {
-    throw new Error(
-      `API ${method} ${path} failed (${result.status}): ${JSON.stringify(result.body)}`,
-    );
-  }
-  return result.body;
-}
+const PLAT = "e2e-q3-ext-plat";
+const BLUE = "e2e-q3-ext-blue";
 
 function todayIso(): string {
   const d = new Date();
@@ -100,222 +52,207 @@ function todayIso(): string {
 }
 
 function fmtCurrency(n: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(n);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
-// Parses "bal $1,234.56" → 1234.56. Strips the leading "bal " prefix the
-// chip wraps each value in, then strips currency formatting.
+// "bal $1,234.56" → 1234.56.
 function parseBalText(text: string): number {
   const m = text.match(/-?\$?[\d,]+(?:\.\d+)?/);
   if (!m) throw new Error(`could not parse running-balance text: "${text}"`);
   return Number(m[0].replace(/[$,]/g, ""));
 }
 
-type Seeded = {
-  id: string;
-  description: string;
-  // Signed amount as the running-balance recurrence sees it (matches
-  // what the page stores in `t.amount` and feeds to
-  // `computeRunningBalances`).
-  amount: number;
-};
+type Seed = { id: string; description: string; amount: string; at: string; pending?: boolean; card?: string };
 
-test.describe("Amex page — per-row running balance (#341)", () => {
-  test("running balances are monotonic newest→oldest and reconcile to the month's ending balance in both layouts", async ({
-    page,
-  }) => {
-    const { email, password } = await createTestUser(
-      "amex-running-balance",
-      provisionedUserIds,
-    );
+function txn(today: string, s: Seed) {
+  return {
+    id: s.id,
+    occurredOn: today,
+    occurredAt: s.at,
+    postedOn: today,
+    description: s.description,
+    amount: s.amount,
+    account: "Amex",
+    categoryId: null,
+    forecastFlag: false,
+    weeklyAllowance: false,
+    weeklyBucket: null,
+    monthlyAllowance: false,
+    unplannedAllowance: false,
+    reimbursable: false,
+    reimbursed: false,
+    reviewed: false,
+    isTransfer: false,
+    isTransferUserOverridden: false,
+    isExternalCardPayment: false,
+    notes: null,
+    source: "plaid:amex",
+    member: null,
+    owedBy: null,
+    plaidTransactionId: `${s.id}-ext`,
+    plaidAccountId: s.card ?? PLAT,
+    pending: s.pending === true,
+    debtId: null,
+    matchedRuleId: null,
+  };
+}
 
-    // Sign in first so the page has a Clerk session cookie before any
-    // /api/* seeding calls. We land on /amex but only to mount an
-    // authenticated origin — we'll reload after seeding.
-    await signInAndOpen(page, email, password, "/amex");
-    await expect(
-      page.getByRole("heading", { name: /american express/i }),
-    ).toBeVisible({ timeout: 15_000 });
+function summaryBody(accountId: string, asOf: string) {
+  const total = (amount = "0.00") => ({ amount, count: 0 });
+  const card = (id: string, name: string, mask: string, owed: string | null) => ({
+    accountId: id,
+    name,
+    mask,
+    institution: "American Express",
+    brand: "silver",
+    cadence: "weekly",
+    debtLinked: false,
+    debtId: null,
+    owed,
+    purchases: total(),
+  });
+  const all = accountId === "all";
+  return {
+    scope: all
+      ? { kind: "all", accountId: null, name: null, mask: null, institution: null, cards: [card(PLAT, "Platinum", "1002", "1000.00"), card(BLUE, "Blue Cash", "2003", "250.00")] }
+      : { kind: "card", accountId, name: "Platinum", mask: "1002", institution: "American Express", cards: [card(PLAT, "Platinum", "1002", "1000.00")] },
+    period: { from: todayIso(), to: todayIso(), timezone: "America/Chicago" },
+    owed: { current: "1000.00", statement: null, asOf, source: "plaid" },
+    purchases: { amount: "0.00", count: 0, reimbursable: total() },
+    refunds: total(),
+    payments: total(),
+    otherCredits: total(),
+    otherCharges: total(),
+    notMine: total(),
+    householdContribution: { amount: "0.00", count: 0, spent: "0.00", weekPlan: null, remaining: null, scope: "all" },
+    planLink: { kind: "none" },
+    needsAttention: {
+      unplanned: { amount: "0.00", count: 0, truncated: false, rows: [] },
+      unfiled: { amount: "0.00", count: 0, truncated: false, rows: [] },
+      uncategorized: { amount: "0.00", count: 0, truncated: false, rows: [] },
+      truncated: false,
+    },
+    limitations: [],
+  };
+}
 
-    // Anchor balance: pick a round value so manual cross-check is easy.
-    const anchorBalance = 1000;
-
-    // Seed four same-day amex transactions with explicit occurredAt
-    // timestamps so the canonical comparator orders them deterministically
-    // (newest occurredAt first, with payment as the oldest of the day).
-    const today = todayIso();
-    const seedSpecs: Array<{ description: string; amount: string; at: string }> = [
-      {
-        description: "AMEX BAL TEST — STARBUCKS NEWEST",
-        amount: "50.00",
-        at: `${today}T18:00:00.000Z`,
-      },
-      {
-        description: "AMEX BAL TEST — TRADER JOES",
-        amount: "30.00",
-        at: `${today}T15:00:00.000Z`,
-      },
-      {
-        description: "AMEX BAL TEST — UBER",
-        amount: "20.00",
-        at: `${today}T12:00:00.000Z`,
-      },
-      {
-        description: "AMEX BAL TEST — PAYMENT THANK YOU",
-        amount: "-100.00",
-        at: `${today}T09:00:00.000Z`,
-      },
-    ];
-
-    const seeded: Seeded[] = [];
-    for (const s of seedSpecs) {
-      const row = await apiCall<{ id: string }>(
-        page,
-        "POST",
-        "/api/transactions",
+async function mockCards(page: Page, today: string, seeds: Seed[]) {
+  // The card's balance was read at midday today in Chicago: today's rows are inside it.
+  const asOf = `${today}T12:00:00-05:00`;
+  await page.route("**/api/plaid/items", async (route: Route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
         {
-          occurredOn: today,
-          occurredAt: s.at,
-          description: s.description,
-          amount: s.amount,
-          account: "Amex",
-          source: "amex",
-          // Don't auto-categorize off a fresh user's empty rule set.
-          categoryId: null,
+          id: "e2e-q3-item-row",
+          itemId: "e2e-q3-item",
+          institutionId: "ins_amex",
+          institutionName: "American Express",
+          institutionSlug: "amex",
+          lastSyncedAt: new Date().toISOString(),
+          lastSyncError: null,
+          lastSyncErrorCode: null,
+          stillPreparing: false,
+          accounts: [
+            { id: "e2e-q3-row-plat", accountId: PLAT, name: "Platinum Card", mask: "1002", type: "credit", subtype: "credit card" },
+            { id: "e2e-q3-row-blue", accountId: BLUE, name: "Blue Cash", mask: "2003", type: "credit", subtype: "credit card" },
+          ],
         },
-      );
-      seeded.push({
-        id: row.id,
-        description: s.description,
-        amount: Number(s.amount),
-      });
-    }
-
-    // Save the Amex anchor AFTER seeding so the GET /amex/anchor query the
-    // page makes on reload returns our value. asOf=today keeps the anchor
-    // month aligned with the selected month, so endingBalance == anchor
-    // (no roll-forward / roll-backward via netChangeByMonth).
-    await apiCall(page, "POST", "/api/amex/anchor", {
-      balance: anchorBalance,
-      asOf: new Date().toISOString(),
+      ]),
     });
+  });
+  await page.route("**/api/transactions**", async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== "GET" || url.pathname !== "/api/transactions") return route.fallback();
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(seeds.map((s) => txn(today, s))) });
+  });
+  await page.route("**/api/amex/summary**", async (route: Route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const accountId = new URL(route.request().url()).searchParams.get("accountId") ?? "all";
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(summaryBody(accountId, asOf)) });
+  });
+}
 
-    // Reload so the Amex page picks up both the seeded txns and the anchor.
-    await page.goto("/amex");
-    await expect(
-      page.getByRole("heading", { name: /american express/i }),
-    ).toBeVisible({ timeout: 15_000 });
+test.describe("Amex page — per-row running balance on Plaid card rows (Q3)", () => {
+  test("one card counts back from its current balance the owed way; All cards carries no combined bal", async ({ page }) => {
+    const { email, password } = await createTestUser("amex-running-balance", provisionedUserIds);
+    const today = todayIso();
+    // Newest first. Owed change: purchase +, payment −.
+    const posted: Seed[] = [
+      { id: "e2e-q3-p1", description: "Q3 GROCER", amount: "-50.00", at: `${today}T18:00:00.000Z` }, //  +50
+      { id: "e2e-q3-p2", description: "Q3 BOOKS", amount: "-30.00", at: `${today}T15:00:00.000Z` }, //   +30
+      { id: "e2e-q3-p3", description: "Q3 TRANSIT", amount: "-20.00", at: `${today}T12:00:00.000Z` }, // +20
+      { id: "e2e-q3-p4", description: "Q3 PAYMENT", amount: "100.00", at: `${today}T09:00:00.000Z` }, // −100
+    ];
+    const pending: Seed = { id: "e2e-q3-hold", description: "Q3 CAFE HOLD", amount: "-12.00", at: `${today}T19:00:00.000Z`, pending: true };
+    const other: Seed = { id: "e2e-q3-b1", description: "Q3 OTHER CARD", amount: "-22.40", at: `${today}T17:00:00.000Z`, card: BLUE };
+    await mockCards(page, today, [pending, ...posted, other]);
 
-    // (C10 repair) The Ending Balance tile (`stat-ending-balance`) is never
-    // rendered (parity AX-33). The per-row running balance is seeded from the
-    // SAME month ending balance (`runningBalanceMap` ← `endingBalance.value`),
-    // so the newest row's "bal" reading the saved anchor is the proof the
-    // tile used to give. (Its "From saved anchor" source footer is not on
-    // screen anywhere.)
-    const expectedAnchorText = fmtCurrency(anchorBalance);
-    await expect(
-      page.getByTestId(`text-running-balance-${seeded[0]!.id}`),
-    ).toContainText(expectedAnchorText, { timeout: 15_000 });
+    await signInAndOpen(page, email, password, `/amex?card=${PLAT}`);
+    await expect(page.getByRole("heading", { name: /american express/i })).toBeVisible({ timeout: 15_000 });
 
-    // Determine newest→oldest order via the seeds' occurredAt: spec is
-    // already in descending-time order, so seeded[] is exactly the order
-    // the comparator should produce. Compute the expected running balance
-    // for each row using the canonical recurrence:
-    //   bal[0] = anchor, bal[i] = bal[i-1] - amount[i-1].
+    // Worked by hand: after p1 1,000.00 · after p2 950.00 · after p3 920.00 ·
+    // after p4 900.00 · before p4 (opening) 1,000.00. The old checking walk
+    // read 1,000.00 / 1,050.00 / 1,080.00 / 1,100.00.
+    const owed = (s: Seed) => -Number(s.amount);
     const expected: Array<{ id: string; bal: number }> = [];
-    let bal = Math.round(anchorBalance * 100) / 100;
-    for (let i = 0; i < seeded.length; i += 1) {
-      expected.push({ id: seeded[i].id, bal });
-      bal = Math.round((bal - seeded[i].amount) * 100) / 100;
+    let bal = 1000;
+    for (const s of posted) {
+      expected.push({ id: s.id, bal });
+      bal = Math.round((bal - owed(s)) * 100) / 100;
     }
+    expect(expected.map((e) => e.bal)).toEqual([1000, 950, 920, 900]);
+    expect(bal).toBe(1000);
 
-    // First row's balance must reconcile to the chip.
-    expect(fmtCurrency(expected[0].bal)).toBe(expectedAnchorText);
-
-    // Sanity: monotonic-down across the three charges, then back up after
-    // the payment. Locks the per-row recurrence's directionality.
-    expect(expected[0].bal).toBeGreaterThan(expected[1].bal);
-    expect(expected[1].bal).toBeGreaterThan(expected[2].bal);
-    expect(expected[2].bal).toBeGreaterThan(expected[3].bal);
-    expect(expected[3].bal).toBeLessThan(expected[0].bal);
-    // After applying the -$100 payment to the oldest row's incoming
-    // balance, we land back at the anchor (charges 50+30+20 = 100).
-    const finalBal = Math.round((expected[3].bal - seeded[3].amount) * 100) / 100;
-    expect(finalBal).toBe(anchorBalance);
-
-    // Both layouts render simultaneously (Tailwind `md:hidden` /
-    // `hidden md:block`), so we read each row's running-balance text
-    // from both code paths. Each row's chip is "bal $X" — `parseBalText`
-    // strips formatting so we can compare numerically (avoids fragile
-    // exact-text matches that would break on locale or whitespace
-    // tweaks).
+    await expect(page.getByTestId(`text-running-balance-${posted[0]!.id}`)).toContainText(fmtCurrency(1000), {
+      timeout: 15_000,
+    });
     for (const e of expected) {
       const desktop = page.getByTestId(`text-running-balance-${e.id}`);
       const mobile = page.getByTestId(`text-running-balance-mobile-${e.id}`);
       await expect(desktop).toBeVisible({ timeout: 15_000 });
       await expect(mobile).toBeAttached({ timeout: 15_000 });
-
-      const desktopText = (await desktop.textContent()) ?? "";
-      const mobileText = (await mobile.textContent()) ?? "";
-      expect(parseBalText(desktopText)).toBeCloseTo(e.bal, 2);
-      expect(parseBalText(mobileText)).toBeCloseTo(e.bal, 2);
-
-      // Both layouts must agree on every row — a divergence would mean
-      // one of the two render paths skipped or re-sorted the map.
-      expect(parseBalText(desktopText)).toBeCloseTo(
-        parseBalText(mobileText),
-        2,
-      );
+      expect(parseBalText((await desktop.textContent()) ?? "")).toBeCloseTo(e.bal, 2);
+      expect(parseBalText((await mobile.textContent()) ?? "")).toBeCloseTo(e.bal, 2);
     }
 
-    // Final reconciliation assertion: the newest row's displayed
-    // running balance equals the chip's displayed value, char for char.
-    const newestDesktopText =
-      (await page
-        .getByTestId(`text-running-balance-${expected[0].id}`)
-        .textContent()) ?? "";
-    expect(newestDesktopText).toContain(expectedAnchorText);
+    // The pending hold is listed, with no "bal"; the other card's row is not on this card's page.
+    await expect(page.getByText("Q3 CAFE HOLD").first()).toBeAttached();
+    await expect(page.getByTestId(`text-running-balance-${pending.id}`)).toHaveCount(0);
+    await expect(page.getByText("Q3 OTHER CARD")).toHaveCount(0);
 
-    // DOM-order monotonicity check. The per-id assertions above pin the
-    // computed values, but a regression in the day-group sort
-    // (`groups.map`) or the per-day `sort(compareNewestFirst)` could
-    // leave the values correct in the map yet render them out of order
-    // on screen. Walk the desktop running-balance chips in their
-    // actual DOM order and assert that consecutive rows obey the
-    // canonical recurrence
-    //   nextBal === prevBal − prevRowAmount.
-    // A single failure here means the rendered list is not in
-    // newest-first order even if `computeRunningBalances` is.
-    const renderedBalLocators = page.locator(
+    // DOM order obeys the owed recurrence: next = prev − owedDelta(prev row).
+    const rendered = page.locator(
       '[data-testid^="text-running-balance-"]:not([data-testid^="text-running-balance-mobile-"])',
     );
-    await expect(renderedBalLocators).toHaveCount(seeded.length, {
-      timeout: 15_000,
-    });
-    const renderedHandles = await renderedBalLocators.elementHandles();
-    const amountById = new Map(seeded.map((s) => [s.id, s.amount]));
-    let prevBal: number | null = null;
-    let prevRowAmount: number | null = null;
-    for (const handle of renderedHandles) {
-      const testId = (await handle.getAttribute("data-testid")) ?? "";
-      const id = testId.replace(/^text-running-balance-/, "");
-      const text = (await handle.textContent()) ?? "";
-      const bal = parseBalText(text);
-      if (prevBal !== null && prevRowAmount !== null) {
-        const expectedNext = Math.round((prevBal - prevRowAmount) * 100) / 100;
-        expect(bal).toBeCloseTo(expectedNext, 2);
-      } else {
-        // First rendered row must reconcile to the chip — pins
-        // newest-first ordering of the day group itself.
-        expect(bal).toBeCloseTo(anchorBalance, 2);
-      }
-      const amt = amountById.get(id);
-      expect(amt, `unexpected row id rendered: ${id}`).not.toBeUndefined();
-      prevBal = bal;
-      prevRowAmount = amt!;
+    await expect(rendered).toHaveCount(posted.length, { timeout: 15_000 });
+    const owedById = new Map(posted.map((s) => [s.id, owed(s)]));
+    let prev: { bal: number; owed: number } | null = null;
+    for (const handle of await rendered.elementHandles()) {
+      const id = ((await handle.getAttribute("data-testid")) ?? "").replace(/^text-running-balance-/, "");
+      const v = parseBalText((await handle.textContent()) ?? "");
+      if (prev) expect(v).toBeCloseTo(Math.round((prev.bal - prev.owed) * 100) / 100, 2);
+      else expect(v).toBeCloseTo(1000, 2);
+      const o = owedById.get(id);
+      expect(o, `unexpected row id rendered: ${id}`).not.toBeUndefined();
+      prev = { bal: v, owed: o! };
     }
+
+    await expect(page.getByTestId("amex-anchor-note")).toHaveText(
+      /^Balance after each row, counting back from \$1,000\.00 \(as of [A-Z][a-z]{2} \d{1,2}\)\.$/,
+    );
+
+    // "All cards": no combined running balance; each card's own balance, by card.
+    await page.goto("/amex");
+    await expect(page.getByRole("heading", { name: /american express/i })).toBeVisible({ timeout: 15_000 });
+    const balances = page.getByTestId("amex-card-balances");
+    await expect(balances).toBeVisible({ timeout: 15_000 });
+    await expect(balances.getByTestId(`amex-card-balance-${PLAT}`)).toContainText("Platinum ••1002");
+    await expect(balances.getByTestId(`amex-card-balance-${PLAT}`)).toContainText(fmtCurrency(1000));
+    await expect(balances.getByTestId(`amex-card-balance-${BLUE}`)).toContainText(fmtCurrency(250));
+    await expect(page.getByText("Q3 OTHER CARD").first()).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('[data-testid^="text-running-balance-"]')).toHaveCount(0);
   });
 });

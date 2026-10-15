@@ -14,94 +14,54 @@ afterEach(() => {
 });
 
 describe("FreshnessLine — the server's verdict, in words", () => {
+  const plaid = (stale: boolean, staleReason: "refresh_failed" | "old" | "manual_old" | null) => ({ source: "plaid" as const, stale, staleReason });
+
   it("renders nothing without a snapshot", () => {
-    const { container } = render(<FreshnessLine bank={undefined} now={NOW} />);
+    const { container } = render(<FreshnessLine bank={undefined} fetchedAt={null} now={NOW} />);
     expect(container.textContent).toBe("");
-    const none = render(
-      <FreshnessLine
-        bank={{ asOfDate: null, source: null, lastContactAt: null, stale: false, staleReason: null }}
-        now={NOW}
-      />,
-    );
+    const none = render(<FreshnessLine bank={{ source: null, stale: false, staleReason: null }} fetchedAt={null} now={NOW} />);
     expect(none.container.textContent).toBe("");
   });
 
-  it("a fresh Plaid balance keeps the calm 'Last auto-updated' line", () => {
-    render(
-      <FreshnessLine
-        bank={{ asOfDate: ago(2 * HOUR), source: "plaid", lastContactAt: ago(HOUR), stale: false, staleReason: null }}
-        now={NOW}
-      />,
-    );
-    expect(screen.getByTestId("text-bank-snapshot-freshness").textContent).toBe(
-      "Last auto-updated 2 hours ago",
-    );
+  it("fresh: 'Updated' is the server's instant, in the header line's own words", () => {
+    render(<FreshnessLine bank={plaid(false, null)} fetchedAt={ago(2 * HOUR)} now={NOW} />);
+    expect(screen.getByTestId("text-bank-snapshot-freshness").textContent).toBe("Updated 2 h ago");
     expect(screen.queryByTestId("text-bank-freshness-stale")).toBeNull();
   });
 
-  it("a fresh typed-in balance keeps 'Set manually'", () => {
-    render(
-      <FreshnessLine
-        bank={{ asOfDate: ago(3 * HOUR), source: "manual", lastContactAt: null, stale: false, staleReason: null }}
-        now={NOW}
-      />,
-    );
-    expect(screen.getByTestId("text-bank-snapshot-freshness").textContent).toContain(
-      "Set manually",
-    );
+  it("(A) a webhook sync after the balance read: says the server's instant, not the older balance time", () => {
+    // Server fetchedAt = the later of the balance read (07:00) and the sync (11:00): 1 h ago. The tile has no other time.
+    render(<FreshnessLine bank={plaid(false, null)} fetchedAt={ago(HOUR)} now={NOW} />);
+    expect(screen.getByTestId("text-bank-snapshot-freshness").textContent).toBe("Updated 1 h ago");
   });
 
-  it("a failed refresh says so, in the alarm colour, from the bank's last contact", () => {
-    // Balance re-read 3 days ago, rows synced an hour ago: the bank last spoke an
-    // hour ago, which is what the server judges by.
-    render(
-      <FreshnessLine
-        bank={{ asOfDate: ago(3 * DAY), source: "plaid", lastContactAt: ago(HOUR), stale: true, staleReason: "refresh_failed" }}
-        now={NOW}
-      />,
-    );
-    expect(screen.getByTestId("text-bank-freshness-stale").textContent).toBe(
-      "Refresh failed · last updated 1 hour ago",
-    );
-    expect(screen.getByText("Refresh failed").className).toContain("text-bad");
-    expect(screen.queryByTestId("text-bank-snapshot-freshness")).toBeNull();
-  });
-
-  it("a quiet feed says when the bank last updated, once, without the alarm colour", () => {
-    render(
-      <FreshnessLine
-        bank={{ asOfDate: ago(5 * DAY), source: "plaid", lastContactAt: ago(50 * HOUR), stale: true, staleReason: "old" }}
-        now={NOW}
-      />,
-    );
+  it("(B) a typed balance with a later failed sync: the typed balance's own old time, never a browser 'later of'", () => {
+    render(<FreshnessLine bank={plaid(true, "refresh_failed")} fetchedAt={ago(10 * DAY)} now={NOW} />);
     const line = screen.getByTestId("text-bank-freshness-stale");
-    expect(line.textContent).toBe("Bank last updated 2 days ago");
+    expect(line.textContent).toBe("Last sync failed · Updated 10 d ago");
+    expect(screen.getByText("Last sync failed").className).toContain("text-bad");
+  });
+
+  it("a quiet feed says 'Out of date' without the alarm colour", () => {
+    render(<FreshnessLine bank={plaid(true, "old")} fetchedAt={ago(2 * DAY)} now={NOW} />);
+    const line = screen.getByTestId("text-bank-freshness-stale");
+    expect(line.textContent).toBe("Out of date · Updated 2 d ago");
     expect(line.getAttribute("data-reason")).toBe("old");
     expect(line.innerHTML).not.toContain("text-bad");
   });
 
-  it("an old typed-in balance says it needs an update, stating its age once", () => {
-    render(
-      <FreshnessLine
-        bank={{ asOfDate: ago(9 * DAY), source: "manual", lastContactAt: null, stale: true, staleReason: "manual_old" }}
-        now={NOW}
-      />,
-    );
+  it("an old typed-in balance says it needs an update", () => {
+    render(<FreshnessLine bank={{ source: "manual", stale: true, staleReason: "manual_old" }} fetchedAt={ago(9 * DAY)} now={NOW} />);
     const line = screen.getByTestId("text-bank-freshness-stale");
-    expect(line.textContent).toBe("Set manually 1 week ago · needs an update");
+    expect(line.textContent).toBe("Needs an update · Updated 9 d ago");
     expect(line.getAttribute("data-reason")).toBe("manual_old");
   });
 
-  it("a stale reason it does not know says 'May be out of date', never another reason's words", () => {
-    render(
-      <FreshnessLine
-        bank={{ asOfDate: ago(3 * HOUR), source: "manual", lastContactAt: null, stale: true, staleReason: null }}
-        now={NOW}
-      />,
-    );
+  it("a stale reason it does not know says 'Out of date', never another reason's words", () => {
+    render(<FreshnessLine bank={{ source: "manual", stale: true, staleReason: null }} fetchedAt={ago(3 * HOUR)} now={NOW} />);
     const line = screen.getByTestId("text-bank-freshness-stale");
-    expect(line.textContent).toBe("May be out of date · last updated 3 hours ago");
-    expect(line.textContent).not.toContain("Set manually");
+    expect(line.textContent).toBe("Out of date · Updated 3 h ago");
+    expect(line.getAttribute("data-reason")).toBe("unknown");
   });
 });
 

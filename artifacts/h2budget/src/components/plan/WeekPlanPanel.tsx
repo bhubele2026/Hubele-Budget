@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetMe, useListMembers } from "@workspace/api-client-react";
+import { ownerOf } from "@/hooks/useOwner";
 import { useUpdateAllowancePlan } from "@workspace/api-client-react/features";
 import {
   getListAllowancePlansQueryKey,
@@ -145,12 +146,13 @@ export function WeekPlanPanel() {
   const suggestedWeekly = toAmount(suggested.weekly);
   const currentWeekly = toAmount(shared?.amount);
   const matches = matchesSuggestion(suggestedWeekly, currentWeekly);
-  const meData = me.data as { isOwner?: boolean } | undefined;
-  const canSet = meData ? meData.isOwner === true : !me.isLoading;
+  // (Q4) Owner is true, false or unknown: unknown draws a placeholder, never the denial.
+  const owner = ownerOf(me);
+  const canSet = owner === true;
   const memberList = (members.data ?? []) as Array<{ id: string; isOwner?: boolean; displayName?: string | null; email?: string | null }>;
   const ownerMember = memberList.find((m) => m.isOwner);
   const ownerName = ownerMember?.displayName ?? ownerMember?.email ?? "the owner";
-  const sourceWord = shared?.source === "derived" ? "suggested" : meData && !meData.isOwner ? `set by ${ownerName}` : "set by you";
+  const sourceWord = shared?.source === "derived" ? "suggested" : owner === "unknown" ? "" : owner === false ? `set by ${ownerName}` : "set by you";
   const nameOf = (id: string | null) => {
     const m = memberList.find((x) => x.id === id);
     return m?.displayName ?? m?.email ?? "A member";
@@ -232,7 +234,9 @@ export function WeekPlanPanel() {
           </p>
 
           <div className="mt-4">
-            {canSet ? (
+            {owner === "unknown" ? (
+              <div className="skeleton h-14 w-full rounded-control" aria-busy="true" data-testid="owner-unknown" />
+            ) : canSet ? (
               <div className="flex items-end gap-3">
                 <label className="min-w-0 flex-1">
                   <span className={fieldLabel}>Set your own</span>

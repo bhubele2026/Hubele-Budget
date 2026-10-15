@@ -31,9 +31,24 @@ describe("plan line and household wording (W4)", () => {
     expect(amexPlanLine({ ...base, kind: "debt" })!.amount).toBeNull();
   });
   it("the household line is the household's plan, not the card's budget", () => {
-    const hc = { weeklyPlan: "560.00", monthlyPlan: "45.00", unfiled: "0.00", link: "/spending/week" };
+    const hc = {
+      weeklyPlan: "560.00", weeklyKnown: "560.00", weeklyUnresolved: "0.00",
+      monthlyPlan: "45.00", monthlyKnown: "45.00", monthlyUnresolved: "0.00",
+      unfiled: "0.00", link: "/spending/week",
+    };
+    // (hh-split) nothing unconfirmed: the line says nothing about it
     expect(householdLine(hc, "wk", true)).toBe("Adds $560.00 to this week's household plan");
     expect(householdLine(hc, "mo", true)).toBe("Adds $560.00 weekly and $45.00 monthly to the household plan");
+    // the weekly part: the server's own unconfirmed figure, said exactly
+    const wk = { ...hc, weeklyKnown: "520.00", weeklyUnresolved: "40.00" };
+    expect(householdLine(wk, "wk", true)).toBe("Adds $560.00 to this week's household plan (includes $40.00 unconfirmed)");
+    expect(householdLine(wk, "mo", true)).toBe("Adds $560.00 weekly (includes $40.00 unconfirmed) and $45.00 monthly to the household plan");
+    // a past week reads as the period's two figures, with the same weekly part
+    expect(householdLine(wk, "wk", false)).toBe("Adds $560.00 weekly (includes $40.00 unconfirmed) and $45.00 monthly to the household plan");
+    // the monthly part says it only when the monthly figure has one
+    const mo = { ...hc, monthlyKnown: "30.00", monthlyUnresolved: "15.00" };
+    expect(householdLine(mo, "mo", true)).toBe("Adds $560.00 weekly and $45.00 monthly (includes $15.00 unconfirmed) to the household plan");
+    expect(householdLine(mo, "wk", true)).toBe("Adds $560.00 to this week's household plan");
   });
 });
 

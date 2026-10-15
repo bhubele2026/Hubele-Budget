@@ -149,10 +149,10 @@ describe("(#825) buildBalanceWindow weekly dollar values", () => {
   // AFTER both the last Saturday bucket and today to prove later txns
   // are excluded from earlier buckets.
   const transactions: BalanceWindowTxn[] = [
-    { occurredOn: "2026-05-05", amount: 100 }, // after May 2 bucket
-    { occurredOn: "2026-05-12", amount: 200 },
-    { occurredOn: "2026-05-20", amount: 50 },
-    { occurredOn: "2026-05-28", amount: 500 }, // after today (May 27)
+    { occurredOn: "2026-05-05", amount: 100, source: "amex" }, // after May 2 bucket
+    { occurredOn: "2026-05-12", amount: 200, source: "amex" },
+    { occurredOn: "2026-05-20", amount: 50, source: "amex" },
+    { occurredOn: "2026-05-28", amount: 500, source: "amex" }, // after today (May 27)
   ];
 
   const balanceAtEndOf = makeAmexBalanceAtEndOf({
@@ -279,7 +279,7 @@ describe("(W4) buildBalanceWindow is the last 12 months, ending today", () => {
 // (W6) No flat line where there is no data.
 describe("(W6) the series starts at the first real week", () => {
   const now = new Date(2026, 9, 14, 12);
-  const build = (transactions: Array<{ occurredOn: string; amount: number }>) =>
+  const build = (transactions: BalanceWindowTxn[]) =>
     buildBalanceWindow({
       anchorPresent: true,
       currentMonth: monthKeyOf(now),
@@ -289,7 +289,7 @@ describe("(W6) the series starts at the first real week", () => {
     })!;
 
   it("keeps the 12-month axis but plots nothing before the tracking start", () => {
-    const w = build([{ occurredOn: "2026-05-05", amount: 10 }]);
+    const w = build([{ occurredOn: "2026-05-05", amount: 10, source: "amex" }]);
     expect(w.subtitle).toBe("Nov 2025 – Oct 2026");
     expect(w.domain[0]).toBe(localMidnightMs(2025, 10, 1));
     expect(w.series[0]!.x).toBe(localMidnightMs(2026, 4, 2)); // the Saturday before the first transaction
@@ -297,8 +297,78 @@ describe("(W6) the series starts at the first real week", () => {
     expect(w.noHistoryBefore).toBe("May 2026");
   });
   it("a card whose first transaction is later starts later", () => {
-    const w = build([{ occurredOn: "2026-08-12", amount: 10 }]); // a Wednesday
+    const w = build([{ occurredOn: "2026-08-12", amount: 10, source: "amex" }]); // a Wednesday
     expect(w.series[0]!.x).toBe(localMidnightMs(2026, 7, 8));
     expect(w.noHistoryBefore).toBe("August 2026");
+  });
+});
+
+// ⭐ (Q3) Plaid card rows (bank sign: a purchase negative) plot the same line as
+// the workbook rows above: each point is the prior month's end plus that
+// month's OWED changes through the point, posted rows only.
+describe("(Q3) buildBalanceWindow with Plaid card rows", () => {
+  const now = new Date(2026, 4, 27, 14, 30, 0);
+  const currentMonth: MonthKey = monthKeyOf(now);
+  const anchor = { balance: 1000, asOf: "2026-04-30" };
+  const transactions: BalanceWindowTxn[] = [
+    { occurredOn: "2026-05-05", amount: -100, source: "plaid:amex" }, // purchase +100
+    { occurredOn: "2026-05-12", amount: -200, source: "plaid:amex" }, // purchase +200
+    { occurredOn: "2026-05-20", amount: 150, source: "plaid:amex" }, //  payment  −150
+    { occurredOn: "2026-05-26", amount: -40, source: "plaid:amex", pending: true }, // pending: not walked
+  ];
+  const balanceAtEndOf = makeAmexBalanceAtEndOf({ anchor, amexTransactions: transactions, fallbackMonth: currentMonth });
+  const w = buildBalanceWindow({ anchorPresent: true, currentMonth, balanceAtEndOf, transactions, now })!;
+  const byDay = new Map(w.series.map((p) => [localDayKey(p.x), p.balance]));
+
+  it("purchases raise the line and a payment lowers it", () => {
+    expect(byDay.get("2026-05-02")).toBe(1000);
+    expect(byDay.get("2026-05-09")).toBe(1100);
+    expect(byDay.get("2026-05-16")).toBe(1300);
+    expect(byDay.get("2026-05-23")).toBe(1150);
+  });
+
+  it("today's point leaves the pending row out and equals the month-end helper", () => {
+    const last = w.series[w.series.length - 1]!;
+    expect(localDayKey(last.x)).toBe("2026-05-27");
+    expect(last.balance).toBe(1150);
+    expect(balanceAtEndOf(currentMonth)).toBe(1150);
+  });
+});
+
+// ⭐ (F6 round 5, review finding 1 — merged onto Q3's walk) The chart's
+// intra-month sums read only the rows that count, as the ending-balance tile
+// does: its today point equals the tile again, and an expired hold lifts no
+// weekly point. Synthetic Plaid rows (bank sign): the card read 10/03 at
+// 1,000.00; 10/01 A 10 posted; 10/05 H 52 an expired hold; 10/06 B 20 posted;
+// today Thu 10/15. Round 4: the tile 1,020, the chart's Oct 10 and today points 1,072.
+describe("(F6 round 5) the 12-month chart leaves out an expired hold, as the tile does", () => {
+  const now = new Date(2026, 9, 15, 12, 0, 0);
+  const anchor = { balance: 1000, asOf: "2026-10-03T15:00:00Z" };
+  const rows: BalanceWindowTxn[] = [
+    { occurredOn: "2026-10-01", amount: "-10.00", source: "plaid:amex" },
+    { occurredOn: "2026-10-05", amount: "-52.00", source: "plaid:amex", pending: true, expiredHold: true },
+    { occurredOn: "2026-10-06", amount: "-20.00", source: "plaid:amex" },
+  ];
+  const windowOf = (txns: BalanceWindowTxn[]) => {
+    const balanceAtEndOf = makeAmexBalanceAtEndOf({ anchor, amexTransactions: txns });
+    return { balanceAtEndOf, w: buildBalanceWindow({ anchorPresent: true, currentMonth: monthKeyOf(now), balanceAtEndOf, transactions: txns, now })! };
+  };
+  const pointOn = (w: ReturnType<typeof buildBalanceWindow>, day: string) => w!.series.find((p) => localDayKey(p.x) === day)?.balance;
+
+  it("today's point equals the ending-balance tile: 1,020.00 (round 4: 1,072.00)", () => {
+    const { balanceAtEndOf, w } = windowOf(rows);
+    expect(pointOn(w, "2026-10-15")).toBe(1020);
+    expect(pointOn(w, "2026-10-15")).toBe(balanceAtEndOf(monthKeyOf(now)));
+    // The weekly points: Sat 10/03 = 990 + 10; Sat 10/10 = + 20 (the hold adds nothing).
+    expect(pointOn(w, "2026-10-03")).toBe(1000);
+    expect(pointOn(w, "2026-10-10")).toBe(1020);
+  });
+
+  it("the server's flag alone (no pending flag on the row) keeps it out; the same 52 posted and counted reads 1,072.00", () => {
+    const flagOnly = windowOf(rows.map(({ pending: _p, ...r }) => r));
+    expect(pointOn(flagOnly.w, "2026-10-15")).toBe(1020);
+    const { balanceAtEndOf, w } = windowOf(rows.map(({ pending: _p, expiredHold: _e, ...r }) => r));
+    expect(pointOn(w, "2026-10-15")).toBe(1072);
+    expect(balanceAtEndOf(monthKeyOf(now))).toBe(1072);
   });
 });

@@ -114,6 +114,10 @@ const FORECAST_BASE = {
 // transition (so the prior register stays on screen) while the
 // horizon button itself flips to the new value immediately.
 const lastHorizonDays = { value: -1 };
+/** (Q5) What the cash-signal query holds: the horizon it answered, and whether that is another key's answer. */
+const cashHeld: { value: { horizonDays: number; fromDate?: string } | undefined; placeholder: boolean } = { value: undefined, placeholder: false };
+/** (Q5 fix) Whether the /forecast LIST query holds another horizon's answer (keepPreviousData). */
+const listHeld = { placeholder: false };
 
 vi.mock("@workspace/api-client-react", () => {
   const noopMutation = () => ({
@@ -124,9 +128,13 @@ vi.mock("@workspace/api-client-react", () => {
   return {
     useGetForecast: (params: { days?: number } = {}) => {
       lastHorizonDays.value = params.days ?? -1;
-      return { data: FORECAST_BASE, isLoading: false };
+      return { data: FORECAST_BASE, isLoading: false, isPlaceholderData: listHeld.placeholder };
     },
-    useGetForecastCashSignal: () => ({ data: undefined, isLoading: false }),
+    useGetForecastCashSignal: () => ({
+      data: cashHeld.value && { ...cashHeld.value, bankToday: null, lowestProjected: "0.00", lowestDate: null, cashBuffer: "500.00", status: "no_data", maxSafeExtra: "0.00", account: { via: "unresolved" }, daily: [], events: [] },
+      isLoading: false,
+      isPlaceholderData: cashHeld.placeholder,
+    }),
     useUpsertForecastResolution: noopMutation,
     useDeleteForecastResolution: noopMutation,
     useCloseForecastMonth: noopMutation,
@@ -214,6 +222,9 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 4, 15, 12, 0, 0));
   lastHorizonDays.value = -1;
+  cashHeld.value = undefined;
+  cashHeld.placeholder = false;
+  listHeld.placeholder = false;
 });
 
 afterEach(() => {
@@ -253,6 +264,70 @@ describe("Forecast — horizon tab switching is instant (#618)", () => {
     // horizon — confirming the click did flow through to the fetch
     // layer (just deferred off the critical path).
     expect(lastHorizonDays.value).toBe(365);
+  });
+
+  it("(Q5) the previous horizon's curve is never shown unlabelled: it says which days it is while the new ones load", () => {
+    cashHeld.value = { horizonDays: 90 };
+    renderPage();
+    // At rest the curve is the asked horizon's: nothing to say.
+    expect(screen.queryByTestId("forecast-other-scope")).toBeNull();
+    // The 1 YEAR answer is out; the query still holds the 90-day one.
+    cashHeld.placeholder = true;
+    fireEvent.click(screen.getByTestId("horizon-365"));
+    expect(screen.getByTestId("forecast-other-scope").textContent).toBe("Showing 90 days while 365 days loads.");
+    // The new horizon's own answer lands: the label goes.
+    cashHeld.value = { horizonDays: 365 };
+    cashHeld.placeholder = false;
+    fireEvent.click(screen.getByTestId("horizon-90"));
+    fireEvent.click(screen.getByTestId("horizon-365"));
+    expect(screen.queryByTestId("forecast-other-scope")).toBeNull();
+  });
+
+  it("(Q5 fix) the register LIST is labelled too: the cash-signal answer landing first does not leave the 90-day list unlabelled under 1 YEAR", () => {
+    // The cash signal already holds the 365 answer; the list query is still the 90-day placeholder.
+    cashHeld.value = { horizonDays: 90 };
+    renderPage();
+    expect(screen.queryByTestId("forecast-other-scope")).toBeNull();
+    cashHeld.value = { horizonDays: 365 };
+    listHeld.placeholder = true;
+    fireEvent.click(screen.getByTestId("horizon-365"));
+    expect(screen.getByTestId("forecast-other-scope").textContent).toBe("Showing 90 days while 365 days loads.");
+    // The list's own answer lands: the label goes.
+    listHeld.placeholder = false;
+    fireEvent.click(screen.getByTestId("horizon-90"));
+    fireEvent.click(screen.getByTestId("horizon-365"));
+    expect(screen.queryByTestId("forecast-other-scope")).toBeNull();
+  });
+
+  it("(Q5 fix) /review?month=YYYY-MM opens that month (the Banking to-review chip's scope); a future or malformed month falls back to this month", () => {
+    window.history.replaceState(null, "", "/review?month=2026-04");
+    const a = render(<QueryClientProvider client={new QueryClient()}><ForecastPage mode="review" /></QueryClientProvider>);
+    expect(screen.getByTestId("select-month-filter").textContent).toContain("2026-04");
+    a.unmount();
+    for (const bad of ["2026-09", "nope", "2026-13"]) {
+      window.history.replaceState(null, "", `/review?month=${bad}`);
+      const b = render(<QueryClientProvider client={new QueryClient()}><ForecastPage mode="review" /></QueryClientProvider>);
+      expect(screen.getByTestId("select-month-filter").textContent, bad).toContain("2026-05");
+      b.unmount();
+    }
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("(Final W3) an older Review month says Loading while the previous window is held, never 'Review is empty · 0 pending'", () => {
+    window.history.replaceState(null, "", "/review?month=2026-03");
+    listHeld.placeholder = true;
+    const a = render(<QueryClientProvider client={new QueryClient()}><ForecastPage mode="review" /></QueryClientProvider>);
+    expect(screen.getByTestId("review-month-loading").textContent).toContain("Loading 2026-03");
+    expect(screen.queryByTestId("review-empty-state")).toBeNull();
+    expect(screen.queryByTestId("card-from-bank")).toBeNull();
+    a.unmount();
+    // Its own window landed (not a placeholder): the page answers for the month.
+    listHeld.placeholder = false;
+    const b = render(<QueryClientProvider client={new QueryClient()}><ForecastPage mode="review" /></QueryClientProvider>);
+    expect(screen.queryByTestId("review-month-loading")).toBeNull();
+    expect(screen.getByTestId("card-from-bank")).toBeTruthy();
+    b.unmount();
+    window.history.replaceState(null, "", "/");
   });
 
   // Regression: short plan registers (the typical 90D / few-dozen-row

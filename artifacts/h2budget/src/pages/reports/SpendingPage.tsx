@@ -121,7 +121,7 @@ export default function SpendingPage() {
         from={fmtISO(fromDate)}
         to={fmtISO(today)}
         txns={rangeTxns}
-        categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        categories={categories?.map((c) => ({ id: c.id, name: c.name }))}
       />
     </ReportShell>
   );
@@ -192,7 +192,7 @@ function UncategorizedBanner({
 }: {
   facts: SpendingFacts;
   uncategorizedTxns: Transaction[];
-  categories: { id: string; name: string }[];
+  categories: { id: string; name: string }[] | undefined;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -316,14 +316,14 @@ function SpendingSection({
   from: string;
   to: string;
   txns: Transaction[];
-  categories: { id: string; name: string }[];
+  categories: { id: string; name: string }[] | undefined;
 }) {
   const { data: facts, isLoading } = useGetReportsSpendingFacts({ from, to });
   // (#dow-drill) Clicked weekday bar → reveal that day's top merchants.
   const [selectedDow, setSelectedDow] = useState<number | null>(null);
 
   // (PR7) The server's own rule decides which rows are uncategorized spend.
-  const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
+  const categoryIds = useMemo(() => (categories ?? []).map((c) => c.id), [categories]);
   // Real uncategorized rows (with IDs) for the Recategorize popover, scoped to
   // the facts' (possibly floor-clamped) range so the count matches the banner.
   const uncategorizedTxns = useMemo(() => {

@@ -51,6 +51,7 @@ vi.mock("@/components/matched-rule-chip", () => ({ MatchedRuleChip: () => null }
 vi.mock("@/components/add-card-to-avalanche", () => ({ AddToAvalanche: () => <span>add</span> }));
 
 const state = vi.hoisted(() => ({
+  wideTxns: undefined as Array<Record<string, unknown>> | undefined, // the 12-month read; undefined = still loading
   monthTxns: undefined as Array<Record<string, unknown>> | undefined,
   items: undefined as unknown[] | undefined,
   payoff: undefined as unknown,
@@ -124,8 +125,8 @@ vi.mock("@workspace/api-client-react", () => {
     getGetAmexWeeklyPayoffQueryKey: () => ["/api/amex/weekly-payoff"],
     useListTransactions: (params: { limit?: number } = {}) => {
       state.listParams.push(params as Record<string, unknown>);
-      if ((params.limit ?? 0) >= 5000) return { data: undefined, isLoading: true };
-      return { data: state.monthTxns, isLoading: state.monthTxns === undefined };
+      if ((params.limit ?? 0) >= 5000) return { data: state.wideTxns, isLoading: state.wideTxns === undefined, isSuccess: state.wideTxns !== undefined, isPlaceholderData: false, isFetching: false };
+      return { data: state.monthTxns, isLoading: state.monthTxns === undefined, isSuccess: state.monthTxns !== undefined, isPlaceholderData: false, isFetching: false };
     },
     useListCategories: () => ({ data: [] }),
     useListDebts: () => ({ data: [] }),
@@ -179,6 +180,7 @@ beforeEach(() => {
   window.localStorage.clear();
   window.history.replaceState(null, "", "/amex");
   state.monthTxns = ROWS();
+  state.wideTxns = undefined;
   state.items = ITEMS;
   state.payoff = PAYOFF;
   state.listParams = [];
@@ -223,7 +225,7 @@ describe("Amex page — the panel grid (C10)", () => {
     expect(plat.textContent).toContain("••1005");
     // (W7) Owed and purchases are the server's Summary figures (components/amexCardBand.test.tsx).
     expect(plat.textContent).toContain("Owed");
-    expect(plat.textContent).toContain("cleared");
+    expect(plat.textContent).not.toContain("cleared"); // (Q6b) the band is a selector: name + owed
     // Add to Avalanche rides on every card panel (AX-27), not on "All cards".
     expect(within(plat).getByText("add")).toBeTruthy();
     expect(within(tile("ext-gold")).getByText("add")).toBeTruthy();
@@ -246,7 +248,7 @@ describe("Amex page — the panel grid (C10)", () => {
     // Both row layouts are mounted (AX-31), inside the ledger panel.
     expect(within(ledger).getByTestId("row-amex-p1")).toBeTruthy();
     expect(within(ledger).getByTestId("row-amex-mobile-p1")).toBeTruthy();
-    fireEvent.click(within(screen.getByTestId("row-amex-p1")).getByRole("checkbox", { name: "Select" }));
+    fireEvent.click(within(screen.getByTestId("row-amex-p1")).getByRole("checkbox", { name: /^Select / }));
     const bar = await screen.findByTestId("amex-bulk-bar");
     expect(bar.style.top).toBe("var(--page-sticky-top, 0px)");
     expect(ledger.contains(bar)).toBe(true);
@@ -331,8 +333,24 @@ describe("D3 — the card scope survives a cold load", () => {
     expect(tile("ext-plat").className).toContain("ring-2");
   });
 
+  it("(Q6b r3 review B) a card the band knows but with no rows yet stays chosen", async () => {
+    window.history.replaceState(null, "", "/amex?accountId=ext-new");
+    state.items = [{ ...ITEMS[0]!, accounts: [...ITEMS[0]!.accounts, { id: "row-new", accountId: "ext-new", name: "Blue Cash", mask: "3003", type: "credit", subtype: "credit card" }] }];
+    state.payoff = { ...PAYOFF, cards: [...PAYOFF.cards, { ...PAYOFF.cards[0]!, accountId: "ext-new", plaidAccountId: "row-new", name: "Blue Cash", weekCharges: 0, chargeCount: 0 }] };
+    state.wideTxns = ROWS(); // no row on ext-new anywhere in 12 months
+    render(tree());
+    // Its own (empty) ledger: no other card's rows, and the band's tile for it stays selected.
+    await waitFor(() => expect(tile("ext-new")?.className ?? "").toContain("ring-2"));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("row-amex-p1")).toBeNull();
+    expect(screen.queryByTestId("row-amex-g1")).toBeNull();
+    expect(tile("ext-new").className).toContain("ring-2");
+    expect(window.location.search).toContain("ext-new");
+  });
+
   it("standalone: a card that is not on this page still falls back to All cards once the options are known", async () => {
     window.history.replaceState(null, "", "/amex?accountId=ext-gone");
+    state.wideTxns = ROWS(); // the 12-month read has answered too
     render(tree());
     await ready();
     await waitFor(() => expect(screen.getByTestId("row-amex-g1")).toBeTruthy());

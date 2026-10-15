@@ -90,7 +90,8 @@ export function ResultBlock({ result, categoryName }: { result: AffordResult; ca
       </span>
       <ul className="flex flex-col" data-testid="afford-deltas">
         <Delta label="Free until payday" before={baseline.availableUntilPayday} after={proposed.availableUntilPayday} data-testid="delta-payday" />
-        <Delta label="This week" tail="left" before={baseline.remainingWeek} after={proposed.remainingWeek} data-testid="delta-week" />
+        {/* (Q5 fix) The same figure the Room line and the week tile say: the plan against what counts toward it. */}
+        <Delta label="This week's plan" tail="left" before={baseline.remainingWeekKnown} after={proposed.remainingWeekKnown} data-testid="delta-week" />
         {result.category && (
           <Delta
             label={categoryName ?? "Category"}
@@ -221,13 +222,18 @@ export default function AffordSheet({
         : null;
 
   // Any change to the question clears the answer, so a result never sits beside inputs it was not made for.
+  // (Q4) And a late answer to an OLD question is dropped: each check takes a ticket, and any change
+  // to the inputs (or closing the sheet) invalidates every ticket out.
+  const asked = useRef(0);
   const touch = () => {
+    asked.current += 1;
     setResult(null);
     setProblem(null);
     setAdded(false);
   };
 
   useEffect(() => {
+    asked.current += 1;
     if (!open) return;
     const id = window.setTimeout(() => amountRef.current?.focus(), 0);
     return () => window.clearTimeout(id);
@@ -237,6 +243,7 @@ export default function AffordSheet({
     setTried(true);
     if (amountError || parsed == null) return;
     setProblem(null);
+    const ticket = ++asked.current;
     try {
       const r = await evaluate.mutateAsync({
         data: {
@@ -246,8 +253,10 @@ export default function AffordSheet({
           ...(member ? { member } : {}),
         },
       });
+      if (ticket !== asked.current) return;
       setResult(r);
     } catch (e) {
+      if (ticket !== asked.current) return;
       setResult(null);
       setProblem(refusal(e));
     }

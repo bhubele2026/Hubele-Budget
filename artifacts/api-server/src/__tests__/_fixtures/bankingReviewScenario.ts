@@ -181,7 +181,8 @@ export const EXPECTED_OCTOBER: Partial<Record<RowKey, string>> = {
 
 /** October 1–14 by hand (see the header). */
 export const OCTOBER_TOTALS = {
-  cashFlow: { moneyIn: "2425.00", moneyOut: "2219.19", net: "205.81", count: 23, pendingNet: "-6.50", supersededExcluded: 1, otherExcluded: 0 },
+  // (Q1) pendingCount 1: STARBUCKS counts; SHELL's replaced pending row is not one.
+  cashFlow: { moneyIn: "2425.00", moneyOut: "2219.19", net: "205.81", count: 23, pendingNet: "-6.50", pendingCount: 1, supersededExcluded: 1, otherExcluded: 0 },
   // (F2) Every as-planned row paid its plan exactly: variance 0.00 on each side.
   asPlanned: { count: 3, net: "1904.51", pendingNet: "0.00", withoutPlanDetail: 0, varianceIn: "0.00", varianceOut: "0.00" },
   amountDifference: { count: 4, moneyIn: "0.00", moneyOut: "643.40", net: "-643.40", pendingNet: "0.00", differenceTotal: "233.40" },

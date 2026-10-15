@@ -478,6 +478,7 @@ describe("Forecast — the bank card's snapshot line takes the server's freshnes
     } as unknown as typeof FORECAST_BASE;
   };
   const staleBank = (asOfDate: string) => ({
+    bankConfidence: { fetchedAt: asOfDate },
     bank: {
       balance: "5000",
       asOfDate,
@@ -489,13 +490,13 @@ describe("Forecast — the bank card's snapshot line takes the server's freshnes
     },
   });
 
-  it("says 'Refresh failed' when the spine judges this snapshot stale", () => {
+  it("says 'Last sync failed' when the spine judges this snapshot stale", () => {
     withSnapshot();
     spineData = staleBank(SNAPSHOT_AT);
     renderPage();
     const meta = screen.getByTestId("text-bank-snapshot-meta");
     expect(within(meta).getByTestId("text-bank-freshness-stale").textContent).toContain(
-      "Refresh failed",
+      "Last sync failed",
     );
   });
 
@@ -649,6 +650,7 @@ describe("Forecast — the bank line's verdict: the main path, and one instant w
     } as unknown as typeof FORECAST_BASE;
   };
   const bankVerdict = (asOfDate: string, stale: boolean) => ({
+    bankConfidence: { fetchedAt: asOfDate },
     bank: {
       balance: "5000",
       asOfDate,
@@ -675,7 +677,7 @@ describe("Forecast — the bank line's verdict: the main path, and one instant w
     renderPage();
     const meta = screen.getByTestId("text-bank-snapshot-meta");
     expect(within(meta).getByTestId("text-bank-freshness-stale").textContent).toContain(
-      "Refresh failed",
+      "Last sync failed",
     );
   });
 });

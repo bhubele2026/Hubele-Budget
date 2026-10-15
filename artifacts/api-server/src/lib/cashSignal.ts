@@ -2,6 +2,7 @@ import { recurringItemsTable } from "@workspace/db";
 import { rollForwardBalance, walkLedger } from "@workspace/avalanche-core";
 import { buildForecastLedger, type ForecastLedger } from "./forecastLedger";
 import type { HookPayoff, PlanOverride } from "./everydayHooks";
+import type { CorrectionOverlay } from "./correctionOverlay";
 import type { SnapshotAccountResolution } from "./resolveSnapshotAccount";
 import { householdTodayISO } from "./householdClock";
 import { expiredHoldsRuleOn } from "./supersededPending";
@@ -473,6 +474,21 @@ export async function computeCashSignalWithPlan(
   return buildCashSignalDetailed(householdId, ownerUserId, { ...opts, planOverride });
 }
 
+/**
+ * ⭐ (Q1) The cash signal as if a proposed fix were written — the correction
+ * dry run (`POST /review/proposals/:key/apply?dryRun=1`). Built on its own
+ * (never shared: the share key does not carry the overlay), by the same ledger
+ * rules (`buildForecastLedger`'s `correctionOverlay`); nothing is written.
+ */
+export async function computeCashSignalWithOverlay(
+  householdId: string,
+  ownerUserId: string,
+  opts: { horizonDays?: number; fromDate?: string },
+  correctionOverlay: CorrectionOverlay,
+): Promise<DetailedCashSignal> {
+  return buildCashSignalDetailed(householdId, ownerUserId, { ...opts, correctionOverlay });
+}
+
 async function buildCashSignalDetailed(
   householdId: string,
   ownerUserId: string,
@@ -480,6 +496,7 @@ async function buildCashSignalDetailed(
     horizonDays?: number;
     fromDate?: string;
     planOverride?: PlanOverride | null;
+    correctionOverlay?: CorrectionOverlay | null;
   },
 ): Promise<DetailedCashSignal> {
   const ledger = await buildForecastLedger(householdId, ownerUserId, opts);

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { PeriodBreakdown } from "@workspace/api-client-react";
+import { WEEK_FIGURE_WORDS } from "@workspace/avalanche-core/glossary";
 import { formatCurrency } from "@/lib/utils";
 import { BiggestCharges } from "@/components/spending/BiggestCharges";
 import { monthWords, type PeriodView } from "./periodDates";
@@ -44,12 +45,12 @@ export function Details({ data, view }: { data: PeriodBreakdown; view: PeriodVie
           </div>
           {!isZero(data.unresolved.amount) ? (
             <div className="flex justify-between gap-3">
-              <dt className="text-neutral-700">Unconfirmed (not counted yet)</dt>
+              <dt className="text-neutral-700">{WEEK_FIGURE_WORDS.unresolved} (not counted yet)</dt>
               <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-unconfirmed">{formatCurrency(data.unresolved.amount)}</dd>
             </div>
           ) : null}
           <div className="flex justify-between gap-3">
-            <dt className="text-neutral-700">Counted for safe to spend</dt>
+            <dt className="text-neutral-700">{WEEK_FIGURE_WORDS.cautious}</dt>
             <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-actual">{formatCurrency(data.actual)}</dd>
           </div>
           {data.carryOver != null && !isZero(data.carryOver) ? (

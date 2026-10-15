@@ -1,20 +1,11 @@
 import { useEffect, useState } from "react";
 import type { SpineBank } from "@workspace/api-client-react";
-import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
+import { bankFreshWords, freshKindOf } from "@/lib/bankFreshWords";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import type { DataState } from "@/lib/queryState";
 import { btnLink, errorBanner } from "@/ui";
 
-type BankFreshnessFields = Pick<
-  SpineBank,
-  "asOfDate" | "source" | "lastContactAt" | "stale" | "staleReason"
->;
-
-function later(a: string | null, b: string | null): string | null {
-  if (!a) return b;
-  if (!b) return a;
-  return Date.parse(a) > Date.parse(b) ? a : b;
-}
+type BankFreshnessFields = Pick<SpineBank, "source" | "stale" | "staleReason">;
 
 /**
  * Re-renders once a minute so relative times keep moving. Skipped when `now` is
@@ -42,66 +33,36 @@ export function moneyFace(value: string | number | null | undefined): string {
 }
 
 /**
- * ⭐ HOW FRESH IS THE BANK BALANCE? Read from the spine; the server decides.
+ * ⭐ HOW FRESH IS THE BANK BALANCE? The server decides; the words are `lib/bankFreshWords`.
  *
- * Fresh, it is the calm line the app always showed: "Last auto-updated …" or
- * "Set manually …". Stale, the words say why. Only a failed refresh takes the
- * alarm colour, because only that one means something is wrong rather than
- * merely old. Status is never colour alone.
- *
- * "Last updated" is the last time the bank told us anything — a balance re-read
- * or a successful sync — the same moment the server judges staleness by.
+ * "Updated 2 h ago" is the SERVER's `fetchedAt` (`spine.bankConfidence.fetchedAt`, or the
+ * review's `freshness.fetchedAt`: the same instant) — the browser never takes a "later of"
+ * itself. Stale, a status leads ("Last sync failed", "Out of date", "Needs an update"); only a
+ * failed sync takes the alarm colour. Status is never colour alone.
  */
 export function FreshnessLine({
   bank,
+  fetchedAt,
   now,
 }: {
   bank: BankFreshnessFields | null | undefined;
+  fetchedAt: string | null | undefined;
   now?: Date;
 }) {
   const at = useMinuteTick(now);
 
-  if (!bank || !bank.source || !bank.asOfDate) return null;
+  if (!bank || !bank.source) return null;
 
-  if (!bank.stale) {
-    return <BankSnapshotFreshness source={bank.source} at={bank.asOfDate} now={at} />;
+  const f = bankFreshWords({ kind: freshKindOf(bank.stale, bank.staleReason), fetchedAt, now: at.getTime() });
+  const updated = f.updated ?? "Not updated yet";
+  if (!f.status) {
+    return <div data-testid="text-bank-snapshot-freshness">{updated}</div>;
   }
-
-  const lastHeard = formatRelativeTime(later(bank.asOfDate, bank.lastContactAt), at);
-
-  switch (bank.staleReason) {
-    case "refresh_failed":
-      return (
-        <span data-testid="text-bank-freshness-stale" data-reason="refresh_failed">
-          <span className="font-semibold text-bad-ink">Refresh failed</span> · last updated{" "}
-          {lastHeard}
-        </span>
-      );
-    case "old":
-      return (
-        <span data-testid="text-bank-freshness-stale" data-reason="old">
-          <span className="font-semibold text-neutral-600">Bank last updated {lastHeard}</span>
-        </span>
-      );
-    case "manual_old":
-      return (
-        <span data-testid="text-bank-freshness-stale" data-reason="manual_old">
-          <span className="font-semibold text-neutral-600">
-            Set manually {formatRelativeTime(bank.asOfDate, at)}
-          </span>{" "}
-          · needs an update
-        </span>
-      );
-    default:
-      // A reason this build does not know yet: say it may be out of date, and
-      // never borrow another reason's words.
-      return (
-        <span data-testid="text-bank-freshness-stale" data-reason="unknown">
-          <span className="font-semibold text-neutral-600">May be out of date</span> · last
-          updated {lastHeard}
-        </span>
-      );
-  }
+  return (
+    <span data-testid="text-bank-freshness-stale" data-reason={bank.staleReason ?? "unknown"}>
+      <span className={f.alarm ? "font-semibold text-bad-ink" : "font-semibold text-neutral-600"}>{f.status}</span> · {updated}
+    </span>
+  );
 }
 
 /**

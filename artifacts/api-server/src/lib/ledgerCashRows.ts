@@ -113,6 +113,12 @@ export function toCashRow(t: TransactionRow): CashRow {
     plaidTransactionId: t.plaidTransactionId ?? null,
     // (PR-D) A logged payment a bank row confirmed adds 0: the bank row counts.
     claimConfirmed: t.paymentState === "confirmed" && !!t.confirmedByTxnId,
+    // (F6 round 5) What the row says about itself: a payment or a transfer is never a hold's reversal.
+    isTransfer: t.isTransfer,
+    debtId: t.debtId,
+    isExternalCardPayment: t.isExternalCardPayment,
+    pfcPrimary: t.pfcPrimary,
+    pfcDetailed: t.pfcDetailed,
   };
 }
 

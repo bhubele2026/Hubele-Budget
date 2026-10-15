@@ -54,7 +54,13 @@
 // `usual` is the median of the category's amount over the prior periods
 // (`medianCents`, the ways-back helper): 8 weeks for a week, 3 months for a
 // month; a period with nothing counts as 0, a period before tracking began is
-// left out, and with none left `usual` is null.
+// left out, and with none left `usual` is null. ⭐ (Q1) With fewer than
+// `USUAL_MIN_HISTORY_PERIODS` (2) of those periods holding rows of the
+// category, `usual` / `usualFullPeriod` / `aboveUsual` are null and
+// `historyPeriods` says how many there were ("Not enough history").
+// ⭐ (Final #10) And fewer than HALF of them (`usualHistoryNeeded`: 4 of 8
+// weeks, 2 of 3 months): rows in 2 of 8 weeks read "usual $0.00 · above
+// usual" (six empty weeks counted 0) — now "Not enough history".
 //
 // ⭐ (F3) A FAIR "USUAL" FOR A PERIOD STILL RUNNING. Month-to-date against three
 // FULL months always read "under usual", so "Why over?" showed nothing above
@@ -74,7 +80,7 @@ import {
   type MovementCoverage,
 } from "./householdMoney";
 import { addDaysISO, monthBounds, samePointInPeriod, weekBounds } from "./householdTime";
-import { medianCents } from "./waysBack";
+import { USUAL_MIN_HISTORY_PERIODS, hasUsualHistory, medianCents, usualHistoryNeeded } from "./waysBack";
 import type { EvidenceClass } from "./evidenceRule";
 
 export type BreakdownPeriod = "week" | "month";
@@ -82,6 +88,17 @@ export type BreakdownBasis = "weekly_allowance" | "monthly_allowance";
 
 /** Prior periods `usual` reads: 8 weeks (as ways-back), 3 months. */
 export const BREAKDOWN_USUAL_PERIODS: Readonly<Record<BreakdownPeriod, number>> = { week: 8, month: 3 };
+/**
+ * ⭐ (Q1) NOT ENOUGH HISTORY. A category's `usual` needs at least this many of
+ * the prior periods it reads (`priorPeriodStarts`) to hold rows of that
+ * category. Below it, `usual`, `usualFullPeriod` and `aboveUsual` are null and
+ * `historyPeriods` says how many there were: a category new this week no longer
+ * reads "Usual $0.00 · above usual". A category with enough history keeps its
+ * real median — "0.00" included (a period with nothing still counts as 0).
+ * The ways back's trims use the same threshold (`waysBack.ts`). (Final #10)
+ * The threshold is also half of the window (`usualHistoryNeeded`).
+ */
+export { USUAL_MIN_HISTORY_PERIODS, hasUsualHistory, usualHistoryNeeded };
 export const BREAKDOWN_ROWS_DEFAULT = 10;
 export const BREAKDOWN_ROWS_MAX = 50;
 
@@ -198,6 +215,13 @@ export interface BreakdownCategory<T> {
   usualFullPeriodCents: number | null;
   /** max(0, cents − usual); null when `usual` is null. (F3) Against the to-date usual for the current period. */
   aboveUsualCents: number | null;
+  /**
+   * (Q1) How many of the prior periods `usual` reads hold rows of this category
+   * (0 – 8 weeks, 0 – 3 months). (Final #10) Below half of them, and never
+   * fewer than `USUAL_MIN_HISTORY_PERIODS` (`usualHistoryNeeded`), the three
+   * usual figures are null: "Not enough history".
+   */
+  historyPeriods: number;
   rows: BreakdownEntry<T>[];
   truncated: boolean;
 }
@@ -382,6 +406,53 @@ export function isProvisional(unresolvedCents: number, planCents: number | null)
   return unresolvedCents > Math.max(BREAKDOWN_PROVISIONAL_MIN_CENTS, share);
 }
 
+/** (Q1) A row as the known / unresolved split reads it: its allowance row and the evidence rule's class. */
+export interface EvidenceSplitRow {
+  /** `allowanceRowOf(row, m)`: the coverage it counts in, its signed spend (dollars), its account. */
+  allowance: { coverage: string; spend: number; account?: string };
+  /** The evidence rule's class for the row (`classifyEvidence`), or null / omitted when it says nothing. */
+  evidenceClass?: EvidenceClass | null;
+}
+
+/** (Q1) Is this row an UNRESOLVED outflow in the period's pool (it leaves `known`, it stays in `actual`)? */
+export function isUnresolvedInPool(period: BreakdownPeriod, row: EvidenceSplitRow): boolean {
+  const rule = RULES[period];
+  const c = row.allowance.coverage;
+  return row.evidenceClass === "unresolved" && (c === rule.filed || c === rule.unfiled) && row.allowance.spend > 0;
+}
+
+/**
+ * ⭐ (Q1) THE ONE KNOWN / UNRESOLVED SPLIT (see `glossary.ts` for the words).
+ * The period breakdown's `actual` / `known` / `unresolved` and the money
+ * position's `spentWeekDiscretionary` / `knownWeek` / `unresolvedWeek` are this
+ * call over the same rows, so the Spending page, the dashboard and Banking can
+ * never quote two figures under one name:
+ *   actual      the pool (`allowanceSpentCents`): cautious, unresolved included;
+ *   known       the pool without its unresolved rows, netted the same way;
+ *   unresolved  actual − known (≥ 0 by construction: removing outflows from a
+ *               floored pool never raises it — a negative throws).
+ */
+export function evidenceSplitCents(
+  rows: readonly EvidenceSplitRow[],
+  period: BreakdownPeriod,
+): { actualCents: number; knownCents: number; unresolvedCents: number } {
+  const cadence = RULES[period].cadence;
+  const actualCents = allowanceSpentCents(
+    rows.map((r) => r.allowance),
+    cadence,
+  );
+  const knownCents = allowanceSpentCents(
+    rows.filter((r) => !isUnresolvedInPool(period, r)).map((r) => r.allowance),
+    cadence,
+  );
+  const unresolvedCents = actualCents - knownCents;
+  if (unresolvedCents < 0) {
+    // Impossible by construction: removing outflows from a floored pool never raises it.
+    throw new Error(`periodBreakdown: known (${knownCents}) exceeds the figure (${actualCents})`);
+  }
+  return { actualCents, knownCents, unresolvedCents };
+}
+
 /** (F2) The coverages a confirmed payment or transfer carries (money out the spending rule already leaves out). */
 const PAYMENT_COVERAGES: ReadonlySet<MovementCoverage> = new Set<MovementCoverage>([
   "transfer",
@@ -397,8 +468,9 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
   const limit = Math.max(1, Math.min(BREAKDOWN_ROWS_MAX, Math.floor(inputs.rowsPerGroup) || BREAKDOWN_ROWS_DEFAULT));
   const allowanceRows = inputs.rows.map((r) => r.allowance);
 
-  // The figure itself: the one helper every reader uses.
-  const actualCents = allowanceSpentCents(allowanceRows, rule.cadence);
+  // The figure itself, and (F2) its known / unresolved split: (Q1) the one
+  // call the money position's week makes too (`evidenceSplitCents`).
+  const { actualCents, knownCents, unresolvedCents } = evidenceSplitCents(inputs.rows, inputs.period);
 
   // ── Group the rows that count against the plan.
   const filedByCategory = new Map<string, BreakdownEntry<T>[]>();
@@ -407,8 +479,7 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
   const paymentEntries: BreakdownEntry<T>[] = [];
   // (F2) The pool's rows that are unresolved: out of `known`, into `unresolved`.
   const inPool = (c: MovementCoverage): boolean => c === rule.filed || c === rule.unfiled;
-  const isUnresolved = (row: BreakdownRowInput<T>): boolean =>
-    row.evidenceClass === "unresolved" && inPool(row.allowance.coverage) && row.allowance.spend > 0;
+  const isUnresolved = (row: BreakdownRowInput<T>): boolean => isUnresolvedInPool(inputs.period, row);
   for (const row of inputs.rows) {
     const coverage = row.allowance.coverage;
     if (PAYMENT_COVERAGES.has(coverage) && row.allowance.spend > 0) {
@@ -430,17 +501,6 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
     }
   }
 
-  // ── (F2) Known: the pool without its unresolved rows, netted the same way.
-  const knownCents = allowanceSpentCents(
-    inputs.rows.filter((r) => !isUnresolved(r)).map((r) => r.allowance),
-    rule.cadence,
-  );
-  const unresolvedCents = actualCents - knownCents;
-  if (unresolvedCents < 0) {
-    // Impossible by construction: removing outflows from a floored pool never raises it.
-    throw new Error(`periodBreakdown: known (${knownCents}) exceeds the figure (${actualCents})`);
-  }
-
   // ── The usual period, per category, from the prior periods' filed rows.
   // (F3) For the current period, also each prior period to the same point.
   const through = inputs.sameDaysThrough ?? null;
@@ -459,8 +519,15 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
       if (toDate) perPeriodToDate.set(k, (perPeriodToDate.get(k) ?? 0) + e.cents);
     }
   }
+  // (Q1) The prior periods holding rows of the category (a key in `perPeriod`
+  // = at least one filed row there, whatever it sums to).
+  const historyOf = (key: string): number => inputs.history.starts.filter((s) => perPeriod.has(`${s}|${key}`)).length;
+  // (Final #10) Rows in at least half of the window's periods (and 2+).
+  const enoughHistory = (key: string): boolean => hasUsualHistory(historyOf(key), inputs.history.starts.length);
   const medianOf = (by: ReadonlyMap<string, number>, key: string): number | null =>
-    inputs.history.starts.length === 0 ? null : medianCents(inputs.history.starts.map((s) => by.get(`${s}|${key}`) ?? 0));
+    inputs.history.starts.length === 0 || !enoughHistory(key)
+      ? null
+      : medianCents(inputs.history.starts.map((s) => by.get(`${s}|${key}`) ?? 0));
   const usualFullOf = (key: string): number | null => medianOf(perPeriod, key);
   const usualOf = (key: string): number | null => (through ? medianOf(perPeriodToDate, key) : usualFullOf(key));
 
@@ -479,6 +546,7 @@ export function periodBreakdown<T>(inputs: PeriodBreakdownInputs<T>): PeriodBrea
       usualCents,
       usualFullPeriodCents: usualFullOf(key),
       aboveUsualCents: usualCents == null ? null : Math.max(0, cents - usualCents),
+      historyPeriods: historyOf(key),
       rows: sorted.slice(0, limit),
       truncated: sorted.length > limit,
     };

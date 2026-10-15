@@ -24,20 +24,25 @@ export interface PeriodBreakdownCategory {
     /** Rows (split parts count one each) */
     count: number;
     /**
-     * Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left. (F3) For the current period each prior period is read only to the same point (usualBasis same_days, through usualThrough): the usual by today, not a whole period.
+     * Median of the category's amount over the prior 8 weeks (3 months); a period with none counts as 0, periods before tracking began are left out; null when none is left. (F3) For the current period each prior period is read only to the same point (usualBasis same_days, through usualThrough): the usual by today, not a whole period. (Q1) Null when fewer than 2 of those prior periods hold rows of the category (historyPeriods < 2): "Not enough history", never "0.00". (Final #10) Also null when fewer than half of them do (4 of 8 weeks, 2 of 3 months). With enough history a real "0.00" stays.
      * @nullable
      */
     usual: string | null;
     /**
-     * (F3) The same median over the whole prior periods ("a full month usually"); equals usual for a past period
+     * (F3) The same median over the whole prior periods ("a full month usually"); equals usual for a past period. (Q1) Null with historyPeriods < 2 (Final #10: or below half of the prior periods)
      * @nullable
      */
     usualFullPeriod: string | null;
     /**
-     * max(0, amount − usual); null when usual is null. (F3) Against the to-date usual for the current period
+     * max(0, amount − usual); null when usual is null (including too little history). (F3) Against the to-date usual for the current period
      * @nullable
      */
     aboveUsual: string | null;
+    /**
+     * (Q1) How many of the prior periods usual reads (8 weeks, 3 months, after tracking began) hold rows of this category. Below 2, or (Final #10) below half of those periods, usual, usualFullPeriod and aboveUsual are null: the screen says "Not enough history".
+     * @minimum 0
+     */
+    historyPeriods: number;
     /** Largest first, at most rowsPerGroup */
     rows: PeriodBreakdownRow[];
     /** More rows than listed */

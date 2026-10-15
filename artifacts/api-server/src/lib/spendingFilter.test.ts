@@ -398,3 +398,42 @@ describe("CARD_PAYMENT_PATTERNS", () => {
     expect(matchesTransferPattern("EPAYMENTS PLUMBING LLC")).toBe(true);
   });
 });
+
+// ⭐ (F6 round 6, review finding 5) The expired-hold rule's payment/transfer
+// test reads the same phrases BY WHOLE WORDS; the spending rule keeps the
+// substring test above (unchanged, disclosed).
+describe("matchesTransferPhrase — the bank-noise phrases as whole words (F6 round 6)", () => {
+  it("never finds 'epay' inside a merchant's word, nor 'chase credit' inside 'purchase credit'", async () => {
+    const { matchesTransferPhrase } = await import("@workspace/avalanche-core");
+    for (const d of ["MURPHY USA PREPAY 7134", "WAWA PREPAY", "PAYPAL *REPAY", "REPAY *PEST CONTROL", "PURCHASE CREDIT 4471", "EPAYMENTS PLUMBING LLC"]) {
+      expect(matchesTransferPhrase(d), d).toBe(false);
+    }
+    // The spending rule still excludes them, exactly as before.
+    expect(matchesTransferPattern("MURPHY USA PREPAY 7134")).toBe(true);
+  });
+
+  it("still finds every phrase as words, and the one-word codes with a suffix or a reference", async () => {
+    const { matchesTransferPhrase } = await import("@workspace/avalanche-core");
+    for (const d of [
+      "ONLINE TRANSFER FROM SAV 1234",
+      "CITY ACH PMT 7731",
+      "ACH PAYMENT",
+      "UTIL WEB ID: 99881",
+      "CREDIT CARD PMT",
+      "CHASE AUTOPAY",
+      "PAYMENT THANK YOU",
+      "CARD PMT",
+      "CHASE EPAY",
+      "CITI EPAYMENT",
+      "BANK EPAY7731",
+      "AUTOPAYMENT 22",
+      "CHASE CREDIT CRD",
+      "BK OF AMER",
+      "WELLS FARGO CARD",
+    ]) {
+      expect(matchesTransferPhrase(d), d).toBe(true);
+    }
+    expect(matchesTransferPhrase(null)).toBe(false);
+    expect(matchesTransferPhrase("")).toBe(false);
+  });
+});

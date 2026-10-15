@@ -119,6 +119,22 @@ describe("GET /plaid/items — snapshot and data through (WP3)", () => {
     expect(chase.lastBankTxOn).toBe("2026-10-08");
     expect(amex.lastBankTxOn).toBeNull();
   });
+
+  it("(Q1) each connection carries its freshness by the bank balance's rule; fetchedAt is the later of a Plaid reading and the last sync", async () => {
+    const res = await request("GET", "/plaid/items");
+    const items = res.json as Array<{ itemId: string; freshness: Record<string, unknown> }>;
+    const chase = items.find((it) => it.itemId === `wp3-chase-${u}`)!;
+    const amex = items.find((it) => it.itemId === `wp3-amex-${u}`)!;
+    // Chase: synced 10/09 13:00; its Plaid readings (savings 10/06; checking's typed 10/02 is not the bank) are older.
+    expect(chase.freshness).toMatchObject({
+      fetchedAt: "2026-10-09T13:00:00.000Z",
+      lastContactAt: "2026-10-09T13:00:00.000Z",
+      lastFailureAt: null,
+    });
+    expect(["ok", "stale"]).toContain(chase.freshness.state);
+    // Amex: never synced, no reading.
+    expect(amex.freshness).toMatchObject({ state: "never", stale: false, fetchedAt: null, lastContactAt: null, lastFailureAt: null });
+  });
 });
 
 describe("accountSnapshotOf (pure)", () => {

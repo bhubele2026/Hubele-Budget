@@ -27,7 +27,7 @@
 
 import { eq } from "drizzle-orm";
 import { db, settingsTable } from "@workspace/db";
-import { activeHookCadences, loadCardPayoffModes } from "./cardPayoffMode";
+import { activeHookCadences, loadCardPayoffModes, type PayDown } from "./cardPayoffMode";
 import { hookObligationsModelOn } from "./everydayHooks";
 
 export { activeHookCadences };
@@ -49,7 +49,13 @@ export function hookObligationsActive(): boolean {
 /** The plain reasons (short: the dialog shows them as they are). */
 export const GATE_REASON = {
   modelOff: "Plans are paused: H2 cannot size the card payments safely right now.",
-  unresolvedCard: (label: string) => `Plans are paused: choose how ${label} is paid — in full, or paying it down.`,
+  // (Q6b r3) Offer "paying it down" only where the server's own rule says it can take effect.
+  unresolvedCard: (label: string, payDown: PayDown = { available: true, reason: null }) =>
+    payDown.available
+      ? `Plans are paused: choose how ${label} is paid — in full, or paying it down.`
+      : payDown.reason === "debt_terms_missing"
+        ? `Plans are paused: choose how ${label} is paid — in full — or add the debt's APR and minimum in Debts.`
+        : `Plans are paused: choose how ${label} is paid — in full.`,
 } as const;
 
 /** "Amex Platinum ••2007" — the card as the reason names it. */
@@ -70,7 +76,7 @@ export async function planWriteGate(householdId: string, ownerUserId: string): P
   if (!hookObligationsActive()) return { ok: false, code: PLAN_UNSAFE, reason: GATE_REASON.modelOff };
   const modes = await loadCardPayoffModes(householdId, ownerUserId, { preferences });
   const open = modes.find((m) => m.mode == null && cadences.includes(m.cadence));
-  if (open) return { ok: false, code: PLAN_UNSAFE, reason: GATE_REASON.unresolvedCard(cardLabel(open)) };
+  if (open) return { ok: false, code: PLAN_UNSAFE, reason: GATE_REASON.unresolvedCard(cardLabel(open), open.payDown) };
   return { ok: true };
 }
 

@@ -1,3 +1,4 @@
+import { categoryCell } from "@/lib/categoryLabel";
 import { lazy, Suspense, useMemo } from "react";
 import { useRoute } from "wouter";
 import {
@@ -41,7 +42,7 @@ function CombinedActivity({ entries, entriesKnown }: { entries: ReturnType<typeo
   const { data: cats } = useListCategories();
   const rows = useMemo<TxnRow[]>(() => {
     const byExt = new Map(entries.map((e) => [e.plaidAccountId, e]));
-    const catName = new Map((cats ?? []).map((c) => [c.id, c.name]));
+    const catName = cats ? new Map(cats.map((c) => [c.id, c.name])) : undefined;
     return (txns ?? []).map((t) => {
       // A row with no linked account says where it came from (Amex import,
       // manual entry, an unlinked bank account), never "Manual entry" for all.
@@ -61,7 +62,7 @@ function CombinedActivity({ entries, entriesKnown }: { entries: ReturnType<typeo
         pending: t.pending,
         // (F6 round 4) An expired hold says so, in place of "Pending".
         expiredHold: t.expiredHold === true,
-        category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
+        category: categoryCell(t.categoryId, catName),
         href: route.href ?? undefined,
         note: route.note,
       };
@@ -243,6 +244,7 @@ export default function NextAccountsPage() {
             <div className="span-12 min-w-0" data-testid="account-activity">
               <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
                 <ChaseLedger
+                  key={selected.rowId}
                   embedded
                   accountKey={selected.rowId}
                   lead={
@@ -265,6 +267,7 @@ export default function NextAccountsPage() {
             <div className="span-12 min-w-0" data-testid="account-activity">
               <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
                 <AmexLedger
+                  key={selected.plaidAccountId}
                   embedded
                   accountId={selected.plaidAccountId}
                   lead={

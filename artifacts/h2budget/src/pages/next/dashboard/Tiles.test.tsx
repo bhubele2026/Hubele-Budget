@@ -44,7 +44,11 @@ const spine = (o: Record<string, unknown> = {}) => ({
   forecast: { lowPoint: "350.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "not_yet" },
   debt: { payoffPct: 41.6, nextMilestone: null, paidDownMtd: 300, confirmedPaymentsMtd: 320, newChargesMtd: 80 },
   reviewCount: 3,
-  position: { safeToSpendNow: "210.00", remainingWeek: "60.00", availableUntilPayday: "400.00", paydayDate: "2026-10-16", horizonKind: "payday", withinPlan: "yes", confidence: "firm", degraded: false, weekAdjustment: null },
+  bankConfidence: {
+    fetchedAt: "2026-10-08T14:00:00Z", bankBalance: "4180.50", bankAsOf: "2026-10-07T20:00:00Z", h2Balance: "4200.50", pendingCount: 1,
+    check: { status: "matches", reason: null, stale: false, staleReason: null, checkedAt: "2026-10-08T13:00:00Z", difference: "0.00", direction: null },
+  },
+  position: { safeToSpendNow: "210.00", remainingWeek: "60.00", knownWeek: "140.00", unresolvedWeek: "0.00", provisional: false, remainingWeekKnown: "60.00", availableUntilPayday: "400.00", paydayDate: "2026-10-16", horizonKind: "payday", withinPlan: "yes", confidence: "firm", degraded: false, weekAdjustment: null },
   monthAllowance: { plan: "1000.00", actual: "900.00", status: "within", remaining: "100.00", over: "0.00" },
   ...o,
 });
@@ -109,7 +113,43 @@ describe("six tiles", () => {
     expect(screen.getByTestId("tile-banking-status").textContent).toBe("3 to review");
     cleanup();
     setup({ reviewCount: 0 });
-    expect(screen.getByTestId("tile-banking-status").textContent).toBe("Up to date");
+    // (Q5) "Up to date" read like a sync verdict; the chip now says what the count is.
+    expect(screen.getByTestId("tile-banking-status").textContent).toBe("Nothing to review");
+  });
+  describe("bank confidence (Q5): separate facts, green only for a matching check", () => {
+    const conf = (check: Record<string, unknown>, o: Record<string, unknown> = {}) => ({
+      fetchedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), bankBalance: "4180.50", bankAsOf: "2026-10-07T20:00:00Z", h2Balance: "4200.50", pendingCount: 0,
+      check: { status: "matches", reason: null, stale: false, staleReason: null, checkedAt: new Date().toISOString(), difference: "0.00", direction: null, ...check }, ...o,
+    });
+    // The words arrive in a lazy chunk: the tile keeps its place meanwhile.
+    const check = () => screen.findByTestId("tile-banking-check");
+    it("matches: Matches bank (green), pending beside", async () => {
+      setup({ bankConfidence: conf({}, { pendingCount: 2 }) });
+      expect((await check()).textContent).toBe("Matches bank");
+      expect((await check()).getAttribute("data-tone")).toBe("ok");
+      expect(screen.getByTestId("tile-banking-pending").textContent).toBe("2 pending");
+    });
+    it("off by $X, which way: rust, never green", async () => {
+      setup({ bankConfidence: conf({ status: "off_by", difference: "62.50", direction: "bank_lower" }) });
+      expect((await check()).textContent).toBe("Off by $62.50 — bank lower");
+      expect((await check()).getAttribute("data-tone")).toBe("bad");
+    });
+    it("not checked yet says why and is grey even though the review count is zero", async () => {
+      setup({ reviewCount: 0, bankConfidence: conf({ status: "not_checked", reason: "never", checkedAt: null, difference: null }) });
+      expect((await check()).textContent).toBe("Not checked yet — Sync to check");
+      expect((await check()).getAttribute("data-tone")).toBe("grey");
+      expect(screen.queryByTestId("tile-banking-pending")).toBeNull();
+      expect(screen.getByTestId("tile-banking-status").textContent).toBe("Nothing to review");
+    });
+    it("an old matching check is grey 'Checked 9 days ago'", async () => {
+      setup({ bankConfidence: conf({ stale: true, staleReason: "age", checkedAt: new Date(Date.now() - 9 * 86_400_000).toISOString() }) });
+      expect((await check()).textContent).toBe("Checked 9 days ago");
+      expect((await check()).getAttribute("data-tone")).toBe("grey");
+    });
+    it("no bank balance: no confidence row at all", () => {
+      setup({ bank: { ...bank, source: null, asOfDate: null, balance: "0.00" }, bankConfidence: conf({}) });
+      expect(screen.queryByTestId("tile-banking-confidence")).toBeNull();
+    });
   });
   it("forecast and debt quote the spine", () => {
     setup();
@@ -129,8 +169,9 @@ describe("six tiles", () => {
 });
 
 describe("this week and this month", () => {
+  const pos = (o: Record<string, unknown>) => ({ ...spine().position, ...o });
   it("no weekly plan: Plan not set, never $0 and never Over", () => {
-    setup({ position: { ...spine().position, remainingWeek: null, withinPlan: null } }, { weekCap: null });
+    setup({ position: pos({ remainingWeek: null, remainingWeekKnown: null, withinPlan: null }) }, { weekCap: null });
     const t = screen.getByTestId("tile-week");
     expect(within(t).getByTestId("tile-week-status").textContent).toBe("Plan not set");
     // said once: the chip, not the body
@@ -140,17 +181,69 @@ describe("this week and this month", () => {
     expect(within(t).getByTestId("tile-week-spent").textContent).toBe("$140.00");
     expect(t.textContent).not.toContain("$0.00");
   });
-  it("plan and overspend: Over $X, named figure 'Counts toward plan'", () => {
-    setup({ position: { ...spine().position, remainingWeek: "-40.00", withinPlan: "over" } }, { spentWeekDiscretionary: "240.00" });
+  it("plan and overspend: Over $X on the KNOWN figure, named 'Counts toward plan'", () => {
+    // The cautious total (spentWeekDiscretionary 999) is never what the tile shows.
+    setup({ position: pos({ remainingWeek: "-40.00", remainingWeekKnown: "-40.00", knownWeek: "240.00", withinPlan: "over" }) }, { spentWeekDiscretionary: "999.00", weekCap: "200.00" });
     const t = screen.getByTestId("tile-week");
     expect(t.textContent).toContain("Counts toward plan");
+    expect(within(t).getByTestId("tile-week-spent").textContent).toBe("$240.00");
+    expect(within(t).getByTestId("tile-week-plan").textContent).toBe("$200.00");
     expect(within(t).getByTestId("tile-week-left").textContent).toBe("Over $40.00");
     expect(within(t).getByTestId("tile-week-status").textContent).toBe("Over");
+    expect(t.textContent).not.toContain("999");
   });
   it("on plan shows what is left", () => {
     setup();
     expect(screen.getByTestId("tile-week-left").textContent).toBe("$60.00 left");
     expect(screen.getByTestId("tile-week-status").textContent).toBe("On plan");
+    expect(screen.queryByTestId("tile-week-provisional")).toBeNull();
+  });
+  it("provisional and the known figure already over: the chip says Over (certain), the line keeps 'so far' and is rust", () => {
+    setup({ position: pos({ remainingWeekKnown: "-24.50", knownWeek: "324.50", unresolvedWeek: "1150.40", provisional: true, withinPlan: "over" }) });
+    expect(screen.getByTestId("tile-week-status").textContent).toBe("Over");
+    expect(screen.getByTestId("tile-week-status").getAttribute("data-tone")).toBe("bad");
+    expect(screen.getByTestId("tile-week-left").textContent).toBe("Over $24.50 so far");
+    expect(screen.getByTestId("tile-week-left").className).toContain("text-bad-ink");
+    expect(screen.getByTestId("tile-week-provisional").textContent).toBe("Unconfirmed $1,150.40 may change this");
+  });
+  it("provisional and the known figure within the plan: plain 'Not final', never the jargon 'Provisional'", () => {
+    setup({ position: pos({ remainingWeekKnown: "300.00", knownWeek: "200.00", unresolvedWeek: "400.00", provisional: true, remainingWeek: "-100.00", withinPlan: "over" }) });
+    expect(screen.getByTestId("tile-week-status").textContent).toBe("Not final");
+    expect(screen.getByTestId("tile-week").textContent).not.toContain("Provisional");
+    expect(screen.getByTestId("tile-week-left").textContent).toBe("$300.00 left so far");
+  });
+  it("(Q5 fix) known within the plan, the cautious total over, not provisional: Tight (amber), never a green 'On plan' — the one helper the Room line reads", () => {
+    // Plan 500, known 490, unconfirmed 20 (under the provisional threshold): remainingWeekKnown 10, cautious -10.
+    setup({ position: pos({ knownWeek: "490.00", unresolvedWeek: "20.00", provisional: false, remainingWeekKnown: "10.00", remainingWeek: "-10.00", withinPlan: "over" }) });
+    expect(screen.getByTestId("tile-week-status").textContent).toBe("Tight");
+    expect(screen.getByTestId("tile-week-status").getAttribute("data-tone")).not.toBe("ok");
+    expect(screen.getByTestId("tile-week-left").textContent).toBe("$10.00 left");
+  });
+  it("small unconfirmed (not provisional) is still said, without alarm", () => {
+    setup({ position: pos({ unresolvedWeek: "12.00", provisional: false }) });
+    expect(screen.getByTestId("tile-week-provisional").textContent).toBe("Unconfirmed $12.00");
+  });
+  it("the plan read loading is a skeleton; failing is a dash with Retry; the known figure and the rows never move", () => {
+    setup();
+    cleanup();
+    h.spine.data = spine();
+    h.Q.pos = { data: undefined, isError: false, isLoading: true, refetch: () => {} };
+    render(<QueryClientProvider client={new QueryClient()}><Router hook={memoryLocation({ path: "/home" }).hook}><Tiles /></Router></QueryClientProvider>);
+    const plan = screen.getByTestId("tile-week-plan");
+    expect(plan.querySelector("[aria-busy='true']")).toBeTruthy();
+    // The skeleton is one text line (1lh), so the tile keeps its height through every state.
+    expect(plan.querySelector("[aria-busy='true']")!.className).toContain("h-[1lh]");
+    expect(screen.getByTestId("tile-week-spent").textContent).toBe("$140.00");
+    expect(screen.getByTestId("tile-week-left").textContent).toBe("$60.00 left");
+    cleanup();
+    const refetch = vi.fn();
+    h.Q.pos = { data: undefined, isError: true, isLoading: false, refetch };
+    render(<QueryClientProvider client={new QueryClient()}><Router hook={memoryLocation({ path: "/home" }).hook}><Tiles /></Router></QueryClientProvider>);
+    // Retry sits inline beside the dash (inside the Plan figure), not on a row of its own.
+    expect(screen.getByTestId("tile-week-plan").textContent).toBe("— Retry");
+    expect(screen.getByTestId("tile-week-plan").contains(screen.getByTestId("tile-week-retry"))).toBe(true);
+    fireEvent.click(screen.getByTestId("tile-week-retry"));
+    expect(refetch).toHaveBeenCalled();
   });
   it("monthly allowance: within, over, and not set", () => {
     setup();

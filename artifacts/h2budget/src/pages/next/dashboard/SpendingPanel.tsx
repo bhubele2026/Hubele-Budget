@@ -3,7 +3,9 @@ import type { SpendingReconciliation } from "@workspace/api-client-react";
 import { Panel } from "@/components/next";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CssFillMeter } from "@/lib/cssBars";
+import { WEEK_FIGURE_WORDS } from "@workspace/avalanche-core/glossary";
 import { useSpine } from "@/hooks/useSpine";
+import { hasCents, weekStatus, withinOfRemaining } from "@/lib/weekFigures";
 import { householdToday, monthBounds } from "@/lib/householdDay";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useMoneyPositionQ, usePlaidItemsQ } from "./queries";
@@ -112,7 +114,7 @@ function MeterRow({
 /**
  * "Can we control spending?" Two bars, each saying its period and scope:
  * this week's discretionary spending against the weekly plan (the money
- * position — the same `remainingWeek` the summary quotes), and this month's
+ * position — the same `remainingWeekKnown` the summary quotes), and this month's
  * budgeted expenses against the budget, each with an even-pace tick. The
  * allowance breakdown and the biggest one-off charges live on their own pages,
  * one click away.
@@ -150,9 +152,11 @@ export default function SpendingPanel() {
             </div>
           </div>
         ) : (() => {
-          const spent = Number(p!.spentWeekDiscretionary);
+          // (Q5) The week bar is what COUNTS TOWARD THE PLAN (known); unconfirmed is said beside it.
+          const spent = Number(p!.knownWeek);
           const cap = p!.weekCap == null ? null : Number(p!.weekCap);
-          const rem = p!.remainingWeek == null ? null : Number(p!.remainingWeek);
+          const rem = p!.remainingWeekKnown == null ? null : Number(p!.remainingWeekKnown);
+          const unconfirmed = hasCents(p!.unresolvedWeek) ? ` · ${WEEK_FIGURE_WORDS.unresolved} ${money(p!.unresolvedWeek)}` : "";
           const pace = p!.paceAllowedToday != null && cap ? Number(p!.paceAllowedToday) / cap : null;
           const bActual = bud ? Number(bud.actual) : null;
           const bBudget = bud ? Number(bud.budget) : null;
@@ -162,11 +166,11 @@ export default function SpendingPanel() {
               <MeterRow
                 testid="dash-week-meter"
                 title="This week vs plan"
-                scope={`${weekdayLabel(p!.weekStart)} – ${weekdayLabel(p!.weekEnd)} · discretionary spending`}
+                scope={`${weekdayLabel(p!.weekStart)} – ${weekdayLabel(p!.weekEnd)} · ${WEEK_FIGURE_WORDS.known.toLowerCase()}`}
                 spent={Number.isFinite(spent) ? spent : null}
                 cap={cap}
-                over={rem != null && rem < 0}
-                status={rem == null ? "No weekly plan set" : rem < 0 ? `${money(-rem)} over the plan` : `${money(rem)} left in the plan`}
+                over={weekStatus(withinOfRemaining(p!.remainingWeekKnown), p!.provisional).tone === "bad"}
+                status={rem == null ? "No weekly plan set" : `${rem < 0 ? `${money(-rem)} over the plan` : `${money(rem)} left in the plan`}${p!.provisional ? " so far" : ""}${unconfirmed}`}
                 marker={pace}
               />
               {budget.data === undefined ? (

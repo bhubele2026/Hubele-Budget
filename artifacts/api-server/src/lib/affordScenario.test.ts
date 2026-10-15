@@ -132,6 +132,7 @@ describe("the baseline is the money position", () => {
     expect(r.baseline).toEqual({
       safeToSpendNow: "144.50",
       remainingWeek: "144.50",
+      remainingWeekKnown: "144.50",
       availableUntilPayday: "2124.50",
       lowest: "2624.50",
       lowestDate: "2026-10-08",
@@ -142,6 +143,30 @@ describe("the baseline is the money position", () => {
     expect(r.baseline.safeToSpendNow).toBe(pos.safeToSpendNow);
     expect(r.baseline.availableUntilPayday).toBe(pos.availableUntilPayday);
     expect(r.baseline.remainingWeek).toBe(pos.remainingWeek);
+  });
+
+  it("(Q5 fix) remainingWeekKnown is the position's known figure: the plan against what counts toward it, apart from the cautious remainingWeek", () => {
+    // Cap 250; $80 confirmed + $25.50 unconfirmed (the evidence rule): known remaining 170, cautious remaining 144.50.
+    const b = household({
+      weekRows: [
+        { coverage: "allowance_weekly", spend: 80 },
+        { coverage: "allowance_weekly", spend: 25.5, evidenceClass: "unresolved" },
+      ],
+    });
+    const pos = computePosition(b.positionInputs);
+    const r = evaluateAfford(b, { amount: 100, dateISO: "2026-10-08" });
+    expect(pos.remainingWeekKnown).toBe("170.00");
+    expect(r.baseline.remainingWeekKnown).toBe(pos.remainingWeekKnown);
+    expect(r.baseline.remainingWeek).toBe("144.50");
+    // The purchase is a confirmed one: it lowers both by the same $100.
+    expect(r.proposed.remainingWeekKnown).toBe("70.00");
+    expect(r.proposed.remainingWeek).toBe("44.50");
+    expect(r.delta.remainingWeekKnown).toBe("-100.00");
+    // No plan: null, never $0 (and never the cautious figure standing in for it).
+    const none = evaluateAfford(household(NO_CAP), { amount: 10 });
+    expect(none.baseline.remainingWeekKnown).toBeNull();
+    expect(none.proposed.remainingWeekKnown).toBeNull();
+    expect(none.delta.remainingWeekKnown).toBeNull();
   });
 
   it("never changes the baseline it is handed", () => {
@@ -160,6 +185,7 @@ describe("one purchase, worked by hand", () => {
     expect(r.proposed).toEqual({
       safeToSpendNow: "44.50",
       remainingWeek: "44.50",
+      remainingWeekKnown: "44.50",
       availableUntilPayday: "2024.50",
       lowest: "2524.50",
       lowestDate: "2026-10-08",
@@ -170,6 +196,7 @@ describe("one purchase, worked by hand", () => {
     expect(r.delta).toEqual({
       safeToSpendNow: "-100.00",
       remainingWeek: "-100.00",
+      remainingWeekKnown: "-100.00",
       availableUntilPayday: "-100.00",
       lowest: "-100.00",
       lowestDate: null,
@@ -265,6 +292,21 @@ describe("the verdict, at every boundary (cents)", () => {
     expect(v(122.82, "2026-10-10", {})).toBe("fits");
     expect(v(144.5, "2026-10-10", {})).toBe("tight");
     expect(v(144.51, "2026-10-10", {})).toBe("tight"); // −0.01: over the cap
+  });
+
+  it("(Round 3) the week verdict reads the known remaining the sheet shows, not the cautious total with unconfirmed rows", () => {
+    // Plan 250, $0 confirmed, $240 unconfirmed, a $20 purchase: known 250 → 230 (fits); cautious 10 → -10 would have said tight.
+    const o: Over = { weekRows: [{ coverage: "allowance_weekly", spend: 240, evidenceClass: "unresolved" }] };
+    const r = evaluateAfford(household(o), { amount: 20, dateISO: "2026-10-10" });
+    expect(r.baseline.remainingWeekKnown).toBe("250.00");
+    expect(r.proposed.remainingWeekKnown).toBe("230.00");
+    expect(r.baseline.remainingWeek).toBe("10.00");
+    expect(r.proposed.remainingWeek).toBe("-10.00");
+    expect(r.verdict).toBe("fits");
+    // And a known overage still says tight: the figure on the sheet went over its plan.
+    const over = evaluateAfford(household({ weekRows: [{ coverage: "allowance_weekly", spend: 240 }] }), { amount: 20, dateISO: "2026-10-10" });
+    expect(over.proposed.remainingWeekKnown).toBe("-10.00");
+    expect(over.verdict).toBe("tight");
   });
 
   it("a purchase after payday that takes a later day under the buffer breaks it", () => {

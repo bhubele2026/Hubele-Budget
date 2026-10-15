@@ -8,8 +8,11 @@
 import type { AmexWeeklyPayoffCardBrand } from "./amexWeeklyPayoffCardBrand";
 import type { AmexWeeklyPayoffCardCadence } from "./amexWeeklyPayoffCardCadence";
 import type { AmexWeeklyPayoffCardTopMerchant } from "./amexWeeklyPayoffCardTopMerchant";
+import type { CardPaidAs } from "./cardPaidAs";
 
 export interface AmexWeeklyPayoffCard {
+  /** (Q1) How this card is paid (CardPaidAs); null only for a card the payoff roster does not know */
+  paidAs: CardPaidAs | null;
   accountId: string;
   /** @nullable */
   plaidAccountId: string | null;

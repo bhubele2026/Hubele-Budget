@@ -3,12 +3,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useGetSettings, type Spine } from "@workspace/api-client-react";
 import { amexCardLabel } from "@workspace/avalanche-core";
+import { WEEK_FIGURE_WORDS } from "@workspace/avalanche-core/glossary";
 import { FreshnessLine } from "@/components/data-state";
 import { isSyntheticPlaidItem } from "@/lib/plaidReauth";
 import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
 import { bankBalanceView } from "@/lib/bankBalance";
 import { cardOwedView, debtForAccount, needsLiability } from "@/lib/cardBalance";
 import { lowPointView } from "@/lib/lowPoint";
+import { hasCents, knownWithinPlan, weekStatus, weekStory } from "@/lib/weekFigures";
 import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { useSpine } from "@/hooks/useSpine";
 import { cn } from "@/lib/utils";
@@ -25,6 +27,8 @@ import { Fig, Skel, Tile, Why, leftOver, type TileStatus } from "./tileParts";
  */
 
 // ── Banking ─────────────────────────────────────────────────────────────────
+const BankConfidence = lazy(() => import("./BankConfidence"));
+
 function BankingTile({ s }: { s: Spine | undefined }) {
   if (!s) return <Tile testid="banking" title="Banking" href="/banking" accent="checking" index={1}><Skel /></Tile>;
   const v = bankBalanceView(s.bank);
@@ -39,7 +43,7 @@ function BankingTile({ s }: { s: Spine | undefined }) {
     <Tile
       testid="banking" title="Banking" href={href} accent="checking" index={1}
       sub={identity ? <span data-testid="tile-banking-account">{identity.label}{identity.mask4 ? ` ••${identity.mask4}` : ""}</span> : "Checking"}
-      status={{ word: n > 0 ? `${n} to review` : "Up to date", tone: n > 0 ? "bad" : "ok" }}
+      status={{ word: n > 0 ? `${n} to review` : "Nothing to review", tone: n > 0 ? "bad" : "ok" }}
     >
       <Fig
         label="Checking" big testid="tile-banking-balance"
@@ -47,8 +51,12 @@ function BankingTile({ s }: { s: Spine | undefined }) {
         tone={Number.isFinite(bal) && bal < 0 ? "bad" : "neutral"}
       />
       <div className="text-micro text-neutral-500" data-testid="tile-banking-fresh">
-        {v.balance == null ? "No bank balance yet." : <FreshnessLine bank={s.bank} />}
+        {v.balance == null ? "No bank balance yet." : <FreshnessLine bank={s.bank} fetchedAt={s.bankConfidence?.fetchedAt} />}
       </div>
+      {v.balance != null && s.bankConfidence ? (
+        // (Q5) Separate facts, in a lazy chunk (the landing stays the same size): the check says "Matches bank" only when it did.
+        <Suspense fallback={<div className="h-5" aria-hidden />}><BankConfidence s={s} variant="tile" /></Suspense>
+      ) : null}
     </Tile>
   );
 }
@@ -121,48 +129,46 @@ function AmexTile({ weekCharges }: AmexTileProps) {
 }
 
 // ── This week / This month ─────────────────────────────────────────────────
-// (F4) The week tile's headline is the KNOWN figure (period breakdown). That read
-// lives in the `features` sub-module, which the landing must not import, so the
-// tile that reads it is a lazy chunk; the spine-based tile below shows until it lands.
-const WeekKnownTile = lazy(() => import("./WeekKnownTile"));
-
+// (Q5) The week tile's headline is what COUNTS TOWARD THE PLAN (the known
+// figure), from the spine's own position fields: the same numbers the header,
+// Needs attention and Spending quote. The cautious total is never drawn here
+// under this name. Loading is a skeleton, never the cautious fallback; a failed
+// plan read is "—" with Retry; the rows keep their height through every state.
 function WeekTile({ s }: { s: Spine | undefined }) {
-  const base = <WeekTileBase s={s} />;
-  if (!s) return base;
-  return (
-    <Suspense fallback={base}>
-      <WeekKnownTile s={s} base={base} />
-    </Suspense>
-  );
-}
-
-function WeekTileBase({ s }: { s: Spine | undefined }) {
   const pos = useMoneyPositionQ();
   if (!s) return <Tile testid="week" title="This week" href="/spending/week" accent="checking" index={3}><Skel /></Tile>;
-  const rem = s.position.remainingWeek == null ? null : Number(s.position.remainingWeek);
-  const planSet = rem != null && Number.isFinite(rem);
-  const w = s.position.withinPlan;
-  const status: TileStatus = !planSet
-    ? { word: "Plan not set", tone: "neutral" }
-    : w === "over" || rem < 0 ? { word: "Over", tone: "bad" }
-    : w === "tight" ? { word: "Tight", tone: "neutral" }
-    : { word: "On plan", tone: "ok" };
-  const lo = planSet ? leftOver(rem) : null;
+  const w = weekStory(s.position);
+  // ONE rule for the word: `knownWithinPlan` (the header and Needs attention read it too). Over on the known
+  // figure is certain (unconfirmed rows are outflows, so the known figure can only rise): it reads Over even when
+  // the week is provisional. A provisional week that is not over reads "Not final", in plain words.
+  const within = knownWithinPlan(s.position);
+  const status: TileStatus = weekStatus(within, w.provisional);
+  const lo = w.planSet && w.remainingKnown != null ? leftOver(w.remainingKnown) : null;
+  const line = lo ? (w.provisional ? `${lo.text} so far` : lo.text) : null;
+  // The plan figure keeps ONE text line in every state (skeleton one text line high (1lh), Retry inline beside the dash): the tile does not change height.
+  const plan = pos.data ? (pos.data.weekCap == null ? "—" : money(pos.data.weekCap)) : pos.isError ? (
+    <>
+      —{" "}
+      <button type="button" className="relative z-10 text-micro font-semibold text-brand-navy underline" onClick={() => void pos.refetch()} data-testid="tile-week-retry">Retry</button>
+    </>
+  ) : <span className="skeleton block h-[1lh] w-20 rounded" aria-busy="true" />;
   return (
     <Tile
       testid="week" title="This week" href="/spending/week" accent="checking" index={3} status={status}
-      why={<Why>Weekly spending plus purchases not filed yet, refunds taken off.</Why>}
+      why={<Why>Confirmed purchases only. Unconfirmed rows are not counted until you confirm them.</Why>}
     >
-      <Fig
-        label="Counts toward plan" big testid="tile-week-spent"
-        value={pos.data ? money(pos.data.spentWeekDiscretionary) : pos.isError ? "—" : <Skel />}
-      />
-      {planSet ? (
+      <Fig label={WEEK_FIGURE_WORDS.known} big testid="tile-week-spent" value={money(w.known)} />
+      {w.planSet ? (
         <>
-          <Fig label="Plan" value={money(pos.data?.weekCap)} testid="tile-week-plan" />
-          <div className={cn("font-mono text-body font-semibold tabular-nums", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-week-left">{lo!.text}</div>
+          <Fig label="Plan" value={plan} testid="tile-week-plan" />
+          <div className={cn("font-mono text-body font-semibold tabular-nums", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-week-left">{line}</div>
         </>
       ) : null /* the chip already says "Plan not set" */}
+      {hasCents(w.unconfirmed) ? (
+        <div className="text-micro text-neutral-600" data-testid="tile-week-provisional">
+          {WEEK_FIGURE_WORDS.unresolved} {money(w.unconfirmed)}{w.provisional ? " may change this" : ""}
+        </div>
+      ) : null}
     </Tile>
   );
 }

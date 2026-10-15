@@ -17,3 +17,22 @@ export function ExpiredHoldLabel({ id }: { id: string }) {
     </span>
   );
 }
+
+/**
+ * ⭐ (F6 round 6) The quiet label on a HELD PAIR in a spending list — a hold the
+ * bank snapshot already held, and its reversal (`expiredPair`). The bank
+ * balance and the register count both (they net to 0), so the row is not
+ * "not counted"; but no spending total counts it (`isCountedSpend`). Listed
+ * with this label, the rows a group shows add up to its header.
+ */
+export function ExpiredPairLabel({ id }: { id: string }) {
+  return (
+    <span
+      className="chip gray whitespace-nowrap"
+      title="A hold and its reversal. They cancel out in the bank balance. Not counted in spending."
+      data-testid={`label-expired-pair-${id}`}
+    >
+      Hold and its reversal · not counted here
+    </span>
+  );
+}

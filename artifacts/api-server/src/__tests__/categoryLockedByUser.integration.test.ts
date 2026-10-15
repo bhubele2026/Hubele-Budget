@@ -51,6 +51,8 @@ const { request } = createTestApp(api);
 
 let CAT_A: string;
 let CAT_B: string;
+/** (Q2) An income category: the payroll deposit's right home (the direction guard refuses an expense one). */
+let CAT_INCOME: string;
 
 async function cleanupRows(): Promise<void> {
   await db.delete(transactionsTable).where(eq(transactionsTable.householdId, TEST_HOUSEHOLD_ID));
@@ -73,6 +75,11 @@ beforeAll(async () => {
     .returning({ id: budgetCategoriesTable.id });
   CAT_A = cats[0]!.id;
   CAT_B = cats[1]!.id;
+  const [income] = await db
+    .insert(budgetCategoriesTable)
+    .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, name: `Lock test income ${randomUUID().slice(0, 6)}`, kind: "income" })
+    .returning({ id: budgetCategoriesTable.id });
+  CAT_INCOME = income!.id;
 });
 
 afterAll(async () => {
@@ -341,17 +348,18 @@ describe("(WP5d) a single-id bulk-update is the audited correction that learns n
     // (Earlier PATCH cases in this file teach memory; compare before and after.)
     const memoryBefore = await db.select().from(merchantMemoryTable).where(eq(merchantMemoryTable.householdId, TEST_HOUSEHOLD_ID));
 
-    const r = await request("POST", "/transactions/bulk-update", { ids: [id], patch: { categoryId: CAT_B } });
+    // (Q2) Into its income category: the direction guard refuses money in under an expense one.
+    const r = await request("POST", "/transactions/bulk-update", { ids: [id], patch: { categoryId: CAT_INCOME } });
     expect(r.status).toBe(200);
     const { decisionIds } = r.json as { decisionIds: string[] };
     expect(decisionIds).toHaveLength(1);
-    expect(await lockOf(id)).toEqual({ categoryId: CAT_B, locked: true });
+    expect(await lockOf(id)).toEqual({ categoryId: CAT_INCOME, locked: true });
     const [d] = await db.select().from(categoryDecisionsTable).where(eq(categoryDecisionsTable.id, decisionIds[0]!));
     expect(d).toMatchObject({
       transactionId: id,
       source: "user",
       previousCategoryId: CAT_A,
-      categoryId: CAT_B,
+      categoryId: CAT_INCOME,
       resolution: "corrected",
       createdMemoryId: null,
     });

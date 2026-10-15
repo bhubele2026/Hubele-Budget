@@ -67,6 +67,8 @@ export {
   BANK_REVIEW_BUCKETS,
   BANK_REVIEW_KINDS,
   bankReviewKindOf,
+  bankReviewPlanOutcome,
+  type BankReviewPlanOutcome,
   emptyBankReviewTotals,
   placeBankReviewRow,
   summarizeBankReview,
@@ -92,6 +94,7 @@ export {
 export {
   canSupersede,
   countsNowhere,
+  canBeReversal,
   expiredHolds,
   isExpiredByAge,
   notCountedIdsOf,
@@ -102,10 +105,12 @@ export {
   SUPERSEDE_MAX_DAYS,
   type ExpiredHoldRow,
   type ExpiredHolds,
+  type ExpiredHoldsOptions,
   type SupersedeRow,
 } from "./pendingSupersede";
 export {
   classifyCashRows,
+  heldExpiredPairs,
   isBankRow,
   type CashAnchor,
   type CashRow,
@@ -120,6 +125,7 @@ export {
   BANK_CHECK_STALE_DAYS,
   bankBalanceCheckOf,
   bankCheckLedger,
+  sameAnchorMoment,
   type BankBalanceCheck,
   type BankBalanceCheckArgs,
   type BankBalanceField,
@@ -147,6 +153,7 @@ export {
   hasRefundMarker,
   incomeAmount,
   isRefundCandidate,
+  isPaymentOrTransferCredit,
   isCardLedgerRow,
   isDebtCategory,
   isExcludedCategoryName,
@@ -155,11 +162,13 @@ export {
   isUncategorizedSpend,
   matchesCardPaymentPattern,
   matchesTransferPattern,
+  matchesTransferPhrase,
   normalizeDescription,
   onCardAccount,
   spendAmount,
   type CardRowKind,
   type ClassifyOptions,
+  type CreditKindSignals,
   type DirectionConflict,
   type DirectionOptions,
   type OutflowClassification,
@@ -269,7 +278,18 @@ export {
   isProvisional,
   type BreakdownUnresolvedGroup,
   type UsualBasis,
+  // (Q1) The one known / unresolved split (the breakdown and the money position).
+  evidenceSplitCents,
+  isUnresolvedInPool,
+  type EvidenceSplitRow,
+  // (Q1) "Not enough history" below this many prior periods with rows.
+  USUAL_MIN_HISTORY_PERIODS,
+  // (Final #10) …and below half of the window's periods.
+  hasUsualHistory,
+  usualHistoryNeeded,
 } from "./periodBreakdown";
+// (Q1) The words for the week's figures (also the `./glossary` subpath).
+export { WEEK_FIGURE_WORDS, type WeekFigure } from "./glossary";
 // (F2) The evidence rule: is an unfiled outflow a purchase, a payment, or unresolved?
 export {
   PFC_PRIMARIES,

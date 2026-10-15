@@ -393,6 +393,9 @@ describe("S4 · GET /banking/review — the forecast account", () => {
     const spine = await get("/spine");
     expect(r.balance.today).toBe(spine.bank.balance);
     expect(r.balance.asOf).toBe(spine.bank.asOfDate);
+    // (Q5 fix) "Updated …" is the server's one instant: Banking says what the spine's confidence line says, never its own latest-of.
+    expect(r.freshness.fetchedAt).toBe(spine.bankConfidence.fetchedAt);
+    expect(r.freshness.fetchedAt).not.toBeNull();
   });
 
   it("rows carry their plan, amounts and flags — the UN flag and a missing category are shown, never a rule", async () => {
@@ -574,6 +577,33 @@ describe("S4 · GET /banking/review — the forecast account", () => {
     expect(r.reviewInbox.unresolvedInRange).toBe(badge);
   });
 
+  it("⭐ (Q1) spine.bankConfidence = this review's balanceCheck and pending count (forecast account), never the review count", async () => {
+    const strip = (c: Json) => {
+      const { bank: _b, h2: _h, lastDrift: _l, ...rest } = c;
+      return rest;
+    };
+    const [spine, r] = await Promise.all([get("/spine"), review("from=2026-08-01&to=2026-10-14")]);
+    expect(spine.bankConfidence.check).toEqual(strip(r.balanceCheck));
+    expect(spine.bankConfidence.check).toMatchObject({ status: "not_checked", reason: "never" });
+    // STARBUCKS (pending) counts; SHELL's replaced pending row does not.
+    expect(r.cashFlow.pendingCount).toBe(1);
+    expect(spine.bankConfidence.pendingCount).toBe(1);
+    expect(spine.bankConfidence).toMatchObject({ bankBalance: spine.bank.snapshot.balance, bankAsOf: spine.bank.snapshot.at, h2Balance: spine.bank.balance });
+    // Nothing to review is not "matches the bank": the two stay apart.
+    expect(spine.reviewCount).toBeGreaterThan(0);
+    await db
+      .update(forecastSettingsTable)
+      .set({ lastBankReconciliation: { checkedAt: "2026-10-14T14:00:00.000Z", accountId: acct.chase.ext, unexplained: "-12.34", status: "drift" } })
+      .where(eq(forecastSettingsTable.userId, OWNER));
+    try {
+      const [s2, r2] = await Promise.all([get("/spine"), review("from=2026-10-01&to=2026-10-14")]);
+      expect(s2.bankConfidence.check).toEqual(strip(r2.balanceCheck));
+      expect(s2.bankConfidence.check).toMatchObject({ status: "off_by", difference: "12.34", direction: "bank_lower", checkedAt: "2026-10-14T14:00:00.000Z" });
+    } finally {
+      await db.update(forecastSettingsTable).set({ lastBankReconciliation: null }).where(eq(forecastSettingsTable.userId, OWNER));
+    }
+  });
+
   it("balanceTie: not checked until a Sync stores one; then that check, for this account only", async () => {
     expect((await review("from=2026-10-01&to=2026-10-14")).balanceTie).toEqual({ status: "not_checked", checkedAt: null, unexplained: null });
     expect((await review("from=2026-10-01&to=2026-10-14")).balanceCheck).toMatchObject({ status: "not_checked", reason: "never", stale: false });
@@ -619,10 +649,16 @@ describe("S4 · GET /banking/review — the forecast account", () => {
       spentWeek: pos.spentWeekDiscretionary,
       weekPlan: pos.weekCap,
       remainingWeek: pos.remainingWeek,
+      // (Q1) The week contract, from the same position.
+      knownWeek: pos.knownWeek,
+      unresolvedWeek: pos.unresolvedWeek,
+      provisional: pos.provisional,
+      remainingWeekKnown: pos.remainingWeekKnown,
     });
     // No weekly plan in this household: "not set" is null, never "0.00".
     expect(r.household.weekPlan).toBeNull();
     expect(r.household.remainingWeek).toBeNull();
+    expect(r.household.remainingWeekKnown).toBeNull();
   });
 
   it("paging one bucket: largest first, never a row skipped or repeated; kind narrows unmatched", async () => {

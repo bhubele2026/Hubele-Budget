@@ -12,6 +12,8 @@ export interface AffordDelta {
   /** @nullable */
   remainingWeek: string | null;
   /** @nullable */
+  remainingWeekKnown: string | null;
+  /** @nullable */
   availableUntilPayday: string | null;
   lowest: string;
   /**

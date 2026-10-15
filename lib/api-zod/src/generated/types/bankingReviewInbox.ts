@@ -6,10 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BankingReviewInboxBadgeScope } from "./bankingReviewInboxBadgeScope";
+import type { BankingReviewInboxUnresolvedScope } from "./bankingReviewInboxUnresolvedScope";
 
+/**
+ * (Q1) Two counts, each with its own scope — never one under the other's label: unresolvedInRange (this review's account and period) and badgeCount (the Review badge: this calendar month, the forecast account).
+ */
 export interface BankingReviewInbox {
   /** Rows placed here (dated through today */
   unresolvedInRange: number;
+  /** (Q1) What unresolvedInRange counts: this review's account (account) and period */
+  unresolvedScope: BankingReviewInboxUnresolvedScope;
+  /** (Q1) The first day unresolvedInRange reads (= period.from) */
+  unresolvedFrom: string;
+  /** (Q1) The last day unresolvedInRange reads (= period.to) */
+  unresolvedTo: string;
   /** The Review badge (spine.reviewCount) */
   badgeCount: number;
   badgeScope: BankingReviewInboxBadgeScope;

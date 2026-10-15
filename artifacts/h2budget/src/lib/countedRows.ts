@@ -13,7 +13,7 @@
  * maths: what the row would have added is simply not added. A row without the
  * field (an older response, a manual row) counts, as before.
  */
-export type MaybeExpiredHold = { expiredHold?: boolean | null };
+export type MaybeExpiredHold = { expiredHold?: boolean | null; expiredPair?: boolean | null };
 
 export function isCounted(row: MaybeExpiredHold): boolean {
   return row.expiredHold !== true;
@@ -22,4 +22,24 @@ export function isCounted(row: MaybeExpiredHold): boolean {
 /** The rows that count (`isCounted`), in their order. */
 export function countedRows<T extends MaybeExpiredHold>(rows: readonly T[]): T[] {
   return rows.filter(isCounted);
+}
+
+/**
+ * ⭐ (F6 round 5, review finding 3) DOES THE ROW COUNT AS SPENDING — or ask for
+ * an answer? `isCounted`, and not `expiredPair`: a hold the bank snapshot
+ * already held and its reversal. The bank balance counts that reversal (the
+ * money came back), so the server sends the pair `expiredHold: false` — cash
+ * walks and cash flows (`isCounted`: the Reconcile running balance, Cash flow,
+ * Bills "Actual") count both, net 0, as the register and the Banking review's
+ * money in / out do. But neither row is spending, and neither is asked about:
+ * the server's spending, allowances, budgets and review leave them out, and so
+ * does every browser spending sum and the Reconcile inbox (`isCountedSpend`).
+ */
+export function isCountedSpend(row: MaybeExpiredHold): boolean {
+  return isCounted(row) && row.expiredPair !== true;
+}
+
+/** The rows that count as spending (`isCountedSpend`), in their order. */
+export function countedSpendRows<T extends MaybeExpiredHold>(rows: readonly T[]): T[] {
+  return rows.filter(isCountedSpend);
 }

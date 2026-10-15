@@ -384,10 +384,12 @@ describe("GET /forecast/bank-balance-explain", () => {
 
     // A Plaid snapshot from Aug 20 whose item has never synced since: old, with
     // no contact and no failure on record.
+    // (Round 3) `fetchedAt` is the confidence line's instant (spine.bankConfidence.fetchedAt): with no contact, the snapshot's own time.
     expect((body as { freshness: unknown }).freshness).toEqual({
       source: "plaid",
       lastContactAt: null,
       lastFailureAt: null,
+      fetchedAt: "2026-08-20T12:00:00.000Z",
       stale: true,
       staleReason: "old",
     });

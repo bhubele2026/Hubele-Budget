@@ -576,4 +576,58 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
     await db.update(transactionsTable).set({ pending: false }).where(eq(transactionsTable.id, old!.id));
     expect((await loadPendingPayments(TEST_HOUSEHOLD_ID, [debt!])).get(debt!.id)).toEqual({ total: 250, count: 2 });
   });
+
+  // ⭐ (F6 round 5, review finding 2) A young pending card payment of the same
+  // cents as an older unpaired expired hold was taken as that hold's "reversal"
+  // (round 4: any pending credit of the cents, 31 days) and counted nowhere. A
+  // payment or a transfer is never a reversal (`canBeReversal`): it nets.
+  it("⭐ (F6 round 5) a 2-day-old PAYMENT - THANK YOU of an unpaired expired hotel hold's cents still nets: 150.00 (1) — round 4: none; base 350.00 (2)", async () => {
+    const today = householdTodayISO();
+    const card = await seedCard({ mask: "7474", liabilityBalance: "1200.00" });
+    const [debt] = await db
+      .insert(debtsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        name: "Travel Card",
+        balance: "1200",
+        apr: "0.2",
+        minPayment: "25",
+        plaidAccountId: card.rowId,
+        balanceSource: "plaid",
+        // Read 14 days ago: every row below is after it.
+        plaidLastSyncedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+        status: "active",
+      })
+      .returning();
+    const row = (on: string, description: string, amount: string, tagged: boolean) => ({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: on,
+      description,
+      amount,
+      debtId: tagged ? debt!.id : null,
+      source: "plaid:testbank",
+      plaidAccountId: card.externalId,
+      plaidTransactionId: `f6r5-${randomUUID().slice(0, 8)}`,
+      pending: true,
+    });
+    await db.insert(transactionsTable).values([
+      // An unpaired hotel hold, 11 days old (expired; the card's own sign: a charge is money out).
+      row(addDaysISO(today, -11), "HARBOR HOTEL HOLD", "-150.00", false),
+      // The payment, 2 days old, tagged to the debt.
+      row(addDaysISO(today, -2), "PAYMENT - THANK YOU", "150.00", true),
+      // An older payment, 12 days old: expired on its own.
+      row(addDaysISO(today, -12), "PAYMENT - THANK YOU", "200.00", true),
+    ]);
+    expect((await loadPendingPayments(TEST_HOUSEHOLD_ID, [debt!])).get(debt!.id)).toEqual({ total: 150, count: 1 });
+    const body = await getDebt(debt!.id);
+    expect([body.pendingPaymentTotal, body.pendingPaymentCount]).toEqual(["150.00", 1]);
+    vi.stubEnv("EXPIRED_HOLDS_RULE", "off");
+    try {
+      expect((await loadPendingPayments(TEST_HOUSEHOLD_ID, [debt!])).get(debt!.id)).toEqual({ total: 350, count: 2 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

@@ -1,5 +1,6 @@
 import { isInSnapshot, pendingChargeWasInBalance, type SnapshotLedgerRow } from "./snapshotInclusion";
-import { expiredHolds, pairPendingWithPosted, type SupersedeRow } from "./pendingSupersede";
+import { expiredHolds, pairPendingWithPosted, type ExpiredHoldRow, type SupersedeRow } from "./pendingSupersede";
+import type { CreditKindSignals } from "./spendingRule";
 
 /** A ledger row, as the cash rule reads it. */
 export type CashRow = {
@@ -23,7 +24,12 @@ export type CashRow = {
    * claim beside it adds 0. Absent (every row before PR-D) means false.
    */
   claimConfirmed?: boolean;
-};
+} & Omit<CreditKindSignals, "description">;
+// ⭐ (F6 round 5) What the row says about itself (`CreditKindSignals`: the
+// transfer, debt-tag and card-payment flags, Plaid's categories) — read only by
+// the expired-hold rule: a credit that is a payment or a transfer is never a
+// hold's reversal. Absent reads as not flagged (`lib/ledgerCashRows.ts`'s
+// `toCashRow` fills them).
 
 /** The bank balance the rows roll forward from: the instant it was read and its household day. */
 export type CashAnchor = { at: Date; day: string };
@@ -176,6 +182,14 @@ export function classifyCashRows(
      * `lib/ledgerCashRows.ts` (`readReversalHoldRows`) reads them.
      */
     priorRows?: readonly CashRow[];
+    /**
+     * ⭐ (F6 round 5, finding 6) A run with no `anchor` (the register reads its
+     * own balances) still pairs reversals as the anchored rule does: a credit the
+     * snapshot does not hold takes a charge it holds only when no other charge
+     * qualifies (`expiredHolds`' `isHeld`). Read only by that pairing; with an
+     * `anchor`, the anchor is used and this is ignored.
+     */
+    pairingAnchor?: CashAnchor | null;
   },
 ): CashRowsResult {
   const { anchor, accountExternalId, todayISO } = opts;
@@ -189,6 +203,8 @@ export function classifyCashRows(
   const held = (r: CashRow): boolean => !!anchor && isInSnapshot(toSnapshotRow(r), anchor.at, anchor.day);
   const pendingWasInBalance = (r: CashRow): boolean =>
     !!anchor && pendingChargeWasInBalance(toSnapshotRow(r), anchor.at, anchor.day);
+  // (F6 round 5) The snapshot the reversal pairing prefers unheld charges by.
+  const pairAnchor = anchor ?? opts.pairingAnchor ?? null;
 
   const toSupersedeRow = (r: CashRow): SupersedeRow => ({
     id: r.id,
@@ -198,6 +214,20 @@ export function classifyCashRows(
     amount: r.amount,
     description: r.description,
     createdAt: r.createdAt,
+  });
+  // (F6 round 5) The expired-hold rule's row: with the row's own payment / transfer signals.
+  const toExpiredHoldRow = (r: CashRow): ExpiredHoldRow => ({
+    id: r.id,
+    plaidAccountId: r.plaidAccountId,
+    pending: r.pending,
+    occurredOn: r.occurredOn,
+    amount: r.amount,
+    description: r.description,
+    isTransfer: r.isTransfer,
+    debtId: r.debtId,
+    isExternalCardPayment: r.isExternalCardPayment,
+    pfcPrimary: r.pfcPrimary,
+    pfcDetailed: r.pfcDetailed,
   });
   const bankRows = rows.filter((r) => isBankRow(r.source, r.plaidAccountId, accountExternalId)).map(toSupersedeRow);
   const supersededBy = pairPendingWithPosted(bankRows);
@@ -219,7 +249,15 @@ export function classifyCashRows(
       const wider = pairPendingWithPosted([...priorBank.map(toSupersedeRow), ...bankRows]);
       replaced = new Set([...supersededIds, ...[...wider.values()].map((p) => p.id).filter((id) => priorIds.has(id))]);
     }
-    expired = expiredHolds([...priorBank.map(toSupersedeRow), ...bankRows], todayISO, replaced);
+    const bankCashRows = rows.filter((r) => isBankRow(r.source, r.plaidAccountId, accountExternalId));
+    // (F6 round 5) Only bank rows reach the pairing: each is on the snapshot's account.
+    const isHeld = pairAnchor
+      ? (h: ExpiredHoldRow): boolean => {
+          const c = holdById.get(h.id);
+          return !!c && isInSnapshot(toSnapshotRow(c), pairAnchor.at, pairAnchor.day);
+        }
+      : undefined;
+    expired = expiredHolds([...priorBank, ...bankCashRows].map(toExpiredHoldRow), todayISO, replaced, { isHeld });
   }
   const expiredHere = (r: CashRow): boolean => {
     if (!expired?.expiredIds.has(r.id)) return false;
@@ -273,4 +311,37 @@ export function classifyCashRows(
     }
   }
   return { rows: out, throughToday: { rowCount, net } };
+}
+
+/**
+ * ⭐ (F6 round 5, review finding 3) THE HELD PAIRS — one answer for the bank
+ * register (`loadRegister`), the transaction list (GET /transactions) and the
+ * forecast bundle (GET /forecast).
+ *
+ * An expired hold the bank snapshot holds (`isInSnapshot`) and the reversal
+ * paired with it: the bank balance counts that reversal (step 3b's exception —
+ * `available` held the hold, the reversal is the money coming back), so the
+ * register counts both at full amount (they net to 0) and neither is labelled
+ * expired. They are still expired holds for spending and review: callers mark
+ * them `expiredPair`.
+ *
+ * `holdOf`: reversal id → hold id, both expired (`expiredHolds`). `rowOf`: the
+ * snapshot fields of a row ON THE SNAPSHOT'S ACCOUNT — undefined for any other
+ * row, which is never held. No anchor: none. Returns both ids of every pair.
+ */
+export function heldExpiredPairs(
+  holdOf: ReadonlyMap<string, string>,
+  rowOf: (id: string) => SnapshotLedgerRow | undefined,
+  anchor: CashAnchor | null,
+): Set<string> {
+  const out = new Set<string>();
+  if (!anchor) return out;
+  for (const [reversalId, holdId] of holdOf) {
+    const hold = rowOf(holdId);
+    if (hold && isInSnapshot(hold, anchor.at, anchor.day)) {
+      out.add(holdId);
+      out.add(reversalId);
+    }
+  }
+  return out;
 }

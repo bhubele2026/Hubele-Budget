@@ -92,6 +92,10 @@ export type FakeLedgerOptions = {
   refusedAccounts?: string[];
   /** Holds a ledger GET until the returned promise settles (to observe a loading state). */
   holdLedger?: (query: URLSearchParams) => Promise<void> | undefined;
+  /** Holds a balances GET the same way (to observe the previous account's answer being kept). */
+  holdBalances?: (query: URLSearchParams) => Promise<void> | undefined;
+  /** (Final confirm N1) The ledger page's `account.plaidAccountIds` for an `account=` value (null = the default account). */
+  accountScopeIds?: (accountParam: string | null) => string[];
 };
 
 export type FakeCall = {
@@ -167,7 +171,7 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
     snapshotAt: null,
     snapshotDay: null,
   });
-  const account = { via: "pointer", plaidAccountIds: [] as string[] };
+  const accountFor = (accountParam: string | null) => ({ via: "pointer", plaidAccountIds: opts.accountScopeIds?.(accountParam) ?? ([] as string[]) });
 
   const handler = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const raw =
@@ -231,11 +235,13 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
             ? "no_snapshot"
             : null,
         anchor: other ? { ...anchor(), todayBalance: null } : anchor(),
-        account,
+        account: accountFor(accountParam),
       });
     }
 
     if (url.pathname === "/api/transactions/balances" && method === "GET") {
+      const holdB = opts.holdBalances?.(q);
+      if (holdB) await holdB;
       const dates = (q.get("dates") ?? "").split(",").filter(Boolean);
       return json(200, {
         balances: dates.map((date) => ({
@@ -249,7 +255,7 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
               ? "no_snapshot"
               : null,
         anchor: anchor(),
-        account,
+        account: accountFor(q.get("account")),
       });
     }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 /**
@@ -13,8 +13,12 @@ const h = vi.hoisted(() => ({
   plans: undefined as unknown,
   items: undefined as unknown,
   me: { isOwner: true } as unknown,
+  /** (Q4) The query still holds another period's answer (keepPreviousData). */
+  placeholder: false,
   budget: undefined as unknown,
   create: vi.fn(),
+  /** (Q5 fix) The options each useCreateAllowancePlan instance was given */
+  createOpts: [] as unknown[],
   dry: undefined as unknown,
   dryFails: false,
 }));
@@ -23,24 +27,29 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react")>()),
   useListPlaidItems: () => ({ data: h.items, isError: false, isLoading: false }),
   useGetMe: () => ({ data: h.me, isLoading: false }),
-  useGetBudgetMonth: () => ({ data: h.budget, isError: false }),
+  // (Q4) The server echoes the month it read; the page shows only the month it asked for.
+  useGetBudgetMonth: (month: string) => ({ data: h.budget && { monthStart: month, ...(h.budget as object) }, isError: false }),
 }));
 vi.mock("@workspace/api-client-react/features", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react/features")>()),
   useListAllowancePlans: () => ({ data: h.plans, isLoading: false }),
-  useCreateAllowancePlan: () => ({ mutate: h.create, isPending: false }),
+  useCreateAllowancePlan: (o?: unknown) => {
+    h.createOpts.push(o);
+    return { mutate: h.create, isPending: false };
+  },
   useGetPeriodBreakdown: (params: Record<string, unknown>) => {
     h.calls.push(params);
     const key = `${params.period}:${params.start}`;
     const base = (h.bd[key] ?? h.bd[String(params.period)]) as Record<string, unknown> | undefined;
     // The server marks the period it was asked for; the fixture follows the request.
     const data = base && { ...base, start: params.start, isCurrent: params.start === "2026-10-11" || params.start === "2026-10-01" };
-    return { data, isError: false, isLoading: false, refetch: vi.fn() };
+    return { data, isError: false, isLoading: false, isPlaceholderData: h.placeholder, refetch: vi.fn() };
   },
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 import SpendingPeriodPage from "./spending-period";
+import { weekStatus, withinOfRemaining } from "@/lib/weekFigures";
 
 const TODAY = new Date("2026-10-14T17:00:00Z"); // Wed 12:00 Central; this week starts Sun 2026-10-11
 
@@ -103,6 +112,7 @@ beforeEach(() => {
     },
   ];
   h.me = { isOwner: true };
+  h.placeholder = false;
   h.budget = undefined;
   h.create.mockReset();
   h.dryFails = false;
@@ -252,6 +262,70 @@ describe("This week", () => {
     expect(posts()[0]![0]).toEqual({ data: { period: "weekly", amount: "275.50", effectiveFrom: "2026-10-11" } });
   });
 
+  it("(Q5 fix) the dry-run preview is not a write: its mutation opts out of the refetch-everything invalidation, the real save keeps it", () => {
+    h.bd.week = notSet();
+    h.createOpts.length = 0;
+    mount("/spending/week");
+    fireEvent.click(screen.getByTestId("plan-use-primary"));
+    const metas = h.createOpts.map((o) => (o as { mutation?: { meta?: unknown } } | undefined)?.mutation?.meta);
+    expect(metas).toContainEqual({ invalidateAfterWrite: false }); // the preview
+    expect(metas).toContain(undefined); // the real save
+  });
+
+  it("(Q5) every entry shows its own dry run: the stored amount, each other prefill, a typed amount", async () => {
+    h.bd.week = notSet();
+    mount("/spending/week");
+    for (const [testid, amount] of [["plan-use-primary", "380.00"], ["plan-use-suggested", "350.00"]] as const) {
+      h.create.mockClear();
+      fireEvent.click(screen.getByTestId(testid));
+      const dlg = screen.getByTestId("plan-confirm");
+      await waitFor(() => expect(within(dlg).getByTestId("plan-dry-run")).toBeTruthy());
+      expect(dryCalls()[0]![0]).toMatchObject({ data: { period: "weekly", amount }, params: { dryRun: "1" } });
+      expect(within(dlg).getByTestId("dry-reserve").textContent).toContain("Weekly Spend reserve");
+      expect((within(dlg).getByTestId("plan-confirm-go") as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(within(dlg).getByTestId("plan-cancel"));
+    }
+    h.create.mockClear();
+    fireEvent.click(screen.getByTestId("plan-different"));
+    fireEvent.change(screen.getByTestId("plan-input"), { target: { value: "475" } });
+    await waitFor(() => expect(screen.getByTestId("plan-dry-run")).toBeTruthy());
+    expect(screen.getByTestId("dry-reserve")).toBeTruthy();
+    expect(posts()).toHaveLength(0);
+  });
+
+  it("(Q5) a typed amount waits a beat, asks once for that exact amount, and Set plan stays off for any other amount until its own answer is in", async () => {
+    h.bd.week = notSet();
+    const held: Array<{ amount: string; answer: () => void }> = [];
+    h.create.mockImplementation((args: { data: { amount: string }; params?: { dryRun?: string } }, opts?: { onSuccess?: (r: unknown) => void }) => {
+      if (args.params?.dryRun) held.push({ amount: args.data.amount, answer: () => opts?.onSuccess?.({ ...(h.dry as object), plan: { period: "weekly", amount: args.data.amount, effectiveFrom: "2026-10-11" } }) });
+    });
+    mount("/spending/week");
+    fireEvent.click(screen.getByTestId("plan-different"));
+    const input = screen.getByTestId("plan-input");
+    const go = () => screen.getByTestId("plan-confirm-go") as HTMLButtonElement;
+    fireEvent.change(input, { target: { value: "4" } });
+    fireEvent.change(input, { target: { value: "47" } });
+    fireEvent.change(input, { target: { value: "475" } });
+    expect(held).toHaveLength(0); // typing is not asking
+    await waitFor(() => expect(held).toHaveLength(1));
+    expect(held[0]!.amount).toBe("475.00");
+    expect(screen.getByTestId("plan-effect-loading")).toBeTruthy();
+    expect(go().disabled).toBe(true);
+    await act(async () => held[0]!.answer());
+    await waitFor(() => expect(screen.getByTestId("plan-dry-run")).toBeTruthy());
+    expect(go().disabled).toBe(false);
+    // The amount changes: the old preview is not this amount's. Off again, at once.
+    fireEvent.change(input, { target: { value: "500" } });
+    expect(go().disabled).toBe(true);
+    expect(screen.queryByTestId("plan-dry-run")).toBeNull();
+    await waitFor(() => expect(held).toHaveLength(2));
+    expect(held[1]!.amount).toBe("500.00");
+    await act(async () => held[1]!.answer());
+    await waitFor(() => expect(go().disabled).toBe(false));
+    fireEvent.click(go());
+    expect(posts()[0]![0]).toEqual({ data: { period: "weekly", amount: "500.00", effectiveFrom: "2026-10-11" } });
+  });
+
   it("over: says Over $X, sorts categories by amount, chips what is above usual (in a warning chip, by the weekday)", () => {
     h.bd.week = bd({ categories: [cat("c-home", "Home", "50.00"), cat("c-gro", "Groceries", "156.60", { usual: "45.00", aboveUsual: "111.60" }), cat("c-gas", "Gas", "92.40")] });
     mount("/spending/week");
@@ -268,10 +342,30 @@ describe("This week", () => {
     expect(screen.queryByTestId("sp-above-c-gas")).toBeNull();
   });
 
-  it("one summary line under Why over?: the over, the category above its usual so far, the plan", () => {
+  it("(Q5) 'Over the plan' and 'Above usual for these days' are two lines, never one sentence", () => {
     h.bd.week = bd({ categories: [cat("c-gro", "Groceries", "156.60", { usual: "45.00", aboveUsual: "111.60" }), cat("c-gas", "Gas", "92.40", { usual: "80.00", aboveUsual: "12.40" })] });
     mount("/spending/week");
-    expect(screen.getByTestId("sp-why-line").textContent).toBe("Over $24.50 · Groceries $156.60 so far vs usual by Wed $45.00 · plan $300.00");
+    expect(screen.getByTestId("sp-why-line").textContent).toBe("Over the plan $24.50 · plan $300.00");
+    expect(screen.getByTestId("sp-above-line").textContent).toBe("Above usual for these days: Groceries $156.60 vs usual by Wed $45.00");
+  });
+
+  it("(Q5) a category with no usual says 'Not enough history', never usual $0.00", () => {
+    h.bd.week = bd({ categories: [cat("c-gro", "Groceries", "156.60", { usual: null, usualFullPeriod: null, aboveUsual: null, historyPeriods: 1 }), cat("c-gas", "Gas", "92.40", { usual: "0.00", aboveUsual: "92.40", historyPeriods: 4 })] });
+    mount("/spending/week");
+    expect(screen.getByTestId("sp-nohistory-c-gro").textContent).toBe("Not enough history");
+    expect(screen.queryByTestId("sp-usual-c-gro")).toBeNull();
+    expect(screen.queryByTestId("sp-above-c-gro")).toBeNull();
+    // A real zero with history stays "usual $0.00"
+    expect(screen.getByTestId("sp-usual-c-gas").textContent).toBe("usual by Wed $0.00");
+    expect(screen.queryByTestId("sp-nohistory-c-gas")).toBeNull();
+    // No above-usual line is built from a missing usual
+    expect(screen.getByTestId("sp-above-line").textContent).toBe("Above usual for these days: Gas $92.40 vs usual by Wed $0.00");
+  });
+
+  it("(Q5) drivers are sorted by amount, largest first", () => {
+    h.bd.week = bd({ categories: [cat("c-home", "Home", "50.00"), cat("c-gro", "Groceries", "156.60"), cat("c-gas", "Gas", "92.40")] });
+    mount("/spending/week");
+    expect(screen.getAllByTestId(/^sp-group-amount-c-/).map((n) => n.textContent)).toEqual(["$156.60", "$92.40", "$50.00"]);
   });
 
   it("a past period's usual is a whole period, and says so", () => {
@@ -347,17 +441,22 @@ describe("This week", () => {
 });
 
 describe("This week — provisional", () => {
-  it("says Provisional, with one line naming the biggest unconfirmed row, and never the bare word Over", () => {
+  it("says Not final, with one line naming the biggest unconfirmed row; over on the known figure is rust, with 'so far'", () => {
     h.bd.week = provisional();
     mount("/spending/week");
-    expect(screen.getByTestId("sp-provisional").textContent).toBe("Provisional");
+    expect(screen.getByTestId("sp-provisional").textContent).toBe("Not final");
+    // (Round 3) The same status as the landing's tile: known over reads Over (bad) even when the week is not final.
+    expect(screen.getByTestId("sp-left").getAttribute("data-tone")).toBe("bad");
+    expect(weekStatus(withinOfRemaining("-24.50"), true)).toEqual({ word: "Over", tone: "bad" });
+    expect(weekStatus(withinOfRemaining("10.00"), true)).toEqual({ word: "Not final", tone: "neutral" });
+    expect(weekStatus(withinOfRemaining(null), true).word).toBe("Plan not set");
     expect(screen.getByTestId("sp-provisional-line").textContent).toBe("Unconfirmed $1,170.40 may change this · Lrk Loans — bank says loan payment");
     expect(screen.getByTestId("sp-summary").textContent).toContain("Over so far");
     expect(screen.getByTestId("sp-summary").textContent).not.toMatch(/Over\$/);
     expect(screen.getByText("Why over so far?")).toBeTruthy();
     // the headline is the KNOWN figure, not the cautious one
     expect(screen.getByTestId("sp-actual").textContent).toBe("$324.50");
-    expect(screen.getByTestId("sp-why-line").textContent).toMatch(/^Over so far \$24\.50/);
+    expect(screen.getByTestId("sp-why-line").textContent).toMatch(/^Over the plan so far \$24\.50/);
   });
 
   it("not provisional: no marker, no line", () => {
@@ -441,7 +540,8 @@ describe("This month", () => {
     mount("/spending/month", "month");
     expect(screen.getByTestId("sp-usual-c-home").textContent).toBe("usual by Oct 14 $300.00");
     expect(screen.getByTestId("sp-above-c-home").className).toContain("warn");
-    expect(screen.getByTestId("sp-why-line").textContent).toBe("Over $40.00 · Home $380.00 so far vs usual by Oct 14 $300.00 · plan $400.00");
+    expect(screen.getByTestId("sp-why-line").textContent).toBe("Over the plan $40.00 · plan $400.00");
+    expect(screen.getByTestId("sp-above-line").textContent).toBe("Above usual for these days: Home $380.00 vs usual by Oct 14 $300.00");
     fireEvent.click(screen.getByText("Details"));
     expect(screen.getByTestId("sp-d-fullusual").textContent).toMatch(/A full month is usually/);
   });
@@ -455,5 +555,44 @@ describe("This month", () => {
     await waitFor(() => expect(screen.getByTestId("plan-dry-run")).toBeTruthy());
     fireEvent.click(screen.getByTestId("plan-confirm-go"));
     expect(posts()[0]![0]).toEqual({ data: { period: "monthly", amount: "600.00", effectiveFrom: "2026-10-01" } });
+  });
+});
+
+describe("(Q4) another period's answer is not this period's", () => {
+  it("while this week loads the old week's figures are not under this week's title", () => {
+    h.placeholder = true;
+    mount("/spending/week?start=2026-10-04");
+    expect(screen.getByTestId("sp-title").textContent).toContain("Oct 4");
+    expect(screen.getByTestId("sp-loading")).toBeTruthy();
+    expect(screen.queryByTestId("sp-summary")).toBeNull();
+    expect(screen.queryByTestId("sp-actual")).toBeNull();
+  });
+
+  it("the answer for the period shows once it is this period's", () => {
+    mount("/spending/week?start=2026-10-04");
+    expect(screen.getByTestId("sp-summary")).toBeTruthy();
+    expect(screen.queryByTestId("sp-loading")).toBeNull();
+  });
+});
+
+describe("(Q4) the owner gate on the plan prompt has three states", () => {
+  it("/me still out: a placeholder, not 'Only the household owner sets the weekly plan'", () => {
+    h.bd.week = notSet();
+    h.me = undefined;
+    mount("/spending/week");
+    expect(screen.getByTestId("plan-prompt-owner-unknown")).toBeTruthy();
+    expect(screen.queryByTestId("plan-prompt-readonly")).toBeNull();
+  });
+
+  it("a member: the denial; the owner: the options", () => {
+    h.bd.week = notSet();
+    h.me = { isOwner: false };
+    mount("/spending/week");
+    expect(screen.getByTestId("plan-prompt-readonly").textContent).toContain("Only the household owner");
+    cleanup();
+    h.me = { isOwner: true };
+    mount("/spending/week");
+    expect(screen.queryByTestId("plan-prompt-readonly")).toBeNull();
+    expect(screen.queryByTestId("plan-prompt-owner-unknown")).toBeNull();
   });
 });

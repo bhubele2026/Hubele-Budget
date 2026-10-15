@@ -1,3 +1,4 @@
+import { categoryCell } from "@/lib/categoryLabel";
 import { displayAmount } from "@/lib/amountDisplay";
 import { useMemo } from "react";
 import { Link } from "wouter";
@@ -34,7 +35,7 @@ export default function ActivityPanel() {
     // Keyed by Plaid's EXTERNAL account_id — what `transaction.plaidAccountId`
     // holds. (Keying by the internal row id matched nothing: every row read "Account".)
     const byExt = new Map(buildEntries(items.data).map((e) => [e.plaidAccountId, e]));
-    const catName = new Map((cats.data ?? []).map((c) => [c.id, c.name]));
+    const catName = cats.data ? new Map(cats.data.map((c) => [c.id, c.name])) : undefined;
     const catsById = categoriesByIdOf(cats.data);
     // (WP5c) A card's credit is never "income": the flag waits for the bank
     // items, which say which accounts are cards.
@@ -53,7 +54,7 @@ export default function ActivityPanel() {
         pending: t.pending,
         // (F6 round 4) An expired hold says so, in place of "Pending".
         expiredHold: t.expiredHold === true,
-        category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
+        category: categoryCell(t.categoryId, catName),
         flag:
           types && isInflowFiledAsExpense(t, catsById, { isCardAccount: isCardTxn(t, types) })
             ? "Income in an expense category"

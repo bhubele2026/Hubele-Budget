@@ -228,7 +228,10 @@ describe("Amex page — fewer, earlier calls (P4)", () => {
     await waitFor(() => expect(screen.getAllByText(/STARBUCKS/).length).toBeGreaterThan(0));
     expect(trendCalls().length).toBeGreaterThan(0);
     expect(trendCalls().every((c) => c.enabled === false)).toBe(true);
-    expect(screen.getByTestId("amex-trend-pending").textContent).toMatch(/Loading the last 12 months/);
+    // (Q3) "All cards" draws no combined chart: the cards' balances hold its
+    // slot, and the 12-month read still waits until that slot is near.
+    expect(screen.getByTestId("amex-card-balances")).toBeTruthy();
+    expect(screen.queryByTestId("amex-trend-pending")).toBeNull();
     act(() => {
       for (const cb of io.cbs) cb([{ isIntersecting: true }]);
     });

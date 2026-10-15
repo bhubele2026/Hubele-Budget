@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import {
   db,
   forecastSettingsTable,
@@ -7,7 +7,7 @@ import {
   plaidSyncAttemptsTable,
 } from "@workspace/db";
 import { MANUAL_SNAPSHOT_STALE_MS, PLAID_FEED_QUIET_MS } from "@workspace/avalanche-core/freshness";
-import { BANK_FEED_DEAD_CODES } from "./plaidReauthCodes";
+import { BANK_FEED_DEAD_CODES, PLAID_REAUTH_ERROR_CODES } from "./plaidReauthCodes";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 
 /**
@@ -72,6 +72,38 @@ function later(a: Date | null, b: Date | null): Date | null {
   return a > b ? a : b;
 }
 
+/**
+ * ⭐ (Q1) WHEN THE BANK LAST TOLD US ANYTHING — the instant the age rule reads.
+ * A Plaid balance: the later of its re-read (the snapshot) and the last
+ * successful sync (rows landing on top of it). A typed-in balance: its own
+ * time (a live feed does not refresh a typed number). Null when neither is
+ * known. The spine's `bankConfidence.fetchedAt` and each Plaid item's
+ * `freshness.fetchedAt` are this, so "Updated 2 h ago" and "stale" never
+ * disagree.
+ */
+export function lastHeardAt(args: {
+  source: "plaid" | "manual";
+  snapshotAt: Date | null;
+  lastContactAt: Date | null;
+}): Date | null {
+  return args.source === "plaid" ? later(args.snapshotAt, args.lastContactAt) : args.snapshotAt;
+}
+
+/**
+ * (Q1) The spine's `bankConfidence.fetchedAt`: `lastHeardAt` for the bank
+ * balance, from its freshness read and its snapshot's time. Null with no
+ * snapshot (source null).
+ */
+export function bankFetchedAt(freshness: Pick<BankFreshness, "source" | "lastContactAt">, snapshotAt: string | null): string | null {
+  if (!freshness.source) return null;
+  const heard = lastHeardAt({
+    source: freshness.source,
+    snapshotAt: snapshotAt ? new Date(snapshotAt) : null,
+    lastContactAt: freshness.lastContactAt ? new Date(freshness.lastContactAt) : null,
+  });
+  return heard ? heard.toISOString() : null;
+}
+
 /** The rule itself, with no I/O. Failure outranks age. */
 export function staleReasonFor(args: {
   source: "plaid" | "manual";
@@ -82,36 +114,44 @@ export function staleReasonFor(args: {
   now: Date;
 }): BankStaleReason | null {
   if (args.lastFailureAt || args.feedDead) return "refresh_failed";
+  // The last time the bank told us anything (`lastHeardAt`).
+  const lastHeard = lastHeardAt(args);
+  if (!lastHeard) return null;
   if (args.source === "plaid") {
-    // The last time the bank told us anything: a balance re-read (the snapshot)
-    // or a successful sync (rows landing on top of it).
-    const lastHeard = later(args.snapshotAt, args.lastContactAt);
-    if (!lastHeard) return null;
     return args.now.getTime() - lastHeard.getTime() > PLAID_FEED_QUIET_MS
       ? "old"
       : null;
   }
   // A live feed does not refresh a typed-in number; only its own age counts.
-  if (!args.snapshotAt) return null;
-  return args.now.getTime() - args.snapshotAt.getTime() > MANUAL_SNAPSHOT_STALE_MS
+  return args.now.getTime() - lastHeard.getTime() > MANUAL_SNAPSHOT_STALE_MS
     ? "manual_old"
     : null;
 }
 
-async function newestAttempt(
-  itemRowId: string,
-  kind: "transactions" | "balance",
-): Promise<{ success: boolean; attemptedAt: Date } | null> {
-  const [row] = await db
-    .select({
+/**
+ * ⭐ (Q1) EACH FEED'S UNRECOVERED FAILURE, in one read for any number of
+ * items: the newest `transactions` and the newest `balance` attempt of each
+ * item (PRODUCT_NOT_READY skipped: a feed warming up, not failing). A kind
+ * whose newest attempt failed has not recovered — a success of the OTHER kind
+ * does not recover it — and the later of the two failures is reported. The
+ * bank balance's freshness (`computeBankFreshness`) and every Plaid item's
+ * (`plaidItemFreshness`) read it, so the rule is one.
+ */
+export async function unrecoveredFailureAt(itemRowIds: readonly string[]): Promise<Map<string, Date | null>> {
+  const out = new Map<string, Date | null>(itemRowIds.map((id) => [id, null]));
+  if (itemRowIds.length === 0) return out;
+  const rows = await db
+    .selectDistinctOn([plaidSyncAttemptsTable.plaidItemId, plaidSyncAttemptsTable.kind], {
+      itemId: plaidSyncAttemptsTable.plaidItemId,
+      kind: plaidSyncAttemptsTable.kind,
       success: plaidSyncAttemptsTable.success,
       attemptedAt: plaidSyncAttemptsTable.attemptedAt,
     })
     .from(plaidSyncAttemptsTable)
     .where(
       and(
-        eq(plaidSyncAttemptsTable.plaidItemId, itemRowId),
-        eq(plaidSyncAttemptsTable.kind, kind),
+        inArray(plaidSyncAttemptsTable.plaidItemId, [...itemRowIds]),
+        inArray(plaidSyncAttemptsTable.kind, ["transactions", "balance"]),
         // Still preparing is a feed warming up, not a feed failing.
         or(
           isNull(plaidSyncAttemptsTable.errorCode),
@@ -119,9 +159,77 @@ async function newestAttempt(
         ),
       ),
     )
-    .orderBy(desc(plaidSyncAttemptsTable.attemptedAt))
-    .limit(1);
-  return row ?? null;
+    .orderBy(plaidSyncAttemptsTable.plaidItemId, plaidSyncAttemptsTable.kind, desc(plaidSyncAttemptsTable.attemptedAt));
+  for (const a of rows) {
+    if (a.success) continue;
+    const cur = out.get(a.itemId) ?? null;
+    if (!cur || a.attemptedAt > cur) out.set(a.itemId, a.attemptedAt);
+  }
+  return out;
+}
+
+/** (Q1) One bank connection's state, as every screen words it. */
+export type FeedState = "ok" | "stale" | "refresh_failed" | "needs_reconnect" | "never";
+
+/**
+ * ⭐ (Q1) ONE PLAID ITEM'S FRESHNESS — the bank balance's own rule
+ * (`staleReasonFor`, `unrecoveredFailureAt`, `BANK_FEED_DEAD_CODES`), applied
+ * to the item, so no screen judges a connection from `last_sync_error` (the
+ * liabilities refresh writes that column too: a card hiccup would mark the
+ * bank failed). `state`, first match wins:
+ *   needs_reconnect  its last error code asks for a reconnect
+ *                    (`PLAID_REAUTH_ERROR_CODES`, the Reconnect button's rule);
+ *   refresh_failed   an unrecovered transactions / balance failure, or a code
+ *                    that means the feed is gone;
+ *   never            never synced and no balance read;
+ *   stale            silent 48 hours (`PLAID_FEED_QUIET_MS`);
+ *   ok.
+ * `fetchedAt` = `lastHeardAt` (the later of the item's newest balance reading
+ * and its last successful sync). Pure.
+ */
+export function plaidItemFreshness(args: {
+  lastSyncedAt: Date | null;
+  lastSyncErrorCode: string | null;
+  lastFailureAt: Date | null;
+  /** The item's newest balance reading (any of its accounts), or null. */
+  snapshotAt: Date | null;
+  now: Date;
+}): {
+  state: FeedState;
+  stale: boolean;
+  staleReason: BankStaleReason | null;
+  fetchedAt: string | null;
+  lastContactAt: string | null;
+  lastFailureAt: string | null;
+} {
+  const code = args.lastSyncErrorCode;
+  const staleReason = staleReasonFor({
+    source: "plaid",
+    snapshotAt: args.snapshotAt,
+    lastContactAt: args.lastSyncedAt,
+    lastFailureAt: args.lastFailureAt,
+    feedDead: code != null && BANK_FEED_DEAD_CODES.has(code),
+    now: args.now,
+  });
+  const heard = lastHeardAt({ source: "plaid", snapshotAt: args.snapshotAt, lastContactAt: args.lastSyncedAt });
+  const state: FeedState =
+    code != null && PLAID_REAUTH_ERROR_CODES.has(code)
+      ? "needs_reconnect"
+      : staleReason === "refresh_failed"
+        ? "refresh_failed"
+        : !heard
+          ? "never"
+          : staleReason
+            ? "stale"
+            : "ok";
+  return {
+    state,
+    stale: staleReason !== null,
+    staleReason,
+    fetchedAt: heard ? heard.toISOString() : null,
+    lastContactAt: args.lastSyncedAt ? args.lastSyncedAt.toISOString() : null,
+    lastFailureAt: args.lastFailureAt ? args.lastFailureAt.toISOString() : null,
+  };
 }
 
 export async function computeBankFreshness(
@@ -185,17 +293,10 @@ export async function computeBankFreshness(
       feedDead =
         item.lastSyncErrorCode != null &&
         BANK_FEED_DEAD_CODES.has(item.lastSyncErrorCode);
-      const newest = await Promise.all([
-        newestAttempt(acct.itemRowId, "transactions"),
-        newestAttempt(acct.itemRowId, "balance"),
-      ]);
       // A kind whose newest attempt failed has not recovered. A success of the
       // OTHER kind does not recover it. Report the later of the two failures.
-      for (const a of newest) {
-        if (a && !a.success && (!lastFailureAt || a.attemptedAt > lastFailureAt)) {
-          lastFailureAt = a.attemptedAt;
-        }
-      }
+      // (Q1) One read, shared with every Plaid item's freshness.
+      lastFailureAt = (await unrecoveredFailureAt([acct.itemRowId])).get(acct.itemRowId) ?? null;
     }
   }
 

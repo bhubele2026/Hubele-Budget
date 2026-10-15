@@ -969,7 +969,7 @@ export default function AvalanchePage() {
                   })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Extra payment source">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -991,7 +991,7 @@ export default function AvalanchePage() {
                       })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Budget category">
                       <SelectValue placeholder="Pick a category" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1077,6 +1077,7 @@ export default function AvalanchePage() {
                     </span>
                   </div>
                   <Slider
+                    aria-label="Extra payment"
                     value={[Math.min(liveManualExtra, budgetCap)]}
                     min={0}
                     max={budgetCap}
@@ -1389,6 +1390,7 @@ export default function AvalanchePage() {
             </div>
             <div className="space-y-2 p-4">
               <Slider
+                aria-label="What-if extra"
                 min={0}
                 max={2000}
                 step={25}
@@ -1730,7 +1732,7 @@ function PillToggle<T extends string>({
             <div
               className={cn(
                 "mt-0.5 text-micro uppercase tracking-wide",
-                active ? "text-white/70" : "text-neutral-400",
+                active ? "text-white/70" : "text-neutral-600",
               )}
             >
               {opt.sub}

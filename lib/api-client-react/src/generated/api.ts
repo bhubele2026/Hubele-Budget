@@ -40,8 +40,12 @@ import type {
   AmexCardPayoffMode,
   AmexSummary,
   AmexWeeklyPayoff,
+  AppliedCorrection,
+  AppliedCorrections,
   ApplyLearnedRuleRetroactivelyParams,
   ApplyRetroactivelyResult,
+  ApplyReviewProposalInput,
+  ApplyReviewProposalParams,
   AvalancheExtra,
   AvalancheSchedule,
   AvalancheSettings,
@@ -75,6 +79,9 @@ import type {
   CleanupNonProdPlaidItems200,
   CloseForecastMonthBody,
   CorrectDecisionInput,
+  CorrectionPreview,
+  CorrectionRefusal,
+  CorrectionUndo,
   CreateAllowancePlanBody,
   CreateAllowancePlanParams,
   CreateDebtFromPlaidAccount409,
@@ -102,6 +109,7 @@ import type {
   DeleteDashboardBudgetParams,
   DeleteMerchantAliasParams,
   DeleteMerchantAliasResult,
+  DirectionRefusal,
   DuplicateTransactionCount,
   EvaluateAffordBody,
   ForecastBundle,
@@ -1815,7 +1823,7 @@ export const updateTransaction = async (
 };
 
 export const getUpdateTransactionMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ReviewRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1856,10 +1864,10 @@ export type UpdateTransactionMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateTransaction>>
 >;
 export type UpdateTransactionMutationBody = BodyType<TransactionInput>;
-export type UpdateTransactionMutationError = ErrorType<unknown>;
+export type UpdateTransactionMutationError = ErrorType<ReviewRefusal>;
 
 export const useUpdateTransaction = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ReviewRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -2079,7 +2087,7 @@ export const recategorizeTransactionsByPattern = async (
 };
 
 export const getRecategorizeTransactionsByPatternMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<DirectionRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -2121,7 +2129,8 @@ export type RecategorizeTransactionsByPatternMutationResult = NonNullable<
 >;
 export type RecategorizeTransactionsByPatternMutationBody =
   BodyType<RecategorizeByPatternInput>;
-export type RecategorizeTransactionsByPatternMutationError = ErrorType<unknown>;
+export type RecategorizeTransactionsByPatternMutationError =
+  ErrorType<DirectionRefusal>;
 
 /**
  * @summary Bulk re-categorize past transactions whose description matches a
@@ -2133,7 +2142,7 @@ rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
 
  */
 export const useRecategorizeTransactionsByPattern = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<DirectionRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -2505,7 +2514,7 @@ export const bulkUpdateTransactions = async (
 };
 
 export const getBulkUpdateTransactionsMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<DirectionRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -2547,7 +2556,7 @@ export type BulkUpdateTransactionsMutationResult = NonNullable<
 >;
 export type BulkUpdateTransactionsMutationBody =
   BodyType<BulkUpdateTransactionsInput>;
-export type BulkUpdateTransactionsMutationError = ErrorType<unknown>;
+export type BulkUpdateTransactionsMutationError = ErrorType<DirectionRefusal>;
 
 /**
  * @summary Apply the same patch to a list of transactions in a single
@@ -2564,7 +2573,7 @@ rule-learning toast is only meaningful for one-off edits.
 
  */
 export const useBulkUpdateTransactions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<DirectionRefusal>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -11978,6 +11987,297 @@ export function useGetReviewProposals<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary (Q2) The fixes the owner applied, newest first (at most 20; owner only)
+ */
+export const getListAppliedReviewProposalsUrl = () => {
+  return `/api/review/proposals/applied`;
+};
+
+export const listAppliedReviewProposals = async (
+  options?: RequestInit,
+): Promise<AppliedCorrections> => {
+  return customFetch<AppliedCorrections>(getListAppliedReviewProposalsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAppliedReviewProposalsQueryKey = () => {
+  return [`/api/review/proposals/applied`] as const;
+};
+
+export const getListAppliedReviewProposalsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAppliedReviewProposals>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAppliedReviewProposals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAppliedReviewProposalsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAppliedReviewProposals>>
+  > = ({ signal }) => listAppliedReviewProposals({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAppliedReviewProposals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAppliedReviewProposalsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAppliedReviewProposals>>
+>;
+export type ListAppliedReviewProposalsQueryError = ErrorType<void>;
+
+/**
+ * @summary (Q2) The fixes the owner applied, newest first (at most 20; owner only)
+ */
+
+export function useListAppliedReviewProposals<
+  TData = Awaited<ReturnType<typeof listAppliedReviewProposals>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAppliedReviewProposals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAppliedReviewProposalsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * The proposal is recomputed and must be the one the owner saw: the body echoes its proposalHash and the ids of its listed rows (a truncated proposal applies to the rows it lists). income_category and transfer file every row under the target category through the user-decision path (the row locked, a user decision with its flags before and after); loan_payment also does (when the proposal names a category) and marks each row matched to its occurrence; bill_match marks it matched. An occurrence two rows would answer goes to the row dated nearest it. Merchant memory learns once per fix, sign-aware. Every category goes through the direction guard. One record keeps everything the undo needs. dryRun=1 writes nothing and answers each row before and after, the answers the fix would replace, and the figures before and after — this week's and this month's breakdown (actual, known, unresolved), the Budget months the rows fall in, and the Banking review's buckets (before only; see limitations) — read by the same builders as the screens, through the plan the apply writes.
+ * @summary (Q2) Apply one proposed fix in one transaction — or, with dryRun=1, show what it would change (owner only)
+ */
+export const getApplyReviewProposalUrl = (
+  key: string,
+  params?: ApplyReviewProposalParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/review/proposals/${key}/apply?${stringifiedParams}`
+    : `/api/review/proposals/${key}/apply`;
+};
+
+export const applyReviewProposal = async (
+  key: string,
+  applyReviewProposalInput: ApplyReviewProposalInput,
+  params?: ApplyReviewProposalParams,
+  options?: RequestInit,
+): Promise<CorrectionPreview | AppliedCorrection> => {
+  return customFetch<CorrectionPreview | AppliedCorrection>(
+    getApplyReviewProposalUrl(key, params),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(applyReviewProposalInput),
+    },
+  );
+};
+
+export const getApplyReviewProposalMutationOptions = <
+  TError = ErrorType<void | CorrectionRefusal>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyReviewProposal>>,
+    TError,
+    {
+      key: string;
+      data: BodyType<ApplyReviewProposalInput>;
+      params?: ApplyReviewProposalParams;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof applyReviewProposal>>,
+  TError,
+  {
+    key: string;
+    data: BodyType<ApplyReviewProposalInput>;
+    params?: ApplyReviewProposalParams;
+  },
+  TContext
+> => {
+  const mutationKey = ["applyReviewProposal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof applyReviewProposal>>,
+    {
+      key: string;
+      data: BodyType<ApplyReviewProposalInput>;
+      params?: ApplyReviewProposalParams;
+    }
+  > = (props) => {
+    const { key, data, params } = props ?? {};
+
+    return applyReviewProposal(key, data, params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApplyReviewProposalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof applyReviewProposal>>
+>;
+export type ApplyReviewProposalMutationBody =
+  BodyType<ApplyReviewProposalInput>;
+export type ApplyReviewProposalMutationError =
+  ErrorType<void | CorrectionRefusal>;
+
+/**
+ * @summary (Q2) Apply one proposed fix in one transaction — or, with dryRun=1, show what it would change (owner only)
+ */
+export const useApplyReviewProposal = <
+  TError = ErrorType<void | CorrectionRefusal>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyReviewProposal>>,
+    TError,
+    {
+      key: string;
+      data: BodyType<ApplyReviewProposalInput>;
+      params?: ApplyReviewProposalParams;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof applyReviewProposal>>,
+  TError,
+  {
+    key: string;
+    data: BodyType<ApplyReviewProposalInput>;
+    params?: ApplyReviewProposalParams;
+  },
+  TContext
+> => {
+  return useMutation(getApplyReviewProposalMutationOptions(options));
+};
+
+/**
+ * Puts back every row's category, lock, provisional flag, transfer flag, its person's override and allowance flags; deletes the answers the fix created and restores the ones it replaced (same ids); reopens the review-queue items it answered; marks its decisions undone; restores the merchant memory (or, when more was learned since, switches off the rule it taught). Refuses, writing nothing, when a row it filed or an answer it wrote changed since (changed_since, naming them).
+ * @summary (Q2) Undo one applied fix, whole and exactly (owner only)
+ */
+export const getUndoAppliedReviewProposalUrl = (id: string) => {
+  return `/api/review/proposals/applied/${id}/undo`;
+};
+
+export const undoAppliedReviewProposal = async (
+  id: string,
+  options?: RequestInit,
+): Promise<CorrectionUndo> => {
+  return customFetch<CorrectionUndo>(getUndoAppliedReviewProposalUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getUndoAppliedReviewProposalMutationOptions = <
+  TError = ErrorType<void | CorrectionRefusal>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoAppliedReviewProposal>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof undoAppliedReviewProposal>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["undoAppliedReviewProposal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof undoAppliedReviewProposal>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return undoAppliedReviewProposal(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UndoAppliedReviewProposalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof undoAppliedReviewProposal>>
+>;
+
+export type UndoAppliedReviewProposalMutationError =
+  ErrorType<void | CorrectionRefusal>;
+
+/**
+ * @summary (Q2) Undo one applied fix, whole and exactly (owner only)
+ */
+export const useUndoAppliedReviewProposal = <
+  TError = ErrorType<void | CorrectionRefusal>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoAppliedReviewProposal>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof undoAppliedReviewProposal>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getUndoAppliedReviewProposalMutationOptions(options));
+};
 
 /**
  * Upserts the household's carry-over for one week (unique on household, week and kind). amountCents is whole cents and must be negative: an adjustment can only LOWER a week. weekStart must be a Sunday, this week or later. The money position subtracts it from that week's remainingWeek.

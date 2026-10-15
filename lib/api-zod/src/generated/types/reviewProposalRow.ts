@@ -5,8 +5,8 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
-import type { PeriodBreakdownAccount } from "./periodBreakdownAccount";
 import type { PeriodBreakdownRowCategory } from "./periodBreakdownRowCategory";
+import type { ReviewProposalAccount } from "./reviewProposalAccount";
 import type { ReviewProposalOccurrence } from "./reviewProposalOccurrence";
 
 export interface ReviewProposalRow {
@@ -17,7 +17,9 @@ export interface ReviewProposalRow {
   /** Signed: negative is money out (a workbook Amex charge is positive) */
   amount: string;
   pending: boolean;
-  account: PeriodBreakdownAccount;
+  /** (Q2) The row's ledger source (plaid:chase, plaid:amex, manual, …), for its link */
+  source: string;
+  account: ReviewProposalAccount;
   category: PeriodBreakdownRowCategory | null;
   /** The bill occurrence "mark matched" would name; null when none is in reach */
   occurrence: ReviewProposalOccurrence | null;

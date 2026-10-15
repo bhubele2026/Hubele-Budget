@@ -9,8 +9,16 @@
 export interface AffordFigures {
   /** @nullable */
   safeToSpendNow: string | null;
-  /** @nullable */
+  /**
+   * The cautious total's remaining (includes unconfirmed)
+   * @nullable
+   */
   remainingWeek: string | null;
+  /**
+   * (Q5 fix) The plan against what counts toward it (= the position's remainingWeekKnown); null with no cap
+   * @nullable
+   */
+  remainingWeekKnown: string | null;
   /** @nullable */
   availableUntilPayday: string | null;
   /** The curve's lowest end-of-day balance over its window. */

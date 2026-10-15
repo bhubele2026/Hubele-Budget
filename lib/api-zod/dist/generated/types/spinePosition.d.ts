@@ -23,6 +23,17 @@ export interface SpinePosition {
      * @nullable
      */
     remainingWeek: string | null;
+    /** (Q1) MoneyPosition.knownWeek — Counts toward plan */
+    knownWeek: string;
+    /** (Q1) MoneyPosition.unresolvedWeek — Unconfirmed */
+    unresolvedWeek: string;
+    /** (Q1) MoneyPosition.provisional */
+    provisional: boolean;
+    /**
+     * (Q1) MoneyPosition.remainingWeekKnown; null when the plan is not set
+     * @nullable
+     */
+    remainingWeekKnown: string | null;
     /**
      * MoneyPosition.availableUntilPayday
      * @nullable

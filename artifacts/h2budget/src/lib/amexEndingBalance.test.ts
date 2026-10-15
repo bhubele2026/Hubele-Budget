@@ -9,7 +9,7 @@ import {
   type AmexTxnInput,
 } from "./amexEndingBalance";
 import { monthKeyFromISO } from "@/components/account-page";
-import { computeRunningBalances, sortNewestFirst } from "./runningBalance";
+import { openingCardBalance, walkCardBalancesBack, walkCardBalancesForward } from "./cardBalanceWalk";
 
 // (#689) The user's dashboard tile reported "$20,000 Amex Ending
 // Balance" — actually their Amex Pay-Over-Time / "Plan-It"
@@ -242,16 +242,17 @@ describe("amexEndingBalance shared helper", () => {
     asOf: "2026-04-15",
   };
 
-  // Anchor-month + neighboring-month activity. Charges are positive
-  // (they raise the card's outstanding balance), payments/credits are
-  // negative.
+  // Anchor-month + neighboring-month activity. Workbook rows (`source:
+  // "amex"`): charges are positive (they raise the card's outstanding
+  // balance), payments/credits are negative. (Q3) The same activity from
+  // Plaid carries the opposite sign — see the Plaid block below.
   const txns: AmexTxnInput[] = [
-    { occurredOn: "2026-04-10", amount: "-50.00" }, // before anchor — ignored
-    { occurredOn: "2026-04-20", amount: "200.00" }, // after anchor — adds $200
-    { occurredOn: "2026-04-25", amount: "-30.00" }, // after anchor — subtracts $30
-    { occurredOn: "2026-05-05", amount: "500.00" },
-    { occurredOn: "2026-05-12", amount: "-100.00" },
-    { occurredOn: "2026-03-20", amount: "-75.00" },
+    { occurredOn: "2026-04-10", amount: "-50.00", source: "amex" }, // before anchor — ignored
+    { occurredOn: "2026-04-20", amount: "200.00", source: "amex" }, // after anchor — adds $200
+    { occurredOn: "2026-04-25", amount: "-30.00", source: "amex" }, // after anchor — subtracts $30
+    { occurredOn: "2026-05-05", amount: "500.00", source: "amex" },
+    { occurredOn: "2026-05-12", amount: "-100.00", source: "amex" },
+    { occurredOn: "2026-03-20", amount: "-75.00", source: "amex" },
   ];
 
   it("matches the Amex page's per-month closure across past, current, future months", () => {
@@ -364,7 +365,7 @@ describe("amexEndingBalance shared helper", () => {
       anchor,
       amexTransactions: [
         ...txns,
-        { occurredOn: "2026-05-28", amount: "250.00" },
+        { occurredOn: "2026-05-28", amount: "250.00", source: "amex" },
       ],
     });
     expect(after).toBeCloseTo((before as number) + 250, 2);
@@ -377,8 +378,8 @@ describe("amexEndingBalance shared helper", () => {
 // YYYY-MM-DD, which the household calendar reads unchanged.
 describe("(PR2b) a computed Amex anchor counts its latest day once", () => {
   const txns: AmexTxnInput[] = [
-    { occurredOn: "2026-09-02", amount: "30.00" },
-    { occurredOn: "2026-09-10", amount: "50.00" },
+    { occurredOn: "2026-09-02", amount: "30.00", source: "amex" },
+    { occurredOn: "2026-09-10", amount: "50.00", source: "amex" },
   ];
 
   it("resolves the server's bare-day asOf to an ending balance equal to the sum", () => {
@@ -410,35 +411,157 @@ describe("(PR2b) a computed Amex anchor counts its latest day once", () => {
   });
 });
 
-// ⭐ (F6 round 4, review finding 3) An expired hold counts nowhere on the card
-// page either: not in the ending-balance tile, not in the 12-month chart, and
-// the running-balance walk skips it — so they agree, and each month's walk
-// starts at the month before's ending balance. Synthetic: the card read 10/03 at
-// 1,000.00; 10/01 A 10 posted; 10/05 H 52 an expired hold; 10/06 B 20 posted.
-describe("(F6 round 4) the tile, the chart and the walk leave out an expired hold together", () => {
-  const anchor: AmexAnchor = { balance: 1000, asOf: "2026-10-03T15:00:00Z" };
-  const rows = [
-    { id: "A", occurredOn: "2026-10-01", amount: "10.00" },
-    { id: "H", occurredOn: "2026-10-05", amount: "52.00", expiredHold: true },
-    { id: "B", occurredOn: "2026-10-06", amount: "20.00" },
+// ⭐ (Q3) The same card activity from PLAID carries the bank sign: a purchase is
+// stored NEGATIVE, a payment or a credit POSITIVE. The month walk reads each
+// row's change to what is OWED (`cardOwedMoves`), so the Plaid rows give the
+// very figures the workbook rows above give. Before Q3 the helper summed the
+// raw amounts: the Plaid month-ends moved the wrong way.
+describe("(Q3) Plaid card rows walk the same as workbook rows", () => {
+  const anchor: AmexAnchor = { balance: 1000, asOf: "2026-04-15" };
+  const plaid: AmexTxnInput[] = [
+    { occurredOn: "2026-04-10", amount: "50.00", source: "plaid:amex" }, //   credit   −50
+    { occurredOn: "2026-04-20", amount: "-200.00", source: "plaid:amex" }, // purchase +200
+    { occurredOn: "2026-04-25", amount: "30.00", source: "plaid:amex" }, //   payment  −30
+    { occurredOn: "2026-05-05", amount: "-500.00", source: "plaid:amex" }, // purchase +500
+    { occurredOn: "2026-05-12", amount: "100.00", source: "plaid:amex" }, //  payment  −100
+    { occurredOn: "2026-03-20", amount: "75.00", source: "plaid:amex" }, //   refund   −75
   ];
-  it("October ends at 1,020.00 (the card's real balance; it read 1,072.00); September at 990.00", () => {
-    const at = makeAmexBalanceAtEndOf({ anchor, amexTransactions: rows });
-    expect(at(monthKeyFromISO("2026-10-01"))).toBeCloseTo(1020, 2);
-    expect(at(monthKeyFromISO("2026-09-01"))).toBeCloseTo(990, 2);
-    // Without the server's flag (an older response): as before, 1,072.00.
-    const before = makeAmexBalanceAtEndOf({ anchor, amexTransactions: rows.map(({ expiredHold: _e, ...r }) => r) });
-    expect(before(monthKeyFromISO("2026-10-01"))).toBeCloseTo(1072, 2);
+  const at = makeAmexBalanceAtEndOf({ anchor, amexTransactions: plaid });
+
+  it("end of April = 1000 + 200 − 30 = 1170; May = 1170 + 500 − 100 = 1570; March = 1170 − (−50 + 200 − 30) = 1050", () => {
+    expect(at(monthKeyFromISO("2026-04-01"))).toBe(1170);
+    expect(at(monthKeyFromISO("2026-05-01"))).toBe(1570);
+    expect(at(monthKeyFromISO("2026-03-01"))).toBe(1050);
+    // February: before March's −75 refund the card owed 75 more.
+    expect(at(monthKeyFromISO("2026-02-01"))).toBe(1125);
   });
-  it("the October walk from its ending balance opens at September's ending balance (it opened 52.00 above)", () => {
-    const at = makeAmexBalanceAtEndOf({ anchor, amexTransactions: rows });
-    const end = at(monthKeyFromISO("2026-10-01"))!;
-    const walk = computeRunningBalances(sortNewestFirst(rows), end);
-    expect(walk.get("B")).toBeCloseTo(1020, 2);
-    expect(walk.has("H")).toBe(false);
-    expect(walk.get("A")).toBeCloseTo(1000, 2);
-    const opening = walk.get("A")! - 10;
-    expect(opening).toBeCloseTo(at(monthKeyFromISO("2026-09-01"))!, 2);
+
+  it("a pending row moves no month-end (the walk is on posted rows)", () => {
+    const withPending = makeAmexBalanceAtEndOf({
+      anchor,
+      amexTransactions: [
+        ...plaid,
+        { occurredOn: "2026-05-28", amount: "-80.00", source: "plaid:amex", pending: true },
+      ],
+    });
+    expect(withPending(monthKeyFromISO("2026-05-01"))).toBe(1570);
+  });
+
+  it("figures are whole cents (no float tails)", () => {
+    const cents = makeAmexBalanceAtEndOf({
+      anchor: { balance: 0.3, asOf: "2026-04-15" },
+      amexTransactions: [
+        { occurredOn: "2026-04-20", amount: "-0.10", source: "plaid:amex" },
+        { occurredOn: "2026-04-21", amount: "-0.20", source: "plaid:amex" },
+      ],
+    });
+    // 0.30 + 0.10 + 0.20 = 0.60 (in floats, 0.6000000000000001).
+    expect(cents(monthKeyFromISO("2026-04-01"))).toBe(0.6);
+    // March = 0.60 − April's 0.30 = 0.30.
+    expect(cents(monthKeyFromISO("2026-03-01"))).toBe(0.3);
+    // Back to nothing owed reads 0, never −0.
+    const zero = makeAmexBalanceAtEndOf({
+      anchor: { balance: 0.3, asOf: "2026-04-15" },
+      amexTransactions: [
+        { occurredOn: "2026-04-10", amount: "-0.10", source: "plaid:amex" },
+        { occurredOn: "2026-04-12", amount: "-0.20", source: "plaid:amex" },
+      ],
+    });
+    expect(Object.is(zero(monthKeyFromISO("2026-03-01")), 0)).toBe(true);
   });
 });
 
+// (#442/#449) A re-link can leave a second `plaid_accounts` row for one card
+// (same institution + mask), with a debt on it. The combined resolver counts
+// that card once. (Q3 moved these guards here from the relink e2e specs: "All
+// cards" no longer walks a combined figure onto its rows, so the specs have no
+// combined "bal" left to read.) Synthetic cards and balances.
+describe("(#442/#449) resolveAmexDebt counts a re-linked card once", () => {
+  const debt = (id: string, balance: string, updated: string): AmexDebtLike => ({
+    name: `Amex ••${id}`,
+    balance,
+    plaidAccountId: id,
+    lastBalanceUpdate: updated,
+    plaidLastSyncedAt: null,
+    type: "credit",
+  });
+  const debts = [
+    debt("row-1001", "500.00", "2026-09-16T23:00:00.000Z"),
+    debt("row-2002", "750.00", "2026-09-16T23:00:00.000Z"),
+    debt("row-3003", "1250.00", "2026-09-16T23:00:00.000Z"),
+    debt("row-1001-dup", "500.00", "2026-09-16T23:30:00.000Z"),
+  ];
+  const items = [
+    {
+      institutionName: "American Express",
+      accounts: [
+        { id: "row-1001", mask: "1001" },
+        { id: "row-2002", mask: "2002" },
+        { id: "row-3003", mask: "3003" },
+        { id: "row-1001-dup", mask: "1001" },
+      ],
+    },
+  ];
+
+  it("(#442) a duplicate row with no transactions is not in scope: 500 + 750 + 1,250 = 2,500", () => {
+    const got = resolveAmexDebt({
+      debts,
+      amexPlaidAccountIds: new Set(["row-1001", "row-2002", "row-3003"]),
+      plaidItemsForScope: items,
+    });
+    expect(got!.balance).toBe("2500");
+  });
+
+  it("(#449) a duplicate row WITH a transaction is collapsed by institution + mask: still 2,500, never 3,000", () => {
+    const got = resolveAmexDebt({
+      debts,
+      amexPlaidAccountIds: new Set(["row-1001", "row-2002", "row-3003", "row-1001-dup"]),
+      plaidItemsForScope: items,
+    });
+    expect(got!.balance).toBe("2500");
+    expect(got!.lastBalanceUpdate).toBe("2026-09-16T23:30:00.000Z");
+  });
+});
+
+// ⭐ (F6 round 4, review finding 3 — merged onto Q3's walk) An expired hold
+// counts nowhere on the card page either: not in the ending-balance tile, not in
+// the 12-month chart, and the per-row walk skips it — so they agree, and each
+// month's walk starts at the month before's ending balance. Synthetic Plaid rows
+// (bank sign): the card read 10/03 at 1,000.00; 10/01 A 10 posted; 10/05 H 52 an
+// expired hold (pending, the server's `expiredHold`); 10/06 B 20 posted.
+describe("(F6 round 4) the tile, the chart and the walk leave out an expired hold together", () => {
+  const anchor: AmexAnchor = { balance: 1000, asOf: "2026-10-03T15:00:00Z" };
+  const rows = [
+    { id: "A", occurredOn: "2026-10-01", amount: "-10.00", source: "plaid:amex" },
+    { id: "H", occurredOn: "2026-10-05", amount: "-52.00", source: "plaid:amex", pending: true, expiredHold: true },
+    { id: "B", occurredOn: "2026-10-06", amount: "-20.00", source: "plaid:amex" },
+  ];
+  it("October ends at 1,020.00 (the card's real balance; a counted 52 read 1,072.00); September at 990.00", () => {
+    const at = makeAmexBalanceAtEndOf({ anchor, amexTransactions: rows });
+    expect(at(monthKeyFromISO("2026-10-01"))).toBe(1020);
+    expect(at(monthKeyFromISO("2026-09-01"))).toBe(990);
+    // The server's flag alone (no pending flag on the row) still keeps it out: `isCounted`.
+    const flagOnly = makeAmexBalanceAtEndOf({
+      anchor,
+      amexTransactions: rows.map(({ pending: _p, ...r }) => r),
+    });
+    expect(flagOnly(monthKeyFromISO("2026-10-01"))).toBe(1020);
+    // Control — the same 52 as a posted, counted purchase: 1,072.00.
+    const counted = makeAmexBalanceAtEndOf({
+      anchor,
+      amexTransactions: rows.map(({ pending: _p, expiredHold: _e, ...r }) => r),
+    });
+    expect(counted(monthKeyFromISO("2026-10-01"))).toBe(1072);
+  });
+  it("the October walk from its ending balance opens at September's ending balance; forward = backward", () => {
+    const at = makeAmexBalanceAtEndOf({ anchor, amexTransactions: rows });
+    const end = at(monthKeyFromISO("2026-10-01"))!;
+    const back = walkCardBalancesBack(rows, end);
+    expect(back.get("B")).toBe(1020);
+    expect(back.has("H")).toBe(false);
+    expect(back.get("A")).toBe(1000);
+    const opening = openingCardBalance(rows, end);
+    expect(opening).toBe(at(monthKeyFromISO("2026-09-01")));
+    expect(walkCardBalancesForward(rows, opening)).toEqual(back);
+  });
+});

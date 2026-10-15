@@ -22,6 +22,8 @@
 //                 even count is the lower-rounded mean of the middle two).
 //                 Biggest spend first; ties by name, then id. Rows with no
 //                 category are never a trim (there is nothing to name).
+//                 (Final #10) Quoted only when the category has rows in at
+//                 least half of those weeks (`usualHistoryNeeded`); else null.
 //                 ⭐ (F3) TO THE SAME WEEKDAY: the week is still running, so
 //                 each of the 8 weeks is cut at today's weekday
 //                 (`samePointInPeriod`: today Wednesday → that week's
@@ -48,6 +50,34 @@
 import type { MoneyPosition } from "./availableToSpend";
 import type { MovementCoverage } from "./householdMoney";
 import { addDaysISO, dayOfWeekISO, samePointInPeriod } from "./householdTime";
+
+/**
+ * (Q1) The fewest prior periods holding rows of a category before its usual is
+ * quoted. The period breakdown re-exports it (`USUAL_MIN_HISTORY_PERIODS`): one
+ * threshold for "Why over?" and the ways back. Defined here because the
+ * breakdown imports this module (`medianCents`), never the reverse.
+ */
+export const USUAL_MIN_HISTORY_PERIODS = 2;
+
+/**
+ * ⭐ (Final #10) A USUAL NEEDS REAL HISTORY. The median runs over every period
+ * of the window (8 weeks, 3 months, after tracking began) with an empty one
+ * counting 0, so a category with rows in 2 of 8 weeks read "usual $0.00 ·
+ * above usual" — the old symptom, for categories that cleared the floor. The
+ * usual is quoted only when the category has rows in at least HALF of the
+ * window's periods, and never fewer than `USUAL_MIN_HISTORY_PERIODS`:
+ * 8 weeks → 4, 3 months → 2, a 3-week window (tracking began then) → 2.
+ * Below it `usual` is null: "Not enough history". One rule for "Why over?"
+ * (`periodBreakdown`) and the ways back.
+ */
+export function usualHistoryNeeded(windowPeriods: number): number {
+  return Math.max(USUAL_MIN_HISTORY_PERIODS, Math.ceil(windowPeriods / 2));
+}
+
+/** (Final #10) Does a category with rows in `historyPeriods` of `windowPeriods` periods get a usual? */
+export function hasUsualHistory(historyPeriods: number, windowPeriods: number): boolean {
+  return historyPeriods >= usualHistoryNeeded(windowPeriods);
+}
 
 /** How many trims the answer offers. */
 export const WAYS_BACK_TRIMS = 3;
@@ -103,6 +133,13 @@ export interface WaysBackTrim {
   usualWeek: number | null;
   /** (F3) The median over the same 8 weeks, whole; null when none of them counts. */
   usualFullWeek: number | null;
+  /**
+   * (Q1) How many of those weeks hold rows of the category. (Final #10) Below
+   * half of them (`usualHistoryNeeded`: 4 of 8, never fewer than 2)
+   * `usualWeek` and `usualFullWeek` are null: "Not enough history", never a
+   * $0 usual.
+   */
+  historyPeriods: number;
 }
 
 export interface WaysBack {
@@ -181,13 +218,20 @@ export function computeWaysBack(inputs: WaysBackInputs): WaysBack {
       perWeekToDate.set(key, (perWeekToDate.get(key) ?? 0) + r.spendCents);
     }
   }
-  const trims: WaysBackTrim[] = top.map((t) => ({
-    categoryId: t.categoryId,
-    name: t.name,
-    spentWeek: t.spentWeek,
-    usualWeek: medianCents(weekStarts.map((ws) => perWeekToDate.get(`${ws}|${t.categoryId}`) ?? 0)),
-    usualFullWeek: medianCents(weekStarts.map((ws) => perWeek.get(`${ws}|${t.categoryId}`) ?? 0)),
-  }));
+  const trims: WaysBackTrim[] = top.map((t) => {
+    // (Q1) The weeks holding rows of the category (a key in `perWeek`).
+    const historyPeriods = weekStarts.filter((ws) => perWeek.has(`${ws}|${t.categoryId}`)).length;
+    // (Final #10) Rows in at least half the weeks (and 2+).
+    const enough = hasUsualHistory(historyPeriods, weekStarts.length);
+    return {
+      categoryId: t.categoryId,
+      name: t.name,
+      spentWeek: t.spentWeek,
+      usualWeek: enough ? medianCents(weekStarts.map((ws) => perWeekToDate.get(`${ws}|${t.categoryId}`) ?? 0)) : null,
+      usualFullWeek: enough ? medianCents(weekStarts.map((ws) => perWeek.get(`${ws}|${t.categoryId}`) ?? 0)) : null,
+      historyPeriods,
+    };
+  });
 
   // ── Carry-over: next week with the overage taken out (or the choice already made).
   const nextWeekStart = addDaysISO(position.weekStart, 7);

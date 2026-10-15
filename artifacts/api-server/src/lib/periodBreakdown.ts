@@ -64,6 +64,7 @@ import { householdTodayISO } from "./householdClock";
 import { expandSplits, loadSplitsForTxns } from "./categorizer/splits";
 import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
 import { billSuggestionsOf, evidenceContextOf, rowEvidenceOf } from "./rowEvidence";
+import { suggestionsAfter, tier2PairedAfter, type CorrectionOverlay } from "./correctionOverlay";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -88,6 +89,11 @@ export interface PeriodBreakdownQuery {
 export interface ReadPeriodOptions {
   /** A cash-signal read already made for this request (the spine's), so one request builds one ledger. */
   cash?: Promise<DetailedCashSignal> | DetailedCashSignal;
+  /**
+   * (Q2) A proposed fix's dry run: the period's rows and confirmed matches as
+   * the fix would leave them (`correctionOverlay.ts`). Never set outside a dry run.
+   */
+  overlay?: CorrectionOverlay | null;
 }
 
 interface PlanView {
@@ -174,7 +180,10 @@ async function readPeriod(
 
   // The current week: the money position's own read and nothing else.
   if (period === "week" && isCurrent) {
-    const read = await loadPositionInputs(householdId, ownerUserId, opts.cash ? { cash: opts.cash } : {});
+    const read = await loadPositionInputs(householdId, ownerUserId, {
+      ...(opts.cash ? { cash: opts.cash } : {}),
+      ...(opts.overlay ? { overlay: opts.overlay } : {}),
+    });
     const readWeek = weekBounds(read.inputs.todayISO);
     // (Midnight Saturday between the two clocks) the read is a week on; the
     // asked-for week is a past week now — read it as one.
@@ -188,7 +197,8 @@ async function readPeriod(
         movement: read.weekMovement,
         money: read.money,
         tier2PairedTxnIds: read.money.tier2PairedTxnIds,
-        billSuggestions: billSuggestionsOf(read.cash.ledger, read.money.supersede),
+        // (Q1) The suggestions the position's own `knownWeek` read (overlay applied there).
+        billSuggestions: read.billSuggestions,
         planCents: capCents,
         plan: planViewOf(period, start, read.allowancePlans, read.money.settings.weeklyAllowanceOverrides, capCents),
         carryOverCents: read.inputs.weekAdjustmentCents ?? null,
@@ -201,10 +211,11 @@ async function readPeriod(
   const cash = await Promise.resolve(
     opts.cash ?? computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: POSITION_HORIZON_DAYS }),
   );
-  const tier2PairedTxnIds = tier2PairedTxnIdsOf(cash.ledger);
+  // (Q2) A dry run drops the pairs with an occurrence the fix answers.
+  const tier2PairedTxnIds = opts.overlay ? tier2PairedAfter(cash.ledger.matches, opts.overlay) : tier2PairedTxnIdsOf(cash.ledger);
   const from = start < TRACKING_START ? TRACKING_START : start;
   const [window, plans, adjustments] = await Promise.all([
-    loadAllowanceWindow(householdId, { start: from, end }, { tier2PairedTxnIds }),
+    loadAllowanceWindow(householdId, { start: from, end }, { tier2PairedTxnIds, overlay: opts.overlay ?? null }),
     loadAllowancePlans(householdId),
     period === "week" ? readWeekAdjustments(householdId, [start]) : Promise.resolve(null),
   ]);
@@ -219,7 +230,7 @@ async function readPeriod(
     movement: window.movement,
     money: window.money,
     tier2PairedTxnIds,
-    billSuggestions: billSuggestionsOf(cash.ledger, window.money.supersede),
+    billSuggestions: suggestionsAfter(billSuggestionsOf(cash.ledger, window.money.supersede), opts.overlay),
     planCents: capCents,
     plan: planViewOf(period, start, plans, overrides, capCents),
     carryOverCents: adjustments?.get(start)?.amountCents ?? null,
@@ -401,7 +412,12 @@ function evidenceView(ev: RowEvidence | null) {
  * ⭐ `GET /money/period-breakdown`. See the file header and the PeriodBreakdown
  * schema. Every figure is `periodBreakdown`'s (avalanche-core).
  */
-export async function buildPeriodBreakdown(householdId: string, ownerUserId: string, q: PeriodBreakdownQuery) {
+export async function buildPeriodBreakdown(
+  householdId: string,
+  ownerUserId: string,
+  q: PeriodBreakdownQuery,
+  opts: ReadPeriodOptions = {},
+) {
   // The account first: a bad or foreign one is refused before anything is read.
   let scopeAccount: (AccountIdentity & { externalId: string }) | null = null;
   if (q.account !== undefined) {
@@ -425,7 +441,8 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
     ? (row: MovementRowRead) => netAccountOf(row) === scopeAccount!.externalId
     : () => true;
 
-  const read = await readPeriod(householdId, ownerUserId, q.period, q.start, {});
+  // (Q2) `opts` is a dry run's overlay (and its ledger) only; the route passes none.
+  const read = await readPeriod(householdId, ownerUserId, q.period, q.start, opts);
   const { period, start, end } = read;
 
   // ── The prior periods `usual` reads: the same window read, the same ledger's pairs.
@@ -435,7 +452,7 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
       ? loadAllowanceWindow(
           householdId,
           { start: historyStarts[0]!, end: addDaysISO(start, -1) },
-          { tier2PairedTxnIds: read.tier2PairedTxnIds },
+          { tier2PairedTxnIds: read.tier2PairedTxnIds, overlay: opts.overlay ?? null },
         )
       : null;
 
@@ -514,6 +531,8 @@ export async function buildPeriodBreakdown(householdId: string, ownerUserId: str
       usual: moneyOrNull(c.usualCents),
       usualFullPeriod: moneyOrNull(c.usualFullPeriodCents),
       aboveUsual: moneyOrNull(c.aboveUsualCents),
+      // (Q1) Below 2 prior periods with rows the three usual figures are null.
+      historyPeriods: c.historyPeriods,
       rows: c.rows.map((e) => rowView(e, view)),
       truncated: c.truncated,
     })),

@@ -3,7 +3,7 @@ import {
   spendAmount,
   type SpendContext,
 } from "@workspace/avalanche-core";
-import { isCounted } from "./countedRows";
+import { isCountedSpend } from "./countedRows";
 
 /**
  * (PR7) Which ledger rows the Spending page's "Needs a category" popover
@@ -50,7 +50,7 @@ export function isUncategorizedSpendRow(
   t: SpendRow,
   categoryIds: Iterable<string> = [],
 ): boolean {
-  if (!isCounted(t)) return false;
+  if (!isCountedSpend(t)) return false;
   const c = classifyOutflow(
     {
       amount: t.amount,

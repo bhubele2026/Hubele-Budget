@@ -1,4 +1,4 @@
-import { isBankTxn, monthKey, type BankLine, type PlanLine } from "./forecastMatch";
+import { asksForAnswer, isBankTxn, monthKey, type BankLine, type PlanLine } from "./forecastMatch";
 import { householdDayOfAt } from "./householdDay";
 
 export type ReconcileContributor = {
@@ -90,7 +90,8 @@ export function computeBankReconcile(input: ReconcileInput): ReconcileResult {
   for (const b of allBank) {
     if (!isBankTxn(b.txn, checkingPlaidAccountIds)) continue;
     if (monthKey(b.date) !== monthFilter) continue;
-    if (b.status === "pending_bank") pending += 1;
+    // (F6 round 5) A held hold and its reversal ask for no answer (`asksForAnswer`).
+    if (b.status === "pending_bank") pending += asksForAnswer(b.txn) ? 1 : 0;
     else if (b.status === "matched") matched += 1;
     else if (b.status === "ignored_unforecasted") unplanned += 1;
   }

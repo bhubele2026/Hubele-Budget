@@ -15,6 +15,11 @@ export interface BankingReviewCashFlow {
     count: number;
     /** What the counted pending rows add */
     pendingNet: string;
+    /**
+     * (Q1) How many counted pending rows there are (a pending row its posted row replaced is not one; nor, F6, an expired hold or its reversal, even a held pair the balance counts); the spine's bankConfidence.pendingCount reads the same rule
+     * @minimum 0
+     */
+    pendingCount: number;
     supersededExcluded: number;
     otherExcluded: number;
 }

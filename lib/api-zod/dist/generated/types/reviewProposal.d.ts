@@ -13,6 +13,8 @@ import type { ReviewProposalRow } from "./reviewProposalRow";
 export interface ReviewProposal {
     /** Stable for the same rows and target */
     key: string;
+    /** (Q2) A fingerprint of what the fix would do (key, kind, action, target, and each listed row's id, amount, pending state, category and occurrence). POST /review/proposals/{key}/apply echoes it. */
+    proposalHash: string;
     kind: ReviewProposalKind;
     /** Newest first, at most 20 */
     rows: ReviewProposalRow[];

@@ -1,5 +1,6 @@
 import { descriptionsFuzzyEqual, tokenizeDescription } from "./descriptionMatch";
 import { addDaysISO } from "./householdTime";
+import { isPaymentOrTransferCredit, type CreditKindSignals } from "./spendingRule";
 
 /** A posted row can replace a pending row dated up to this many days before it. */
 export const SUPERSEDE_MAX_DAYS = 7;
@@ -64,8 +65,13 @@ export function canSupersede(pending: SupersedeRow, posted: SupersedeRow): boole
   return descriptionsFuzzyEqual(pending.description, posted.description);
 }
 
-/** A pending row as the expired-hold rule reads it. */
-export type ExpiredHoldRow = Pick<SupersedeRow, "id" | "plaidAccountId" | "pending" | "occurredOn" | "amount" | "description">;
+/**
+ * A pending row as the expired-hold rule reads it. (F6 round 5) With what the
+ * row says about itself (`CreditKindSignals`, all optional): a credit that is a
+ * payment or a transfer is never a reversal (`isPaymentOrTransferCredit`).
+ */
+export type ExpiredHoldRow = Pick<SupersedeRow, "id" | "plaidAccountId" | "pending" | "occurredOn" | "amount" | "description"> &
+  Omit<CreditKindSignals, "description">;
 
 /** What `expiredHolds` answers. */
 export type ExpiredHolds = {
@@ -73,6 +79,21 @@ export type ExpiredHolds = {
   expiredIds: Set<string>;
   /** A reversal's id → the expired hold it reversed (one to one). */
   holdOf: Map<string, string>;
+};
+
+/** (F6 round 5) What `expiredHolds` may also read. */
+export type ExpiredHoldsOptions = {
+  /**
+   * ⭐ (F6 round 5, finding 6) Does the bank snapshot already hold this row (the
+   * cash rule's `held`: `isInSnapshot`)? Given only where a snapshot is known —
+   * the cash rule, the register, the list's labels — and true only for rows on
+   * the snapshot's account. A credit the snapshot does NOT hold takes a charge
+   * the snapshot holds only when no charge it does not hold qualifies: the
+   * reversal of a held hold counts in the bank balance (it is the money coming
+   * back), so pairing a newer, unheld hold's reversal with an old held leftover
+   * would lift the balance by money that never came back.
+   */
+  isHeld?: (row: ExpiredHoldRow) => boolean;
 };
 
 /**
@@ -85,12 +106,101 @@ export function isExpiredByAge(row: Pick<SupersedeRow, "pending" | "plaidAccount
   return row.pending && !!row.plaidAccountId && row.occurredOn < addDaysISO(todayISO, -SUPERSEDE_MAX_DAYS);
 }
 
-/** Negative when `a` is the better reversal for `hold` than `b`. */
-function rankReversal(a: ExpiredHoldRow, b: ExpiredHoldRow, hold: ExpiredHoldRow): number {
+/**
+ * ⭐ (F6 round 5) Can this row be the reversal of an expired charge? A pending
+ * CREDIT (money in) that is not a payment or a transfer
+ * (`isPaymentOrTransferCredit`, the server's own rules: a card payment, a debt
+ * tag, Plaid LOAN_PAYMENTS / TRANSFER_*, payment or transfer words). Finding 2:
+ * a 2-day-old "PAYMENT - THANK YOU" of the same cents as an older unpaired
+ * hotel hold was taken as its reversal and counted nowhere.
+ */
+export function canBeReversal(row: ExpiredHoldRow): boolean {
+  return row.amount > 0 && !isPaymentOrTransferCredit(row);
+}
+
+/**
+ * Negative when charge `a` is the better hold for `credit` to reverse than `b`.
+ * ⭐ (F6 round 6, lead's order — findings 6 and 7) (a) a fuzzy-equal real
+ * description first (a "MARRIOTT HOTEL 4471" credit reverses the MARRIOTT hold,
+ * not a stuck pump hold of the same cents); (b) then, with a snapshot, a charge
+ * the snapshot does not hold for a credit it does not hold; (c) then the
+ * closest earlier charge; then id.
+ */
+function rankHold(a: ExpiredHoldRow, b: ExpiredHoldRow, credit: ExpiredHoldRow, isHeld: ExpiredHoldsOptions["isHeld"]): number {
   const named = (r: ExpiredHoldRow) =>
-    hasRealDescription(hold.description) && hasRealDescription(r.description) && descriptionsFuzzyEqual(hold.description, r.description) ? 0 : 1;
-  const gap = (r: ExpiredHoldRow) => Date.parse(`${r.occurredOn}T00:00:00Z`) - Date.parse(`${hold.occurredOn}T00:00:00Z`);
-  return named(a) - named(b) || gap(a) - gap(b) || a.occurredOn.localeCompare(b.occurredOn) || a.id.localeCompare(b.id);
+    hasRealDescription(credit.description) && hasRealDescription(r.description) && descriptionsFuzzyEqual(credit.description, r.description) ? 0 : 1;
+  // A credit the snapshot does not hold prefers a charge it does not hold.
+  const heldRank = (r: ExpiredHoldRow) => (isHeld && !isHeld(credit) && isHeld(r) ? 1 : 0);
+  return (
+    named(a) - named(b) ||
+    heldRank(a) - heldRank(b) ||
+    b.occurredOn.localeCompare(a.occurredOn) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+/**
+ * The most pairs the credits can still make with the free charges — one
+ * group: one account, one amount to the cent. Glover's rule: credits in date
+ * order (each sees the charges dated from 31 days before it to its day), each
+ * takes the OLDEST free charge it can reach — the one whose window closes
+ * first. That is a maximum matching for windows of one length. `credits` and
+ * `charges` are sorted by date; `free[j]` says charge j may be taken. O(n).
+ */
+function maxPairsFrom(credits: readonly ExpiredHoldRow[], from: number, charges: readonly ExpiredHoldRow[], free: readonly boolean[]): number {
+  let pairs = 0;
+  let lo = 0;
+  for (let i = from; i < credits.length; i += 1) {
+    const credit = credits[i]!;
+    const first = addDaysISO(credit.occurredOn, -REVERSAL_MAX_DAYS);
+    while (lo < charges.length && (!free[lo] || charges[lo]!.occurredOn < first)) lo += 1;
+    if (lo < charges.length && charges[lo]!.occurredOn <= credit.occurredOn) {
+      pairs += 1;
+      lo += 1;
+    }
+  }
+  return pairs;
+}
+
+/**
+ * ⭐ (F6 round 6, findings 6 and 7) ONE GROUP'S PAIRS — a MAXIMUM matching
+ * (no reversal is left unpaired while the charges could pair one more), each
+ * credit getting its best charge (`rankHold`) among the choices that keep it
+ * maximum. Credits decide in date order (then id); a credit tries its charges
+ * best first and takes the first one after which the remaining credits can
+ * still make the most pairs (`maxPairsFrom`); with none, it pairs with
+ * nothing. So a later credit changes an earlier credit's pair only to pair one
+ * more (the 75 case: 9/01 and 9/20 holds, credits 9/25 and 10/12 — the 9/25
+ * credit takes 9/01, which the 10/12 credit cannot reach, and leaves it 9/20).
+ */
+function pairGroup(
+  credits: readonly ExpiredHoldRow[],
+  charges: readonly ExpiredHoldRow[],
+  isHeld: ExpiredHoldsOptions["isHeld"],
+  holdOf: Map<string, string>,
+): void {
+  const free = charges.map(() => true);
+  const most = maxPairsFrom(credits, 0, charges, free);
+  if (most === 0) return;
+  let made = 0;
+  for (let i = 0; i < credits.length && made < most; i += 1) {
+    const credit = credits[i]!;
+    const first = addDaysISO(credit.occurredOn, -REVERSAL_MAX_DAYS);
+    const choices: number[] = [];
+    charges.forEach((c, j) => {
+      if (free[j] && c.occurredOn >= first && c.occurredOn <= credit.occurredOn) choices.push(j);
+    });
+    choices.sort((x, y) => rankHold(charges[x]!, charges[y]!, credit, isHeld));
+    for (const j of choices) {
+      free[j] = false;
+      if (made + 1 + maxPairsFrom(credits, i + 1, charges, free) === most) {
+        made += 1;
+        holdOf.set(credit.id, charges[j]!.id);
+        break;
+      }
+      free[j] = true;
+    }
+  }
 }
 
 /**
@@ -110,15 +220,26 @@ function rankReversal(a: ExpiredHoldRow, b: ExpiredHoldRow, hold: ExpiredHoldRow
  * hold's day or up to REVERSAL_MAX_DAYS (31) after it, not replaced.
  * (Lead's amendment) No description test — a bank describes the reversal of a
  * restaurant hold generically ("Restaurant Transaction"), not by the merchant.
- * ⭐ (F6 round 4) ONLY A CHARGE TAKES A REVERSAL. An expired hold that is money
- * out (a charge) may take a pending credit; an expired CREDIT expires alone and
- * never takes a charge — an orphan "Restaurant Transaction" credit whose hold a
- * tipped final replaced must not take a real 3-day-old purchase of the same
- * amount with it (finding 10: that purchase counted nowhere).
- * One to one, deterministic: holds pair oldest first (then id); each takes,
- * among the credits still free, a fuzzy-equal description first
- * (`descriptionsFuzzyEqual`, both real), then the closest date, the oldest,
- * then id. A row in a pair is never in another.
+ * (F6 round 4) ONLY A CHARGE TAKES A REVERSAL: an expired credit expires alone
+ * and never takes a charge (finding 10).
+ * ⭐ (F6 round 5, lead's decisions on findings 2 and 6)
+ *   - A credit that is a payment or a transfer is never a reversal
+ *     (`canBeReversal`): a real pending card payment counts until it posts.
+ *   - THE CREDIT CHOOSES. Credits pair oldest first (then id), each among the
+ *     expired charges still free on or before it (within 31 days). Finding 6:
+ *     a leftover 9/15 hold (the snapshot holds it) took the 10/09 reversal of a
+ *     10/04 hold 24 days later; the bank balance read 100 high.
+ * ⭐ (F6 round 6, lead's decisions on round 5's findings 6 and 7)
+ *   - ITS ORDER (`rankHold`): (a) a fuzzy-equal real description, (b) with
+ *     `opts.isHeld` (a snapshot is known), a charge the snapshot does not hold
+ *     for a credit it does not hold, (c) the closest earlier charge, then id.
+ *   - A MAXIMUM MATCHING per account and amount (`pairGroup`): a credit takes
+ *     its best charge among those that still let the most credits pair. Round
+ *     5's greedy gave the 9/25 credit the 9/20 hold, and the 10/12 credit
+ *     could not reach back to 9/01: it counted (bank 75 high).
+ * A row in a pair is never in another. ⚠️ A later credit can move an earlier
+ * credit's pair (only to pair one more): readers of a window read past it
+ * (`findSupersededPendingForRange`'s forward cut).
  *
  * Pure: the caller chooses the rows (all the pending rows that can pair with
  * the ones it asks about — see `findSupersededPendingForRange`). Non-pending
@@ -128,40 +249,36 @@ export function expiredHolds(
   rows: readonly ExpiredHoldRow[],
   todayISO: string,
   replacedIds: ReadonlySet<string>,
+  opts: ExpiredHoldsOptions = {},
 ): ExpiredHolds {
   const expiredIds = new Set<string>();
   const holdOf = new Map<string, string>();
   const live = rows.filter((r) => r.pending && r.plaidAccountId && !replacedIds.has(r.id));
-  // Candidate reversals — pending CREDITS only — by account and amount in cents.
+  // The expired CHARGES — the holds a credit can reverse — by account and amount in cents.
+  const chargesByKey = new Map<string, ExpiredHoldRow[]>();
+  for (const r of live) {
+    if (!isExpiredByAge(r, todayISO)) continue;
+    expiredIds.add(r.id);
+    if (!(r.amount < 0)) continue;
+    const key = `${r.plaidAccountId}|${cents(r.amount)}`;
+    const list = chargesByKey.get(key);
+    if (list) list.push(r);
+    else chargesByKey.set(key, [r]);
+  }
+  const byDate = (a: ExpiredHoldRow, b: ExpiredHoldRow) => a.occurredOn.localeCompare(b.occurredOn) || a.id.localeCompare(b.id);
   const creditsByKey = new Map<string, ExpiredHoldRow[]>();
   for (const r of live) {
-    if (!(r.amount > 0)) continue;
+    if (!canBeReversal(r)) continue;
     const key = `${r.plaidAccountId}|${cents(r.amount)}`;
+    if (!chargesByKey.has(key)) continue;
     const list = creditsByKey.get(key);
     if (list) list.push(r);
     else creditsByKey.set(key, [r]);
   }
-  const holds = live
-    .filter((r) => isExpiredByAge(r, todayISO))
-    .sort((a, b) => a.occurredOn.localeCompare(b.occurredOn) || a.id.localeCompare(b.id));
-  const taken = new Set<string>();
-  for (const hold of holds) {
-    expiredIds.add(hold.id);
-    // (F6 round 4) Only an expired CHARGE takes a reversal; a credit expires alone.
-    if (!(hold.amount < 0)) continue;
-    const last = addDaysISO(hold.occurredOn, REVERSAL_MAX_DAYS);
-    let best: ExpiredHoldRow | null = null;
-    for (const r of creditsByKey.get(`${hold.plaidAccountId}|${cents(hold.amount)}`) ?? []) {
-      if (taken.has(r.id)) continue;
-      if (r.occurredOn < hold.occurredOn || r.occurredOn > last) continue;
-      if (!best || rankReversal(r, best, hold) < 0) best = r;
-    }
-    if (best) {
-      taken.add(best.id);
-      expiredIds.add(best.id);
-      holdOf.set(best.id, hold.id);
-    }
+  for (const [key, credits] of creditsByKey) {
+    pairGroup(credits.sort(byDate), chargesByKey.get(key)!.sort(byDate), opts.isHeld, holdOf);
   }
+  for (const creditId of holdOf.keys()) expiredIds.add(creditId);
   return { expiredIds, holdOf };
 }
 

@@ -10,7 +10,7 @@ export interface BankingReviewHousehold {
     scope: BankingReviewHouseholdScope;
     weekStart: string;
     weekEnd: string;
-    /** GET /money/position spentWeekDiscretionary */
+    /** GET /money/position spentWeekDiscretionary — the cautious total (includes unconfirmed) */
     spentWeek: string;
     /**
      * GET /money/position weekCap; null when the plan is not set
@@ -18,9 +18,20 @@ export interface BankingReviewHousehold {
      */
     weekPlan: string | null;
     /**
-     * GET /money/position remainingWeek; null when the plan is not set
+     * GET /money/position remainingWeek (cautious); null when the plan is not set
      * @nullable
      */
     remainingWeek: string | null;
+    /** (Q1) GET /money/position knownWeek — Counts toward plan (confirmed purchases) */
+    knownWeek: string;
+    /** (Q1) GET /money/position unresolvedWeek — Unconfirmed; knownWeek + unresolvedWeek = spentWeek */
+    unresolvedWeek: string;
+    /** (Q1) GET /money/position provisional */
+    provisional: boolean;
+    /**
+     * (Q1) GET /money/position remainingWeekKnown; null when the plan is not set
+     * @nullable
+     */
+    remainingWeekKnown: string | null;
 }
 //# sourceMappingURL=bankingReviewHousehold.d.ts.map

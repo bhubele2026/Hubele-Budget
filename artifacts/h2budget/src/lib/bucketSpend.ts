@@ -1,5 +1,5 @@
 import { effectiveBucket, type AllowanceBucket } from "@/lib/weeklyBuckets";
-import { isCounted } from "@/lib/countedRows";
+import { isCountedSpend } from "@/lib/countedRows";
 
 /**
  * Single source of truth for weekly / monthly / unplanned SPEND.
@@ -65,8 +65,8 @@ export function bucketSpendInWindow(
     if (!t.occurredOn || t.occurredOn < startISO || t.occurredOn > endISO)
       continue;
     if (!isCountableSpend(t)) continue;
-    // (F6 round 4) An expired hold counts nowhere.
-    if (!isCounted(t)) continue;
+    // (F6 round 4) An expired hold counts nowhere; (round 5) a held pair is no spending.
+    if (!isCountedSpend(t)) continue;
     if (effectiveBucket(t) !== bucket) continue;
     sum += expenseMagnitude(t);
   }

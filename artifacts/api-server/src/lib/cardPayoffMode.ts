@@ -33,6 +33,9 @@
 // may read low, never high — no minimum pays it), and it holds the plan gate
 // (`planSafety.ts`) until the owner chooses.
 //
+// (Q1) `paidAs` (`paidAsOf`) words the answer once for every screen: the Amex
+// band, the Amex summary, the weekly payoff and the debts list.
+//
 // ⚠️ READ-ONLY. No write here; no default is ever stored.
 
 import { and, eq, inArray } from "drizzle-orm";
@@ -114,6 +117,79 @@ export function resolvePayoffMode(explicit: CardPayoffMode | null, linked: reado
   return { mode: null, source: "default", reason: "debt_terms_missing", debtId };
 }
 
+/**
+ * ⭐ (Q1) HOW THE CARD IS PAID — ONE DEFINITION FOR EVERY SCREEN.
+ * The owner saw Platinum "On the payoff plan" in one place and "In full weekly"
+ * in another: the band split cards by "has a debt row" (any status), the
+ * summary by `payoffMode`, the debts list by status. Every surface now reads
+ * this, derived from the one rule (`resolvePayoffMode`) and the card's cadence:
+ *
+ *   effectiveMode  in_full_weekly · in_full_monthly — the everyday hook pays
+ *                  its purchases at the card's cadence;
+ *                  debt_plan — its minimum and the avalanche extra pay it;
+ *                  unset — not resolved: the owner must choose (the hook bills
+ *                  it like in full meanwhile, and plans are paused).
+ *   source         chosen — the owner's explicit choice;
+ *                  default_no_debt — no debt row links the card;
+ *                  default_debt_inactive — its debt rows are archived / paid /
+ *                    zero (an archived-debt card is paid in full);
+ *                  default_debt_active — an active debt with an APR or a minimum;
+ *                  needs_choice — unset (an active debt with neither, or an
+ *                    explicit debt_plan with no active revolving debt).
+ */
+export type EffectivePayoffMode = "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+export type PaidAsSource = "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+export interface PaidAs {
+  effectiveMode: EffectivePayoffMode;
+  source: PaidAsSource;
+}
+
+/** (Q1) The one definition (see above), from the rule's answer and the card's cadence. Pure. */
+export function paidAsOf(answer: Pick<PayoffModeAnswer, "mode" | "source" | "reason">, cadence: "weekly" | "monthly"): PaidAs {
+  if (answer.mode == null) return { effectiveMode: "unset", source: "needs_choice" };
+  const effectiveMode: EffectivePayoffMode = answer.mode === "debt_plan" ? "debt_plan" : cadence === "monthly" ? "in_full_monthly" : "in_full_weekly";
+  if (answer.source === "explicit") return { effectiveMode, source: "chosen" };
+  const source: PaidAsSource =
+    answer.reason === "no_debt" ? "default_no_debt" : answer.reason === "debt_not_active" ? "default_debt_inactive" : "default_debt_active";
+  return { effectiveMode, source };
+}
+
+/**
+ * (Q6b) Can "Paying down" take effect on this card? The server answers with its
+ * own rule (`resolvePayoffMode("debt_plan", linked)`), so no screen re-derives
+ * it. `reason` says why not: no_debt (no debt row links the card) ·
+ * debt_not_active (its debt is archived / paid / zero) · debt_terms_missing
+ * (active, but no APR and no minimum). Null when available.
+ */
+export type PayDownReason = "no_debt" | "debt_not_active" | "debt_terms_missing";
+export interface PayDown {
+  available: boolean;
+  reason: PayDownReason | null;
+}
+
+export function payDownOf(linked: readonly PayoffModeDebt[]): PayDown {
+  if (resolvePayoffMode("debt_plan", linked).mode === "debt_plan") return { available: true, reason: null };
+  if (linked.length === 0) return { available: false, reason: "no_debt" };
+  if (!linked.some(isActiveDebt)) return { available: false, reason: "debt_not_active" };
+  return { available: false, reason: "debt_terms_missing" };
+}
+
+/**
+ * (Q6b r3) What "Use the default" would resolve to: the rule's answer with no
+ * explicit choice (`resolvePayoffMode(null, linked)`). `mode` null = the
+ * default cannot tell either (an active debt with no APR and no minimum), so
+ * going back to it would pause plans.
+ */
+export interface DefaultMode {
+  mode: CardPayoffMode | null;
+  reason: PayoffModeReason;
+}
+
+export function defaultModeOf(linked: readonly PayoffModeDebt[]): DefaultMode {
+  const a = resolvePayoffMode(null, linked);
+  return { mode: a.mode, reason: a.reason };
+}
+
 /** One discovered Amex card and how it is paid. */
 export interface CardPayoffModeView extends PayoffModeAnswer {
   /** External Plaid `account_id`. */
@@ -127,6 +203,12 @@ export interface CardPayoffModeView extends PayoffModeAnswer {
   effectiveMode: CardPayoffMode;
   /** Every debt row linked to the card (any status). */
   linkedDebtIds: string[];
+  /** (Q1) The one definition every screen words (`paidAsOf`). */
+  paidAs: PaidAs;
+  /** (Q6b) Whether "Paying down" can take effect on this card, and why not. */
+  payDown: PayDown;
+  /** (Q6b r3) What "Use the default" would resolve to. */
+  defaultMode: DefaultMode;
 }
 
 /**
@@ -164,15 +246,19 @@ export async function loadCardPayoffModes(
   return roster.cardRows.map((c) => {
     const linked = debts.filter((d) => d.plaidAccountId === c.internalId);
     const answer = resolvePayoffMode(explicitPayoffMode(preferences, c.accountId), linked);
+    const cadence = roster.cadenceFor(c.accountId);
     return {
       ...answer,
       accountId: c.accountId,
       internalId: c.internalId,
       name: c.name,
       mask: c.mask,
-      cadence: roster.cadenceFor(c.accountId),
+      cadence,
       effectiveMode: answer.mode ?? "in_full",
       linkedDebtIds: linked.map((d) => d.id),
+      paidAs: paidAsOf(answer, cadence),
+      payDown: payDownOf(linked),
+      defaultMode: defaultModeOf(linked),
     };
   });
 }

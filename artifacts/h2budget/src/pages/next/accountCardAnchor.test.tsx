@@ -141,11 +141,19 @@ describe("(WP8b) a card outside the Amex set, on its own page", () => {
     const summary = await screen.findByTestId("summary-creditor");
     await waitFor(() => expect(within(summary).getByText("$512.34")).toBeTruthy());
     // The newest row carries the card's current balance; the one before it, that less the newer charge.
+    // (Q3) Worked by hand. Plaid stores a card purchase with the bank sign, so
+    // tx-freedom-new (−14.82) is a $14.82 PURCHASE: it raised what is owed.
+    //   after tx-freedom-new (Sep 15)          512.34  (the card's current balance)
+    //   after tx-freedom-old (Sep 14)  512.34 − 14.82 = 497.52
+    //   before tx-freedom-old          497.52 − 30.00 = 467.52
+    // This used to read $527.16 (512.34 + 14.82): the walk read the purchase
+    // as a payment, so the balance rose going back in time.
     await waitFor(() => expect(screen.getByTestId("text-running-balance-tx-freedom-new").textContent).toBe("bal $512.34"));
-    expect(screen.getByTestId("text-running-balance-tx-freedom-old").textContent).toBe("bal $527.16");
+    expect(screen.getByTestId("text-running-balance-tx-freedom-old").textContent).toBe("bal $497.52");
     expect(screen.getByTestId("card-balance-trend")).toBeTruthy();
+    // (Q3) The note says what the figures count back from, and its date.
     expect(screen.getByTestId("amex-anchor-note").textContent).toBe(
-      "Running balances start from the card's current balance, $512.34 as of Sep 16.",
+      "Balance after each row, counting back from $512.34 (as of Sep 16).",
     );
     expect(screen.queryByTestId("amex-trend-cap")).toBeNull();
   });

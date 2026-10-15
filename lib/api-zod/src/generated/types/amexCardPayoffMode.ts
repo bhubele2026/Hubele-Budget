@@ -8,6 +8,9 @@
 import type { AmexCardPayoffModeCadence } from "./amexCardPayoffModeCadence";
 import type { AmexCardPayoffModeMode } from "./amexCardPayoffModeMode";
 import type { AmexCardPayoffModeSource } from "./amexCardPayoffModeSource";
+import type { CardDefaultMode } from "./cardDefaultMode";
+import type { CardPaidAs } from "./cardPaidAs";
+import type { CardPayDown } from "./cardPayDown";
 import type { PayoffModeReason } from "./payoffModeReason";
 
 export interface AmexCardPayoffMode {
@@ -30,4 +33,7 @@ export interface AmexCardPayoffMode {
    * @nullable
    */
   debtId: string | null;
+  paidAs: CardPaidAs;
+  payDown: CardPayDown;
+  defaultMode: CardDefaultMode;
 }

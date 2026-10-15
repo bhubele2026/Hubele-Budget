@@ -338,6 +338,7 @@ export default function AskPage() {
         input,
         end,
         bank: spine.data?.bank,
+        fetchedAt: spine.data?.bankConfidence?.fetchedAt,
       }}
     />
   );
@@ -371,6 +372,7 @@ export interface AskModel {
   input: RefObject<HTMLTextAreaElement | null>;
   end: RefObject<HTMLDivElement | null>;
   bank: Parameters<typeof FreshnessLine>[0]["bank"];
+  fetchedAt?: string | null;
 }
 
 /** The page on a model it is handed. */
@@ -395,7 +397,7 @@ export function AskView({ m }: { m: AskModel }) {
       </div>
       {m.bank?.stale && (
         <div className="text-micro text-neutral-500" data-testid="ask-fresh">
-          <FreshnessLine bank={m.bank} />
+          <FreshnessLine bank={m.bank} fetchedAt={m.fetchedAt} />
         </div>
       )}
 

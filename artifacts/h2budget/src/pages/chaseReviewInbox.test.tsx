@@ -285,6 +285,7 @@ describe("paging", () => {
 
   it("never calls the old 1,000-row list, and shows the freshness line", async () => {
     state.spine = {
+      bankConfidence: { fetchedAt: new Date(Date.UTC(2026, 8, 16, 11, 48, 0)).toISOString() },
       bank: {
         asOfDate: new Date(Date.UTC(2026, 8, 16, 11, 48, 0)).toISOString(),
         source: "plaid",
@@ -299,7 +300,7 @@ describe("paging", () => {
     expect(state.listTransactions).not.toHaveBeenCalled();
     expect(server.calls.some((c) => c.path === "/api/transactions")).toBe(false);
     expect(screen.queryByText(/1,000 most recent/)).toBeNull();
-    expect(screen.getByTestId("chase-freshness").textContent).toContain("Last auto-updated");
+    expect(screen.getByTestId("chase-freshness").textContent).toContain("Updated");
   });
 });
 

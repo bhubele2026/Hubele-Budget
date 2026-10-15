@@ -383,6 +383,9 @@ async function expectStep(id: StepId): Promise<Observed & { _raw: Record<string,
     c(o.amex.weekCharges),
   );
   expect(amexWeek.householdContribution.weeklyPlan, `${id} amex weeklyPlan = breakdown account actual`).toBe(cardWeek.actual);
+  // (hh-split) …and its split: the breakdown's own known / unresolved.
+  expect(amexWeek.householdContribution.weeklyKnown, `${id} amex weeklyKnown = breakdown account known`).toBe(cardWeek.known);
+  expect(amexWeek.householdContribution.weeklyUnresolved, `${id} amex weeklyUnresolved = breakdown account unresolved`).toBe(cardWeek.unresolved.amount);
   expect(amexMonth.owed.current, `${id} amex "all" owed = GET /amex/anchor`).toBe(o.amex.endingBalance);
   expect(amexWeek.scope, `${id} amex scope`).toMatchObject({ kind: "card", accountId: acct("amex"), name: "Platinum", mask: "1005", institution: "American Express" });
   expect(amexMonth.scope.cards.map((x: Record<string, any>) => [x.accountId, x.debtLinked]), `${id} amex all cards`).toEqual([[acct("amex"), false]]);

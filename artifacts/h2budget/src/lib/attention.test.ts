@@ -31,7 +31,9 @@ describe("attentionItems", () => {
   it("over names the amount", () => {
     const a = attentionItems({ ...base, withinPlan: "over", overBy: 40 })[0]!;
     expect(a.kind).toBe("over");
-    expect(a.title).toBe("Over this week's limit by $40.00");
+    expect(a.title).toBe("Over this week's plan by $40.00");
+    // (Q5) With unconfirmed rows still open the same item says "so far".
+    expect(attentionItems({ ...base, withinPlan: "over", overBy: 40, provisional: true })[0]!.title).toBe("Over this week's plan by $40.00 so far");
   });
   it("bills due today or tomorrow, singular and plural", () => {
     const one = attentionItems({ ...base, dueSoon: [{ name: "Rent", amount: 1200, dueOn: "2026-10-09" }] })[0]!;
@@ -58,7 +60,7 @@ describe("attention — way back (F7)", () => {
   it("the over item offers a way back; no other item does", () => {
     const over = attentionItems({ ...base, withinPlan: "over", overBy: 40 })[0]!;
     expect(over.wayBack).toBe(true);
-    expect(over.detail).toBe("Pick a way back. No lecture.");
+    expect(over.detail).toBe("Pick a way back.");
     expect(attentionItems({ ...base, reviewCount: 2 })[0]!.wayBack).toBeUndefined();
   });
 });

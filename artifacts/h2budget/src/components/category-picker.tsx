@@ -1,3 +1,4 @@
+import { CATEGORY_DELETED, CATEGORY_NONE } from "@/lib/categoryLabel";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,7 +34,8 @@ export function CategoryPicker({
   triggerClassName,
 }: {
   value: string | null;
-  categories: { id: string; name: string }[];
+  /** `undefined` = the list is still loading: the trigger stays blank, never "Unknown". */
+  categories: { id: string; name: string }[] | undefined;
   description?: string;
   onChange: (id: string | null, rememberPattern?: string | null) => void;
   testId?: string;
@@ -41,6 +43,8 @@ export function CategoryPicker({
   triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const loading = categories === undefined;
+  categories = categories ?? [];
   const [remember, setRemember] = useState(true);
   // (#474) When the system-managed "Uncategorized" category exists in the
   // list, the hard-coded "Uncategorized" command item picks its real id so
@@ -74,8 +78,10 @@ export function CategoryPicker({
       (!ignoreCat || c.id !== ignoreCat.id),
   );
   const current = value
-    ? categories.find((c) => c.id === value)?.name ?? "Unknown"
-    : "Uncategorized";
+    ? loading
+      ? ""
+      : categories.find((c) => c.id === value)?.name ?? CATEGORY_DELETED
+    : CATEGORY_NONE;
   const pattern = description ? defaultRememberPattern(description) : "";
   const rememberId = `remember-${testId ?? "picker"}`;
   return (
@@ -84,11 +90,15 @@ export function CategoryPicker({
         <Button
           variant="outline"
           role="combobox"
-          aria-label={`Category: ${current}`}
+          aria-label={current ? `Category: ${current}` : "Category"}
           className={cn("h-8 text-xs w-52 justify-between font-normal", triggerClassName)}
           data-testid={testId ?? "button-category-picker"}
         >
-          <span className="truncate">{current}</span>
+          {current ? (
+            <span className="truncate">{current}</span>
+          ) : (
+            <span className="h-3 w-20 animate-pulse rounded bg-platinum-2" aria-hidden data-testid="category-picker-loading" />
+          )}
           <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>

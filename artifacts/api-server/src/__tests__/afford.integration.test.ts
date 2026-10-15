@@ -268,6 +268,7 @@ const SATURDAY_300 = {
   baseline: {
     safeToSpendNow: "144.50",
     remainingWeek: "144.50",
+    remainingWeekKnown: "144.50",
     availableUntilPayday: "2124.50",
     lowest: "2624.50",
     lowestDate: "2026-10-08",
@@ -278,6 +279,7 @@ const SATURDAY_300 = {
   proposed: {
     safeToSpendNow: "0.00",
     remainingWeek: "-155.50",
+    remainingWeekKnown: "-155.50",
     availableUntilPayday: "2124.50",
     lowest: "2624.50",
     lowestDate: "2026-10-08",
@@ -288,6 +290,7 @@ const SATURDAY_300 = {
   delta: {
     safeToSpendNow: "-144.50",
     remainingWeek: "-300.00",
+    remainingWeekKnown: "-300.00",
     availableUntilPayday: "0.00",
     lowest: "0.00",
     lowestDate: null,
@@ -343,6 +346,9 @@ describe("POST /money/afford — household A, worked by hand", () => {
     const r = await evaluateAffordForHousehold(HH[A_OWNER]!.householdId, A_OWNER, { amount: 0 });
     expect(r.proposed).toEqual(r.baseline);
     expect(r.baseline).toEqual(SATURDAY_300.baseline);
+    // (Q5 fix) the sheet's "This week's plan … left" is the position's known figure to the cent, as the Room line says it.
+    const pos = await call("GET", "/money/position");
+    expect(r.baseline.remainingWeekKnown).toBe(pos.json.remainingWeekKnown);
   });
 
   it("refuses what it cannot read", async () => {

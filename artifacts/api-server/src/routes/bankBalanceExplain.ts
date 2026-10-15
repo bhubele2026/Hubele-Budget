@@ -11,7 +11,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { computeCashSignal } from "../lib/cashSignal";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "../lib/householdClock";
-import { computeBankFreshness } from "../lib/bankFreshness";
+import { bankFetchedAt, computeBankFreshness } from "../lib/bankFreshness";
 import { classifyLedgerRowsThroughToday } from "../lib/ledgerCashRows";
 
 const router: IRouter = Router();
@@ -169,7 +169,14 @@ router.get(
       displayed: { bankToday: signal.bankToday },
       // Whether that balance can be trusted right now, and why not. The spine's
       // `bank` object carries the same fields from the same function.
-      freshness,
+      // (Q5 round 3) plus `fetchedAt`, the instant the confidence line's "Updated …" says.
+      freshness: {
+        ...freshness,
+        fetchedAt: bankFetchedAt(
+          freshness,
+          settings?.bankSnapshotAt ? new Date(settings.bankSnapshotAt).toISOString() : null,
+        ),
+      },
       // The anchor it is built on.
       snapshot: {
         balance: settings?.bankSnapshotBalance ?? null,

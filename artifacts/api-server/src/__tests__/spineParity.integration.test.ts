@@ -59,7 +59,7 @@ import {
   plaidAccountsTable,
   plaidItemsTable,
 } from "@workspace/db";
-import { effectiveDebtBalance, payoffPct } from "@workspace/avalanche-core";
+import { addDaysISO, effectiveDebtBalance, payoffPct } from "@workspace/avalanche-core";
 import { runwayDaysFrom } from "../lib/cashSignal";
 import { pickNextBill, type BillsSummary } from "../lib/billsSummary";
 import spineRouter from "../routes/spine";
@@ -79,6 +79,8 @@ import moneyRouter from "../routes/money";
 import debtPlanRouter from "../routes/debtPlan";
 // (WP6) The Budget month quotes `spentMonth` in its spending reconciliation.
 import budgetRouter from "../routes/budget";
+// (Q1) `/banking/review` owns `bankConfidence.check` and `.pendingCount`.
+import bankingRouter from "../routes/banking";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import { householdTodayDate } from "../lib/householdClock";
@@ -104,6 +106,7 @@ app.use(bankBalanceExplainRouter);
 app.use(moneyRouter);
 app.use(debtPlanRouter);
 app.use(budgetRouter);
+app.use(bankingRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -589,6 +592,10 @@ type Spine = {
     confidence: "firm" | "estimated";
     degraded: boolean;
     weekAdjustment: { amount: string; reason: string | null; weekStart: string } | null;
+    knownWeek: string;
+    unresolvedWeek: string;
+    provisional: boolean;
+    remainingWeekKnown: string | null;
   };
   monthAllowance: {
     plan: string | null;
@@ -596,6 +603,14 @@ type Spine = {
     status: "not_set" | "within" | "over";
     remaining: string | null;
     over: string | null;
+  };
+  bankConfidence: {
+    fetchedAt: string | null;
+    bankBalance: string | null;
+    bankAsOf: string | null;
+    h2Balance: string | null;
+    check: Record<string, unknown>;
+    pendingCount: number;
   };
 };
 
@@ -615,6 +630,10 @@ type MoneyPosition = {
   spentWeekDiscretionary: string;
   weekStart: string;
   weekEnd: string;
+  knownWeek: string;
+  unresolvedWeek: string;
+  provisional: boolean;
+  remainingWeekKnown: string | null;
 };
 
 type CashSignal = {
@@ -651,12 +670,13 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
 
   it("bank freshness matches /forecast/bank-balance-explain (the same computeBankFreshness)", async () => {
     const spine = await get<Spine>("/spine");
-    const explain = await get<{ freshness: BankFreshness }>(
+    const explain = await get<{ freshness: BankFreshness & { fetchedAt: string | null } }>(
       "/forecast/bank-balance-explain",
     );
 
     const { source, lastContactAt, lastFailureAt, stale, staleReason } = spine.bank;
-    expect({ source, lastContactAt, lastFailureAt, stale, staleReason }).toEqual(
+    // (Round 3) plus the confidence line's instant: the Why? body says the same "Updated …" as the header and the tile.
+    expect({ source, lastContactAt, lastFailureAt, stale, staleReason, fetchedAt: spine.bankConfidence.fetchedAt }).toEqual(
       explain.freshness,
     );
     // Not vacuous: the fixture's snapshot was typed in, and the item behind its
@@ -1184,15 +1204,24 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     // (V5) The household's carry-over for this week — none in this fixture.
     expect(spine.position.weekAdjustment).toEqual(pos.weekAdjustment);
     expect(pos.weekAdjustment).toBeNull();
-    // The nine headline fields and nothing else.
+    // (Q1) The week contract, field for field.
+    expect(spine.position.knownWeek).toBe(pos.knownWeek);
+    expect(spine.position.unresolvedWeek).toBe(pos.unresolvedWeek);
+    expect(spine.position.provisional).toBe(pos.provisional);
+    expect(spine.position.remainingWeekKnown).toBe(pos.remainingWeekKnown);
+    // The nine headline fields, (Q1) the four of the week contract, and nothing else.
     expect(Object.keys(spine.position).sort()).toEqual([
       "availableUntilPayday",
       "confidence",
       "degraded",
       "horizonKind",
+      "knownWeek",
       "paydayDate",
+      "provisional",
       "remainingWeek",
+      "remainingWeekKnown",
       "safeToSpendNow",
+      "unresolvedWeek",
       "weekAdjustment",
       "withinPlan",
     ]);
@@ -1235,6 +1264,33 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(b.actual).toBe(pos.spentWeekDiscretionary);
     expect(b.remaining).toBe(pos.remainingWeek);
     expect(b.remaining).toBe(spine.position.remainingWeek);
+  });
+
+  it("⭐ (Q1) the week contract: spine.position.knownWeek / unresolvedWeek / provisional / remainingWeekKnown = the current week's breakdown known / unresolved / provisional / remaining, to the cent", async () => {
+    const spine = await get<Spine>("/spine");
+    const pos = await get<MoneyPosition>("/money/position");
+    const b = await get<{
+      actual: string;
+      known: string;
+      remaining: string | null;
+      provisional: boolean;
+      unresolved: { amount: string };
+      isCurrent: boolean;
+    }>(`/money/period-breakdown?period=week&start=${pos.weekStart}`);
+    expect(b.isCurrent).toBe(true);
+    expect(spine.position.knownWeek).toBe(b.known);
+    expect(cents(spine.position.knownWeek)).toBe(cents(b.known));
+    expect(spine.position.unresolvedWeek).toBe(b.unresolved.amount);
+    expect(spine.position.provisional).toBe(b.provisional);
+    expect(spine.position.remainingWeekKnown).toBe(b.remaining);
+    expect(pos.knownWeek).toBe(b.known);
+    expect(pos.unresolvedWeek).toBe(b.unresolved.amount);
+    // known + unresolved = the cautious total; the cautious figures do not move.
+    expect(cents(pos.knownWeek) + cents(pos.unresolvedWeek)).toBe(cents(pos.spentWeekDiscretionary));
+    expect(spine.position.remainingWeek).toBe(pos.remainingWeek);
+    // Not vacuous: a $250 cap, so remainingWeekKnown is a figure, not null.
+    expect(spine.position.remainingWeekKnown).not.toBeNull();
+    expect(cents(spine.position.remainingWeekKnown!)).toBe(25000 - cents(spine.position.knownWeek));
   });
 
   it("(PR-B1) position sits on the spine's own curve, week and buffer", async () => {
@@ -1289,7 +1345,9 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(debtKeys.filter((k) => /balance|owed|remaining|credit|limit|available/i.test(k))).toEqual([]);
 
     // `bank.balance` is the household's own cash and is allowed; nothing else
-    // in the payload may look like a debt figure.
+    // in the payload may look like a debt figure. (Q1) `bankConfidence` is the
+    // same cash (the bank's figure beside H2's): it is held to the bank's law
+    // in its own test below, and still scanned here.
     const serialized = JSON.stringify({ ...spine, bank: undefined });
     for (const banned of [
       "totalDebt",
@@ -1315,8 +1373,9 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
       }
       return out;
     };
-    // The whole spine except the bank's own cash balance, and the whole position.
-    const keys = [...keysOf({ ...spine, bank: undefined }), ...keysOf(pos)];
+    // The whole spine except the bank's own cash balance (`bank`, and (Q1) its
+    // confidence block, `bankConfidence`), and the whole position.
+    const keys = [...keysOf({ ...spine, bank: undefined, bankConfidence: undefined }), ...keysOf(pos)];
     expect(keys).toContain("safeToSpendNow");
     for (const k of keys) {
       expect(k, k).not.toMatch(/credit|limit(?!s)/i);
@@ -1336,6 +1395,76 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     for (const key of Object.keys(spine.debt)) {
       expect(key).not.toMatch(/balance|owed|remaining|limit|credit/i);
     }
+  });
+
+  it("⚠️ (Q1) bankConfidence is the household's own cash: no key at any depth names a debt, an amount owed, credit or a limit", async () => {
+    const spine = await get<Spine>("/spine");
+    const keys: string[] = [];
+    const walk = (v: unknown) => {
+      if (v && typeof v === "object") {
+        for (const [k, x] of Object.entries(v)) {
+          keys.push(k);
+          walk(x);
+        }
+      }
+    };
+    walk(spine.bankConfidence);
+    expect(keys.sort()).toEqual(
+      [
+        "bankAsOf",
+        "bankBalance",
+        "check",
+        "checkedAt",
+        "difference",
+        "direction",
+        "fetchedAt",
+        "h2Balance",
+        "pendingCount",
+        "reason",
+        "stale",
+        "staleReason",
+        "status",
+      ].sort(),
+    );
+    for (const k of keys) expect(k, k).not.toMatch(/debt|owed|credit|limit|available/i);
+    // The two balances are the bank's own: its snapshot as read, and H2's roll-forward of it.
+    expect(spine.bankConfidence.bankBalance).toBe(spine.bank.snapshot?.balance ?? null);
+    expect(spine.bankConfidence.h2Balance).toBe(spine.bank.balance);
+  });
+
+  it("⭐ (Q1) bankConfidence: the check and pending count are GET /banking/review's for the forecast account; the figures are the bank's own", async () => {
+    const spine = await get<Spine>("/spine");
+    const explain = await get<{ freshness: BankFreshness }>("/forecast/bank-balance-explain");
+    // A range covering every row of the fixture (≤ 366 days, the review's cap).
+    const r = await get<{
+      balanceCheck: Record<string, unknown> & { bank: unknown; h2: unknown; lastDrift: unknown };
+      cashFlow: { pendingCount: number };
+      account: { isForecastAccount: boolean; id: string | null };
+    }>(`/banking/review?from=${addDaysISO(TODAY_ISO, -365)}&to=${TODAY_ISO}`);
+    expect(r.account.isForecastAccount).toBe(true);
+    expect(r.account.id).toBe(CHECKING_ROW_ID);
+    const { bank: _b, h2: _h, lastDrift: _l, ...check } = r.balanceCheck;
+    expect(spine.bankConfidence.check).toEqual(check);
+    expect(spine.bankConfidence.pendingCount).toBe(r.cashFlow.pendingCount);
+    // This fixture holds no pending checking row (bankBalanceCheck.integration.test
+    // pins a pending row, a replaced pending pair and a real check).
+    expect(spine.bankConfidence.pendingCount).toBe(0);
+    // This fixture never ran a Sync: not checked, never — and so never "Matches bank".
+    expect(spine.bankConfidence.check).toMatchObject({ status: "not_checked", reason: "never", difference: null, direction: null });
+    // The bank's own figure and when it was read; H2's balance today.
+    expect(spine.bankConfidence.bankBalance).toBe(spine.bank.snapshot!.balance);
+    expect(spine.bankConfidence.bankAsOf).toBe(spine.bank.snapshot!.at);
+    expect(spine.bankConfidence.h2Balance).toBe(spine.bank.balance);
+    // fetchedAt: the freshness rule's instant — a Plaid balance, the later of its read and the last
+    // sync; a typed balance (this fixture's), its own time.
+    const heard =
+      spine.bank.source === "plaid"
+        ? [spine.bank.snapshot!.at, explain.freshness.lastContactAt]
+            .filter((x): x is string => !!x)
+            .map((x) => Date.parse(x))
+            .reduce((a, b) => Math.max(a, b))
+        : Date.parse(spine.bank.snapshot!.at);
+    expect(Date.parse(spine.bankConfidence.fetchedAt!)).toBe(heard);
   });
 
   it("is one snapshot: asOf is present and every field is populated together", async () => {

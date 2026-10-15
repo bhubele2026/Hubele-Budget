@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
+import { scoped } from "@/lib/queryState";
 import {
   useCreateTransaction,
   useUpdateTransaction,
@@ -56,8 +57,6 @@ import {
 } from "@/components/ui/select";
 import {
   Plus,
-  Edit2,
-  Trash2,
   Send,
   Inbox,
   Landmark,
@@ -119,7 +118,7 @@ import { Panel } from "@/components/next/Panel";
 import { identityOf } from "@/lib/accountIdentity";
 import { accountPageHref } from "@/lib/accountPage";
 import { currentRowDeepLink, rowDeepLinkStatus } from "@/lib/rowDeepLink";
-import { useUrlState } from "@/hooks/useUrlState";
+import { replaceUrlParam, useUrlState, type UrlCodec } from "@/hooks/useUrlState";
 import { modeParam, monthParam, urlHasMonth } from "@/lib/ledgerUrl";
 import { ChaseInsightStrip } from "@/components/chase-insight-strip";
 import { invalidateForecastFamily } from "@/lib/invalidateForecast";
@@ -184,6 +183,8 @@ function ymd(d: Date) {
 // so it survives reloads / browser restarts even when the user clears
 // the URL. URL takes precedence so shareable links still win.
 const CHASE_ACCOUNT_STORAGE_KEY = "h2budget:chase-account";
+
+const chaseAccountCodec: UrlCodec<string | null> = { read: (raw) => raw || null, write: (v) => v || null };
 
 function readInitialChaseAccount(): string | null {
   if (typeof window === "undefined") return null;
@@ -294,8 +295,14 @@ export default function TransactionsPage({
   // id of a row in `plaidCheckingAccounts`. The selection is persisted
   // across reloads via a `?account=` URL param plus a localStorage
   // fallback so deep-links share the same view.
-  const [selectedAccountKey, setSelectedAccountKey] = useState<string | null>(
+  // (Q4) The account is URL state like the month and card: a choice pushes ONE
+  // history entry (Back returns to the account before), and nothing here wipes
+  // `history.state`. Embedded, the route names it and the address is left alone.
+  const [selectedAccountKey, setSelectedAccountKey] = useUrlState<string | null>(
+    "account",
+    chaseAccountCodec,
     () => accountKey ?? readInitialChaseAccount(),
+    { url: !embedded, push: true, popFallback: () => accountKey ?? null },
   );
   useEffect(() => {
     if (embedded && accountKey) setSelectedAccountKey(accountKey);
@@ -427,9 +434,10 @@ export default function TransactionsPage({
       if (selectedAccountKey === null) return;
       keepSavedPickRef.current = false;
     }
-    const params = new URLSearchParams(window.location.search);
+    // The saved pick and the address follow the value. `replaceUrlParam` keeps
+    // `history.state` (scroll restore lives there) and changes nothing when the
+    // address already says it; a saved pick the address lacked is written in place.
     if (selectedAccountKey) {
-      params.set("account", selectedAccountKey);
       try {
         window.localStorage.setItem(
           CHASE_ACCOUNT_STORAGE_KEY,
@@ -439,16 +447,13 @@ export default function TransactionsPage({
         // localStorage may be blocked (private mode); URL still works.
       }
     } else {
-      params.delete("account");
       try {
         window.localStorage.removeItem(CHASE_ACCOUNT_STORAGE_KEY);
       } catch {
         // ignore
       }
     }
-    const qs = params.toString();
-    const next = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
-    window.history.replaceState(null, "", next);
+    replaceUrlParam("account", selectedAccountKey);
   }, [selectedAccountKey, embedded]);
 
   // If the persisted selection points at an account that no longer
@@ -470,12 +475,12 @@ export default function TransactionsPage({
     // legitimate source-based fallback surface.
     if (selectedAccountKey === "manual") {
       if (chaseOnlyPlaidCheckingAccounts.length > 0) {
-        setSelectedAccountKey(null);
+        setSelectedAccountKey(null, { replace: true });
       }
       return;
     }
     if (!chaseOnlyPlaidCheckingAccounts.some((a) => a.id === selectedAccountKey)) {
-      setSelectedAccountKey(null);
+      setSelectedAccountKey(null, { replace: true });
     }
   }, [
     selectedAccountKey,
@@ -603,7 +608,7 @@ export default function TransactionsPage({
   // last one's figures. They are never shown under the new label: "—" until it answers.
   const statsStale = register.isPlaceholderData;
   const toReviewCount = statsStale ? null : (registerPage?.review.unreviewed ?? null);
-  const reviewedCount = registerPage?.review.reviewed ?? 0;
+  const reviewedCount = statsStale ? 0 : (registerPage?.review.reviewed ?? 0);
   // (PR14 review H1) An account other than the bank balance's: rows, totals and
   // review counts, and no balance (the server computes none for it).
   const balanceUnavailable = registerPage?.balanceUnavailableReason === "not_snapshot_account";
@@ -618,7 +623,7 @@ export default function TransactionsPage({
     if (embedded) return;
     if (!selectedAccountKey || selectedAccountKey === "manual") return;
     if (register.errorCode !== "account_not_ledger" && register.errorCode !== "invalid_account") return;
-    setSelectedAccountKey(null);
+    setSelectedAccountKey(null, { replace: true });
     toast({ title: "That account has no ledger. Showing the bank balance account." });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [register.errorCode, selectedAccountKey, embedded]);
@@ -719,7 +724,7 @@ export default function TransactionsPage({
     dates: balanceDatesParam,
     ...(ledgerAccount ? { account: ledgerAccount } : {}),
   };
-  const { data: ledgerBalances } = useGetTransactionsBalances(balancesParams, {
+  const balancesQ = useGetTransactionsBalances(balancesParams, {
     query: {
       queryKey: getGetTransactionsBalancesQueryKey(balancesParams),
       enabled: !!effectiveSnapshot && !balanceUnavailable && balanceDatesParam !== "",
@@ -727,6 +732,8 @@ export default function TransactionsPage({
       gcTime: LEDGER_CACHE.gcTime,
     },
   });
+  // (Final W2) Another account's answer, kept while this one loads, is not this account's.
+  const ledgerBalances = scoped(balancesQ, () => true).data;
   const balanceByDate = useMemo(() => {
     const m = new Map<string, number>();
     for (const b of ledgerBalances?.balances ?? []) {
@@ -746,11 +753,21 @@ export default function TransactionsPage({
     endBal: statsStale ? null : moneyOrNull(registerPage?.balanceEnd),
   };
 
+  // (Final confirm N1) The trend chart does not depend on the range or filters: a held
+  // register answer for THIS account (Wk/Mo/Yr, the month stepper, a filter) keeps it; only
+  // a held answer for another account hides it (the account the last real answer was for).
+  const answeredAccount = !statsStale && registerPage ? (ledgerAccount ?? null) : undefined;
+  const [lastAnsweredAccount, setLastAnsweredAccount] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (answeredAccount !== undefined) setLastAnsweredAccount(answeredAccount);
+  }, [answeredAccount]);
+  const chartStale = statsStale && lastAnsweredAccount !== (ledgerAccount ?? null);
+
   // The forward-looking actual-vs-forecast trend chart. Weekly (Sun–Sat, on the
   // week-ending Saturday) actual balances from the ledger, and the cash signal's
   // projection, both meeting at today's balance.
   const balanceTrend = useMemo(() => {
-    if (!effectiveSnapshot || balanceUnavailable) return null;
+    if (!effectiveSnapshot || balanceUnavailable || chartStale) return null;
     const { windowStart, windowEnd, saturdays } = trendWindow;
 
     // Today's balance: the spine's, as the ledger carries it. Without it there is no
@@ -806,6 +823,7 @@ export default function TransactionsPage({
   }, [
     effectiveSnapshot,
     balanceUnavailable,
+    chartStale,
     trendWindow,
     registerPage?.balanceToday,
     pendingLedger.first?.balanceToday,
@@ -2271,7 +2289,9 @@ export default function TransactionsPage({
   // (PR14 review H1) Only a cold first load shows the skeleton. A failed load renders
   // the whole page, header and account picker included, with the error and Retry
   // in the list: one account's error can never dead-end the page.
-  if (register.enabled && !registerPage && !register.isLoadingError) {
+  // (Q4) Another account's or range's rows are not shown while this one loads
+  // (the hook withholds them): the page keeps its chrome, the list says it is loading.
+  if (register.enabled && !registerPage && !register.isLoadingError && !register.isPlaceholderData) {
     return <AccountPageSkeleton tiles={5} />;
   }
 
@@ -2364,7 +2384,8 @@ export default function TransactionsPage({
   // or per-account). Refresh-from-Plaid is offered for any selected
   // Plaid checking account so the user can populate / advance that
   // account's snapshot directly from this page.
-  const hasLinkedChecking = !!effectiveSnapshot || balanceUnavailable;
+  // While another account's answer is on its way the page does not claim this one has no balance.
+  const hasLinkedChecking = !!effectiveSnapshot || balanceUnavailable || register.isPlaceholderData;
   // The end of the range, through today, on the server's register. Null without
   // a snapshot time: a null shows "—", never a `?? 0` dressed as $0.00.
   const checkingEnd = rangeBalances.endBal;
@@ -2490,7 +2511,7 @@ export default function TransactionsPage({
   const accountPicker =
     pickerAccounts.length > 1 ? (
       <div className="flex items-center gap-2" data-testid="chase-account-picker">
-        <span className={fieldLabel}>Account</span>
+        <span className={cn(fieldLabel, "text-neutral-600")}>Account</span>
         <Select
           value={effectiveAccountKey}
           onValueChange={(v) => {
@@ -2529,7 +2550,6 @@ export default function TransactionsPage({
 
   // The register's row actions: date controls, send to Forecast, review, edit
   // and delete. Icon buttons are 32 px so a one-line row stays 40 px.
-  const rowIcon = "h-8 w-8";
 
   return (
     <div
@@ -2791,7 +2811,7 @@ export default function TransactionsPage({
               }}
               onSelectPage={selectPage}
               canSelectPage={pageIds.length > 0}
-              freshness={<FreshnessLine bank={spine.data?.bank} />}
+              freshness={<FreshnessLine bank={spine.data?.bank} fetchedAt={spine.data?.bankConfidence?.fetchedAt} />}
             />
           }
         >
@@ -2870,6 +2890,12 @@ export default function TransactionsPage({
             </div>
           )}
 
+          {register.isPlaceholderData && !register.isLoadingError ? (
+            <div className={emptyNote} role="status" data-testid="chase-switching">
+              Loading…
+            </div>
+          ) : null}
+
           {(registerPage || !register.enabled) &&
             !register.isLoadingError &&
             groups.length === 0 &&
@@ -2936,7 +2962,7 @@ export default function TransactionsPage({
                           tx={tx}
                           selected={selected.has(tx.id)}
                           onToggleSelect={() => toggleOne(tx.id)}
-                          categories={categories ?? []}
+                          categories={categories}
                           onCategoryChange={(id, remember) =>
                             handleQuickCategorize(tx, id, remember)
                           }
@@ -2945,7 +2971,7 @@ export default function TransactionsPage({
                           }
                           onQuickDate={(raw) => handleQuickDate(tx, raw)}
                           disabled={updateTx.isPending}
-                          dimmed={isInForecastRow(tx) || isIgnored}
+                          stateLabel={isIgnored ? "Ignored" : null}
                           hideDate
                           cardLabel={card.label}
                           cardAccent={card.accent}
@@ -3073,7 +3099,7 @@ export default function TransactionsPage({
                           tx={tx}
                           selected={selected.has(tx.id)}
                           onToggleSelect={() => toggleOne(tx.id)}
-                          categories={categories ?? []}
+                          categories={categories}
                           onCategoryChange={(id, remember) =>
                             handleQuickCategorize(tx, id, remember)
                           }
@@ -3082,7 +3108,7 @@ export default function TransactionsPage({
                           }
                           onQuickDate={(raw) => handleQuickDate(tx, raw)}
                           disabled={updateTx.isPending}
-                          dimmed={isInForecastRow(tx) || isIgnored}
+                          stateLabel={isIgnored ? "Ignored" : null}
                           cardLabel={card.label}
                           cardAccent={card.accent}
                           gridClass={LEDGER_GRID_WIDE_ACTIONS}
@@ -3111,29 +3137,12 @@ export default function TransactionsPage({
                               )}
                             </div>
                           }
+                          onEdit={() => handleOpenEdit(tx)}
+                          onDelete={() => handleDelete(tx.id)}
                           actionsNode={
                             <>
                               {renderSendForecastAction(tx)}
                               <Button variant="ghost" size="sm" disabled={reviewWrites.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={rowIcon}
-                                onClick={() => handleOpenEdit(tx)}
-                                title="Edit"
-                                data-testid={`button-edit-tx-${tx.id}`}
-                              >
-                                <Edit2 className="w-4 h-4 text-muted-foreground" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={rowIcon}
-                                onClick={() => handleDelete(tx.id)}
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
                             </>
                           }
                         />

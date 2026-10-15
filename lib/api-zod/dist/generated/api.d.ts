@@ -1252,6 +1252,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
         confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         expiredHold: zod.ZodOptional<zod.ZodBoolean>;
+        expiredPair: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         source: string;
@@ -1292,6 +1293,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }, {
         id: string;
         source: string;
@@ -1332,6 +1334,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }>, "many">;
     topCategories: zod.ZodArray<zod.ZodObject<{
         categoryName: zod.ZodString;
@@ -1430,6 +1433,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -1498,6 +1502,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -1604,6 +1609,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     expiredHold: zod.ZodOptional<zod.ZodBoolean>;
+    expiredPair: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     source: string;
@@ -1644,6 +1650,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
     expiredHold?: boolean | undefined;
+    expiredPair?: boolean | undefined;
 }, {
     id: string;
     source: string;
@@ -1684,6 +1691,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
     expiredHold?: boolean | undefined;
+    expiredPair?: boolean | undefined;
 }>;
 export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -1731,6 +1739,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     expiredHold: zod.ZodOptional<zod.ZodBoolean>;
+    expiredPair: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     source: string;
@@ -1771,6 +1780,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
     expiredHold?: boolean | undefined;
+    expiredPair?: boolean | undefined;
 }, {
     id: string;
     source: string;
@@ -1811,6 +1821,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
     expiredHold?: boolean | undefined;
+    expiredPair?: boolean | undefined;
 }>, "many">;
 export declare const createTransactionBodyPlaidAccountIdMax = 128;
 export declare const createTransactionBodySplitOfMax = 64;
@@ -2011,6 +2022,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     expiredHold: zod.ZodOptional<zod.ZodBoolean>;
+    expiredPair: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     source: string;
@@ -2051,6 +2063,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
     expiredHold?: boolean | undefined;
+    expiredPair?: boolean | undefined;
 }, {
     id: string;
     source: string;
@@ -2091,6 +2104,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
     expiredHold?: boolean | undefined;
+    expiredPair?: boolean | undefined;
 }>, zod.ZodObject<{
     repointedRules: zod.ZodArray<zod.ZodObject<{
         ruleId: zod.ZodString;
@@ -2362,6 +2376,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     expiredHold: zod.ZodOptional<zod.ZodBoolean>;
+    expiredPair: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     source: string;
@@ -2402,6 +2417,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
     expiredHold?: boolean | undefined;
+    expiredPair?: boolean | undefined;
 }, {
     id: string;
     source: string;
@@ -2442,6 +2458,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
     expiredHold?: boolean | undefined;
+    expiredPair?: boolean | undefined;
 }>;
 /**
  * @summary Bulk re-categorize past transactions whose description matches a
@@ -2957,6 +2974,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
         confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         expiredHold: zod.ZodOptional<zod.ZodBoolean>;
+        expiredPair: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         source: string;
@@ -2997,6 +3015,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }, {
         id: string;
         source: string;
@@ -3037,6 +3056,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }>, zod.ZodObject<{
         splitCount: zod.ZodNumber;
         categoryProvisional: zod.ZodBoolean;
@@ -3182,6 +3202,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     } & {
         expiredHold: boolean;
         splitCount: number;
@@ -3264,6 +3285,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     } & {
         expiredHold: boolean;
         splitCount: number;
@@ -3574,6 +3596,16 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     }>, zod.ZodNull]>>;
+    paidAs: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+        source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     id: string;
@@ -3618,6 +3650,10 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    } | null | undefined;
 }, {
     status: string;
     id: string;
@@ -3661,6 +3697,10 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
         liabilityKind?: string | null | undefined;
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
+    } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
     } | null | undefined;
 }>;
 export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
@@ -3737,6 +3777,16 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     }>, zod.ZodNull]>>;
+    paidAs: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+        source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     id: string;
@@ -3781,6 +3831,10 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    } | null | undefined;
 }, {
     status: string;
     id: string;
@@ -3824,6 +3878,10 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
         liabilityKind?: string | null | undefined;
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
+    } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
     } | null | undefined;
 }>, "many">;
 export declare const CreateDebtBody: zod.ZodObject<{
@@ -3954,6 +4012,16 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     }>, zod.ZodNull]>>;
+    paidAs: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+        source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     id: string;
@@ -3998,6 +4066,10 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    } | null | undefined;
 }, {
     status: string;
     id: string;
@@ -4041,6 +4113,10 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
         liabilityKind?: string | null | undefined;
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
+    } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
     } | null | undefined;
 }>;
 export declare const UnlinkDebtFromPlaidParams: zod.ZodObject<{
@@ -4124,6 +4200,16 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     }>, zod.ZodNull]>>;
+    paidAs: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+        source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     id: string;
@@ -4168,6 +4254,10 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    } | null | undefined;
 }, {
     status: string;
     id: string;
@@ -4211,6 +4301,10 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
         liabilityKind?: string | null | undefined;
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
+    } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
     } | null | undefined;
 }>;
 export declare const RefreshDebtFromPlaidParams: zod.ZodObject<{
@@ -4294,6 +4388,16 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     }>, zod.ZodNull]>>;
+    paidAs: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+        source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     id: string;
@@ -4338,6 +4442,10 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    } | null | undefined;
 }, {
     status: string;
     id: string;
@@ -4381,6 +4489,10 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
         liabilityKind?: string | null | undefined;
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
+    } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
     } | null | undefined;
 }>;
 export declare const ListPlaidLiabilityAccountsQueryParams: zod.ZodObject<{
@@ -4986,6 +5098,16 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     }>, zod.ZodNull]>>;
+    paidAs: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+        source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     id: string;
@@ -5030,6 +5152,10 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
     } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    } | null | undefined;
 }, {
     status: string;
     id: string;
@@ -5073,6 +5199,10 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
         liabilityKind?: string | null | undefined;
         institutionName?: string | null | undefined;
         institutionSlug?: string | null | undefined;
+    } | null | undefined;
+    paidAs?: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
     } | null | undefined;
 }>;
 export declare const DeleteDebtParams: zod.ZodObject<{
@@ -7622,12 +7752,16 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
         recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     } | null | undefined;
 }>;
+export declare const getForecastQueryFromMonthRegExp: RegExp;
 export declare const GetForecastQueryParams: zod.ZodObject<{
     days: zod.ZodOptional<zod.ZodNumber>;
+    fromMonth: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     days?: number | undefined;
+    fromMonth?: string | undefined;
 }, {
     days?: number | undefined;
+    fromMonth?: string | undefined;
 }>;
 export declare const GetForecastResponse: zod.ZodObject<{
     fromDate: zod.ZodString;
@@ -7697,6 +7831,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
         confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         expiredHold: zod.ZodOptional<zod.ZodBoolean>;
+        expiredPair: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         source: string;
@@ -7737,6 +7872,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }, {
         id: string;
         source: string;
@@ -7777,6 +7913,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }>, "many">;
     resolutions: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
@@ -7977,13 +8114,13 @@ export declare const GetForecastResponse: zod.ZodObject<{
                 mode: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"in_full">, zod.ZodLiteral<"debt_plan">, zod.ZodLiteral<null>]>>;
                 amount: zod.ZodString;
             }, "strip", zod.ZodTypeAny, {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 amount: string;
                 name: string | null;
                 mask: string | null;
                 accountId: string;
             }, {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 amount: string;
                 name: string | null;
                 mask: string | null;
@@ -8011,7 +8148,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             allowanceLeft?: string | undefined;
             cappedByBalance?: string | undefined;
             cards?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 amount: string;
                 name: string | null;
                 mask: string | null;
@@ -8039,7 +8176,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             allowanceLeft?: string | undefined;
             cappedByBalance?: string | undefined;
             cards?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 amount: string;
                 name: string | null;
                 mask: string | null;
@@ -8258,7 +8395,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             allowanceLeft?: string | undefined;
             cappedByBalance?: string | undefined;
             cards?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 amount: string;
                 name: string | null;
                 mask: string | null;
@@ -8378,7 +8515,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             allowanceLeft?: string | undefined;
             cappedByBalance?: string | undefined;
             cards?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 amount: string;
                 name: string | null;
                 mask: string | null;
@@ -8538,6 +8675,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }[];
     resolutions: {
         status: string;
@@ -8656,7 +8794,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             allowanceLeft?: string | undefined;
             cappedByBalance?: string | undefined;
             cards?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 amount: string;
                 name: string | null;
                 mask: string | null;
@@ -8763,6 +8901,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
         expiredHold?: boolean | undefined;
+        expiredPair?: boolean | undefined;
     }[];
     resolutions: {
         status: string;
@@ -8881,7 +9020,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             allowanceLeft?: string | undefined;
             cappedByBalance?: string | undefined;
             cards?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 amount: string;
                 name: string | null;
                 mask: string | null;
@@ -9271,13 +9410,13 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
             mode: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"in_full">, zod.ZodLiteral<"debt_plan">, zod.ZodLiteral<null>]>>;
             amount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
             accountId: string;
         }, {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -9305,7 +9444,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         allowanceLeft?: string | undefined;
         cappedByBalance?: string | undefined;
         cards?: {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -9333,7 +9472,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         allowanceLeft?: string | undefined;
         cappedByBalance?: string | undefined;
         cards?: {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -9552,7 +9691,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         allowanceLeft?: string | undefined;
         cappedByBalance?: string | undefined;
         cards?: {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -9672,7 +9811,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         allowanceLeft?: string | undefined;
         cappedByBalance?: string | undefined;
         cards?: {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -9727,6 +9866,7 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
         source: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"plaid">, zod.ZodLiteral<"manual">, zod.ZodLiteral<null>]>>;
         lastContactAt: zod.ZodNullable<zod.ZodString>;
         lastFailureAt: zod.ZodNullable<zod.ZodString>;
+        fetchedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         stale: zod.ZodBoolean;
         staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
     }, "strip", zod.ZodTypeAny, {
@@ -9735,12 +9875,14 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
         lastFailureAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
+        fetchedAt?: string | null | undefined;
     }, {
         source: "plaid" | "manual" | null;
         lastContactAt: string | null;
         lastFailureAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
+        fetchedAt?: string | null | undefined;
     }>;
     snapshot: zod.ZodObject<{
         balance: zod.ZodNullable<zod.ZodString>;
@@ -9920,6 +10062,7 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
         lastFailureAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
+        fetchedAt?: string | null | undefined;
     };
     snapshot: {
         at: string | null;
@@ -9981,6 +10124,7 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
         lastFailureAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
+        fetchedAt?: string | null | undefined;
     };
     snapshot: {
         at: string | null;
@@ -12094,6 +12238,16 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
     weekStart: zod.ZodString;
     weekEnd: zod.ZodString;
     cards: zod.ZodArray<zod.ZodObject<{
+        paidAs: zod.ZodUnion<[zod.ZodObject<{
+            effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+            source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+        }, "strip", zod.ZodTypeAny, {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        }, {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        }>, zod.ZodNull]>;
         accountId: zod.ZodString;
         plaidAccountId: zod.ZodNullable<zod.ZodString>;
         debtId: zod.ZodNullable<zod.ZodString>;
@@ -12121,6 +12275,10 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         debtId: string | null;
         displayName: string | null;
         name: string;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        } | null;
         accountId: string;
         cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
@@ -12138,6 +12296,10 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         debtId: string | null;
         displayName: string | null;
         name: string;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        } | null;
         accountId: string;
         cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
@@ -12154,6 +12316,16 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
     combinedWeekCharges: zod.ZodNumber;
     combinedStatementBalance: zod.ZodNumber;
     debtLinkedCards: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        paidAs: zod.ZodUnion<[zod.ZodObject<{
+            effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+            source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+        }, "strip", zod.ZodTypeAny, {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        }, {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        }>, zod.ZodNull]>;
         accountId: zod.ZodString;
         name: zod.ZodString;
         mask: zod.ZodNullable<zod.ZodString>;
@@ -12166,6 +12338,10 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         mask: string | null;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        } | null;
         accountId: string;
         cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
@@ -12174,6 +12350,10 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         mask: string | null;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        } | null;
         accountId: string;
         cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
@@ -12187,24 +12367,78 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         source: zod.ZodEnum<["explicit", "default"]>;
         reason: zod.ZodEnum<["set_by_owner", "no_debt", "debt_not_active", "debt_active", "debt_terms_missing", "debt_plan_without_active_debt"]>;
         debtId: zod.ZodNullable<zod.ZodString>;
+        paidAs: zod.ZodObject<{
+            effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+            source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+        }, "strip", zod.ZodTypeAny, {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        }, {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        }>;
+        payDown: zod.ZodObject<{
+            available: zod.ZodBoolean;
+            reason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"no_debt">, zod.ZodLiteral<"debt_not_active">, zod.ZodLiteral<"debt_terms_missing">, zod.ZodLiteral<null>]>>;
+        }, "strip", zod.ZodTypeAny, {
+            reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+            available: boolean;
+        }, {
+            reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+            available: boolean;
+        }>;
+        defaultMode: zod.ZodObject<{
+            mode: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"in_full">, zod.ZodLiteral<"debt_plan">, zod.ZodLiteral<null>]>>;
+            reason: zod.ZodEnum<["set_by_owner", "no_debt", "debt_not_active", "debt_active", "debt_terms_missing", "debt_plan_without_active_debt"]>;
+        }, "strip", zod.ZodTypeAny, {
+            mode: "debt_plan" | "in_full" | null;
+            reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        }, {
+            mode: "debt_plan" | "in_full" | null;
+            reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        }>;
     }, "strip", zod.ZodTypeAny, {
-        mode: "in_full" | "debt_plan" | null;
+        mode: "debt_plan" | "in_full" | null;
         source: "explicit" | "default";
         debtId: string | null;
         name: string | null;
         mask: string | null;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        };
         accountId: string;
         cadence: "weekly" | "monthly";
         reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        payDown: {
+            reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+            available: boolean;
+        };
+        defaultMode: {
+            mode: "debt_plan" | "in_full" | null;
+            reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        };
     }, {
-        mode: "in_full" | "debt_plan" | null;
+        mode: "debt_plan" | "in_full" | null;
         source: "explicit" | "default";
         debtId: string | null;
         name: string | null;
         mask: string | null;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        };
         accountId: string;
         cadence: "weekly" | "monthly";
         reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        payDown: {
+            reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+            available: boolean;
+        };
+        defaultMode: {
+            mode: "debt_plan" | "in_full" | null;
+            reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        };
     }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     cards: {
@@ -12212,6 +12446,10 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         debtId: string | null;
         displayName: string | null;
         name: string;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        } | null;
         accountId: string;
         cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
@@ -12234,19 +12472,35 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         mask: string | null;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        } | null;
         accountId: string;
         cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
     }[] | undefined;
     payoffModes?: {
-        mode: "in_full" | "debt_plan" | null;
+        mode: "debt_plan" | "in_full" | null;
         source: "explicit" | "default";
         debtId: string | null;
         name: string | null;
         mask: string | null;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        };
         accountId: string;
         cadence: "weekly" | "monthly";
         reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        payDown: {
+            reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+            available: boolean;
+        };
+        defaultMode: {
+            mode: "debt_plan" | "in_full" | null;
+            reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        };
     }[] | undefined;
 }, {
     cards: {
@@ -12254,6 +12508,10 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         debtId: string | null;
         displayName: string | null;
         name: string;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        } | null;
         accountId: string;
         cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
@@ -12276,19 +12534,35 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         mask: string | null;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        } | null;
         accountId: string;
         cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
     }[] | undefined;
     payoffModes?: {
-        mode: "in_full" | "debt_plan" | null;
+        mode: "debt_plan" | "in_full" | null;
         source: "explicit" | "default";
         debtId: string | null;
         name: string | null;
         mask: string | null;
+        paidAs: {
+            source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+            effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+        };
         accountId: string;
         cadence: "weekly" | "monthly";
         reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        payDown: {
+            reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+            available: boolean;
+        };
+        defaultMode: {
+            mode: "debt_plan" | "in_full" | null;
+            reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+        };
     }[] | undefined;
 }>;
 /**
@@ -12305,9 +12579,9 @@ export declare const SetAmexCardPayoffModeParams: zod.ZodObject<{
 export declare const SetAmexCardPayoffModeBody: zod.ZodObject<{
     mode: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"in_full">, zod.ZodLiteral<"debt_plan">, zod.ZodLiteral<null>]>>;
 }, "strip", zod.ZodTypeAny, {
-    mode: "in_full" | "debt_plan" | null;
+    mode: "debt_plan" | "in_full" | null;
 }, {
-    mode: "in_full" | "debt_plan" | null;
+    mode: "debt_plan" | "in_full" | null;
 }>;
 export declare const SetAmexCardPayoffModeResponse: zod.ZodObject<{
     accountId: zod.ZodString;
@@ -12318,24 +12592,78 @@ export declare const SetAmexCardPayoffModeResponse: zod.ZodObject<{
     source: zod.ZodEnum<["explicit", "default"]>;
     reason: zod.ZodEnum<["set_by_owner", "no_debt", "debt_not_active", "debt_active", "debt_terms_missing", "debt_plan_without_active_debt"]>;
     debtId: zod.ZodNullable<zod.ZodString>;
+    paidAs: zod.ZodObject<{
+        effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+        source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }, {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    }>;
+    payDown: zod.ZodObject<{
+        available: zod.ZodBoolean;
+        reason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"no_debt">, zod.ZodLiteral<"debt_not_active">, zod.ZodLiteral<"debt_terms_missing">, zod.ZodLiteral<null>]>>;
+    }, "strip", zod.ZodTypeAny, {
+        reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+        available: boolean;
+    }, {
+        reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+        available: boolean;
+    }>;
+    defaultMode: zod.ZodObject<{
+        mode: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"in_full">, zod.ZodLiteral<"debt_plan">, zod.ZodLiteral<null>]>>;
+        reason: zod.ZodEnum<["set_by_owner", "no_debt", "debt_not_active", "debt_active", "debt_terms_missing", "debt_plan_without_active_debt"]>;
+    }, "strip", zod.ZodTypeAny, {
+        mode: "debt_plan" | "in_full" | null;
+        reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+    }, {
+        mode: "debt_plan" | "in_full" | null;
+        reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+    }>;
 }, "strip", zod.ZodTypeAny, {
-    mode: "in_full" | "debt_plan" | null;
+    mode: "debt_plan" | "in_full" | null;
     source: "explicit" | "default";
     debtId: string | null;
     name: string | null;
     mask: string | null;
+    paidAs: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    };
     accountId: string;
     cadence: "weekly" | "monthly";
     reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+    payDown: {
+        reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+        available: boolean;
+    };
+    defaultMode: {
+        mode: "debt_plan" | "in_full" | null;
+        reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+    };
 }, {
-    mode: "in_full" | "debt_plan" | null;
+    mode: "debt_plan" | "in_full" | null;
     source: "explicit" | "default";
     debtId: string | null;
     name: string | null;
     mask: string | null;
+    paidAs: {
+        source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+        effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+    };
     accountId: string;
     cadence: "weekly" | "monthly";
     reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+    payDown: {
+        reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+        available: boolean;
+    };
+    defaultMode: {
+        mode: "debt_plan" | "in_full" | null;
+        reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+    };
 }>;
 /**
  * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. Read-only.
@@ -12384,14 +12712,44 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
                 source: zod.ZodEnum<["explicit", "default"]>;
                 reason: zod.ZodEnum<["set_by_owner", "no_debt", "debt_not_active", "debt_active", "debt_terms_missing", "debt_plan_without_active_debt"]>;
             }, "strip", zod.ZodTypeAny, {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 source: "explicit" | "default";
                 reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
             }, {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 source: "explicit" | "default";
                 reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
             }>>;
+            paidAs: zod.ZodUnion<[zod.ZodObject<{
+                effectiveMode: zod.ZodEnum<["in_full_weekly", "in_full_monthly", "debt_plan", "unset"]>;
+                source: zod.ZodEnum<["chosen", "default_no_debt", "default_debt_inactive", "default_debt_active", "needs_choice"]>;
+            }, "strip", zod.ZodTypeAny, {
+                source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+                effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+            }, {
+                source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+                effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+            }>, zod.ZodNull]>;
+            payDown: zod.ZodObject<{
+                available: zod.ZodBoolean;
+                reason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"no_debt">, zod.ZodLiteral<"debt_not_active">, zod.ZodLiteral<"debt_terms_missing">, zod.ZodLiteral<null>]>>;
+            }, "strip", zod.ZodTypeAny, {
+                reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+                available: boolean;
+            }, {
+                reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+                available: boolean;
+            }>;
+            defaultMode: zod.ZodObject<{
+                mode: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"in_full">, zod.ZodLiteral<"debt_plan">, zod.ZodLiteral<null>]>>;
+                reason: zod.ZodEnum<["set_by_owner", "no_debt", "debt_not_active", "debt_active", "debt_terms_missing", "debt_plan_without_active_debt"]>;
+            }, "strip", zod.ZodTypeAny, {
+                mode: "debt_plan" | "in_full" | null;
+                reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+            }, {
+                mode: "debt_plan" | "in_full" | null;
+                reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+            }>;
             purchases: zod.ZodObject<{
                 amount: zod.ZodString;
                 count: zod.ZodNumber;
@@ -12406,9 +12764,21 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             debtId: string | null;
             name: string;
             mask: string | null;
+            paidAs: {
+                source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+                effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+            } | null;
             accountId: string;
             cadence: "weekly" | "monthly";
             brand: "blue" | "silver";
+            payDown: {
+                reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+                available: boolean;
+            };
+            defaultMode: {
+                mode: "debt_plan" | "in_full" | null;
+                reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+            };
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
@@ -12417,7 +12787,7 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
                 amount: string;
             };
             payoffMode?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 source: "explicit" | "default";
                 reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
             } | undefined;
@@ -12425,9 +12795,21 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             debtId: string | null;
             name: string;
             mask: string | null;
+            paidAs: {
+                source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+                effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+            } | null;
             accountId: string;
             cadence: "weekly" | "monthly";
             brand: "blue" | "silver";
+            payDown: {
+                reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+                available: boolean;
+            };
+            defaultMode: {
+                mode: "debt_plan" | "in_full" | null;
+                reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+            };
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
@@ -12436,7 +12818,7 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
                 amount: string;
             };
             payoffMode?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 source: "explicit" | "default";
                 reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
             } | undefined;
@@ -12450,9 +12832,21 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             debtId: string | null;
             name: string;
             mask: string | null;
+            paidAs: {
+                source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+                effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+            } | null;
             accountId: string;
             cadence: "weekly" | "monthly";
             brand: "blue" | "silver";
+            payDown: {
+                reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+                available: boolean;
+            };
+            defaultMode: {
+                mode: "debt_plan" | "in_full" | null;
+                reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+            };
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
@@ -12461,7 +12855,7 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
                 amount: string;
             };
             payoffMode?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 source: "explicit" | "default";
                 reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
             } | undefined;
@@ -12476,9 +12870,21 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             debtId: string | null;
             name: string;
             mask: string | null;
+            paidAs: {
+                source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+                effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+            } | null;
             accountId: string;
             cadence: "weekly" | "monthly";
             brand: "blue" | "silver";
+            payDown: {
+                reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+                available: boolean;
+            };
+            defaultMode: {
+                mode: "debt_plan" | "in_full" | null;
+                reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+            };
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
@@ -12487,7 +12893,7 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
                 amount: string;
             };
             payoffMode?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 source: "explicit" | "default";
                 reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
             } | undefined;
@@ -12603,17 +13009,29 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
     }>;
     householdContribution: zod.ZodObject<{
         weeklyPlan: zod.ZodString;
+        weeklyKnown: zod.ZodString;
+        weeklyUnresolved: zod.ZodString;
         monthlyPlan: zod.ZodString;
+        monthlyKnown: zod.ZodString;
+        monthlyUnresolved: zod.ZodString;
         unfiled: zod.ZodString;
         link: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
         weeklyPlan: string;
+        weeklyKnown: string;
+        weeklyUnresolved: string;
         monthlyPlan: string;
+        monthlyKnown: string;
+        monthlyUnresolved: string;
         unfiled: string;
         link: string;
     }, {
         weeklyPlan: string;
+        weeklyKnown: string;
+        weeklyUnresolved: string;
         monthlyPlan: string;
+        monthlyKnown: string;
+        monthlyUnresolved: string;
         unfiled: string;
         link: string;
     }>;
@@ -13146,9 +13564,21 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             debtId: string | null;
             name: string;
             mask: string | null;
+            paidAs: {
+                source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+                effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+            } | null;
             accountId: string;
             cadence: "weekly" | "monthly";
             brand: "blue" | "silver";
+            payDown: {
+                reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+                available: boolean;
+            };
+            defaultMode: {
+                mode: "debt_plan" | "in_full" | null;
+                reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+            };
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
@@ -13157,7 +13587,7 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
                 amount: string;
             };
             payoffMode?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 source: "explicit" | "default";
                 reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
             } | undefined;
@@ -13187,7 +13617,11 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
     };
     householdContribution: {
         weeklyPlan: string;
+        weeklyKnown: string;
+        weeklyUnresolved: string;
         monthlyPlan: string;
+        monthlyKnown: string;
+        monthlyUnresolved: string;
         unfiled: string;
         link: string;
     };
@@ -13300,9 +13734,21 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             debtId: string | null;
             name: string;
             mask: string | null;
+            paidAs: {
+                source: "chosen" | "default_no_debt" | "default_debt_inactive" | "default_debt_active" | "needs_choice";
+                effectiveMode: "in_full_weekly" | "in_full_monthly" | "debt_plan" | "unset";
+            } | null;
             accountId: string;
             cadence: "weekly" | "monthly";
             brand: "blue" | "silver";
+            payDown: {
+                reason: "no_debt" | "debt_not_active" | "debt_terms_missing" | null;
+                available: boolean;
+            };
+            defaultMode: {
+                mode: "debt_plan" | "in_full" | null;
+                reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
+            };
             institution: string | null;
             debtLinked: boolean;
             owed: string | null;
@@ -13311,7 +13757,7 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
                 amount: string;
             };
             payoffMode?: {
-                mode: "in_full" | "debt_plan" | null;
+                mode: "debt_plan" | "in_full" | null;
                 source: "explicit" | "default";
                 reason: "set_by_owner" | "no_debt" | "debt_not_active" | "debt_active" | "debt_terms_missing" | "debt_plan_without_active_debt";
             } | undefined;
@@ -13341,7 +13787,11 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
     };
     householdContribution: {
         weeklyPlan: string;
+        weeklyKnown: string;
+        weeklyUnresolved: string;
         monthlyPlan: string;
+        monthlyKnown: string;
+        monthlyUnresolved: string;
         unfiled: string;
         link: string;
     };
@@ -13651,6 +14101,28 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    freshness: zod.ZodOptional<zod.ZodObject<{
+        state: zod.ZodEnum<["ok", "stale", "refresh_failed", "needs_reconnect", "never"]>;
+        stale: zod.ZodBoolean;
+        staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
+        fetchedAt: zod.ZodNullable<zod.ZodString>;
+        lastContactAt: zod.ZodNullable<zod.ZodString>;
+        lastFailureAt: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }>>;
     autoUpdates: zod.ZodOptional<zod.ZodObject<{
         on: zod.ZodBoolean;
         reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
@@ -13743,6 +14215,14 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -13784,6 +14264,14 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -13823,6 +14311,28 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    freshness: zod.ZodOptional<zod.ZodObject<{
+        state: zod.ZodEnum<["ok", "stale", "refresh_failed", "needs_reconnect", "never"]>;
+        stale: zod.ZodBoolean;
+        staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
+        fetchedAt: zod.ZodNullable<zod.ZodString>;
+        lastContactAt: zod.ZodNullable<zod.ZodString>;
+        lastFailureAt: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }>>;
     autoUpdates: zod.ZodOptional<zod.ZodObject<{
         on: zod.ZodBoolean;
         reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
@@ -13915,6 +14425,14 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -13956,6 +14474,14 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -13995,6 +14521,28 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    freshness: zod.ZodOptional<zod.ZodObject<{
+        state: zod.ZodEnum<["ok", "stale", "refresh_failed", "needs_reconnect", "never"]>;
+        stale: zod.ZodBoolean;
+        staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
+        fetchedAt: zod.ZodNullable<zod.ZodString>;
+        lastContactAt: zod.ZodNullable<zod.ZodString>;
+        lastFailureAt: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }>>;
     autoUpdates: zod.ZodOptional<zod.ZodObject<{
         on: zod.ZodBoolean;
         reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
@@ -14087,6 +14635,14 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -14128,6 +14684,14 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -14184,6 +14748,28 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    freshness: zod.ZodOptional<zod.ZodObject<{
+        state: zod.ZodEnum<["ok", "stale", "refresh_failed", "needs_reconnect", "never"]>;
+        stale: zod.ZodBoolean;
+        staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
+        fetchedAt: zod.ZodNullable<zod.ZodString>;
+        lastContactAt: zod.ZodNullable<zod.ZodString>;
+        lastFailureAt: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }>>;
     autoUpdates: zod.ZodOptional<zod.ZodObject<{
         on: zod.ZodBoolean;
         reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
@@ -14276,6 +14862,14 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -14317,6 +14911,14 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -14600,6 +15202,28 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    freshness: zod.ZodOptional<zod.ZodObject<{
+        state: zod.ZodEnum<["ok", "stale", "refresh_failed", "needs_reconnect", "never"]>;
+        stale: zod.ZodBoolean;
+        staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
+        fetchedAt: zod.ZodNullable<zod.ZodString>;
+        lastContactAt: zod.ZodNullable<zod.ZodString>;
+        lastFailureAt: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }, {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }>>;
     autoUpdates: zod.ZodOptional<zod.ZodObject<{
         on: zod.ZodBoolean;
         reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
@@ -14692,6 +15316,14 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -14733,6 +15365,14 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    freshness?: {
+        state: "never" | "ok" | "stale" | "refresh_failed" | "needs_reconnect";
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        fetchedAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    } | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
@@ -16812,6 +17452,7 @@ export declare const RecomputeMetricsResponse: zod.ZodObject<{
  * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position), monthAllowance from readMonthAllowance (as GET /money/period-breakdown?period=month: plan, actual, remaining, over) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
+export declare const getSpineResponseBankConfidencePendingCountMin = 0;
 export declare const GetSpineResponse: zod.ZodObject<{
     asOf: zod.ZodString;
     bank: zod.ZodObject<{
@@ -16996,6 +17637,10 @@ export declare const GetSpineResponse: zod.ZodObject<{
     position: zod.ZodObject<{
         safeToSpendNow: zod.ZodNullable<zod.ZodString>;
         remainingWeek: zod.ZodNullable<zod.ZodString>;
+        knownWeek: zod.ZodString;
+        unresolvedWeek: zod.ZodString;
+        provisional: zod.ZodBoolean;
+        remainingWeekKnown: zod.ZodNullable<zod.ZodString>;
         availableUntilPayday: zod.ZodNullable<zod.ZodString>;
         paydayDate: zod.ZodNullable<zod.ZodString>;
         horizonKind: zod.ZodEnum<["payday", "week_end"]>;
@@ -17020,6 +17665,10 @@ export declare const GetSpineResponse: zod.ZodObject<{
         withinPlan: "tight" | "over" | "yes" | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        knownWeek: string;
+        unresolvedWeek: string;
+        provisional: boolean;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
@@ -17034,6 +17683,10 @@ export declare const GetSpineResponse: zod.ZodObject<{
         withinPlan: "tight" | "over" | "yes" | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        knownWeek: string;
+        unresolvedWeek: string;
+        provisional: boolean;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
@@ -17062,6 +17715,68 @@ export declare const GetSpineResponse: zod.ZodObject<{
         plan: string | null;
         over: string | null;
         remaining: string | null;
+    }>;
+    bankConfidence: zod.ZodObject<{
+        fetchedAt: zod.ZodNullable<zod.ZodString>;
+        bankBalance: zod.ZodNullable<zod.ZodString>;
+        bankAsOf: zod.ZodNullable<zod.ZodString>;
+        h2Balance: zod.ZodNullable<zod.ZodString>;
+        check: zod.ZodObject<{
+            status: zod.ZodEnum<["matches", "off_by", "resolved_since", "not_checked"]>;
+            reason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"never">, zod.ZodLiteral<"not_forecast_account">, zod.ZodLiteral<"anchor_too_old">, zod.ZodLiteral<"balance_unavailable">, zod.ZodLiteral<null>]>>;
+            stale: zod.ZodBoolean;
+            staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"age">, zod.ZodLiteral<"anchor_changed">, zod.ZodLiteral<"rows_since">, zod.ZodLiteral<null>]>>;
+            checkedAt: zod.ZodNullable<zod.ZodString>;
+            difference: zod.ZodNullable<zod.ZodString>;
+            direction: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"bank_higher">, zod.ZodLiteral<"bank_lower">, zod.ZodLiteral<null>]>>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "matches" | "off_by" | "resolved_since" | "not_checked";
+            difference: string | null;
+            stale: boolean;
+            staleReason: "age" | "anchor_changed" | "rows_since" | null;
+            reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+            checkedAt: string | null;
+            direction: "bank_higher" | "bank_lower" | null;
+        }, {
+            status: "matches" | "off_by" | "resolved_since" | "not_checked";
+            difference: string | null;
+            stale: boolean;
+            staleReason: "age" | "anchor_changed" | "rows_since" | null;
+            reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+            checkedAt: string | null;
+            direction: "bank_higher" | "bank_lower" | null;
+        }>;
+        pendingCount: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        fetchedAt: string | null;
+        bankBalance: string | null;
+        bankAsOf: string | null;
+        h2Balance: string | null;
+        check: {
+            status: "matches" | "off_by" | "resolved_since" | "not_checked";
+            difference: string | null;
+            stale: boolean;
+            staleReason: "age" | "anchor_changed" | "rows_since" | null;
+            reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+            checkedAt: string | null;
+            direction: "bank_higher" | "bank_lower" | null;
+        };
+        pendingCount: number;
+    }, {
+        fetchedAt: string | null;
+        bankBalance: string | null;
+        bankAsOf: string | null;
+        h2Balance: string | null;
+        check: {
+            status: "matches" | "off_by" | "resolved_since" | "not_checked";
+            difference: string | null;
+            stale: boolean;
+            staleReason: "age" | "anchor_changed" | "rows_since" | null;
+            reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+            checkedAt: string | null;
+            direction: "bank_higher" | "bank_lower" | null;
+        };
+        pendingCount: number;
     }>;
 }, "strip", zod.ZodTypeAny, {
     asOf: string;
@@ -17123,6 +17838,10 @@ export declare const GetSpineResponse: zod.ZodObject<{
         withinPlan: "tight" | "over" | "yes" | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        knownWeek: string;
+        unresolvedWeek: string;
+        provisional: boolean;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
@@ -17139,6 +17858,22 @@ export declare const GetSpineResponse: zod.ZodObject<{
         plan: string | null;
         over: string | null;
         remaining: string | null;
+    };
+    bankConfidence: {
+        fetchedAt: string | null;
+        bankBalance: string | null;
+        bankAsOf: string | null;
+        h2Balance: string | null;
+        check: {
+            status: "matches" | "off_by" | "resolved_since" | "not_checked";
+            difference: string | null;
+            stale: boolean;
+            staleReason: "age" | "anchor_changed" | "rows_since" | null;
+            reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+            checkedAt: string | null;
+            direction: "bank_higher" | "bank_lower" | null;
+        };
+        pendingCount: number;
     };
 }, {
     asOf: string;
@@ -17200,6 +17935,10 @@ export declare const GetSpineResponse: zod.ZodObject<{
         withinPlan: "tight" | "over" | "yes" | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        knownWeek: string;
+        unresolvedWeek: string;
+        provisional: boolean;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
@@ -17216,6 +17955,22 @@ export declare const GetSpineResponse: zod.ZodObject<{
         plan: string | null;
         over: string | null;
         remaining: string | null;
+    };
+    bankConfidence: {
+        fetchedAt: string | null;
+        bankBalance: string | null;
+        bankAsOf: string | null;
+        h2Balance: string | null;
+        check: {
+            status: "matches" | "off_by" | "resolved_since" | "not_checked";
+            difference: string | null;
+            stale: boolean;
+            staleReason: "age" | "anchor_changed" | "rows_since" | null;
+            reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+            checkedAt: string | null;
+            direction: "bank_higher" | "bank_lower" | null;
+        };
+        pendingCount: number;
     };
 }>;
 /**
@@ -17279,6 +18034,10 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     unplannedWeek: zod.ZodString;
     monthlyWeek: zod.ZodString;
     remainingWeek: zod.ZodNullable<zod.ZodString>;
+    knownWeek: zod.ZodString;
+    unresolvedWeek: zod.ZodString;
+    provisional: zod.ZodBoolean;
+    remainingWeekKnown: zod.ZodNullable<zod.ZodString>;
     paceAllowedToday: zod.ZodNullable<zod.ZodString>;
     withinPlan: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"over">, zod.ZodLiteral<"tight">, zod.ZodLiteral<"yes">, zod.ZodLiteral<null>]>>;
     safeToSpendNow: zod.ZodNullable<zod.ZodString>;
@@ -17312,6 +18071,10 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     withinPlan: "tight" | "over" | "yes" | null;
     safeToSpendNow: string | null;
     remainingWeek: string | null;
+    knownWeek: string;
+    unresolvedWeek: string;
+    provisional: boolean;
+    remainingWeekKnown: string | null;
     availableUntilPayday: string | null;
     paydayDate: string | null;
     payday: {
@@ -17358,6 +18121,10 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     withinPlan: "tight" | "over" | "yes" | null;
     safeToSpendNow: string | null;
     remainingWeek: string | null;
+    knownWeek: string;
+    unresolvedWeek: string;
+    provisional: boolean;
+    remainingWeekKnown: string | null;
     availableUntilPayday: string | null;
     paydayDate: string | null;
     payday: {
@@ -17425,6 +18192,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
     baseline: zod.ZodObject<{
         safeToSpendNow: zod.ZodNullable<zod.ZodString>;
         remainingWeek: zod.ZodNullable<zod.ZodString>;
+        remainingWeekKnown: zod.ZodNullable<zod.ZodString>;
         availableUntilPayday: zod.ZodNullable<zod.ZodString>;
         lowest: zod.ZodString;
         lowestDate: zod.ZodNullable<zod.ZodString>;
@@ -17435,6 +18203,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: string | null;
@@ -17444,6 +18213,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: string | null;
@@ -17453,6 +18223,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
     proposed: zod.ZodObject<{
         safeToSpendNow: zod.ZodNullable<zod.ZodString>;
         remainingWeek: zod.ZodNullable<zod.ZodString>;
+        remainingWeekKnown: zod.ZodNullable<zod.ZodString>;
         availableUntilPayday: zod.ZodNullable<zod.ZodString>;
         lowest: zod.ZodString;
         lowestDate: zod.ZodNullable<zod.ZodString>;
@@ -17463,6 +18234,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: string | null;
@@ -17472,6 +18244,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: string | null;
@@ -17481,6 +18254,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
     delta: zod.ZodObject<{
         safeToSpendNow: zod.ZodNullable<zod.ZodString>;
         remainingWeek: zod.ZodNullable<zod.ZodString>;
+        remainingWeekKnown: zod.ZodNullable<zod.ZodString>;
         availableUntilPayday: zod.ZodNullable<zod.ZodString>;
         lowest: zod.ZodString;
         lowestDate: zod.ZodNullable<zod.ZodString>;
@@ -17491,6 +18265,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: number | null;
@@ -17500,6 +18275,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: number | null;
@@ -17558,6 +18334,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: number | null;
@@ -17570,6 +18347,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: string | null;
@@ -17580,6 +18358,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: string | null;
@@ -17605,6 +18384,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: number | null;
@@ -17617,6 +18397,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: string | null;
@@ -17627,6 +18408,7 @@ export declare const EvaluateAffordResponse: zod.ZodObject<{
         lowestDate: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
+        remainingWeekKnown: string | null;
         availableUntilPayday: string | null;
         lowest: string;
         debtFreeEarliest: string | null;
@@ -18211,13 +18993,13 @@ export declare const CreateAllowancePlanResponse: zod.ZodUnion<[zod.ZodIntersect
             mode: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"in_full">, zod.ZodLiteral<"debt_plan">, zod.ZodLiteral<null>]>>;
             amount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
             accountId: string;
         }, {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -18229,7 +19011,7 @@ export declare const CreateAllowancePlanResponse: zod.ZodUnion<[zod.ZodIntersect
         hook: "weekly" | "monthly";
         planKey: string;
         cards: {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -18259,7 +19041,7 @@ export declare const CreateAllowancePlanResponse: zod.ZodUnion<[zod.ZodIntersect
         hook: "weekly" | "monthly";
         planKey: string;
         cards: {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -18349,7 +19131,7 @@ export declare const CreateAllowancePlanResponse: zod.ZodUnion<[zod.ZodIntersect
         hook: "weekly" | "monthly";
         planKey: string;
         cards: {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -18399,7 +19181,7 @@ export declare const CreateAllowancePlanResponse: zod.ZodUnion<[zod.ZodIntersect
         hook: "weekly" | "monthly";
         planKey: string;
         cards: {
-            mode: "in_full" | "debt_plan" | null;
+            mode: "debt_plan" | "in_full" | null;
             amount: string;
             name: string | null;
             mask: string | null;
@@ -18632,6 +19414,7 @@ export declare const UpdateAllowancePlanResponse: zod.ZodIntersection<zod.ZodObj
  */
 export declare const getWaysBackResponseOverByMin = 0;
 export declare const getWaysBackResponseDaysLeftMax = 7;
+export declare const getWaysBackResponseTrimsItemHistoryPeriodsMin = 0;
 export declare const GetWaysBackResponse: zod.ZodObject<{
     weekStart: zod.ZodString;
     weekEnd: zod.ZodString;
@@ -18653,18 +19436,21 @@ export declare const GetWaysBackResponse: zod.ZodObject<{
         spentWeek: zod.ZodNumber;
         usualWeek: zod.ZodNullable<zod.ZodNumber>;
         usualFullWeek: zod.ZodNullable<zod.ZodNumber>;
+        historyPeriods: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         categoryId: string;
         name: string;
         spentWeek: number;
         usualWeek: number | null;
         usualFullWeek: number | null;
+        historyPeriods: number;
     }, {
         categoryId: string;
         name: string;
         spentWeek: number;
         usualWeek: number | null;
         usualFullWeek: number | null;
+        historyPeriods: number;
     }>, "many">;
     usualBasis: zod.ZodEnum<["same_days"]>;
     usualThrough: zod.ZodString;
@@ -18719,6 +19505,7 @@ export declare const GetWaysBackResponse: zod.ZodObject<{
         spentWeek: number;
         usualWeek: number | null;
         usualFullWeek: number | null;
+        historyPeriods: number;
     }[];
     usualBasis: "same_days";
     usualThrough: string;
@@ -18747,6 +19534,7 @@ export declare const GetWaysBackResponse: zod.ZodObject<{
         spentWeek: number;
         usualWeek: number | null;
         usualFullWeek: number | null;
+        historyPeriods: number;
     }[];
     usualBasis: "same_days";
     usualThrough: string;
@@ -18785,6 +19573,7 @@ export declare const GetPeriodBreakdownQueryParams: zod.ZodObject<{
     account?: string | undefined;
     rowsPerGroup?: number | undefined;
 }>;
+export declare const getPeriodBreakdownResponseCategoriesItemHistoryPeriodsMin = 0;
 export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     period: zod.ZodEnum<["week", "month"]>;
     basis: zod.ZodEnum<["weekly_allowance", "monthly_allowance"]>;
@@ -18847,6 +19636,7 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
         usual: zod.ZodNullable<zod.ZodString>;
         usualFullPeriod: zod.ZodNullable<zod.ZodString>;
         aboveUsual: zod.ZodNullable<zod.ZodString>;
+        historyPeriods: zod.ZodNumber;
         rows: zod.ZodArray<zod.ZodObject<{
             id: zod.ZodString;
             date: zod.ZodString;
@@ -19142,6 +19932,7 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
             } | null;
         }[];
         truncated: boolean;
+        historyPeriods: number;
         shareBp: number | null;
         usual: string | null;
         usualFullPeriod: string | null;
@@ -19198,6 +19989,7 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
             } | null;
         }[];
         truncated: boolean;
+        historyPeriods: number;
         shareBp: number | null;
         usual: string | null;
         usualFullPeriod: string | null;
@@ -20352,6 +21144,7 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     period: "month" | "week";
     limitations: string[];
     withinPlan: boolean | null;
+    provisional: boolean;
     remaining: string | null;
     usualBasis: "same_days" | "full_period";
     usualThrough: string | null;
@@ -20359,7 +21152,6 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     isCurrent: boolean;
     planScope: "household";
     known: string;
-    provisional: boolean;
     categories: {
         count: number;
         amount: string;
@@ -20412,6 +21204,7 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
             } | null;
         }[];
         truncated: boolean;
+        historyPeriods: number;
         shareBp: number | null;
         usual: string | null;
         usualFullPeriod: string | null;
@@ -20605,6 +21398,7 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     period: "month" | "week";
     limitations: string[];
     withinPlan: boolean | null;
+    provisional: boolean;
     remaining: string | null;
     usualBasis: "same_days" | "full_period";
     usualThrough: string | null;
@@ -20612,7 +21406,6 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     isCurrent: boolean;
     planScope: "household";
     known: string;
-    provisional: boolean;
     categories: {
         count: number;
         amount: string;
@@ -20665,6 +21458,7 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
             } | null;
         }[];
         truncated: boolean;
+        historyPeriods: number;
         shareBp: number | null;
         usual: string | null;
         usualFullPeriod: string | null;
@@ -20823,6 +21617,7 @@ export declare const GetBankingReviewQueryParams: zod.ZodObject<{
     bucket?: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched" | undefined;
     rowsPerBucket?: number | undefined;
 }>;
+export declare const getBankingReviewResponseCashFlowPendingCountMin = 0;
 export declare const GetBankingReviewResponse: zod.ZodObject<{
     account: zod.ZodObject<{
         id: zod.ZodNullable<zod.ZodString>;
@@ -20883,6 +21678,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
     }>;
     freshness: zod.ZodUnion<[zod.ZodObject<{
         source: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"plaid">, zod.ZodLiteral<"manual">, zod.ZodLiteral<null>]>>;
+        fetchedAt: zod.ZodNullable<zod.ZodString>;
         lastContactAt: zod.ZodNullable<zod.ZodString>;
         lastFailureAt: zod.ZodNullable<zod.ZodString>;
         stale: zod.ZodBoolean;
@@ -20891,12 +21687,14 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         source: "plaid" | "manual" | null;
         lastContactAt: string | null;
         lastFailureAt: string | null;
+        fetchedAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
     }, {
         source: "plaid" | "manual" | null;
         lastContactAt: string | null;
         lastFailureAt: string | null;
+        fetchedAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
     }>, zod.ZodNull]>;
@@ -20906,6 +21704,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         net: zod.ZodString;
         count: zod.ZodNumber;
         pendingNet: zod.ZodString;
+        pendingCount: zod.ZodNumber;
         supersededExcluded: zod.ZodNumber;
         otherExcluded: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
@@ -20913,6 +21712,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         moneyIn: string;
         moneyOut: string;
         net: string;
+        pendingCount: number;
         pendingNet: string;
         supersededExcluded: number;
         otherExcluded: number;
@@ -20921,6 +21721,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         moneyIn: string;
         moneyOut: string;
         net: string;
+        pendingCount: number;
         pendingNet: string;
         supersededExcluded: number;
         otherExcluded: number;
@@ -20968,6 +21769,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         actual: zod.ZodNullable<zod.ZodString>;
         variance: zod.ZodNullable<zod.ZodString>;
         varianceKind: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"less_than_expected">, zod.ZodLiteral<"more_than_expected">, zod.ZodLiteral<"over_planned">, zod.ZodLiteral<"under_planned">, zod.ZodLiteral<null>]>>;
+        outcome: zod.ZodEnum<["received", "received_different", "not_received_yet", "paid", "paid_different", "not_paid_yet", "suggested", "skipped", "missed", "carried", "not_due", "not_decided"]>;
     }, "strip", zod.ZodTypeAny, {
         expected: string | null;
         itemId: string;
@@ -20983,15 +21785,16 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         txnId: string | null;
         dayDelta: number | null;
         key: string;
+        direction: "in" | "out";
         onCurve: boolean;
         scheduledDate: string;
         fate: "skipped" | "matched" | "carried" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
         txnOnThisAccount: boolean;
         remainder: string | null;
         eventKind: "income" | "hook" | "debt" | "bill";
-        direction: "in" | "out";
         variance: string | null;
         varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+        outcome: "received" | "skipped" | "carried" | "paid" | "suggested" | "missed" | "not_due" | "received_different" | "not_received_yet" | "paid_different" | "not_paid_yet" | "not_decided";
     }, {
         expected: string | null;
         itemId: string;
@@ -21007,15 +21810,16 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         txnId: string | null;
         dayDelta: number | null;
         key: string;
+        direction: "in" | "out";
         onCurve: boolean;
         scheduledDate: string;
         fate: "skipped" | "matched" | "carried" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
         txnOnThisAccount: boolean;
         remainder: string | null;
         eventKind: "income" | "hook" | "debt" | "bill";
-        direction: "in" | "out";
         variance: string | null;
         varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+        outcome: "received" | "skipped" | "carried" | "paid" | "suggested" | "missed" | "not_due" | "received_different" | "not_received_yet" | "paid_different" | "not_paid_yet" | "not_decided";
     }>, "many">;
     notInPlan: zod.ZodObject<{
         amountDifference: zod.ZodObject<{
@@ -21090,9 +21894,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }, {
@@ -21103,9 +21907,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }>, zod.ZodNull]>;
@@ -21130,9 +21934,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -21145,8 +21949,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }, {
                 date: string;
@@ -21169,9 +21973,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -21184,8 +21988,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
@@ -21553,9 +22357,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -21568,8 +22372,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -21677,9 +22481,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -21692,8 +22496,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -21851,9 +22655,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }, {
@@ -21864,9 +22668,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }>, zod.ZodNull]>;
@@ -21891,9 +22695,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -21906,8 +22710,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }, {
                 date: string;
@@ -21930,9 +22734,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -21945,8 +22749,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
@@ -22314,9 +23118,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -22329,8 +23133,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -22438,9 +23242,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -22453,8 +23257,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -22612,9 +23416,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }, {
@@ -22625,9 +23429,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }>, zod.ZodNull]>;
@@ -22652,9 +23456,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -22667,8 +23471,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }, {
                 date: string;
@@ -22691,9 +23495,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -22706,8 +23510,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
@@ -23075,9 +23879,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -23090,8 +23894,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -23199,9 +24003,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -23214,8 +24018,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -23373,9 +24177,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }, {
@@ -23386,9 +24190,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }>, zod.ZodNull]>;
@@ -23413,9 +24217,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -23428,8 +24232,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }, {
                 date: string;
@@ -23452,9 +24256,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -23467,8 +24271,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
@@ -23836,9 +24640,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -23851,8 +24655,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -23960,9 +24764,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -23975,8 +24779,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -24134,9 +24938,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }, {
@@ -24147,9 +24951,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 }>, zod.ZodNull]>;
@@ -24174,9 +24978,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -24189,8 +24993,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }, {
                 date: string;
@@ -24213,9 +25017,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -24228,8 +25032,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
@@ -24597,9 +25401,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -24612,8 +25416,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -24721,9 +25525,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -24736,8 +25540,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -24847,9 +25651,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -24862,8 +25666,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -24972,9 +25776,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -24987,8 +25791,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -25097,9 +25901,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -25112,8 +25916,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -25222,9 +26026,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -25237,8 +26041,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -25347,9 +26151,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -25362,8 +26166,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -25473,9 +26277,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -25488,8 +26292,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -25598,9 +26402,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -25613,8 +26417,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -25723,9 +26527,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -25738,8 +26542,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -25848,9 +26652,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -25863,8 +26667,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -25973,9 +26777,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -25988,8 +26792,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -26113,14 +26917,23 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
     }>;
     reviewInbox: zod.ZodObject<{
         unresolvedInRange: zod.ZodNumber;
+        unresolvedScope: zod.ZodEnum<["this account · this period"]>;
+        unresolvedFrom: zod.ZodString;
+        unresolvedTo: zod.ZodString;
         badgeCount: zod.ZodNumber;
         badgeScope: zod.ZodEnum<["this calendar month, forecast account"]>;
     }, "strip", zod.ZodTypeAny, {
         unresolvedInRange: number;
+        unresolvedScope: "this account · this period";
+        unresolvedFrom: string;
+        unresolvedTo: string;
         badgeCount: number;
         badgeScope: "this calendar month, forecast account";
     }, {
         unresolvedInRange: number;
+        unresolvedScope: "this account · this period";
+        unresolvedFrom: string;
+        unresolvedTo: string;
         badgeCount: number;
         badgeScope: "this calendar month, forecast account";
     }>;
@@ -26129,11 +26942,11 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         checkedAt: zod.ZodNullable<zod.ZodString>;
         unexplained: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
-        status: "ties" | "drift" | "not_checked";
+        status: "not_checked" | "ties" | "drift";
         unexplained: string | null;
         checkedAt: string | null;
     }, {
-        status: "ties" | "drift" | "not_checked";
+        status: "not_checked" | "ties" | "drift";
         unexplained: string | null;
         checkedAt: string | null;
     }>;
@@ -26150,11 +26963,11 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         }, "strip", zod.ZodTypeAny, {
             at: string;
             balance: string;
-            field: "current" | "available";
+            field: "available" | "current";
         }, {
             at: string;
             balance: string;
-            field: "current" | "available";
+            field: "available" | "current";
         }>, zod.ZodNull]>;
         h2: zod.ZodUnion<[zod.ZodObject<{
             balance: zod.ZodString;
@@ -26179,7 +26992,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             direction: "bank_higher" | "bank_lower" | null;
         }>, zod.ZodNull]>;
     }, "strip", zod.ZodTypeAny, {
-        status: "matches" | "not_checked" | "off_by" | "resolved_since";
+        status: "matches" | "off_by" | "resolved_since" | "not_checked";
         difference: string | null;
         stale: boolean;
         staleReason: "age" | "anchor_changed" | "rows_since" | null;
@@ -26188,7 +27001,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         bank: {
             at: string;
             balance: string;
-            field: "current" | "available";
+            field: "available" | "current";
         } | null;
         direction: "bank_higher" | "bank_lower" | null;
         h2: {
@@ -26200,7 +27013,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             direction: "bank_higher" | "bank_lower" | null;
         } | null;
     }, {
-        status: "matches" | "not_checked" | "off_by" | "resolved_since";
+        status: "matches" | "off_by" | "resolved_since" | "not_checked";
         difference: string | null;
         stale: boolean;
         staleReason: "age" | "anchor_changed" | "rows_since" | null;
@@ -26209,7 +27022,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         bank: {
             at: string;
             balance: string;
-            field: "current" | "available";
+            field: "available" | "current";
         } | null;
         direction: "bank_higher" | "bank_lower" | null;
         h2: {
@@ -26228,12 +27041,20 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         spentWeek: zod.ZodString;
         weekPlan: zod.ZodNullable<zod.ZodString>;
         remainingWeek: zod.ZodNullable<zod.ZodString>;
+        knownWeek: zod.ZodString;
+        unresolvedWeek: zod.ZodString;
+        provisional: zod.ZodBoolean;
+        remainingWeekKnown: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         weekStart: string;
         weekEnd: string;
         scope: "all accounts · this week";
         spentWeek: string;
         remainingWeek: string | null;
+        knownWeek: string;
+        unresolvedWeek: string;
+        provisional: boolean;
+        remainingWeekKnown: string | null;
         weekPlan: string | null;
     }, {
         weekStart: string;
@@ -26241,6 +27062,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         scope: "all accounts · this week";
         spentWeek: string;
         remainingWeek: string | null;
+        knownWeek: string;
+        unresolvedWeek: string;
+        provisional: boolean;
+        remainingWeekKnown: string | null;
         weekPlan: string | null;
     }>, zod.ZodNull]>;
     page: zod.ZodUnion<[zod.ZodObject<{
@@ -26312,9 +27137,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 label: string;
                 dayDelta: number | null;
                 key: string;
+                direction: "in" | "out";
                 scheduledDate: string;
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
-                direction: "in" | "out";
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             }, {
@@ -26325,9 +27150,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 label: string;
                 dayDelta: number | null;
                 key: string;
+                direction: "in" | "out";
                 scheduledDate: string;
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
-                direction: "in" | "out";
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             }>, zod.ZodNull]>;
@@ -26352,9 +27177,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 label: string;
                 dayDelta: number | null;
                 key: string;
+                direction: "in" | "out";
                 scheduledDate: string;
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
-                direction: "in" | "out";
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
@@ -26367,8 +27192,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 transfer: boolean;
                 cardPayment: boolean;
             };
-            evidence: "confirmed" | "automatic" | null;
             direction: "in" | "out";
+            evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
         }, {
             date: string;
@@ -26391,9 +27216,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 label: string;
                 dayDelta: number | null;
                 key: string;
+                direction: "in" | "out";
                 scheduledDate: string;
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
-                direction: "in" | "out";
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
@@ -26406,8 +27231,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 transfer: boolean;
                 cardPayment: boolean;
             };
-            evidence: "confirmed" | "automatic" | null;
             direction: "in" | "out";
+            evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
         }>, "many">;
         nextCursor: zod.ZodNullable<zod.ZodString>;
@@ -26436,9 +27261,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 label: string;
                 dayDelta: number | null;
                 key: string;
+                direction: "in" | "out";
                 scheduledDate: string;
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
-                direction: "in" | "out";
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
@@ -26451,8 +27276,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 transfer: boolean;
                 cardPayment: boolean;
             };
-            evidence: "confirmed" | "automatic" | null;
             direction: "in" | "out";
+            evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
         }[];
         nextCursor: string | null;
@@ -26481,9 +27306,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 label: string;
                 dayDelta: number | null;
                 key: string;
+                direction: "in" | "out";
                 scheduledDate: string;
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
-                direction: "in" | "out";
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
@@ -26496,8 +27321,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 transfer: boolean;
                 cardPayment: boolean;
             };
-            evidence: "confirmed" | "automatic" | null;
             direction: "in" | "out";
+            evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
         }[];
         nextCursor: string | null;
@@ -26534,20 +27359,22 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         txnId: string | null;
         dayDelta: number | null;
         key: string;
+        direction: "in" | "out";
         onCurve: boolean;
         scheduledDate: string;
         fate: "skipped" | "matched" | "carried" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
         txnOnThisAccount: boolean;
         remainder: string | null;
         eventKind: "income" | "hook" | "debt" | "bill";
-        direction: "in" | "out";
         variance: string | null;
         varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+        outcome: "received" | "skipped" | "carried" | "paid" | "suggested" | "missed" | "not_due" | "received_different" | "not_received_yet" | "paid_different" | "not_paid_yet" | "not_decided";
     }[];
     freshness: {
         source: "plaid" | "manual" | null;
         lastContactAt: string | null;
         lastFailureAt: string | null;
+        fetchedAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
     } | null;
@@ -26563,6 +27390,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         scope: "all accounts · this week";
         spentWeek: string;
         remainingWeek: string | null;
+        knownWeek: string;
+        unresolvedWeek: string;
+        provisional: boolean;
+        remainingWeekKnown: string | null;
         weekPlan: string | null;
     } | null;
     cashFlow: {
@@ -26570,6 +27401,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         moneyIn: string;
         moneyOut: string;
         net: string;
+        pendingCount: number;
         pendingNet: string;
         supersededExcluded: number;
         otherExcluded: number;
@@ -26605,9 +27437,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -26620,8 +27452,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -26730,9 +27562,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -26745,8 +27577,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -26855,9 +27687,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -26870,8 +27702,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -26980,9 +27812,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -26995,8 +27827,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -27105,9 +27937,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -27120,8 +27952,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -27223,16 +28055,19 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
     };
     reviewInbox: {
         unresolvedInRange: number;
+        unresolvedScope: "this account · this period";
+        unresolvedFrom: string;
+        unresolvedTo: string;
         badgeCount: number;
         badgeScope: "this calendar month, forecast account";
     };
     balanceTie: {
-        status: "ties" | "drift" | "not_checked";
+        status: "not_checked" | "ties" | "drift";
         unexplained: string | null;
         checkedAt: string | null;
     };
     balanceCheck: {
-        status: "matches" | "not_checked" | "off_by" | "resolved_since";
+        status: "matches" | "off_by" | "resolved_since" | "not_checked";
         difference: string | null;
         stale: boolean;
         staleReason: "age" | "anchor_changed" | "rows_since" | null;
@@ -27241,7 +28076,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         bank: {
             at: string;
             balance: string;
-            field: "current" | "available";
+            field: "available" | "current";
         } | null;
         direction: "bank_higher" | "bank_lower" | null;
         h2: {
@@ -27277,9 +28112,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 label: string;
                 dayDelta: number | null;
                 key: string;
+                direction: "in" | "out";
                 scheduledDate: string;
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
-                direction: "in" | "out";
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
@@ -27292,8 +28127,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 transfer: boolean;
                 cardPayment: boolean;
             };
-            evidence: "confirmed" | "automatic" | null;
             direction: "in" | "out";
+            evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
         }[];
         nextCursor: string | null;
@@ -27330,20 +28165,22 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         txnId: string | null;
         dayDelta: number | null;
         key: string;
+        direction: "in" | "out";
         onCurve: boolean;
         scheduledDate: string;
         fate: "skipped" | "matched" | "carried" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
         txnOnThisAccount: boolean;
         remainder: string | null;
         eventKind: "income" | "hook" | "debt" | "bill";
-        direction: "in" | "out";
         variance: string | null;
         varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+        outcome: "received" | "skipped" | "carried" | "paid" | "suggested" | "missed" | "not_due" | "received_different" | "not_received_yet" | "paid_different" | "not_paid_yet" | "not_decided";
     }[];
     freshness: {
         source: "plaid" | "manual" | null;
         lastContactAt: string | null;
         lastFailureAt: string | null;
+        fetchedAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
     } | null;
@@ -27359,6 +28196,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         scope: "all accounts · this week";
         spentWeek: string;
         remainingWeek: string | null;
+        knownWeek: string;
+        unresolvedWeek: string;
+        provisional: boolean;
+        remainingWeekKnown: string | null;
         weekPlan: string | null;
     } | null;
     cashFlow: {
@@ -27366,6 +28207,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         moneyIn: string;
         moneyOut: string;
         net: string;
+        pendingCount: number;
         pendingNet: string;
         supersededExcluded: number;
         otherExcluded: number;
@@ -27401,9 +28243,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -27416,8 +28258,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -27526,9 +28368,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -27541,8 +28383,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -27651,9 +28493,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -27666,8 +28508,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -27776,9 +28618,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -27791,8 +28633,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -27901,9 +28743,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     label: string;
                     dayDelta: number | null;
                     key: string;
+                    direction: "in" | "out";
                     scheduledDate: string;
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
-                    direction: "in" | "out";
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
@@ -27916,8 +28758,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     transfer: boolean;
                     cardPayment: boolean;
                 };
-                evidence: "confirmed" | "automatic" | null;
                 direction: "in" | "out";
+                evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
             }[];
             moneyIn: string;
@@ -28019,16 +28861,19 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
     };
     reviewInbox: {
         unresolvedInRange: number;
+        unresolvedScope: "this account · this period";
+        unresolvedFrom: string;
+        unresolvedTo: string;
         badgeCount: number;
         badgeScope: "this calendar month, forecast account";
     };
     balanceTie: {
-        status: "ties" | "drift" | "not_checked";
+        status: "not_checked" | "ties" | "drift";
         unexplained: string | null;
         checkedAt: string | null;
     };
     balanceCheck: {
-        status: "matches" | "not_checked" | "off_by" | "resolved_since";
+        status: "matches" | "off_by" | "resolved_since" | "not_checked";
         difference: string | null;
         stale: boolean;
         staleReason: "age" | "anchor_changed" | "rows_since" | null;
@@ -28037,7 +28882,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         bank: {
             at: string;
             balance: string;
-            field: "current" | "available";
+            field: "available" | "current";
         } | null;
         direction: "bank_higher" | "bank_lower" | null;
         h2: {
@@ -28073,9 +28918,9 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 label: string;
                 dayDelta: number | null;
                 key: string;
+                direction: "in" | "out";
                 scheduledDate: string;
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
-                direction: "in" | "out";
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
@@ -28088,8 +28933,8 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 transfer: boolean;
                 cardPayment: boolean;
             };
-            evidence: "confirmed" | "automatic" | null;
             direction: "in" | "out";
+            evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
         }[];
         nextCursor: string | null;
@@ -28118,6 +28963,7 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
     truncated: zod.ZodBoolean;
     items: zod.ZodArray<zod.ZodObject<{
         key: zod.ZodString;
+        proposalHash: zod.ZodString;
         kind: zod.ZodEnum<["loan_payment", "transfer", "bill_match", "income_category"]>;
         rows: zod.ZodArray<zod.ZodObject<{
             id: zod.ZodString;
@@ -28126,20 +28972,24 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
             description: zod.ZodString;
             amount: zod.ZodString;
             pending: zod.ZodBoolean;
+            source: zod.ZodString;
             account: zod.ZodObject<{
                 id: zod.ZodNullable<zod.ZodString>;
                 institution: zod.ZodNullable<zod.ZodString>;
                 name: zod.ZodNullable<zod.ZodString>;
                 mask: zod.ZodNullable<zod.ZodString>;
+                externalId: zod.ZodNullable<zod.ZodString>;
             }, "strip", zod.ZodTypeAny, {
                 id: string | null;
                 name: string | null;
                 mask: string | null;
+                externalId: string | null;
                 institution: string | null;
             }, {
                 id: string | null;
                 name: string | null;
                 mask: string | null;
+                externalId: string | null;
                 institution: string | null;
             }>;
             category: zod.ZodUnion<[zod.ZodObject<{
@@ -28168,12 +29018,14 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
         }, "strip", zod.ZodTypeAny, {
             date: string;
             id: string;
+            source: string;
             description: string;
             amount: string;
             account: {
                 id: string | null;
                 name: string | null;
                 mask: string | null;
+                externalId: string | null;
                 institution: string | null;
             };
             pending: boolean;
@@ -28190,12 +29042,14 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
         }, {
             date: string;
             id: string;
+            source: string;
             description: string;
             amount: string;
             account: {
                 id: string | null;
                 name: string | null;
                 mask: string | null;
+                externalId: string | null;
                 institution: string | null;
             };
             pending: boolean;
@@ -28270,12 +29124,14 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
         rows: {
             date: string;
             id: string;
+            source: string;
             description: string;
             amount: string;
             account: {
                 id: string | null;
                 name: string | null;
                 mask: string | null;
+                externalId: string | null;
                 institution: string | null;
             };
             pending: boolean;
@@ -28307,6 +29163,7 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
             value: string;
             field: "category" | "bill_suggestion" | "pfc_primary" | "pfc_detailed" | "name_match" | "amount_match" | "same_amount_rows";
         }[];
+        proposalHash: string;
         applyWith: ("review_mark_matched" | "categories_change")[];
     }, {
         kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
@@ -28314,12 +29171,14 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
         rows: {
             date: string;
             id: string;
+            source: string;
             description: string;
             amount: string;
             account: {
                 id: string | null;
                 name: string | null;
                 mask: string | null;
+                externalId: string | null;
                 institution: string | null;
             };
             pending: boolean;
@@ -28351,6 +29210,7 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
             value: string;
             field: "category" | "bill_suggestion" | "pfc_primary" | "pfc_detailed" | "name_match" | "amount_match" | "same_amount_rows";
         }[];
+        proposalHash: string;
         applyWith: ("review_mark_matched" | "categories_change")[];
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
@@ -28362,12 +29222,14 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
         rows: {
             date: string;
             id: string;
+            source: string;
             description: string;
             amount: string;
             account: {
                 id: string | null;
                 name: string | null;
                 mask: string | null;
+                externalId: string | null;
                 institution: string | null;
             };
             pending: boolean;
@@ -28399,6 +29261,7 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
             value: string;
             field: "category" | "bill_suggestion" | "pfc_primary" | "pfc_detailed" | "name_match" | "amount_match" | "same_amount_rows";
         }[];
+        proposalHash: string;
         applyWith: ("review_mark_matched" | "categories_change")[];
     }[];
     window: {
@@ -28415,12 +29278,14 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
         rows: {
             date: string;
             id: string;
+            source: string;
             description: string;
             amount: string;
             account: {
                 id: string | null;
                 name: string | null;
                 mask: string | null;
+                externalId: string | null;
                 institution: string | null;
             };
             pending: boolean;
@@ -28452,6 +29317,7 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
             value: string;
             field: "category" | "bill_suggestion" | "pfc_primary" | "pfc_detailed" | "name_match" | "amount_match" | "same_amount_rows";
         }[];
+        proposalHash: string;
         applyWith: ("review_mark_matched" | "categories_change")[];
     }[];
     window: {
@@ -28459,6 +29325,2452 @@ export declare const GetReviewProposalsResponse: zod.ZodObject<{
         to: string;
         days: number;
     };
+}>;
+/**
+ * @summary (Q2) The fixes the owner applied, newest first (at most 20; owner only)
+ */
+export declare const listAppliedReviewProposalsResponseItemsMax = 20;
+export declare const ListAppliedReviewProposalsResponse: zod.ZodObject<{
+    items: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        proposalKey: zod.ZodString;
+        kind: zod.ZodEnum<["loan_payment", "transfer", "bill_match", "income_category"]>;
+        label: zod.ZodString;
+        rowCount: zod.ZodNumber;
+        filedCount: zod.ZodNumber;
+        matchedCount: zod.ZodNumber;
+        appliedAt: zod.ZodString;
+        undoneAt: zod.ZodNullable<zod.ZodString>;
+        undoable: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        label: string;
+        rowCount: number;
+        proposalKey: string;
+        filedCount: number;
+        matchedCount: number;
+        appliedAt: string;
+        undoneAt: string | null;
+        undoable: boolean;
+    }, {
+        id: string;
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        label: string;
+        rowCount: number;
+        proposalKey: string;
+        filedCount: number;
+        matchedCount: number;
+        appliedAt: string;
+        undoneAt: string | null;
+        undoable: boolean;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    items: {
+        id: string;
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        label: string;
+        rowCount: number;
+        proposalKey: string;
+        filedCount: number;
+        matchedCount: number;
+        appliedAt: string;
+        undoneAt: string | null;
+        undoable: boolean;
+    }[];
+}, {
+    items: {
+        id: string;
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        label: string;
+        rowCount: number;
+        proposalKey: string;
+        filedCount: number;
+        matchedCount: number;
+        appliedAt: string;
+        undoneAt: string | null;
+        undoable: boolean;
+    }[];
+}>;
+/**
+ * The proposal is recomputed and must be the one the owner saw: the body echoes its proposalHash and the ids of its listed rows (a truncated proposal applies to the rows it lists). income_category and transfer file every row under the target category through the user-decision path (the row locked, a user decision with its flags before and after); loan_payment also does (when the proposal names a category) and marks each row matched to its occurrence; bill_match marks it matched. An occurrence two rows would answer goes to the row dated nearest it. Merchant memory learns once per fix, sign-aware. Every category goes through the direction guard. One record keeps everything the undo needs. dryRun=1 writes nothing and answers each row before and after, the answers the fix would replace, and the figures before and after — this week's and this month's breakdown (actual, known, unresolved), the Budget months the rows fall in, and the Banking review's buckets (before only; see limitations) — read by the same builders as the screens, through the plan the apply writes.
+ * @summary (Q2) Apply one proposed fix in one transaction — or, with dryRun=1, show what it would change (owner only)
+ */
+export declare const ApplyReviewProposalParams: zod.ZodObject<{
+    key: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    key: string;
+}, {
+    key: string;
+}>;
+export declare const ApplyReviewProposalQueryParams: zod.ZodObject<{
+    dryRun: zod.ZodOptional<zod.ZodEnum<["1", "true"]>>;
+}, "strip", zod.ZodTypeAny, {
+    dryRun?: "1" | "true" | undefined;
+}, {
+    dryRun?: "1" | "true" | undefined;
+}>;
+export declare const applyReviewProposalBodyRowIdsMax = 20;
+export declare const applyReviewProposalBodyProposalHashMax = 64;
+export declare const ApplyReviewProposalBody: zod.ZodObject<{
+    rowIds: zod.ZodArray<zod.ZodString, "many">;
+    proposalHash: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    proposalHash: string;
+    rowIds: string[];
+}, {
+    proposalHash: string;
+    rowIds: string[];
+}>;
+export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
+    dryRun: zod.ZodLiteral<true>;
+    proposal: zod.ZodObject<{
+        key: zod.ZodString;
+        kind: zod.ZodEnum<["loan_payment", "transfer", "bill_match", "income_category"]>;
+        proposalHash: zod.ZodString;
+        action: zod.ZodEnum<["file_as_bill_payment", "file_as_debt_payment", "file_as_transfer", "confirm_bill_match", "file_under_income_category"]>;
+        label: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        action: "file_as_bill_payment" | "file_as_debt_payment" | "file_as_transfer" | "confirm_bill_match" | "file_under_income_category";
+        label: string;
+        key: string;
+        proposalHash: string;
+    }, {
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        action: "file_as_bill_payment" | "file_as_debt_payment" | "file_as_transfer" | "confirm_bill_match" | "file_under_income_category";
+        label: string;
+        key: string;
+        proposalHash: string;
+    }>;
+    rows: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        date: zod.ZodString;
+        displayName: zod.ZodString;
+        amount: zod.ZodString;
+        pending: zod.ZodBoolean;
+        source: zod.ZodString;
+        account: zod.ZodObject<{
+            id: zod.ZodNullable<zod.ZodString>;
+            institution: zod.ZodNullable<zod.ZodString>;
+            name: zod.ZodNullable<zod.ZodString>;
+            mask: zod.ZodNullable<zod.ZodString>;
+            externalId: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        }, {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        }>;
+        before: zod.ZodObject<{
+            categoryId: zod.ZodNullable<zod.ZodString>;
+            categoryLockedByUser: zod.ZodBoolean;
+            categoryProvisional: zod.ZodBoolean;
+            isTransfer: zod.ZodBoolean;
+            isTransferUserOverridden: zod.ZodBoolean;
+            weeklyAllowance: zod.ZodBoolean;
+            monthlyAllowance: zod.ZodBoolean;
+            unplannedAllowance: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        }, {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        }>;
+        after: zod.ZodObject<{
+            categoryId: zod.ZodNullable<zod.ZodString>;
+            categoryLockedByUser: zod.ZodBoolean;
+            categoryProvisional: zod.ZodBoolean;
+            isTransfer: zod.ZodBoolean;
+            isTransferUserOverridden: zod.ZodBoolean;
+            weeklyAllowance: zod.ZodBoolean;
+            monthlyAllowance: zod.ZodBoolean;
+            unplannedAllowance: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        }, {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        }>;
+        resolution: zod.ZodUnion<[zod.ZodObject<{
+            recurringItemId: zod.ZodString;
+            occurrenceDate: zod.ZodString;
+            status: zod.ZodEnum<["matched"]>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        }, {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        }>, zod.ZodNull]>;
+        resolutionSkipped: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"no_occurrence">, zod.ZodLiteral<"occurrence_shared">, zod.ZodLiteral<null>]>>;
+        decisionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        id: string;
+        source: string;
+        amount: string;
+        account: {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        };
+        pending: boolean;
+        displayName: string;
+        before: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        after: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        resolution: {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        } | null;
+        resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
+        decisionId?: string | null | undefined;
+    }, {
+        date: string;
+        id: string;
+        source: string;
+        amount: string;
+        account: {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        };
+        pending: boolean;
+        displayName: string;
+        before: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        after: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        resolution: {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        } | null;
+        resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
+        decisionId?: string | null | undefined;
+    }>, "many">;
+    replaces: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        status: zod.ZodString;
+        recurringItemId: zod.ZodNullable<zod.ZodString>;
+        occurrenceDate: zod.ZodNullable<zod.ZodString>;
+        matchedTxnId: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }, {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }>, "many">;
+    learnsMemory: zod.ZodBoolean;
+    figures: zod.ZodObject<{
+        week: zod.ZodObject<{
+            before: zod.ZodObject<{
+                start: zod.ZodString;
+                end: zod.ZodString;
+                plan: zod.ZodNullable<zod.ZodString>;
+                actual: zod.ZodString;
+                known: zod.ZodString;
+                unresolved: zod.ZodString;
+                remaining: zod.ZodNullable<zod.ZodString>;
+                over: zod.ZodNullable<zod.ZodString>;
+            }, "strip", zod.ZodTypeAny, {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            }, {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            }>;
+            after: zod.ZodObject<{
+                start: zod.ZodString;
+                end: zod.ZodString;
+                plan: zod.ZodNullable<zod.ZodString>;
+                actual: zod.ZodString;
+                known: zod.ZodString;
+                unresolved: zod.ZodString;
+                remaining: zod.ZodNullable<zod.ZodString>;
+                over: zod.ZodNullable<zod.ZodString>;
+            }, "strip", zod.ZodTypeAny, {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            }, {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            }>;
+        }, "strip", zod.ZodTypeAny, {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        }, {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        }>;
+        month: zod.ZodObject<{
+            before: zod.ZodObject<{
+                start: zod.ZodString;
+                end: zod.ZodString;
+                plan: zod.ZodNullable<zod.ZodString>;
+                actual: zod.ZodString;
+                known: zod.ZodString;
+                unresolved: zod.ZodString;
+                remaining: zod.ZodNullable<zod.ZodString>;
+                over: zod.ZodNullable<zod.ZodString>;
+            }, "strip", zod.ZodTypeAny, {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            }, {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            }>;
+            after: zod.ZodObject<{
+                start: zod.ZodString;
+                end: zod.ZodString;
+                plan: zod.ZodNullable<zod.ZodString>;
+                actual: zod.ZodString;
+                known: zod.ZodString;
+                unresolved: zod.ZodString;
+                remaining: zod.ZodNullable<zod.ZodString>;
+                over: zod.ZodNullable<zod.ZodString>;
+            }, "strip", zod.ZodTypeAny, {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            }, {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            }>;
+        }, "strip", zod.ZodTypeAny, {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        }, {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        }>;
+        budgetMonths: zod.ZodArray<zod.ZodObject<{
+            monthStart: zod.ZodString;
+            before: zod.ZodObject<{
+                income: zod.ZodString;
+                expenses: zod.ZodString;
+                net: zod.ZodString;
+                lines: zod.ZodArray<zod.ZodObject<{
+                    categoryId: zod.ZodString;
+                    name: zod.ZodString;
+                    kind: zod.ZodString;
+                    actual: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }, {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }>, "many">;
+            }, "strip", zod.ZodTypeAny, {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            }, {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            }>;
+            after: zod.ZodObject<{
+                income: zod.ZodString;
+                expenses: zod.ZodString;
+                net: zod.ZodString;
+                lines: zod.ZodArray<zod.ZodObject<{
+                    categoryId: zod.ZodString;
+                    name: zod.ZodString;
+                    kind: zod.ZodString;
+                    actual: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }, {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }>, "many">;
+            }, "strip", zod.ZodTypeAny, {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            }, {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            }>;
+        }, "strip", zod.ZodTypeAny, {
+            monthStart: string;
+            before: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+            after: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+        }, {
+            monthStart: string;
+            before: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+            after: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+        }>, "many">;
+        banking: zod.ZodArray<zod.ZodObject<{
+            account: zod.ZodObject<{
+                id: zod.ZodNullable<zod.ZodString>;
+                institution: zod.ZodNullable<zod.ZodString>;
+                name: zod.ZodNullable<zod.ZodString>;
+                mask: zod.ZodNullable<zod.ZodString>;
+            }, "strip", zod.ZodTypeAny, {
+                id: string | null;
+                name: string | null;
+                mask: string | null;
+                institution: string | null;
+            }, {
+                id: string | null;
+                name: string | null;
+                mask: string | null;
+                institution: string | null;
+            }>;
+            from: zod.ZodString;
+            to: zod.ZodString;
+            before: zod.ZodObject<{
+                buckets: zod.ZodObject<{
+                    amountDifference: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                    timingDifference: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                    confirmedUnplanned: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                    uncertain: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                    unmatched: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                }, "strip", zod.ZodTypeAny, {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                }, {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                }>;
+                asPlanned: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    net: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    net: string;
+                }, {
+                    count: number;
+                    net: string;
+                }>;
+                unresolvedInRange: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            }, {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            }>;
+            after: zod.ZodUnion<[zod.ZodObject<{
+                buckets: zod.ZodObject<{
+                    amountDifference: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                    timingDifference: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                    confirmedUnplanned: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                    uncertain: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                    unmatched: zod.ZodObject<{
+                        count: zod.ZodNumber;
+                        moneyIn: zod.ZodString;
+                        moneyOut: zod.ZodString;
+                        net: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }, {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    }>;
+                }, "strip", zod.ZodTypeAny, {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                }, {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                }>;
+                asPlanned: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    net: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    net: string;
+                }, {
+                    count: number;
+                    net: string;
+                }>;
+                unresolvedInRange: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            }, {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            account: {
+                id: string | null;
+                name: string | null;
+                mask: string | null;
+                institution: string | null;
+            };
+            from: string;
+            to: string;
+            before: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            };
+            after: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            } | null;
+        }, {
+            account: {
+                id: string | null;
+                name: string | null;
+                mask: string | null;
+                institution: string | null;
+            };
+            from: string;
+            to: string;
+            before: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            };
+            after: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            } | null;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        month: {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        };
+        week: {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        };
+        budgetMonths: {
+            monthStart: string;
+            before: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+            after: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+        }[];
+        banking: {
+            account: {
+                id: string | null;
+                name: string | null;
+                mask: string | null;
+                institution: string | null;
+            };
+            from: string;
+            to: string;
+            before: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            };
+            after: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            } | null;
+        }[];
+    }, {
+        month: {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        };
+        week: {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        };
+        budgetMonths: {
+            monthStart: string;
+            before: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+            after: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+        }[];
+        banking: {
+            account: {
+                id: string | null;
+                name: string | null;
+                mask: string | null;
+                institution: string | null;
+            };
+            from: string;
+            to: string;
+            before: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            };
+            after: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            } | null;
+        }[];
+    }>;
+    limitations: zod.ZodArray<zod.ZodEnum<["forecast_pairs_as_before", "banking_after_not_previewed", "listed_rows_only"]>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    rows: {
+        date: string;
+        id: string;
+        source: string;
+        amount: string;
+        account: {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        };
+        pending: boolean;
+        displayName: string;
+        before: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        after: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        resolution: {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        } | null;
+        resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
+        decisionId?: string | null | undefined;
+    }[];
+    limitations: ("forecast_pairs_as_before" | "banking_after_not_previewed" | "listed_rows_only")[];
+    dryRun: true;
+    proposal: {
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        action: "file_as_bill_payment" | "file_as_debt_payment" | "file_as_transfer" | "confirm_bill_match" | "file_under_income_category";
+        label: string;
+        key: string;
+        proposalHash: string;
+    };
+    replaces: {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }[];
+    learnsMemory: boolean;
+    figures: {
+        month: {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        };
+        week: {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        };
+        budgetMonths: {
+            monthStart: string;
+            before: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+            after: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+        }[];
+        banking: {
+            account: {
+                id: string | null;
+                name: string | null;
+                mask: string | null;
+                institution: string | null;
+            };
+            from: string;
+            to: string;
+            before: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            };
+            after: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            } | null;
+        }[];
+    };
+}, {
+    rows: {
+        date: string;
+        id: string;
+        source: string;
+        amount: string;
+        account: {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        };
+        pending: boolean;
+        displayName: string;
+        before: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        after: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        resolution: {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        } | null;
+        resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
+        decisionId?: string | null | undefined;
+    }[];
+    limitations: ("forecast_pairs_as_before" | "banking_after_not_previewed" | "listed_rows_only")[];
+    dryRun: true;
+    proposal: {
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        action: "file_as_bill_payment" | "file_as_debt_payment" | "file_as_transfer" | "confirm_bill_match" | "file_under_income_category";
+        label: string;
+        key: string;
+        proposalHash: string;
+    };
+    replaces: {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }[];
+    learnsMemory: boolean;
+    figures: {
+        month: {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        };
+        week: {
+            before: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+            after: {
+                actual: string;
+                unresolved: string;
+                plan: string | null;
+                start: string;
+                end: string;
+                over: string | null;
+                remaining: string | null;
+                known: string;
+            };
+        };
+        budgetMonths: {
+            monthStart: string;
+            before: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+            after: {
+                net: string;
+                income: string;
+                expenses: string;
+                lines: {
+                    kind: string;
+                    categoryId: string;
+                    name: string;
+                    actual: string;
+                }[];
+            };
+        }[];
+        banking: {
+            account: {
+                id: string | null;
+                name: string | null;
+                mask: string | null;
+                institution: string | null;
+            };
+            from: string;
+            to: string;
+            before: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            };
+            after: {
+                asPlanned: {
+                    count: number;
+                    net: string;
+                };
+                unresolvedInRange: number;
+                buckets: {
+                    amountDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    timingDifference: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    confirmedUnplanned: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    uncertain: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                    unmatched: {
+                        count: number;
+                        moneyIn: string;
+                        moneyOut: string;
+                        net: string;
+                    };
+                };
+            } | null;
+        }[];
+    };
+}>, zod.ZodObject<{
+    dryRun: zod.ZodLiteral<false>;
+    applicationId: zod.ZodString;
+    appliedAt: zod.ZodString;
+    proposal: zod.ZodObject<{
+        key: zod.ZodString;
+        kind: zod.ZodEnum<["loan_payment", "transfer", "bill_match", "income_category"]>;
+        proposalHash: zod.ZodString;
+        action: zod.ZodEnum<["file_as_bill_payment", "file_as_debt_payment", "file_as_transfer", "confirm_bill_match", "file_under_income_category"]>;
+        label: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        action: "file_as_bill_payment" | "file_as_debt_payment" | "file_as_transfer" | "confirm_bill_match" | "file_under_income_category";
+        label: string;
+        key: string;
+        proposalHash: string;
+    }, {
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        action: "file_as_bill_payment" | "file_as_debt_payment" | "file_as_transfer" | "confirm_bill_match" | "file_under_income_category";
+        label: string;
+        key: string;
+        proposalHash: string;
+    }>;
+    rows: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        date: zod.ZodString;
+        displayName: zod.ZodString;
+        amount: zod.ZodString;
+        pending: zod.ZodBoolean;
+        source: zod.ZodString;
+        account: zod.ZodObject<{
+            id: zod.ZodNullable<zod.ZodString>;
+            institution: zod.ZodNullable<zod.ZodString>;
+            name: zod.ZodNullable<zod.ZodString>;
+            mask: zod.ZodNullable<zod.ZodString>;
+            externalId: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        }, {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        }>;
+        before: zod.ZodObject<{
+            categoryId: zod.ZodNullable<zod.ZodString>;
+            categoryLockedByUser: zod.ZodBoolean;
+            categoryProvisional: zod.ZodBoolean;
+            isTransfer: zod.ZodBoolean;
+            isTransferUserOverridden: zod.ZodBoolean;
+            weeklyAllowance: zod.ZodBoolean;
+            monthlyAllowance: zod.ZodBoolean;
+            unplannedAllowance: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        }, {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        }>;
+        after: zod.ZodObject<{
+            categoryId: zod.ZodNullable<zod.ZodString>;
+            categoryLockedByUser: zod.ZodBoolean;
+            categoryProvisional: zod.ZodBoolean;
+            isTransfer: zod.ZodBoolean;
+            isTransferUserOverridden: zod.ZodBoolean;
+            weeklyAllowance: zod.ZodBoolean;
+            monthlyAllowance: zod.ZodBoolean;
+            unplannedAllowance: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        }, {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        }>;
+        resolution: zod.ZodUnion<[zod.ZodObject<{
+            recurringItemId: zod.ZodString;
+            occurrenceDate: zod.ZodString;
+            status: zod.ZodEnum<["matched"]>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        }, {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        }>, zod.ZodNull]>;
+        resolutionSkipped: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"no_occurrence">, zod.ZodLiteral<"occurrence_shared">, zod.ZodLiteral<null>]>>;
+        decisionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        id: string;
+        source: string;
+        amount: string;
+        account: {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        };
+        pending: boolean;
+        displayName: string;
+        before: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        after: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        resolution: {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        } | null;
+        resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
+        decisionId?: string | null | undefined;
+    }, {
+        date: string;
+        id: string;
+        source: string;
+        amount: string;
+        account: {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        };
+        pending: boolean;
+        displayName: string;
+        before: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        after: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        resolution: {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        } | null;
+        resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
+        decisionId?: string | null | undefined;
+    }>, "many">;
+    replaced: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        status: zod.ZodString;
+        recurringItemId: zod.ZodNullable<zod.ZodString>;
+        occurrenceDate: zod.ZodNullable<zod.ZodString>;
+        matchedTxnId: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }, {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }>, "many">;
+    learnedMemory: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    rows: {
+        date: string;
+        id: string;
+        source: string;
+        amount: string;
+        account: {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        };
+        pending: boolean;
+        displayName: string;
+        before: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        after: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        resolution: {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        } | null;
+        resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
+        decisionId?: string | null | undefined;
+    }[];
+    dryRun: false;
+    appliedAt: string;
+    proposal: {
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        action: "file_as_bill_payment" | "file_as_debt_payment" | "file_as_transfer" | "confirm_bill_match" | "file_under_income_category";
+        label: string;
+        key: string;
+        proposalHash: string;
+    };
+    applicationId: string;
+    replaced: {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }[];
+    learnedMemory: boolean;
+}, {
+    rows: {
+        date: string;
+        id: string;
+        source: string;
+        amount: string;
+        account: {
+            id: string | null;
+            name: string | null;
+            mask: string | null;
+            externalId: string | null;
+            institution: string | null;
+        };
+        pending: boolean;
+        displayName: string;
+        before: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        after: {
+            categoryId: string | null;
+            weeklyAllowance: boolean;
+            monthlyAllowance: boolean;
+            unplannedAllowance: boolean;
+            isTransfer: boolean;
+            isTransferUserOverridden: boolean;
+            categoryLockedByUser: boolean;
+            categoryProvisional: boolean;
+        };
+        resolution: {
+            status: "matched";
+            recurringItemId: string;
+            occurrenceDate: string;
+        } | null;
+        resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
+        decisionId?: string | null | undefined;
+    }[];
+    dryRun: false;
+    appliedAt: string;
+    proposal: {
+        kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        action: "file_as_bill_payment" | "file_as_debt_payment" | "file_as_transfer" | "confirm_bill_match" | "file_under_income_category";
+        label: string;
+        key: string;
+        proposalHash: string;
+    };
+    applicationId: string;
+    replaced: {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }[];
+    learnedMemory: boolean;
+}>]>;
+/**
+ * Puts back every row's category, lock, provisional flag, transfer flag, its person's override and allowance flags; deletes the answers the fix created and restores the ones it replaced (same ids); reopens the review-queue items it answered; marks its decisions undone; restores the merchant memory (or, when more was learned since, switches off the rule it taught). Refuses, writing nothing, when a row it filed or an answer it wrote changed since (changed_since, naming them).
+ * @summary (Q2) Undo one applied fix, whole and exactly (owner only)
+ */
+export declare const UndoAppliedReviewProposalParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const UndoAppliedReviewProposalResponse: zod.ZodObject<{
+    applicationId: zod.ZodString;
+    undoneAt: zod.ZodString;
+    rows: zod.ZodNumber;
+    answersRemoved: zod.ZodNumber;
+    answersRestored: zod.ZodNumber;
+    memory: zod.ZodEnum<["none", "restored", "disabled", "kept"]>;
+}, "strip", zod.ZodTypeAny, {
+    rows: number;
+    undoneAt: string;
+    applicationId: string;
+    answersRemoved: number;
+    answersRestored: number;
+    memory: "none" | "restored" | "disabled" | "kept";
+}, {
+    rows: number;
+    undoneAt: string;
+    applicationId: string;
+    answersRemoved: number;
+    answersRestored: number;
+    memory: "none" | "restored" | "disabled" | "kept";
 }>;
 /**
  * Upserts the household's carry-over for one week (unique on household, week and kind). amountCents is whole cents and must be negative: an adjustment can only LOWER a week. weekStart must be a Sunday, this week or later. The money position subtracts it from that week's remainingWeek.
@@ -28793,46 +32105,46 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
         type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
         id: string;
         createdAt: Date;
+        outcome: "proposed" | "applied" | "needs_attention";
+        undoneAt: Date | null;
         runId: string;
         targetKind: string;
         targetId: string | null;
-        outcome: "proposed" | "applied" | "needs_attention";
         reversible: boolean;
-        undoneAt: Date | null;
     }, {
         type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
         id: string;
         createdAt: Date;
+        outcome: "proposed" | "applied" | "needs_attention";
+        undoneAt: Date | null;
         runId: string;
         targetKind: string;
         targetId: string | null;
-        outcome: "proposed" | "applied" | "needs_attention";
         reversible: boolean;
-        undoneAt: Date | null;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     actions: {
         type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
         id: string;
         createdAt: Date;
+        outcome: "proposed" | "applied" | "needs_attention";
+        undoneAt: Date | null;
         runId: string;
         targetKind: string;
         targetId: string | null;
-        outcome: "proposed" | "applied" | "needs_attention";
         reversible: boolean;
-        undoneAt: Date | null;
     }[];
 }, {
     actions: {
         type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
         id: string;
         createdAt: Date;
+        outcome: "proposed" | "applied" | "needs_attention";
+        undoneAt: Date | null;
         runId: string;
         targetKind: string;
         targetId: string | null;
-        outcome: "proposed" | "applied" | "needs_attention";
         reversible: boolean;
-        undoneAt: Date | null;
     }[];
 }>;
 /**
@@ -28860,22 +32172,22 @@ export declare const UndoAgentActionResponse: zod.ZodObject<{
     type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
     id: string;
     createdAt: Date;
+    outcome: "proposed" | "applied" | "needs_attention";
+    undoneAt: Date | null;
     runId: string;
     targetKind: string;
     targetId: string | null;
-    outcome: "proposed" | "applied" | "needs_attention";
     reversible: boolean;
-    undoneAt: Date | null;
 }, {
     type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
     id: string;
     createdAt: Date;
+    outcome: "proposed" | "applied" | "needs_attention";
+    undoneAt: Date | null;
     runId: string;
     targetKind: string;
     targetId: string | null;
-    outcome: "proposed" | "applied" | "needs_attention";
     reversible: boolean;
-    undoneAt: Date | null;
 }>;
 /**
  * @summary Owner only. Run the deterministic categorization stages over the
@@ -29095,32 +32407,32 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         undoable: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "user" | "recurring" | "memory" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
         transactionId: string;
-        band: "queue" | "provisional" | "auto";
+        undoable: boolean;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
+        band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
-        undoable: boolean;
     }, {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "user" | "recurring" | "memory" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
         transactionId: string;
-        band: "queue" | "provisional" | "auto";
+        undoable: boolean;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
+        band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
-        undoable: boolean;
     }>, "many">;
     reviewCount: zod.ZodNumber;
     backlog: zod.ZodObject<{
@@ -29210,18 +32522,18 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     };
     recent: {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "user" | "recurring" | "memory" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
         transactionId: string;
-        band: "queue" | "provisional" | "auto";
+        undoable: boolean;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
+        band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
-        undoable: boolean;
     }[];
     backlog: {
         unfiled: number;
@@ -29278,18 +32590,18 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     };
     recent: {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "user" | "recurring" | "memory" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
         transactionId: string;
-        band: "queue" | "provisional" | "auto";
+        undoable: boolean;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
+        band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
-        undoable: boolean;
     }[];
     backlog: {
         unfiled: number;
@@ -29481,32 +32793,32 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         undoable: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "user" | "recurring" | "memory" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
         transactionId: string;
-        band: "queue" | "provisional" | "auto";
+        undoable: boolean;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
+        band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
-        undoable: boolean;
     }, {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "user" | "recurring" | "memory" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
         transactionId: string;
-        band: "queue" | "provisional" | "auto";
+        undoable: boolean;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
+        band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
-        undoable: boolean;
     }>, "many">;
     reviewCount: zod.ZodNumber;
     backlog: zod.ZodObject<{
@@ -29596,18 +32908,18 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     };
     recent: {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "user" | "recurring" | "memory" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
         transactionId: string;
-        band: "queue" | "provisional" | "auto";
+        undoable: boolean;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
+        band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
-        undoable: boolean;
     }[];
     backlog: {
         unfiled: number;
@@ -29664,18 +32976,18 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     };
     recent: {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "user" | "recurring" | "memory" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
         transactionId: string;
-        band: "queue" | "provisional" | "auto";
+        undoable: boolean;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
+        band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
-        undoable: boolean;
     }[];
     backlog: {
         unfiled: number;
@@ -30139,8 +33451,8 @@ export declare const ListCategoryDecisionsResponseItem: zod.ZodObject<{
     transactionId: string;
     confidence: number;
     undoneAt: Date | null;
-    band: "queue" | "provisional" | "auto";
     resolution: string | null;
+    band: "queue" | "provisional" | "auto";
     explanation: string;
 }, {
     id: string;
@@ -30151,8 +33463,8 @@ export declare const ListCategoryDecisionsResponseItem: zod.ZodObject<{
     transactionId: string;
     confidence: number;
     undoneAt: Date | null;
-    band: "queue" | "provisional" | "auto";
     resolution: string | null;
+    band: "queue" | "provisional" | "auto";
     explanation: string;
 }>;
 export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
@@ -30176,8 +33488,8 @@ export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
     transactionId: string;
     confidence: number;
     undoneAt: Date | null;
-    band: "queue" | "provisional" | "auto";
     resolution: string | null;
+    band: "queue" | "provisional" | "auto";
     explanation: string;
 }, {
     id: string;
@@ -30188,8 +33500,8 @@ export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
     transactionId: string;
     confidence: number;
     undoneAt: Date | null;
-    band: "queue" | "provisional" | "auto";
     resolution: string | null;
+    band: "queue" | "provisional" | "auto";
     explanation: string;
 }>, "many">;
 /**
@@ -30244,10 +33556,10 @@ export declare const ListLearnedRulesResponseItem: zod.ZodObject<{
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
     direction: "in" | "out";
+    disabled: boolean;
     amountBandLo: string | null;
     amountBandHi: string | null;
     lastConfirmedAt: Date | null;
-    disabled: boolean;
 }, {
     count: number;
     id: string;
@@ -30258,10 +33570,10 @@ export declare const ListLearnedRulesResponseItem: zod.ZodObject<{
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
     direction: "in" | "out";
+    disabled: boolean;
     amountBandLo: string | null;
     amountBandHi: string | null;
     lastConfirmedAt: Date | null;
-    disabled: boolean;
 }>;
 export declare const ListLearnedRulesResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -30287,10 +33599,10 @@ export declare const ListLearnedRulesResponse: zod.ZodArray<zod.ZodObject<{
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
     direction: "in" | "out";
+    disabled: boolean;
     amountBandLo: string | null;
     amountBandHi: string | null;
     lastConfirmedAt: Date | null;
-    disabled: boolean;
 }, {
     count: number;
     id: string;
@@ -30301,10 +33613,10 @@ export declare const ListLearnedRulesResponse: zod.ZodArray<zod.ZodObject<{
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
     direction: "in" | "out";
+    disabled: boolean;
     amountBandLo: string | null;
     amountBandHi: string | null;
     lastConfirmedAt: Date | null;
-    disabled: boolean;
 }>, "many">;
 export declare const UpdateLearnedRuleParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -30350,10 +33662,10 @@ export declare const UpdateLearnedRuleResponse: zod.ZodObject<{
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
     direction: "in" | "out";
+    disabled: boolean;
     amountBandLo: string | null;
     amountBandHi: string | null;
     lastConfirmedAt: Date | null;
-    disabled: boolean;
 }, {
     count: number;
     id: string;
@@ -30364,10 +33676,10 @@ export declare const UpdateLearnedRuleResponse: zod.ZodObject<{
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
     direction: "in" | "out";
+    disabled: boolean;
     amountBandLo: string | null;
     amountBandHi: string | null;
     lastConfirmedAt: Date | null;
-    disabled: boolean;
 }>;
 export declare const DeleteLearnedRuleParams: zod.ZodObject<{
     id: zod.ZodString;

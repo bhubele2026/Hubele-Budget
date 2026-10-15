@@ -22,13 +22,19 @@ import {
 import { runCategorizationBatch } from "../lib/categorizer";
 import { selectPatternCandidates } from "../lib/patternCandidates";
 import { expandSplits, loadSplitsForTxns } from "../lib/categorizer/splits";
-import { recordHandFiling, recordUserDecisions } from "../lib/categorizer/userDecisions";
+import {
+  DECISION_FLAG_COLUMNS,
+  decisionFlagsOf,
+  recordHandFiling,
+  recordUserDecisions,
+} from "../lib/categorizer/userDecisions";
+import { directionConflictsOf, directionPatchOf, directionRefusalOf } from "../lib/categorizer/review";
 import type { RetroactiveCandidates } from "../lib/categorizer/memory";
 import { forecastTodayISO } from "../lib/forecastInclusion";
 import { recordRuleChange, ruleSnapshot } from "../lib/mappingRuleAudit";
 import { cleanMerchant, merchantSignature } from "../lib/merchantNameExtract";
 import { isUuid } from "../lib/bankLedger";
-import { findExpiredHoldsAmong } from "../lib/supersededPending";
+import { expiredHoldsRuleOn, findExpiredLabelsAmong, loadBankSnapshotRef } from "../lib/supersededPending";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
   isExcludedCategory,
@@ -164,8 +170,15 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   // than 7 days after its date, never replaced, or the reversal of one — which
   // counts nowhere. Only a pending Plaid row can be one, so the read spans just
   // the page's pending days (the whole-ledger answer for them), and is skipped
-  // when the page has none (F6 round 4: `findExpiredHoldsAmong`, shared).
-  const expiredIds = await findExpiredHoldsAmong(req.householdId!, rows);
+  // when the page has none.
+  // ⭐ (F6 round 5, finding 3) With the register's own test: a hold the bank
+  // snapshot holds and its reversal are counted rows — `expiredHold: false`, no
+  // label — marked `expiredPair` (no spending, never asked about). One function
+  // for the register, this list and the forecast bundle (`heldExpiredPairs`).
+  const canBeExpired = expiredHoldsRuleOn() && rows.some((r) => r.pending === true && !!r.plaidAccountId);
+  const labels = canBeExpired
+    ? await findExpiredLabelsAmong(req.householdId!, rows, await loadBankSnapshotRef(req.householdId!, req.householdOwnerId!))
+    : { expiredHold: new Set<string>(), expiredPair: new Set<string>() };
   const annotated = rows.map((r) => {
     // (#888) displayName precedence: a user/AI alias keyed on the row's
     // stable signature wins; otherwise fall back to cleanMerchant. Never
@@ -180,7 +193,8 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
       merchantSignature: sig,
       displayName: alias ?? cleanMerchant(r.description),
       ...(partsByTxn.has(r.id) ? { splits: partsByTxn.get(r.id) } : {}),
-      expiredHold: expiredIds.has(r.id),
+      expiredHold: labels.expiredHold.has(r.id),
+      expiredPair: labels.expiredPair.has(r.id),
     };
   });
   res.json(annotated);
@@ -485,6 +499,26 @@ router.patch(
     const pickingTransfer =
       pickingCategory &&
       (await isTransferCategory(req.householdId!, patch.categoryId as string));
+    // ⭐ (Q2) THE DIRECTION GUARD, as the review queue applies it: a category
+    // picked here never files money IN under an expense category nor money OUT
+    // under an income one — judged on the row as this write leaves it (a body
+    // that also marks it a transfer, or picks Transfer, is never a conflict).
+    // 409, nothing written.
+    if (pickingCategory) {
+      const conflicts = await directionConflictsOf(req.householdId!, [params.data.id], patch.categoryId as string, {
+        // The transfer flag as the write below leaves it: Transfer picked → true;
+        // the body's own flag; else a real category clears it.
+        patch: {
+          ...directionPatchOf(patch as Record<string, unknown>),
+          isTransfer: pickingTransfer ? true : bodyHasIsTransfer ? patch.isTransfer === true : false,
+        },
+      });
+      if (conflicts.size > 0) {
+        const refusal = directionRefusalOf(conflicts);
+        res.status(409).json({ error: refusal.error, code: refusal.code, conflict: refusal.conflict });
+        return;
+      }
+    }
     const patchToApply: Record<string, unknown> = { ...patch };
     if (bodyHasIsTransfer || pickingCategory) {
       patchToApply.isTransferUserOverridden = true;
@@ -550,9 +584,10 @@ router.patch(
       }
     }
     // (PR-A) The category before this write, for the `user` decision.
+    // (Q2) With the row's five flags, so the decision's undo restores them too.
     const [before] = bodyHasCategoryId
       ? await db
-          .select({ categoryId: transactionsTable.categoryId })
+          .select({ categoryId: transactionsTable.categoryId, ...DECISION_FLAG_COLUMNS })
           .from(transactionsTable)
           .where(
             and(
@@ -592,6 +627,8 @@ router.patch(
       const filed = await recordHandFiling(req.householdId!, req.userId!, row.id, {
         previousCategoryId: before?.categoryId ?? null,
         categoryId: row.categoryId,
+        flagsBefore: before ? decisionFlagsOf(before) : null,
+        flagsAfter: decisionFlagsOf(row),
       });
       retroactiveCandidates = filed?.retroactiveCandidates ?? null;
       decisionId = filed?.decisionId ?? null;
@@ -723,6 +760,36 @@ router.post(
       res.json({ updated: 0, affectedMonths: [], affectedIds: [] });
       return;
     }
+    // (Q2) The rows this call would move — read before anything is written,
+    // so the direction guard below can refuse the whole call (a read only:
+    // the rule re-point below never changes which rows match).
+    let candidates = await selectPatternCandidates(
+      req.householdId!,
+      { pattern, matchType },
+      fromCategoryId,
+    );
+    if (ids && ids.length > 0) {
+      const allow = new Set(ids);
+      candidates = candidates.filter((c) => allow.has(c.id));
+    }
+    // ⭐ (Q2) THE DIRECTION GUARD: a pattern that matches a payroll credit and
+    // same-name card purchases never files the credit under an expense
+    // category (nor a purchase under an income one). 409 with every
+    // conflicting id, nothing written (the rule re-point included). An Undo
+    // (it carries `lockedIds`) restores each row's own earlier filing exactly,
+    // so it is not a new pick and is not judged. (Q1: kept deliberately — the
+    // guard's one exception; see `directionConflictsOf`.)
+    if (lockedIds === undefined && candidates.length > 0) {
+      const conflicts = await directionConflictsOf(
+        req.householdId!,
+        candidates.map((c) => c.id),
+        toCategoryId,
+      );
+      if (conflicts.size > 0) {
+        res.status(409).json(directionRefusalOf(conflicts));
+        return;
+      }
+    }
     // Optional rule re-point — used by the client's "Undo" affordance so
     // that reverting a bulk recategorize also reverses the mapping-rule
     // repoint that triggered it. Without this, future matching charges
@@ -768,15 +835,6 @@ router.post(
         });
       });
     }
-    let candidates = await selectPatternCandidates(
-      req.householdId!,
-      { pattern, matchType },
-      fromCategoryId,
-    );
-    if (ids && ids.length > 0) {
-      const allow = new Set(ids);
-      candidates = candidates.filter((c) => allow.has(c.id));
-    }
     if (!candidates.length) {
       res.json({ updated: 0, affectedMonths: [], affectedIds: [] });
       return;
@@ -794,20 +852,18 @@ router.post(
     // pick (plaidSync.ts's `isTransferUserOverridden` preservation).
     // (PR-0) Which of these rows a person had already locked, BEFORE the
     // move: returned as `lockedIds` so the Undo can hand them back.
-    const wasLocked = new Set(
-      (
-        await db
-          .select({ id: transactionsTable.id })
-          .from(transactionsTable)
-          .where(
-            and(
-              eq(transactionsTable.householdId, req.householdId!),
-              inArray(transactionsTable.id, candidateIds),
-              eq(transactionsTable.categoryLockedByUser, true),
-            ),
-          )
-      ).map((r) => r.id),
-    );
+    // (Q2) Read with each row's five flags, for the decisions' undo.
+    const beforeRows = await db
+      .select({ id: transactionsTable.id, locked: transactionsTable.categoryLockedByUser, ...DECISION_FLAG_COLUMNS })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, req.householdId!),
+          inArray(transactionsTable.id, candidateIds),
+        ),
+      );
+    const wasLocked = new Set(beforeRows.filter((r) => r.locked).map((r) => r.id));
+    const flagsBeforeOf = new Map(beforeRows.map((r) => [r.id, decisionFlagsOf(r)] as const));
     // Only ids this call can move count (also keeps a malformed id out of SQL).
     const relockIds = lockedIds?.filter((id) => candidateIds.includes(id));
     const updated = await db
@@ -835,13 +891,19 @@ router.post(
           inArray(transactionsTable.id, candidateIds),
         ),
       )
-      .returning({ id: transactionsTable.id });
+      .returning({ id: transactionsTable.id, ...DECISION_FLAG_COLUMNS });
     // (PR-A) Each moved row is a `user` decision.
     await recordUserDecisions(
       db,
       req.householdId!,
       req.userId!,
-      updated.map((r) => ({ transactionId: r.id, previousCategoryId: fromCategoryId, categoryId: toCategoryId })),
+      updated.map((r) => ({
+        transactionId: r.id,
+        previousCategoryId: fromCategoryId,
+        categoryId: toCategoryId,
+        flagsBefore: flagsBeforeOf.get(r.id) ?? null,
+        flagsAfter: decisionFlagsOf(r),
+      })),
     );
     res.json({
       updated: updated.length,
@@ -956,6 +1018,18 @@ router.post(
       res.status(400).json({ error: "Invalid debtId" });
       return;
     }
+    // ⭐ (Q2) THE DIRECTION GUARD for every row of the bulk pick, on the rows
+    // as this patch leaves them: one conflicting row refuses the whole request
+    // (409, every conflicting id listed, nothing written).
+    if (bulkPickingCategory) {
+      const conflicts = await directionConflictsOf(req.householdId!, ids, drizzlePatch.categoryId as string, {
+        patch: directionPatchOf(patch as Record<string, unknown>),
+      });
+      if (conflicts.size > 0) {
+        res.status(409).json(directionRefusalOf(conflicts));
+        return;
+      }
+    }
     // (#642) Bulk variant of the per-row Unplanned guard: when the patch
     // would set `unplannedAllowance=true`, refuse to flip any rows whose
     // description matches the transfer / card-payment heuristic. Rather
@@ -1027,12 +1101,13 @@ router.post(
     }
     const rejectedSet = new Set(bulkRejectedIds);
     // (PR-A) Categories before the write, for the `user` decisions.
+    // (Q2) With each row's five flags, so a decision's undo restores them too.
     const bulkBefore =
       bulkSetsCategory && safeIds.length > 0
         ? new Map(
             (
               await db
-                .select({ id: transactionsTable.id, categoryId: transactionsTable.categoryId })
+                .select({ id: transactionsTable.id, categoryId: transactionsTable.categoryId, ...DECISION_FLAG_COLUMNS })
                 .from(transactionsTable)
                 .where(
                   and(
@@ -1040,7 +1115,7 @@ router.post(
                     inArray(transactionsTable.id, safeIds),
                   ),
                 )
-            ).map((r) => [r.id, r.categoryId] as const),
+            ).map((r) => [r.id, r] as const),
           )
         : null;
     const updated =
@@ -1058,6 +1133,7 @@ router.post(
             .returning({
               id: transactionsTable.id,
               occurredOn: transactionsTable.occurredOn,
+              ...DECISION_FLAG_COLUMNS,
             });
     let bulkDecisionIds: string[] = [];
     if (bulkBefore) {
@@ -1065,11 +1141,16 @@ router.post(
         db,
         req.householdId!,
         req.userId!,
-        updated.map((r) => ({
-          transactionId: r.id,
-          previousCategoryId: bulkBefore.get(r.id) ?? null,
-          categoryId: (drizzlePatch.categoryId as string | null | undefined) ?? null,
-        })),
+        updated.map((r) => {
+          const was = bulkBefore.get(r.id);
+          return {
+            transactionId: r.id,
+            previousCategoryId: was?.categoryId ?? null,
+            categoryId: (drizzlePatch.categoryId as string | null | undefined) ?? null,
+            flagsBefore: was ? decisionFlagsOf(was) : null,
+            flagsAfter: decisionFlagsOf(r),
+          };
+        }),
       );
     }
     const okIds = new Set(updated.map((r) => r.id));

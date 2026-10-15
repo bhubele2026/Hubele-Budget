@@ -24,7 +24,7 @@ import type { ForecastNextCtx } from "../next/forecast/types";
  *   cleared" badge (FC-20/21) beside the six summary figures (FC-22).
  * - The projected-cash chart (FC-28/29, B2's expanded chart, with the classic
  *   big-bill markers re-hosted).
- * - The register panel (span-8) with its two views — "Register & reconcile"
+ * - The register panel (span-8) with its two views — "Register & review"
  *   (review mode) and "Month & bank" (overall mode: past due, bank cards, the
  *   planned list, month close) — beside the selected day and the balance on a
  *   chosen date (FC-23).
@@ -41,7 +41,7 @@ export const TAB_OF_MODE: Record<ForecastNextCtx["mode"], RegisterTab> = {
 };
 
 const TABS: Array<{ id: RegisterTab; label: string; href: string }> = [
-  { id: "register", label: "Register & reconcile", href: "/review" },
+  { id: "register", label: "Register & review", href: "/review" },
   { id: "plan", label: "Month & bank", href: "/forecast" },
 ];
 
@@ -269,7 +269,7 @@ export function ForecastBody({
           title={
             // On a phone the two view tabs fill the head (≈ 284 of 332 px), so
             // the title — the selected tab's own words — is read, not shown.
-            <span className="max-sm:sr-only">{tab === "register" ? "Register & reconcile" : "Month & bank"}</span>
+            <span className="max-sm:sr-only">{tab === "register" ? "Register & review" : "Month & bank"}</span>
           }
           span={8}
           variant={["sticky-safe", "static"]}

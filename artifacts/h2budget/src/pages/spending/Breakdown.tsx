@@ -152,18 +152,24 @@ export function usualLabel(data: Pick<PeriodBreakdown, "period" | "usualBasis" |
 }
 
 /**
- * One line under "Why over?": the server's figures, in the owner's order.
- * "Over $60.02 · Subscriptions $560.02 so far vs usual by Oct 14 $500.00 · plan $500.00".
- * The category is the one the server says is furthest above its usual.
+ * (Q5) Two facts under "Why over?", kept on two lines: they are not the same.
+ *   "Over the plan $42.00 · plan $500.00"
+ *   "Above usual for these days: Subscriptions $542.00 vs usual by Oct 14 $500.00"
+ * The first is the plan comparison; the second is the category furthest above
+ * its usual (the server's `aboveUsual`), and exists only with enough history.
  */
-export function whyOverLine(data: PeriodBreakdown): string | null {
-  if (data.over == null || cents(data.over) <= 0) return null;
-  const parts = [`${data.provisional ? "Over so far" : "Over"} ${formatCurrency(data.over)}`];
+export function whyOverLines(data: PeriodBreakdown): { over: string | null; above: string | null } {
+  let over: string | null = null;
+  if (data.over != null && cents(data.over) > 0) {
+    const parts = [`${data.provisional ? "Over the plan so far" : "Over the plan"} ${formatCurrency(data.over)}`];
+    if (data.plan.amount != null) parts.push(`plan ${formatCurrency(data.plan.amount)}`);
+    over = parts.join(" · ");
+  }
   let top: PeriodBreakdownCategory | null = null;
   for (const c of data.categories) if (c.aboveUsual != null && cents(c.aboveUsual) > 0 && (!top || cents(c.aboveUsual) > cents(top.aboveUsual))) top = c;
-  if (top && top.usual != null) parts.push(`${top.name ?? "No category"} ${formatCurrency(top.amount)} so far vs ${usualLabel(data)} ${formatCurrency(top.usual)}`);
-  if (data.plan.amount != null) parts.push(`plan ${formatCurrency(data.plan.amount)}`);
-  return parts.join(" · ");
+  const label = data.usualBasis === "same_days" ? "Above usual for these days" : "Above usual";
+  const above = top && top.usual != null ? `${label}: ${top.name ?? "No category"} ${formatCurrency(top.amount)} vs ${usualLabel(data)} ${formatCurrency(top.usual)}` : null;
+  return { over, above };
 }
 
 /** "Unconfirmed $1,300.19 may change this · Lrk Loans — bank says loan payment" (the biggest unconfirmed row). */
@@ -191,13 +197,14 @@ export function Breakdown({ data, open, onToggle, routeOf }: {
   const usual = usualLabel(data);
   const unconfirmed = data.unresolved;
   const payments = data.excludedPayments;
-  const why = whyOverLine(data);
+  const why = whyOverLines(data);
   return (
     <section className="surface rounded-card ring-1 ring-brand-line" data-testid="sp-breakdown">
       <h2 className="border-b border-brand-line px-4 py-2.5 text-title font-semibold text-brand-navy">
         {over ? (data.provisional ? "Why over so far?" : "Why over?") : "Where it went"}
       </h2>
-      {why ? <p className="border-b border-brand-line px-4 py-2 text-label text-neutral-700" data-testid="sp-why-line">{why}</p> : null}
+      {why.over ? <p className="border-b border-brand-line px-4 py-2 text-label text-neutral-700" data-testid="sp-why-line">{why.over}</p> : null}
+      {why.above ? <p className="border-b border-brand-line px-4 py-2 text-label text-neutral-700" data-testid="sp-above-line">{why.above}</p> : null}
 
       <div data-testid="sp-known">
         <div className="flex items-baseline justify-between gap-3 border-b border-brand-line bg-brand-tint/40 px-4 py-2">
@@ -224,7 +231,12 @@ export function Breakdown({ data, open, onToggle, routeOf }: {
                   bar={<CssFillMeter className="mt-1.5" value={Math.max(0, amount)} ceiling={Math.max(actual, amount, 0)} />}
                   chips={
                     <>
-                      {c.usual != null ? <span data-testid={`sp-usual-${token}`}>{usual} {formatCurrency(c.usual)}</span> : null}
+                      {c.usual != null ? (
+                        <span data-testid={`sp-usual-${token}`}>{usual} {formatCurrency(c.usual)}</span>
+                      ) : (
+                        // (Q5) A usual needs 2+ prior periods with rows: below that it is unknown, never "$0.00".
+                        <span data-testid={`sp-nohistory-${token}`}>Not enough history</span>
+                      )}
                       {c.aboveUsual != null && cents(c.aboveUsual) > 0 ? (
                         <span className="chip warn" data-testid={`sp-above-${token}`}>above usual {formatCurrency(c.aboveUsual)}</span>
                       ) : null}

@@ -20,6 +20,7 @@ import { computeReviewCount } from "../lib/reviewCount";
 import { withPendingPayments } from "../lib/debtPending";
 import { computeBankFreshness } from "../lib/bankFreshness";
 import { computeDebtHeadline } from "../lib/debtPlan";
+import { readBankConfidence } from "../lib/bankConfidence";
 
 const router: IRouter = Router();
 
@@ -63,8 +64,16 @@ const router: IRouter = Router();
  *                                   (also GET /money/position), handed THIS
  *                                   request's own cash-signal, freshness and
  *                                   pending-pair reads so one request builds
- *                                   one ledger
- *   monthAllowance.*              → readMonthAllowance()  [lib/periodBreakdown]
+ *                                   one ledger. (Q1) .knownWeek / .unresolvedWeek /
+ *                                   .provisional / .remainingWeekKnown = GET
+ *                                   /money/period-breakdown?period=week (current)
+ *                                   .known / .unresolved.amount / .provisional / .remaining
+ *   bankConfidence.*              → readBankConfidence()  [lib/bankConfidence]
+ *                                   (Q1; .check = GET /banking/review .balanceCheck and
+ *                                   .pendingCount = its .cashFlow.pendingCount for the
+ *                                   forecast account; .bankBalance / .bankAsOf =
+ *                                   bank.snapshot; .h2Balance = bank.balance)
+ *   monthAllowance.*            → readMonthAllowance()  [lib/periodBreakdown]
  *                                   (S3; also GET /money/period-breakdown?period=month
  *                                   .plan.amount / .actual, and S6 .remaining / .over
  *                                   via allowancePeriodFigures), handed this
@@ -115,7 +124,7 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   // fields below quote.
   const cashPromise = computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: 90 });
   const freshnessPromise = computeBankFreshness(householdId, ownerUserId);
-  const [cash, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness, position, monthAllowance] =
+  const [cash, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness, position, monthAllowance, bankConfidence] =
     await Promise.all([
       cashPromise,
       supersedePromise.then((supersede) =>
@@ -134,6 +143,9 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
         supersede: supersedePromise,
       }),
       readMonthAllowance(householdId, ownerUserId, { cash: cashPromise }),
+      // (Q1) Can the balance be trusted: the check, the pending rows, the bank's
+      // own figure beside H2's — on THIS request's signal and freshness.
+      readBankConfidence(householdId, ownerUserId, { cash: cashPromise, freshness: freshnessPromise }),
     ]);
   const signal = cash.signal;
   // (WP1) The snapshot and what the roll adds since, from the very ledger that
@@ -222,7 +234,24 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       degraded: position.degraded,
       // (V5) The household's own carry-over for this week, or null.
       weekAdjustment: position.weekAdjustment,
+      // ⭐ (Q1) The week contract (avalanche-core `glossary.ts`): "Counts toward
+      // plan" (known), "Unconfirmed" (unresolved), whether the known comparison
+      // is provisional, and what is left of the cap against KNOWN purchases
+      // (null when no plan is set). The same call as GET /money/period-breakdown's
+      // current week (`evidenceSplitCents`); `remainingWeek` above stays cautious.
+      knownWeek: position.knownWeek,
+      unresolvedWeek: position.unresolvedWeek,
+      provisional: position.provisional,
+      remainingWeekKnown: position.remainingWeekKnown,
     },
+    // ⭐ (Q1) Can the bank balance be trusted? `readBankConfidence`
+    // (lib/bankConfidence.ts): when the bank last told us anything, the bank's
+    // own figure beside H2's, the last Sync's check of the two (= GET
+    // /banking/review .balanceCheck for the forecast account) and the pending
+    // rows the balance counts (= its .cashFlow.pendingCount). A dashboard says
+    // "Matches bank" only from `check`, never from the review count. ⚠️ The
+    // household's own cash, like `bank`: never a debt, a limit or credit.
+    bankConfidence,
     // ⭐ (S3) This month's monthly allowance: plan (null when not set — never
     // "0.00"), what counts against it, and a status word; (S6) what is left and
     // how far over, so no screen subtracts. The same read and helpers as GET

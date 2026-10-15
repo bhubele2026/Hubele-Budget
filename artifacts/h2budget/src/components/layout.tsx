@@ -140,7 +140,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     let off: (() => void) | undefined;
     let live = true;
     void import("@/lib/scrollRestore").then((m) => {
-      if (live) off = m.installScrollRestoration(() => mainRef.current);
+      if (live) off = m.installScrollRestoration(() => mainRef.current, () => !m.pageDataPending(qc));
     });
     return () => {
       live = false;

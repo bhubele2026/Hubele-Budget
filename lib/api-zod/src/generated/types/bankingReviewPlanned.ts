@@ -9,6 +9,7 @@ import type { BankingReviewDirection } from "./bankingReviewDirection";
 import type { BankingReviewPlanFate } from "./bankingReviewPlanFate";
 import type { BankingReviewPlanKind } from "./bankingReviewPlanKind";
 import type { BankingReviewPlannedHook } from "./bankingReviewPlannedHook";
+import type { BankingReviewPlanOutcome } from "./bankingReviewPlanOutcome";
 import type { BankingReviewVarianceKind } from "./bankingReviewVarianceKind";
 
 export interface BankingReviewPlanned {
@@ -83,4 +84,5 @@ export interface BankingReviewPlanned {
    */
   variance: string | null;
   varianceKind: BankingReviewVarianceKind | null;
+  outcome: BankingReviewPlanOutcome;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classificationNote, fateWords, planLine, plannedFateWords, sideWords, signedCash, varianceWords } from "./words";
+import { BUCKETS, bucketAria, classificationNote, fateWords, planLine, plannedFateWords, sideWords, signedCash, varianceWords } from "./words";
 
 /** (F4) Direction-aware words: income is 'less / more than expected', an expense is 'over / under'. */
 const plan = (o: Record<string, unknown>) => ({ key: "k", label: "L", scheduledDate: "2026-10-09", planned: null, difference: null, dayDelta: 0, eventKind: "bill", direction: "out", expected: null, actual: null, variance: null, varianceKind: null, ...o });
@@ -66,5 +66,44 @@ describe("plannedFateWords", () => {
     expect(plannedFateWords({ fate: "paid_on_evidence", carriedTo: null, onCurve: false, remainder: "0.00" })).toBe("Paid");
     expect(plannedFateWords({ fate: "missed", carriedTo: null, onCurve: false, remainder: null })).toBe("Missed");
     expect(fateWords("carried")).toBe("Carried");
+  });
+});
+
+describe("(Q5) bucket words and aria", () => {
+  const meta = Object.fromEntries(BUCKETS.map((b) => [b.name, b]));
+  it("direction-aware titles: received or paid, a different day, not on the plan", () => {
+    expect(meta.amountDifference!.title).toBe("Received or paid a different amount");
+    expect(meta.timingDifference!.title).toBe("On a different day");
+    expect(meta.unmatched!.title).toBe("Not on the plan");
+    expect(BUCKETS.map((b) => b.title).join(" ")).not.toMatch(/Unmatched|Different date|Different amount/);
+  });
+  it("aria / tooltip: the count, then money in and money out apart; a zero side is not mentioned", () => {
+    expect(bucketAria("Not on the plan", { count: 2, moneyIn: "300.00", moneyOut: "25.00" })).toBe("Not on the plan: 2 rows, money in $300.00, money out $25.00");
+    expect(bucketAria("On a different day", { count: 1, moneyIn: "0.00", moneyOut: "40.00" })).toBe("On a different day: 1 row, money out $40.00");
+    expect(bucketAria("Not sure", { count: 0, moneyIn: "0.00", moneyOut: "0.00" })).toBe("Not sure: 0 rows");
+    // (Q5 fix) the variance lines the card shows lead the accessible name
+    expect(bucketAria("Received or paid a different amount", { count: 2, moneyIn: "1940.00", moneyOut: "152.00", varianceIn: "-60.00", varianceOut: "-12.00" })).toBe(
+      "Received or paid a different amount: Income $60.00 less than expected, Bills $12.00 over, 2 rows, money in $1,940.00, money out $152.00",
+    );
+    expect(bucketAria("Not sure", { count: 1, moneyIn: "0.00", moneyOut: "40.00", varianceIn: null, varianceOut: "-4.00" })).toBe("Not sure: Bills $4.00 over, 1 row, money out $40.00");
+  });
+});
+
+describe("(Q5) planned outcomes in the direction of the money", () => {
+  it("income: Received / Received, different amount / Not received yet; a payment: Paid / Paid, different amount / Not paid yet", () => {
+    const p = (outcome: string, direction: "in" | "out", o: Record<string, unknown> = {}) =>
+      plannedFateWords({ fate: "matched", carriedTo: null, onCurve: false, remainder: null, outcome, direction, ...o } as never);
+    expect(p("received", "in")).toBe("Received");
+    expect(p("received_different", "in")).toBe("Received, different amount");
+    expect(p("not_received_yet", "in")).toBe("Not received yet");
+    expect(p("paid", "out")).toBe("Paid");
+    expect(p("paid_different", "out")).toBe("Paid, different amount");
+    expect(p("not_paid_yet", "out")).toBe("Not paid yet");
+    expect(p("suggested", "in")).toBe("Maybe received");
+    expect(p("suggested", "out")).toBe("Maybe paid");
+    expect(p("not_due", "out")).toBe("Not due yet");
+    expect(p("missed", "out")).toBe("Missed");
+    // the card-week special cases still win
+    expect(plannedFateWords({ fate: "carried", carriedTo: "2026-10-15", onCurve: false, remainder: null, outcome: "carried", direction: "out" } as never)).toBe("Carried to Oct 15");
   });
 });

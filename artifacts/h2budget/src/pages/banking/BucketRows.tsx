@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Link } from "wouter";
 import type {
   BankingReviewBucketName,
@@ -98,6 +99,15 @@ function Chunk({
   const seeded = !!seed && cursor === undefined;
   const q = useGetBankingReview(params, { query: { queryKey: getGetBankingReviewQueryKey(params), staleTime: MIN, enabled: !seeded } });
   const page = q.data?.page ?? null;
+  // (Q4) An answer that lands after this page's scope changed (account, range,
+  // bucket: the Chunk unmounts) is dropped: its cursor belongs to the old rows.
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
   const cursorOf = () => qc.fetchQuery({ queryKey: getGetBankingReviewQueryKey(params), queryFn: () => getBankingReview(params), staleTime: MIN });
   if (seeded && seed) {
     return (
@@ -110,7 +120,7 @@ function Chunk({
               className="press rounded-control px-3 py-1.5 text-label font-semibold text-brand-navy ring-1 ring-brand-line hover:bg-neutral-50"
               onPointerEnter={() => void cursorOf().catch(() => {})}
               onFocus={() => void cursorOf().catch(() => {})}
-              onClick={() => void cursorOf().then((r) => r.page?.nextCursor && onMore(r.page.nextCursor)).catch(() => {})}
+              onClick={() => void cursorOf().then((r) => live.current && r.page?.nextCursor && onMore(r.page.nextCursor)).catch(() => {})}
               data-testid="br-more"
             >
               Show more

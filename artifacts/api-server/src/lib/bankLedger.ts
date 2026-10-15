@@ -11,7 +11,9 @@ import {
 } from "@workspace/db";
 import {
   classifyCashRows,
+  heldExpiredPairs,
   inForecast,
+  isBankRow,
   isInSnapshot,
   type CashRow,
   type CashRowOutcome,
@@ -571,6 +573,12 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
       forecastFlag: t.forecastFlag,
       paymentState: t.paymentState,
       confirmedByTxnId: t.confirmedByTxnId,
+      // (F6 round 5) What the row says about itself: a payment or a transfer is never a hold's reversal.
+      isTransfer: t.isTransfer,
+      debtId: t.debtId,
+      isExternalCardPayment: t.isExternalCardPayment,
+      pfcPrimary: t.pfcPrimary,
+      pfcDetailed: t.pfcDetailed,
     })
     .from(t)
     .where(and(eq(t.householdId, scope.householdId), bankRowWhere(scope.plaidAccountIds, scope.snapshotAccount)))
@@ -589,8 +597,20 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
     plaidAccountId: r.plaidAccountId ?? null,
     plaidTransactionId: r.plaidTransactionId ?? null,
     claimConfirmed: r.paymentState === "confirmed" && !!r.confirmedByTxnId,
+    isTransfer: r.isTransfer,
+    debtId: r.debtId,
+    isExternalCardPayment: r.isExternalCardPayment,
+    pfcPrimary: r.pfcPrimary,
+    pfcDetailed: r.pfcDetailed,
   }));
   const today = scope.anchor.today;
+  // The snapshot the bank balance rolls from (null without one). Read before the
+  // runs below: (F6 round 5) their reversal pairing prefers the charges it does
+  // not hold, as the anchored rule does (`pairingAnchor`).
+  const anchor =
+    scope.anchor.snapshotAt && scope.anchor.snapshotDay
+      ? { at: new Date(scope.anchor.snapshotAt), day: scope.anchor.snapshotDay }
+      : null;
 
   // ⭐ WHICH ROWS PAIR (second review, R2). `bankToday` reads every row dated
   // through today and, after today, only rows flagged for the forecast
@@ -608,7 +628,7 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
     if (part.length === 0) continue;
     classifyCashRows(
       part.map((i) => cashRows[i]!),
-      { anchor: null, accountExternalId: scope.accountExternalId, todayISO: today, expiredHolds: expiredHoldsRuleOn() },
+      { anchor: null, accountExternalId: scope.accountExternalId, todayISO: today, expiredHolds: expiredHoldsRuleOn(), pairingAnchor: anchor },
     ).rows.forEach((outcome, k) => {
       outcomes[part[k]!] = outcome;
     });
@@ -619,10 +639,6 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
   // posted row that replaced a pending row, holds that pending row too. Pairing
   // does not depend on the anchor, so the pairs above serve; a second, anchored
   // `classifyCashRows` run over the whole history is not needed.
-  const anchor =
-    scope.anchor.snapshotAt && scope.anchor.snapshotDay
-      ? { at: new Date(scope.anchor.snapshotAt), day: scope.anchor.snapshotDay }
-      : null;
   const indexById = new Map(rows.map((r, i) => [r.id, i] as const));
   const held = (i: number): boolean => anchor !== null && isInSnapshot(cashRows[i]!, anchor.at, anchor.day);
 
@@ -636,16 +652,29 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
   // and the rows since it are the ones "Why this number?" lists. Neither is
   // labelled expired (`expiredPair` marks them for the readers that still
   // leave them out: spending, review).
-  const expiredPair = new Set<number>();
-  outcomes.forEach((o, i) => {
+  // ⭐ (F6 round 5, finding 3) The test is `heldExpiredPairs` — the one GET
+  // /transactions and the GET /forecast bundle read (`findExpiredLabelsAmong`).
+  const pairOf = new Map<string, string>();
+  outcomes.forEach((o) => {
     if (o.reason !== "expired" || o.reversalOf === null) return;
     const h = indexById.get(o.reversalOf);
-    if (h === undefined || outcomes[h]!.reason !== "expired" || !held(h)) return;
-    for (const k of [h, i]) {
-      expiredPair.add(k);
-      outcomes[k] = { ...outcomes[k]!, reason: "counted", counts: true, contribution: cashRows[k]!.amount };
-    }
+    if (h !== undefined && outcomes[h]!.reason === "expired") pairOf.set(o.id, o.reversalOf);
   });
+  const heldPairIds = heldExpiredPairs(
+    pairOf,
+    (id) => {
+      const i = indexById.get(id);
+      const r = i === undefined ? undefined : cashRows[i]!;
+      return r && isBankRow(r.source, r.plaidAccountId, scope.accountExternalId) ? r : undefined;
+    },
+    anchor,
+  );
+  const expiredPair = new Set<number>();
+  for (const id of heldPairIds) {
+    const k = indexById.get(id)!;
+    expiredPair.add(k);
+    outcomes[k] = { ...outcomes[k]!, reason: "counted", counts: true, contribution: cashRows[k]!.amount };
+  }
 
   const ordered: RegisterRow[] = [];
   let cum = 0;
@@ -799,6 +828,12 @@ export type LedgerPageRow = Record<string, unknown> & {
   stalePending: boolean;
   /** (F6 round 3) An expired hold or its reversal: the register moves by 0 (`balanceReason` "expired"). */
   expiredHold: boolean;
+  /**
+   * (F6 round 5) A hold the snapshot held, or its reversal (`heldExpiredPairs`):
+   * counted here (net 0, no label) but in no spending and never asked about —
+   * the same flag GET /transactions and the GET /forecast bundle send.
+   */
+  expiredPair: boolean;
 };
 
 export type LedgerPage = {
@@ -830,6 +865,13 @@ export type LedgerPage = {
  *                  every row matching the filter other than `reviewed`, each
  *                  moving the register by what `loadRegister` says (0 for a row
  *                  it does not count).
+ *   pendingCount   (Q1) the PENDING rows among them that the register counts
+ *                  (a pending row its posted row replaced is not one): what
+ *                  "N pending" beside the balance says. The spine's
+ *                  `bankConfidence.pendingCount` and the banking review's
+ *                  `cashFlow.pendingCount` both read it. (F6 ⇄ Q1 merge) An
+ *                  expired hold is not one either — nor a held hold and its
+ *                  reversal (`expiredPair`), which the register counts.
  */
 export type LedgerTotals = {
   matchingCount: number;
@@ -838,6 +880,7 @@ export type LedgerTotals = {
   moneyOut: string;
   net: string;
   pendingNet: string;
+  pendingCount: number;
   notCounted: { superseded: number; other: number };
   review: { reviewed: number; unreviewed: number };
 };
@@ -852,6 +895,13 @@ export async function readLedgerTotals(
   const overrides = reg.ordered
     .filter((r) => !r.countsInBalance)
     .map((r) => ({ id: r.id, amount: money(r.balanceCents), reason: r.balanceReason }));
+  // ⭐ (F6 ⇄ Q1 merge) An expired hold is not "pending" for "N pending": the
+  // register moves an unheld one by 0 (`expired`, so `balance_reason` is set and
+  // the count below never reads it), and a held hold with its reversal
+  // (`expiredPair`) count in the balance — net 0, the money already back — but
+  // are expired holds to every other reader. Left out of the count, never out
+  // of the money (`pendingNet` still holds them: the register counts them).
+  const expiredPairIds = reg.ordered.filter((r) => r.expiredPair).map((r) => r.id);
   const withoutReviewed = filterWhere(filter, false, householdId);
   const aggregateResult = await db.execute(sql`
     with ${ledgerCtes(scope, overrides)}
@@ -864,6 +914,10 @@ export async function readLedgerTotals(
       count(*) filter (where ${withoutReviewed} and r.reviewed)::int as reviewed_count,
       count(*) filter (where ${withoutReviewed} and not r.reviewed)::int as unreviewed_count,
       round(coalesce(sum(r.balance_amount) filter (where ${withoutReviewed} and r.pending), 0), 2)::text as pending_net,
+      count(*) filter (
+        where ${withoutReviewed} and r.pending and r.balance_reason is null
+          and r.id::text not in (select jsonb_array_elements_text(${JSON.stringify(expiredPairIds)}::jsonb))
+      )::int as pending_count,
       count(*) filter (where ${withoutReviewed} and r.balance_reason = 'superseded')::int as superseded_count,
       count(*) filter (where ${withoutReviewed} and r.balance_reason is not null and r.balance_reason <> 'superseded')::int as other_not_counted
     from bal r
@@ -878,6 +932,7 @@ export async function readLedgerTotals(
     reviewed_count: number;
     unreviewed_count: number;
     pending_net: string;
+    pending_count: number;
     superseded_count: number;
     other_not_counted: number;
   }>(aggregateResult);
@@ -888,6 +943,7 @@ export async function readLedgerTotals(
     moneyOut: agg?.money_out ?? "0.00",
     net: agg?.net ?? "0.00",
     pendingNet: agg?.pending_net ?? "0.00",
+    pendingCount: Number(agg?.pending_count ?? 0),
     notCounted: {
       superseded: Number(agg?.superseded_count ?? 0),
       other: Number(agg?.other_not_counted ?? 0),
@@ -961,6 +1017,7 @@ export async function readLedgerPage(
       afterToday: r.occurred_on > today,
       stalePending: isStalePending(row.pending === true, r.occurred_on, today),
       expiredHold: reg?.balanceReason === "expired",
+      expiredPair: reg?.expiredPair ?? false,
     });
   }
 

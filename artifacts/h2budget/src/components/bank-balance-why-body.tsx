@@ -124,11 +124,10 @@ function Explanation({ explain }: { explain: BankBalanceExplain }) {
             <FreshnessLine
               bank={{
                 source: freshness.source,
-                asOfDate: snapshot.at,
-                lastContactAt: freshness.lastContactAt,
                 stale: freshness.stale,
                 staleReason: freshness.staleReason,
               }}
+              fetchedAt={freshness.fetchedAt}
             />
           </div>
 

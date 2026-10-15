@@ -11,7 +11,7 @@
 // Household G — a Weekly Spend hook (stored $450, Saturdays) and a weekly plan
 //   $300 from 9/27.
 //     Amex Platinum ••2207  weekly;  its debt row ARCHIVED       → in_full (default)
-//     Amex Blue Cash ••1106 monthly; an ACTIVE debt, min 143.05 → debt_plan (default)
+//     Amex Blue Cash ••1106 monthly; an ACTIVE debt, min 135.00 → debt_plan (default)
 //     Amex Gold ••3307      weekly;  an ACTIVE debt row with no APR and no
 //                           minimum → UNRESOLVED until the owner chooses
 // Household N — no hook at all: nothing to protect, never refused.
@@ -63,19 +63,28 @@ import {
   settingsTable,
   type AgentProposal,
 } from "@workspace/db";
-import { CreateAllowancePlanResponse, GetAmexWeeklyPayoffResponse, SetAmexCardPayoffModeResponse } from "@workspace/api-zod";
+import {
+  CreateAllowancePlanResponse,
+  GetAmexSummaryResponse,
+  GetAmexWeeklyPayoffResponse,
+  ListDebtsResponse,
+  SetAmexCardPayoffModeResponse,
+} from "@workspace/api-zod";
 import moneyRouter from "../routes/money";
 import settingsRouter from "../routes/settings";
 import amexRouter from "../routes/amex";
+// (Q1) GET /debts says how a linked card is paid, by the same definition.
+import debtsRouter from "../routes/debts";
 import { applyProposal } from "../lib/proposalApply";
 import { GATE_REASON, planWriteGate } from "../lib/planSafety";
-import { loadCardPayoffModes, resolvePayoffMode } from "../lib/cardPayoffMode";
+import { defaultModeOf, loadCardPayoffModes, paidAsOf, payDownOf, resolvePayoffMode } from "../lib/cardPayoffMode";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { newRun } from "./_helpers/askFixtures";
 
 const NOW = new Date("2026-10-14T12:00:00-05:00");
 const THIS_SUNDAY = "2026-10-11";
-const GOLD_REASON = GATE_REASON.unresolvedCard("Amex Gold ••3307");
+// Gold has an active debt with no APR and no minimum: Paying down cannot take effect, so the reason never offers it.
+const GOLD_REASON = GATE_REASON.unresolvedCard("Amex Gold ••3307", { available: false, reason: "debt_terms_missing" });
 
 const app = express();
 app.use(express.json());
@@ -86,6 +95,7 @@ app.use((req: { log?: unknown }, _res, next) => {
 app.use(moneyRouter);
 app.use(settingsRouter);
 app.use(amexRouter);
+app.use(debtsRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -148,7 +158,7 @@ beforeAll(async () => {
     .returning();
   await db.insert(debtsTable).values([
     { userId: G, householdId: g, name: "Amex Platinum", balance: "1200.00", apr: "0.2499", minPayment: "40.00", status: "archived", type: "credit_card", plaidAccountId: plat!.id },
-    { userId: G, householdId: g, name: "Amex Blue Cash", balance: "4100.00", apr: "0.2299", minPayment: "143.05", status: "active", type: "credit_card", dueDay: 20, plaidAccountId: blue!.id },
+    { userId: G, householdId: g, name: "Amex Blue Cash", balance: "4100.00", apr: "0.2299", minPayment: "135.00", status: "active", type: "credit_card", dueDay: 20, plaidAccountId: blue!.id },
     { userId: G, householdId: g, name: "Amex Gold", balance: "300.00", apr: "0", minPayment: "0", status: "active", type: "credit_card", plaidAccountId: gold!.id },
   ]);
   const [ws] = await db
@@ -196,12 +206,42 @@ describe("payoff modes — the one rule (pure)", () => {
     expect(resolvePayoffMode(null, [d("archived", "1200", "0.25", "40")])).toMatchObject({ mode: "in_full", reason: "debt_not_active" });
     expect(resolvePayoffMode(null, [d("paid", "0", "0.25", "40")])).toMatchObject({ mode: "in_full", reason: "debt_not_active" });
     expect(resolvePayoffMode(null, [d("active", "0", "0.25", "40")])).toMatchObject({ mode: "in_full", reason: "debt_not_active" });
-    expect(resolvePayoffMode(null, [d("active", "4100", "0.23", "143.05")])).toMatchObject({ mode: "debt_plan", reason: "debt_active" });
+    expect(resolvePayoffMode(null, [d("active", "4100", "0.23", "135.00")])).toMatchObject({ mode: "debt_plan", reason: "debt_active" });
     expect(resolvePayoffMode(null, [d("active", "4100", "0.23", "0")])).toMatchObject({ mode: "debt_plan", reason: "debt_active" });
     expect(resolvePayoffMode(null, [d("active", "300", "0", "0")])).toMatchObject({ mode: null, reason: "debt_terms_missing" });
-    expect(resolvePayoffMode("in_full", [d("active", "4100", "0.23", "143.05")])).toMatchObject({ mode: "in_full", source: "explicit", reason: "set_by_owner" });
-    expect(resolvePayoffMode("debt_plan", [d("active", "4100", "0.23", "143.05")])).toMatchObject({ mode: "debt_plan", source: "explicit" });
+    expect(resolvePayoffMode("in_full", [d("active", "4100", "0.23", "135.00")])).toMatchObject({ mode: "in_full", source: "explicit", reason: "set_by_owner" });
+    expect(resolvePayoffMode("debt_plan", [d("active", "4100", "0.23", "135.00")])).toMatchObject({ mode: "debt_plan", source: "explicit" });
     expect(resolvePayoffMode("debt_plan", [d("archived", "1200", "0.25", "40")])).toMatchObject({ mode: null, source: "explicit", reason: "debt_plan_without_active_debt" });
+  });
+
+  it("(Q6b) payDownOf: Paying down is available only when the one rule would resolve it, and the reason names the cause", () => {
+    expect(payDownOf([])).toEqual({ available: false, reason: "no_debt" });
+    expect(payDownOf([d("archived", "1200", "0.25", "40")])).toEqual({ available: false, reason: "debt_not_active" });
+    expect(payDownOf([d("paid", "0", "0.25", "40")])).toEqual({ available: false, reason: "debt_not_active" });
+    expect(payDownOf([d("active", "300", "0", "0")])).toEqual({ available: false, reason: "debt_terms_missing" });
+    expect(payDownOf([d("active", "4100", "0.23", "0")])).toEqual({ available: true, reason: null });
+    expect(payDownOf([d("active", "4100", "0", "135.00")])).toEqual({ available: true, reason: null });
+    // One source: it agrees with resolvePayoffMode("debt_plan", …) for every input above.
+    for (const linked of [[], [d("archived", "1200", "0.25", "40")], [d("active", "300", "0", "0")], [d("active", "4100", "0.23", "135.00")]]) {
+      expect(payDownOf(linked).available).toBe(resolvePayoffMode("debt_plan", linked).mode === "debt_plan");
+    }
+  });
+
+  it("(Q6b r3) the gate words offer paying it down only where it can take effect", () => {
+    const open = (r: Parameters<typeof GATE_REASON.unresolvedCard>[1]) => GATE_REASON.unresolvedCard("Amex Gold ••3307", r);
+    expect(open({ available: true, reason: null })).toBe("Plans are paused: choose how Amex Gold ••3307 is paid — in full, or paying it down.");
+    expect(open(undefined)).toContain("paying it down");
+    expect(open({ available: false, reason: "debt_terms_missing" })).toBe("Plans are paused: choose how Amex Gold ••3307 is paid — in full — or add the debt's APR and minimum in Debts.");
+    expect(open({ available: false, reason: "debt_not_active" })).toBe("Plans are paused: choose how Amex Gold ••3307 is paid — in full.");
+    expect(open({ available: false, reason: "no_debt" })).not.toContain("paying it down");
+    expect(GOLD_REASON).not.toContain("paying it down");
+  });
+
+  it("(Q6b r3) defaultModeOf: what Use the default resolves to, from the one rule", () => {
+    expect(defaultModeOf([])).toEqual({ mode: "in_full", reason: "no_debt" });
+    expect(defaultModeOf([d("archived", "1200", "0.25", "40")])).toEqual({ mode: "in_full", reason: "debt_not_active" });
+    expect(defaultModeOf([d("active", "4100", "0.23", "0")])).toEqual({ mode: "debt_plan", reason: "debt_active" });
+    expect(defaultModeOf([d("active", "300", "0", "0")])).toEqual({ mode: null, reason: "debt_terms_missing" });
   });
 
   it("household G's cards: Platinum in_full (archived debt), Blue debt_plan (active debt), Gold unresolved", async () => {
@@ -211,6 +251,36 @@ describe("payoff modes — the one rule (pure)", () => {
       ["2207", "weekly", "in_full", "default", "debt_not_active"],
       ["3307", "weekly", null, "default", "debt_terms_missing"],
     ]);
+    // (Q1) The one definition every screen words.
+    expect(modes.map((m) => [m.mask, m.paidAs.effectiveMode, m.paidAs.source]).sort()).toEqual([
+      ["1106", "debt_plan", "default_debt_active"],
+      ["2207", "in_full_weekly", "default_debt_inactive"],
+      ["3307", "unset", "needs_choice"],
+    ]);
+    // (Q6b) Whether Paying down can take effect, per card: Blue yes; Platinum (archived) and Gold (no APR or minimum) no, each with its cause.
+    expect(modes.map((m) => [m.mask, m.payDown]).sort()).toEqual([
+      ["1106", { available: true, reason: null }],
+      ["2207", { available: false, reason: "debt_not_active" }],
+      ["3307", { available: false, reason: "debt_terms_missing" }],
+    ]);
+  });
+
+  it("(Q1) paidAsOf: the effective mode carries the cadence; the source says chosen or which default", () => {
+    const at = (explicit: "in_full" | "debt_plan" | null, linked: ReturnType<typeof d>[], cadence: "weekly" | "monthly") =>
+      paidAsOf(resolvePayoffMode(explicit, linked), cadence);
+    expect(at(null, [], "weekly")).toEqual({ effectiveMode: "in_full_weekly", source: "default_no_debt" });
+    expect(at(null, [], "monthly")).toEqual({ effectiveMode: "in_full_monthly", source: "default_no_debt" });
+    // ⭐ An archived debt's card is paid in full at its cadence — never "on the payoff plan".
+    expect(at(null, [d("archived", "1200", "0.25", "40")], "weekly")).toEqual({ effectiveMode: "in_full_weekly", source: "default_debt_inactive" });
+    // An active debt with an APR or a minimum: the debt plan.
+    expect(at(null, [d("active", "4100", "0.23", "135.00")], "monthly")).toEqual({ effectiveMode: "debt_plan", source: "default_debt_active" });
+    expect(at(null, [d("active", "4100", "0", "135.00")], "weekly")).toEqual({ effectiveMode: "debt_plan", source: "default_debt_active" });
+    // ⭐ An explicit choice wins, either way.
+    expect(at("in_full", [d("active", "4100", "0.23", "135.00")], "monthly")).toEqual({ effectiveMode: "in_full_monthly", source: "chosen" });
+    expect(at("debt_plan", [d("active", "4100", "0.23", "135.00")], "weekly")).toEqual({ effectiveMode: "debt_plan", source: "chosen" });
+    // Unresolved: the owner must choose.
+    expect(at(null, [d("active", "300", "0", "0")], "weekly")).toEqual({ effectiveMode: "unset", source: "needs_choice" });
+    expect(at("debt_plan", [d("archived", "1200", "0.25", "40")], "weekly")).toEqual({ effectiveMode: "unset", source: "needs_choice" });
   });
 });
 
@@ -364,5 +434,84 @@ describe("a household with no hook: nothing to protect", () => {
     expect(r.status).toBe(200);
     expect(await plansOf(N)).toEqual([["weekly", "300.00", THIS_SUNDAY]]);
     expect((await call("PUT", "/settings", N, { weeklyAllowanceAmount: "250" })).status).toBe(200);
+  });
+});
+
+describe("(Q1) one payoff-mode definition on every surface: the weekly payoff (band and debt-linked), the Amex summary, the debts list", () => {
+  const pick = <T extends { accountId: string; paidAs: unknown }>(list: T[]) =>
+    Object.fromEntries(list.map((c) => [c.accountId, c.paidAs]));
+
+  it("⭐ each card reads the same paidAs everywhere; the archived Platinum is in full weekly though a debt row links it; the owner's choice wins", async () => {
+    // Gold was chosen in_full above; Platinum and Blue are defaults.
+    const want = {
+      [ext.plat]: { effectiveMode: "in_full_weekly", source: "default_debt_inactive" },
+      [ext.blue]: { effectiveMode: "debt_plan", source: "default_debt_active" },
+      [ext.gold]: { effectiveMode: "in_full_weekly", source: "chosen" },
+    };
+    const payoff = await call("GET", `/amex/weekly-payoff?weekStart=${THIS_SUNDAY}`, G);
+    expect(() => GetAmexWeeklyPayoffResponse.parse(payoff.body)).not.toThrow();
+    // The band (`cards`) and the debt-linked list together hold every card once, each with its definition.
+    const onPage = { ...pick(payoff.body.cards), ...pick(payoff.body.debtLinkedCards) };
+    expect(onPage).toEqual(want);
+    expect(pick(payoff.body.payoffModes)).toEqual(want);
+    // A card in the debt-linked list is not "on the payoff plan" because it is there.
+    const platLinked = (payoff.body.debtLinkedCards as Array<{ accountId: string }>).some((c) => c.accountId === ext.plat);
+    if (platLinked) expect(onPage[ext.plat]).toMatchObject({ effectiveMode: "in_full_weekly" });
+
+    const summary = await call("GET", `/amex/summary?accountId=all&from=${THIS_SUNDAY}&to=2026-10-14`, G);
+    expect(summary.status).toBe(200);
+    expect(() => GetAmexSummaryResponse.parse(summary.body)).not.toThrow();
+    expect(pick(summary.body.scope.cards)).toEqual(want);
+    // (Q6b) The same card says whether Paying down can take effect, on the summary and on the payoff-mode answer.
+    const payDownWant = {
+      [ext.plat]: { available: false, reason: "debt_not_active" },
+      [ext.blue]: { available: true, reason: null },
+      [ext.gold]: { available: false, reason: "debt_terms_missing" },
+    };
+    expect(Object.fromEntries((summary.body.scope.cards as Array<{ accountId: string; payDown: unknown }>).map((c) => [c.accountId, c.payDown]))).toEqual(payDownWant);
+    expect((await call("PUT", `/amex/cards/${ext.plat}/payoff-mode`, G, { mode: "in_full" })).body.payDown).toEqual(payDownWant[ext.plat]);
+    expect((await call("PUT", `/amex/cards/${ext.plat}/payoff-mode`, G, { mode: null })).body.payDown).toEqual(payDownWant[ext.plat]);
+
+    // (Q6b r3) What Use the default would resolve to, on the summary and the payoff-mode answer: Gold cannot tell.
+    const defWant = {
+      [ext.plat]: { mode: "in_full", reason: "debt_not_active" },
+      [ext.blue]: { mode: "debt_plan", reason: "debt_active" },
+      [ext.gold]: { mode: null, reason: "debt_terms_missing" },
+    };
+    expect(Object.fromEntries((summary.body.scope.cards as Array<{ accountId: string; defaultMode: unknown }>).map((c) => [c.accountId, c.defaultMode]))).toEqual(defWant);
+    expect((await call("PUT", `/amex/cards/${ext.plat}/payoff-mode`, G, { mode: null })).body.defaultMode).toEqual(defWant[ext.plat]);
+
+    const debts = await call("GET", "/debts", G);
+    expect(debts.status).toBe(200);
+    expect(() => ListDebtsResponse.parse(debts.body)).not.toThrow();
+    const byName = Object.fromEntries((debts.body as Array<{ name: string; paidAs: unknown }>).map((x) => [x.name, x.paidAs]));
+    expect(byName).toEqual({
+      "Amex Platinum": want[ext.plat],
+      "Amex Blue Cash": want[ext.blue],
+      "Amex Gold": want[ext.gold],
+    });
+  });
+
+  it("an explicit choice moves every surface at once (Blue chosen in full monthly), and clearing it restores the default", async () => {
+    expect((await call("PUT", `/amex/cards/${ext.blue}/payoff-mode`, G, { mode: "in_full" })).body.paidAs).toEqual({ effectiveMode: "in_full_monthly", source: "chosen" });
+    try {
+      const payoff = await call("GET", `/amex/weekly-payoff?weekStart=${THIS_SUNDAY}`, G);
+      expect({ ...pick(payoff.body.cards), ...pick(payoff.body.debtLinkedCards) }[ext.blue]).toEqual({ effectiveMode: "in_full_monthly", source: "chosen" });
+      const debts = await call("GET", "/debts", G);
+      expect((debts.body as Array<{ name: string; paidAs: unknown }>).find((x) => x.name === "Amex Blue Cash")!.paidAs).toEqual({
+        effectiveMode: "in_full_monthly",
+        source: "chosen",
+      });
+    } finally {
+      const back = await call("PUT", `/amex/cards/${ext.blue}/payoff-mode`, G, { mode: null });
+      expect(back.body.paidAs).toEqual({ effectiveMode: "debt_plan", source: "default_debt_active" });
+    }
+  });
+
+  it("the band's cards and figures are unchanged: which cards are in `cards`, and the combined totals, do not depend on paidAs", async () => {
+    const payoff = await call("GET", `/amex/weekly-payoff?weekStart=${THIS_SUNDAY}`, G);
+    // Every card in `cards` has no debt row (the hook's old split, kept); paidAs only words it.
+    for (const c of payoff.body.cards as Array<{ debtId: string | null }>) expect(c.debtId).toBeNull();
+    for (const c of payoff.body.debtLinkedCards as Array<{ debtId: string }>) expect(typeof c.debtId).toBe("string");
   });
 });

@@ -3,6 +3,8 @@
 // pinned to the matcher's own.
 import { describe, expect, it } from "vitest";
 import {
+  bankReviewPlanOutcome,
+  cashVarianceOf,
   BANK_REVIEW_KINDS,
   MATCH_STRICT_DAYS,
   bankLineStatusOf,
@@ -232,5 +234,38 @@ describe("the pair arithmetic is the matcher's own", () => {
     expect(withinStrictTolerance(-50, -51)).toBe(true);
     expect(withinStrictTolerance(-50, -51.01)).toBe(false);
     expect(MATCH_STRICT_DAYS).toBe(3);
+  });
+});
+
+describe("(Q1) bankReviewPlanOutcome — what happened to a plan, in its own direction", () => {
+  const out = (fate: string, planned: number | null, actual: number | null) => {
+    const v = cashVarianceOf(planned, actual, planned != null && planned > 0 ? "in" : "out");
+    return bankReviewPlanOutcome(fate, v.direction, v.varianceKind);
+  };
+  it("a paycheck: received, received a different amount, not received yet", () => {
+    expect(out("matched", 2500, 2500)).toBe("received");
+    expect(out("paid_on_evidence", 2500, 2500)).toBe("received");
+    expect(out("paid_on_evidence", 2500, 2391.4)).toBe("received_different");
+    expect(out("matched", 2500, 2600)).toBe("received_different");
+    expect(out("partial", 2500, 1000)).toBe("received_different");
+    expect(out("income_not_arrived", 2500, null)).toBe("not_received_yet");
+    expect(out("on_curve", 2500, null)).toBe("not_received_yet");
+    expect(out("overdue_outside", 2500, null)).toBe("not_received_yet");
+  });
+  it("a bill: paid, paid a different amount, not paid yet — never income words", () => {
+    expect(out("matched", -95, -95)).toBe("paid");
+    expect(out("paid_on_evidence", -1110, -1150.4)).toBe("paid_different");
+    expect(out("partial", -300, -100)).toBe("paid_different");
+    expect(out("on_curve", -95, null)).toBe("not_paid_yet");
+    expect(out("overdue_outside", -95, null)).toBe("not_paid_yet");
+    // A matched answer with no row (nothing to compare): paid.
+    expect(out("matched", -95, null)).toBe("paid");
+  });
+  it("the household's answers and the ledger's own words pass through", () => {
+    for (const f of ["suggested", "skipped", "missed", "carried", "not_due"] as const) {
+      expect(out(f, -95, null)).toBe(f);
+      expect(out(f, 2500, null)).toBe(f);
+    }
+    expect(out("outside_window", -95, null)).toBe("not_decided");
   });
 });

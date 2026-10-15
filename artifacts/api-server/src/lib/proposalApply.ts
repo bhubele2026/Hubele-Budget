@@ -10,6 +10,8 @@ import {
   type AgentProposal,
 } from "@workspace/db";
 import { recordHandFiling, setCategoryByHand, categoryBelongs } from "./categorizer/userDecisions";
+import { queuePickConflict } from "./categorizer/review";
+import { DIRECTION_EXPLANATION } from "./categorizer/direction";
 import { writeOwnerAllowancePlan } from "./allowancePlanWriter";
 import { syncAvalanchePaymentCategory } from "../routes/avalanche";
 import { householdTodayISO } from "./householdClock";
@@ -32,8 +34,11 @@ export interface Approver {
 
 export type ApplyResult =
   | { ok: true; actionId: string }
-  /** (F1) `code: "plan_unsafe"` when the plan gate refused a weekly limit (`planSafety.ts`). */
-  | { ok: false; status: 403 | 404 | 409; error: string; code?: typeof PLAN_UNSAFE };
+  /**
+   * (F1) `code: "plan_unsafe"` when the plan gate refused a weekly limit (`planSafety.ts`).
+   * (Q2) `code: "direction_conflict"` when a set_category would file money against its direction.
+   */
+  | { ok: false; status: 403 | 404 | 409; error: string; code?: typeof PLAN_UNSAFE | "direction_conflict" };
 
 async function recordAction(
   p: AgentProposal,
@@ -55,9 +60,19 @@ export async function applyProposal(p: AgentProposal, who: Approver): Promise<Ap
     if (!txnId || !categoryId || !(await categoryBelongs(householdId, categoryId))) {
       return { ok: false, status: 404, error: "That category no longer exists." };
     }
+    // ⭐ (Q2) The review queue's direction guard: a model's pick a person
+    // approves never files money in under an expense category, nor money out
+    // under an income one. 409, nothing written.
+    const conflict = await queuePickConflict(householdId, txnId, categoryId);
+    if (conflict) return { ok: false, status: 409, error: DIRECTION_EXPLANATION[conflict], code: "direction_conflict" };
     const set = await setCategoryByHand(householdId, txnId, categoryId);
     if (!set) return { ok: false, status: 404, error: "That charge no longer exists." };
-    const filed = await recordHandFiling(householdId, who.actorUserId, txnId, { previousCategoryId: set.previousCategoryId, categoryId });
+    const filed = await recordHandFiling(householdId, who.actorUserId, txnId, {
+      previousCategoryId: set.previousCategoryId,
+      categoryId,
+      flagsBefore: set.flagsBefore,
+      flagsAfter: set.flagsAfter,
+    });
     const actionId = await recordAction(p, {
       type: "set_category",
       targetKind: "transaction",

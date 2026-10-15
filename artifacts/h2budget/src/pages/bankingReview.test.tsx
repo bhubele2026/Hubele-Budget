@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 /**
@@ -16,6 +16,14 @@ const h = vi.hoisted(() => ({
   error: false,
   proposals: undefined as unknown,
   proposalCalls: 0,
+  /** (Q4) The query holds another account's/range's answer (keepPreviousData). */
+  placeholder: false,
+  /** (Q4) Holds `getBankingReview` (the Show more cursor request) until released. */
+  hold: null as Promise<void> | null,
+  /** (Q5) The signed-in person is the household owner. */
+  owner: true as boolean,
+  /** (Q5 fix) The spine's bank confidence (the account-wide pending count, the bank's figure today). */
+  spine: undefined as unknown,
 }));
 
 function withFirstPages(r: Record<string, unknown>, pages: Record<string, unknown>) {
@@ -30,15 +38,20 @@ function withFirstPages(r: Record<string, unknown>, pages: Record<string, unknow
 vi.mock("@workspace/api-client-react", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react")>()),
   useListPlaidItems: () => ({ data: h.items, isError: false, isLoading: false }),
+  useGetMe: () => ({ data: { isOwner: h.owner }, isError: false, isLoading: false }),
 }));
 vi.mock("@workspace/api-client-react/features", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react/features")>()),
   getBankingReview: async (params: Record<string, unknown>) => {
     h.calls.push({ ...params, via: "fetch" });
+    if (h.hold) await h.hold;
     const key = `${params.bucket}|${params.kind ?? ""}|${params.cursor ?? ""}`;
     return { ...h.review, page: h.pages[key] ?? { bucket: params.bucket, kind: params.kind ?? null, rows: [], nextCursor: null, limit: 25 } };
   },
   getGetReviewProposalsQueryKey: () => ["/api/review/proposals"],
+  getListAppliedReviewProposalsQueryKey: () => ["/api/review/proposals/applied"],
+  useListAppliedReviewProposals: () => ({ data: { items: [] }, isError: false }),
+  useApplyReviewProposal: () => ({ mutate: vi.fn(), isPending: false }),
   useGetReviewProposals: (opts?: { query?: { enabled?: boolean } }) => {
     if (opts?.query?.enabled === false) return { data: undefined, isError: false, refetch: vi.fn() };
     h.proposalCalls += 1;
@@ -52,9 +65,16 @@ vi.mock("@workspace/api-client-react/features", async (orig) => ({
     const page = key ? (h.pages[key] ?? { bucket: params.bucket, kind: params.kind ?? null, rows: [], nextCursor: null, limit: 25 }) : null;
     // (P4) The summary carries each bucket's first page, as the server does.
     const seeded = h.review && !params.bucket ? withFirstPages(h.review, h.pages) : h.review;
-    return { data: seeded && { ...seeded, page }, isError: false, isLoading: false, refetch: vi.fn() };
+    // (Q4) The server echoes the days it read; the page shows an answer only for the range it asked.
+    const echoed = seeded && {
+      ...seeded,
+      period: { ...(seeded as { period: Record<string, unknown> }).period, ...(params.from ? { from: params.from } : {}), ...(params.to ? { to: params.to } : {}) },
+      page,
+    };
+    return { data: echoed, isError: false, isLoading: false, isPlaceholderData: h.placeholder, refetch: vi.fn() };
   },
 }));
+vi.mock("@/hooks/useSpine", () => ({ useSpine: () => ({ data: h.spine, state: h.spine ? "loaded" : "cold", refetch: () => {} }) }));
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => <button data-testid="own-sync">Sync</button> }));
 
 import BankingReviewPage from "./command-center";
@@ -114,12 +134,12 @@ const review = (o: Record<string, unknown> = {}) => ({
   account: { id: "acct-chk", institution: "Chase", name: "Total Checking", mask: "4321", isForecastAccount: true, lastSyncedAt: "2026-10-14T16:00:00.000Z" },
   period: { from: "2026-10-01", to: "2026-10-14", today: "2026-10-14", timezone: "America/Chicago" },
   balance: { today: "3205.81", asOf: "2026-10-14T13:00:00.000Z", start: "3000.00", end: "3205.81", unavailableReason: null },
-  freshness: { source: "plaid", lastContactAt: "2026-10-14T16:00:00.000Z", lastFailureAt: null, stale: false, staleReason: null },
-  cashFlow: { moneyIn: "2425.00", moneyOut: "2219.19", net: "205.81", count: 23, pendingNet: "-6.50", supersededExcluded: 1, otherExcluded: 0 },
+  freshness: { source: "plaid", fetchedAt: "2026-10-14T16:00:00.000Z", lastContactAt: "2026-10-14T16:00:00.000Z", lastFailureAt: null, stale: false, staleReason: null },
+  cashFlow: { moneyIn: "2425.00", moneyOut: "2219.19", net: "205.81", count: 23, pendingNet: "-6.50", pendingCount: 1, supersededExcluded: 1, otherExcluded: 0 },
   planComparison: { available: true, reason: null, comparedFrom: "2026-08-16", plansFrom: "2026-09-01", through: "2026-10-14" },
   planned: [
-    { key: "a|2026-10-01", itemId: "a", label: "Gym Membership", scheduledDate: "2026-10-01", occurrenceDate: "2026-10-01", planned: "-40.00", fate: "matched", txnId: "t1", txnDate: "2026-10-08", txnAmount: "-40.00", txnOnThisAccount: true, difference: "0.00", dayDelta: 7, remainder: null, onCurve: false, hook: null },
-    { key: "b|2026-10-12", itemId: "b", label: "Water", scheduledDate: "2026-10-12", occurrenceDate: "2026-10-12", planned: "-60.00", fate: "missed", txnId: null, txnDate: null, txnAmount: null, txnOnThisAccount: false, difference: null, dayDelta: null, remainder: null, onCurve: true, hook: null },
+    { key: "a|2026-10-01", itemId: "a", label: "Gym Membership", scheduledDate: "2026-10-01", occurrenceDate: "2026-10-01", planned: "-40.00", fate: "matched", txnId: "t1", txnDate: "2026-10-08", txnAmount: "-40.00", txnOnThisAccount: true, difference: "0.00", dayDelta: 7, remainder: null, onCurve: false, hook: null, direction: "out", outcome: "paid" },
+    { key: "b|2026-10-12", itemId: "b", label: "Water", scheduledDate: "2026-10-12", occurrenceDate: "2026-10-12", planned: "-60.00", fate: "missed", txnId: null, txnDate: null, txnAmount: null, txnOnThisAccount: false, difference: null, dayDelta: null, remainder: null, onCurve: true, hook: null, direction: "out", outcome: "missed" },
   ],
   notInPlan: {
     amountDifference: totals(4, "-643.40"),
@@ -135,10 +155,10 @@ const review = (o: Record<string, unknown> = {}) => ({
   },
   asPlanned: { count: 3, net: "1904.51", pendingNet: "0.00", withoutPlanDetail: 0 },
   reconciliation: { rowsPlaced: 22, rowsUnexplained: 0, unexplained: "0.00" },
-  reviewInbox: { unresolvedInRange: 15, badgeCount: 16, badgeScope: "this calendar month, forecast account" },
+  reviewInbox: { unresolvedInRange: 15, unresolvedScope: "this account · this period", unresolvedFrom: "2026-10-01", unresolvedTo: "2026-10-14", badgeCount: 16, badgeScope: "this calendar month, forecast account" },
   balanceTie: { status: "not_checked", checkedAt: null, unexplained: null },
   balanceCheck: check({}),
-  household: { scope: "all accounts · this week", weekStart: "2026-10-11", weekEnd: "2026-10-17", spentWeek: "124.00", weekPlan: null, remainingWeek: null },
+  household: { scope: "all accounts · this week", weekStart: "2026-10-11", weekEnd: "2026-10-17", spentWeek: "124.00", weekPlan: null, remainingWeek: null, knownWeek: "100.00", unresolvedWeek: "24.00", provisional: false, remainingWeekKnown: null },
   ...o,
 });
 
@@ -150,6 +170,7 @@ const item = (over: Record<string, unknown> = {}) => ({
   lastSyncedAt: "2026-10-14T16:00:00Z",
   lastSyncError: null,
   lastSyncErrorCode: null,
+  freshness: { state: "ok", stale: false, staleReason: null, fetchedAt: "2026-10-14T16:00:00Z", lastContactAt: "2026-10-14T16:00:00Z", lastFailureAt: null },
   accounts: [
     { id: "acct-chk", accountId: "ext-chk", name: "Total Checking", mask: "4321", type: "depository", subtype: "checking" },
     { id: "acct-sav", accountId: "ext-sav", name: "Savings", mask: "8802", type: "depository", subtype: "savings" },
@@ -176,8 +197,12 @@ beforeEach(() => {
   h.calls = [];
   h.items = [item()];
   h.error = false;
+  h.placeholder = false;
+  h.hold = null;
   h.proposals = undefined;
   h.proposalCalls = 0;
+  h.owner = true;
+  h.spine = { bankConfidence: { fetchedAt: "2026-10-14T16:00:00.000Z", bankBalance: "3205.81", bankAsOf: "2026-10-14T13:00:00.000Z", h2Balance: "3205.81", pendingCount: 1, check: {} } };
 });
 afterEach(() => {
   cleanup();
@@ -191,8 +216,64 @@ describe("Banking review — header and summary", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Banking review");
     expect(text("br-account")).toContain("Total Checking");
     expect(text("br-range")).toBe("Oct 1 – Oct 14");
-    expect(text("br-fresh")).toContain("Synced 1 hour ago");
+    expect(text("br-fresh")).toContain("Updated 1 h ago");
+    expect(text("br-pending")).toBe("1 pending");
     expect(screen.getByTestId("br-preset-month").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("'Updated' is the SERVER's instant (freshness.fetchedAt), never a latest-of the browser takes itself", () => {
+    h.review = review({
+      account: { id: "acct-chk", institution: "Chase", name: "Total Checking", mask: "4321", isForecastAccount: true, lastSyncedAt: "2026-10-14T16:00:00.000Z" },
+      freshness: { source: "plaid", fetchedAt: "2026-10-14T13:00:00.000Z", lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null },
+    });
+    mount();
+    expect(text("br-fresh")).toContain("Updated 4 h ago");
+    cleanup();
+    h.review = review({
+      account: { id: "acct-chk", institution: "Chase", name: "Total Checking", mask: "4321", isForecastAccount: true, lastSyncedAt: null },
+      freshness: null,
+      balance: { today: null, asOf: null, start: null, end: null, unavailableReason: "not_snapshot_account" },
+    });
+    h.items = [item({ freshness: { state: "never", stale: false, staleReason: null, fetchedAt: null, lastContactAt: null, lastFailureAt: null } })];
+    mount();
+    expect(text("br-fresh")).toContain("Not updated yet");
+  });
+
+  it("(Q5 fix) a typed balance is as old as its own time: a live feed's recent sync does not make it 'Updated 1 h ago'", () => {
+    // The dashboard header (spine) and the tile say 10 days; Banking says the same, from the same server instant.
+    h.review = review({
+      freshness: { source: "manual", fetchedAt: "2026-10-04T13:00:00.000Z", lastContactAt: "2026-10-14T16:00:00.000Z", lastFailureAt: null, stale: true, staleReason: "manual_old" },
+      balance: { today: "3205.81", asOf: "2026-10-04T13:00:00.000Z", start: "3000.00", end: "3205.81", unavailableReason: null },
+    });
+    mount();
+    expect(text("br-fresh")).toBe("Needs an update · Updated 10 d ago");
+  });
+
+  it("(Q5 fix) another account's 'Updated' is its own connection's server freshness", () => {
+    h.review = review({
+      account: { id: "acct-sav", institution: "Chase", name: "Savings", mask: "8802", isForecastAccount: false, lastSyncedAt: "2026-10-14T16:00:00.000Z" },
+      freshness: null,
+    });
+    h.items = [item({ freshness: { state: "stale", stale: true, staleReason: "old", fetchedAt: "2026-10-11T13:00:00Z", lastContactAt: "2026-10-11T13:00:00Z", lastFailureAt: null } })];
+    mount("/banking?account=acct-sav");
+    expect(text("br-fresh")).toBe("Out of date · Updated 3 d ago");
+  });
+
+  it("(Q5 fix) 'N pending' is the account's, through today — the dashboard's count — not the range's", () => {
+    // Last month: nothing pending in September, but the account has 3 pending now (the spine's count).
+    h.spine = { bankConfidence: { fetchedAt: "2026-10-14T16:00:00.000Z", bankBalance: "3205.81", bankAsOf: null, h2Balance: "3205.81", pendingCount: 3, check: {} } };
+    h.review = review({ cashFlow: { moneyIn: "0.00", moneyOut: "0.00", net: "0.00", count: 0, pendingNet: "0.00", pendingCount: 0, supersededExcluded: 0, otherExcluded: 0 } });
+    mount("/banking?from=2026-09-01&to=2026-09-30");
+    expect(text("br-pending")).toBe("3 pending");
+    cleanup();
+    // Another account has no account-wide read: it says its range.
+    h.review = review({
+      account: { id: "acct-sav", institution: "Chase", name: "Savings", mask: "8802", isForecastAccount: false, lastSyncedAt: null },
+      freshness: null,
+      cashFlow: { moneyIn: "0.00", moneyOut: "0.00", net: "0.00", count: 2, pendingNet: "-5.00", pendingCount: 2, supersededExcluded: 0, otherExcluded: 0 },
+    });
+    mount("/banking?account=acct-sav");
+    expect(text("br-pending")).toBe("2 pending in Oct 1 – Oct 14");
   });
 
   it("asks the server for this month to today on the default account", () => {
@@ -208,21 +289,63 @@ describe("Banking review — header and summary", () => {
     expect(text("br-out")).toBe("$2,219.19");
   });
 
-  it("Balance check and Review inbox are separate things", () => {
+  it("Balance check and the to-review count are separate things, each with its own scope", () => {
     mount();
     expect(within(screen.getByTestId("br-tie-cell")).getByText("Balance check")).toBeTruthy();
-    expect(within(screen.getByTestId("br-inbox-cell")).getByText("Review inbox")).toBeTruthy();
-    expect(text("br-tie")).toBe("Not checked yet");
-    expect(text("br-inbox")).toBe("16 to review this month");
-    // The inbox's real scope is in its tooltip, not in a claim about the balance.
-    expect(screen.getByTestId("br-inbox-cell").innerHTML).toContain("this calendar month, forecast account");
-    expect(screen.getByTestId("br-tie-cell").textContent).not.toMatch(/review/i);
+    expect(text("br-tie")).toBe("Not checked yet — Sync to check");
+    // One name everywhere (the dashboard tile and the top bar say "review"). The count is THIS account and range, not the badge's.
+    expect(text("br-inbox")).toBe("15 to review");
+    expect(text("br-inbox-scope")).toBe("This account · Oct 1 – Oct 14");
+    // (Q5 fix) The destination opens on that month, so the list has the scope the chip names.
+    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review?month=2026-10");
+    expect(screen.getByTestId("br-inbox").getAttribute("aria-label")).toBe("15 to review, This account · Oct 1 – Oct 14");
+    expect(screen.getByTestId("banking-review").textContent).not.toMatch(/Review inbox|to review this month|reconcile/i);
+    expect(screen.getByTestId("br-tie-cell").textContent).not.toMatch(/reconcile|review/i);
   });
 
-  it("an empty inbox reads 'Review inbox clear'", () => {
-    h.review = review({ reviewInbox: { unresolvedInRange: 0, badgeCount: 0, badgeScope: "this calendar month, forecast account" } });
+  it("(Q5 fix) the to-review chip always ties to its destination: last month links to that month; a range the review page cannot show says the page's own count", () => {
+    h.review = review({ reviewInbox: { unresolvedInRange: 1, unresolvedScope: "this account · this period", unresolvedFrom: "2026-09-01", unresolvedTo: "2026-09-30", badgeCount: 9, badgeScope: "this calendar month, forecast account" } });
+    mount("/banking?from=2026-09-01&to=2026-09-30");
+    expect(text("br-inbox")).toBe("1 to review");
+    expect(text("br-inbox-scope")).toBe("This account · Sep 1 – Sep 30");
+    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review?month=2026-09");
+    cleanup();
+    // (Round 3) A month two back ties too: Review loads it (GET /forecast?fromMonth). Thirteen back it cannot: the page's count.
+    mount("/banking?from=2026-08-01&to=2026-08-31");
+    expect(text("br-inbox-scope")).toBe("This account · Aug 1 – Aug 31");
+    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review?month=2026-08");
+    cleanup();
+    mount("/banking?from=2025-08-01&to=2025-08-31");
+    expect(text("br-inbox-scope")).toBe("Planned account · this month");
+    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review");
+    cleanup();
+    // This week is part of a month (the review page lists the whole month): the chip says the page's count and scope.
+    mount("/banking?from=2026-10-11&to=2026-10-14");
+    expect(text("br-inbox")).toBe("9 to review");
+    expect(text("br-inbox-scope")).toBe("Planned account · this month");
+    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review");
+    cleanup();
+    // Another account: the review page lists the planned account only.
+    h.review = review({ account: { id: "acct-sav", institution: "Chase", name: "Savings", mask: "8802", isForecastAccount: false, lastSyncedAt: null }, freshness: null });
+    mount("/banking?account=acct-sav");
+    expect(text("br-inbox")).toBe("16 to review");
+    expect(text("br-inbox-scope")).toBe("Planned account · this month");
+  });
+
+  it("an empty inbox reads 'Nothing to review'", () => {
+    h.review = review({ reviewInbox: { unresolvedInRange: 0, unresolvedScope: "this account · this period", unresolvedFrom: "2026-10-01", unresolvedTo: "2026-10-14", badgeCount: 0, badgeScope: "this calendar month, forecast account" } });
     mount();
-    expect(text("br-inbox")).toBe("Review inbox clear");
+    expect(text("br-inbox")).toBe("Nothing to review");
+  });
+
+  it("the order is the order of the questions: context, then what needs a decision, then not on the plan, planned, household", () => {
+    mount();
+    const order = ["br-summary", "br-decide", "br-notinplan", "br-planned", "br-household"].map((id) => screen.getByTestId(id));
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING, `${i}`).toBeTruthy();
+    }
+    expect(within(screen.getByTestId("br-decide")).getByTestId("br-fixes")).toBeTruthy();
+    expect(within(screen.getByTestId("br-decide")).getByTestId("br-inbox")).toBeTruthy();
   });
 
   it("no balance for an account without a snapshot reads a dash, never $0.00", () => {
@@ -250,20 +373,24 @@ describe("Banking review — Not in the plan", () => {
       "br-bucket-confirmedUnplanned",
       "br-bucket-uncertain",
     ]);
-    const expected: Array<[string, string, string]> = [
-      ["unmatched", "9", "-$737.80"],
-      ["amountDifference", "4", "-$643.40"],
-      ["timingDifference", "1", "-$40.00"],
-      ["confirmedUnplanned", "3", "-$132.50"],
-      ["uncertain", "2", "-$145.00"],
+    const expected: Array<[string, string]> = [
+      ["unmatched", "9"],
+      ["amountDifference", "4"],
+      ["timingDifference", "1"],
+      ["confirmedUnplanned", "3"],
+      ["uncertain", "2"],
     ];
-    for (const [name, count, net] of expected) {
+    for (const [name, count] of expected) {
       expect(text(`br-count-${name}`)).toBe(count);
-      expect(text(`br-net-${name}`)).toBe(net);
+      // (Q5) Never the old net-as-"total moved": money in and money out are said apart.
+      expect(screen.queryByTestId(`br-net-${name}`)).toBeNull();
+      expect(screen.getByTestId(`br-bucket-${name}`).textContent).not.toMatch(/total moved/i);
     }
-    const titles = ["Unmatched", "Different amount", "Different date", "Marked not in plan", "Not sure"];
+    expect(text("br-inout-unmatched-out")).toBe("Out $737.80");
+    expect(screen.queryByTestId("br-inout-unmatched-in")).toBeNull();
+    const titles = ["Not on the plan", "Received or paid a different amount", "On a different day", "Marked not in plan", "Not sure"];
     for (const t of titles) expect(screen.getAllByText(t).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Paid, but not on the plan").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Money in or out the plan did not list").length).toBeGreaterThan(0);
     expect(screen.getByText("H2 can't tell yet")).toBeTruthy();
   });
 
@@ -273,13 +400,22 @@ describe("Banking review — Not in the plan", () => {
     expect((screen.getByTestId("br-planned") as HTMLDetailsElement).open).toBe(false);
   });
 
-  it("Unmatched is split by kind, with the note that card and debt payments are not overspending", () => {
+  it("a bucket reads aloud with its count, money in and money out apart", () => {
+    h.review = review({ notInPlan: { ...review().notInPlan, unmatched: totals(2, "275.00", { moneyIn: "300.00", moneyOut: "25.00" }) } });
+    mount();
+    expect(screen.getByTestId("br-bucket-unmatched").getAttribute("aria-label")).toBe("Not on the plan: 2 rows, money in $300.00, money out $25.00");
+    expect(screen.getByTestId("br-bucket-unmatched").getAttribute("title")).toBe("Not on the plan: 2 rows, money in $300.00, money out $25.00");
+    expect(text("br-inout-unmatched-in")).toBe("In $300.00");
+    expect(text("br-inout-unmatched-out")).toBe("Out $25.00");
+  });
+
+  it("Unmatched is split by kind, with the note that card payments, debt payments and transfers are not spending", () => {
     mount();
     const kinds = screen.getByTestId("br-kinds");
     expect(text("br-kind-card_payment")).toContain("Card payment");
     expect(text("br-kind-card_payment")).toContain("-$250.00");
     expect(text("br-kind-debt_payment")).toContain("-$300.00");
-    expect(kinds.textContent).toContain("Card and debt payments are not overspending.");
+    expect(kinds.textContent).toContain("Card and debt payments and transfers are not spending.");
     for (const k of ["spending", "transfer", "income", "refund", "other"]) expect(screen.getByTestId(`br-kind-${k}`)).toBeTruthy();
   });
 
@@ -343,7 +479,7 @@ describe("Banking review — Not in the plan", () => {
     expect(window.location.search).toContain("bucket=unmatched");
     expect(window.location.search).toContain("kind=card_payment");
     expect(h.calls.some((c) => c.bucket === "unmatched" && c.kind === "card_payment")).toBe(true);
-    expect(screen.getByTestId("br-detail").textContent).toContain("Unmatched · Card payment");
+    expect(screen.getByTestId("br-detail").textContent).toContain("Not on the plan · Card payment");
   });
 
   it("first load is ONE review request: the summary carries the default bucket's first page", () => {
@@ -393,22 +529,64 @@ describe("Banking review — planned, household, unexplained", () => {
     expect(rows[1]).toContain("$60.00");
   });
 
-  it("household: labelled, secondary, 'Plan not set' is never $0", () => {
+  it("household: labelled, secondary, the glossary's words, 'Plan not set' is never $0", () => {
     mount();
     const box = screen.getByTestId("br-household");
     expect(box.textContent).toContain("All accounts · this week");
-    expect(text("br-hh-spent")).toBe("$124.00");
-    expect(text("br-hh-plan")).toBe("Plan not set");
+    // Counts toward plan = known (100), Unconfirmed 24, the cautious total (124) named as such.
+    expect(box.textContent).toContain("Counts toward plan");
+    expect(text("br-hh-spent")).toBe("$100.00");
+    expect(box.textContent).toContain("Unconfirmed");
+    expect(text("br-hh-unconfirmed")).toBe("$24.00");
+    expect(text("br-hh-cautious")).toBe("Cautious total (includes unconfirmed) $124.00");
+    expect(text("br-hh-plan")).toBe("Not set");
+    expect(screen.queryByTestId("br-hh-left")).toBeNull();
+    expect(box.textContent).not.toContain("Counts toward weekly plan");
     expect(within(box).getByText("Open this week →").getAttribute("href")).toBe("/spending/week");
     // It comes last.
     const planned = screen.getByTestId("br-planned");
     expect(planned.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("household with a plan shows it", () => {
-    h.review = review({ household: { scope: "all accounts · this week", weekStart: "2026-10-11", weekEnd: "2026-10-17", spentWeek: "124.00", weekPlan: "300.00", remainingWeek: "176.00" } });
+  it("(Q5 fix) a provisional week says 'so far' on Left / Over, as the tile and the Room line do", () => {
+    h.review = review({ household: { scope: "all accounts · this week", weekStart: "2026-10-11", weekEnd: "2026-10-17", spentWeek: "900.00", weekPlan: "700.00", remainingWeek: "-200.00", knownWeek: "596.32", unresolvedWeek: "303.68", provisional: true, remainingWeekKnown: "103.68" } });
+    mount();
+    expect(screen.getByTestId("br-household").textContent).toContain("Left so far");
+    cleanup();
+    h.review = review({ household: { scope: "all accounts · this week", weekStart: "2026-10-11", weekEnd: "2026-10-17", spentWeek: "900.00", weekPlan: "500.00", remainingWeek: "-400.00", knownWeek: "524.50", unresolvedWeek: "375.50", provisional: true, remainingWeekKnown: "-24.50" } });
+    mount();
+    expect(screen.getByTestId("br-household").textContent).toContain("Over so far");
+  });
+
+  it("household with a plan shows it, and Left / Over on the known figure", () => {
+    h.review = review({ household: { scope: "all accounts · this week", weekStart: "2026-10-11", weekEnd: "2026-10-17", spentWeek: "124.00", weekPlan: "300.00", remainingWeek: "176.00", knownWeek: "100.00", unresolvedWeek: "0.00", provisional: false, remainingWeekKnown: "200.00" } });
     mount();
     expect(text("br-hh-plan")).toBe("$300.00");
+    expect(text("br-hh-left")).toBe("$200.00");
+    expect(screen.getByTestId("br-household").textContent).toContain("Left");
+    // Nothing unconfirmed: no second figure to explain.
+    expect(screen.queryByTestId("br-hh-cautious")).toBeNull();
+    cleanup();
+    h.review = review({ household: { scope: "all accounts · this week", weekStart: "2026-10-11", weekEnd: "2026-10-17", spentWeek: "340.00", weekPlan: "300.00", remainingWeek: "-40.00", knownWeek: "340.00", unresolvedWeek: "0.00", provisional: false, remainingWeekKnown: "-40.00" } });
+    mount();
+    expect(screen.getByTestId("br-household").textContent).toContain("Over");
+    expect(text("br-hh-left")).toBe("$40.00");
+  });
+
+  it("planned items say it in the direction of the money: income Received, a bill Paid", () => {
+    h.review = review({
+      planned: [
+        { key: "p|1", itemId: "p", label: "Paycheck", scheduledDate: "2026-10-09", occurrenceDate: "2026-10-09", planned: "2500.00", fate: "partial", txnId: "t", txnDate: "2026-10-09", txnAmount: "2391.40", txnOnThisAccount: true, difference: "-108.60", dayDelta: 0, remainder: null, onCurve: false, hook: null, direction: "in", outcome: "received_different" },
+        { key: "p|2", itemId: "q", label: "Side gig", scheduledDate: "2026-10-12", occurrenceDate: "2026-10-12", planned: "400.00", fate: "unmatched", txnId: null, txnDate: null, txnAmount: null, txnOnThisAccount: false, difference: null, dayDelta: null, remainder: null, onCurve: false, hook: null, direction: "in", outcome: "not_received_yet" },
+        { key: "p|3", itemId: "r", label: "Water", scheduledDate: "2026-10-12", occurrenceDate: "2026-10-12", planned: "-60.00", fate: "unmatched", txnId: null, txnDate: null, txnAmount: null, txnOnThisAccount: false, difference: null, dayDelta: null, remainder: null, onCurve: false, hook: null, direction: "out", outcome: "not_paid_yet" },
+      ],
+    });
+    mount();
+    const rows = screen.getAllByTestId("br-planned-row").map((r) => r.textContent!);
+    expect(rows[0]).toContain("Expected Oct 9 · Received, different amount");
+    expect(rows[1]).toContain("Expected Oct 12 · Not received yet");
+    expect(rows[2]).toContain("Due Oct 12 · Not paid yet");
+    expect(rows.join(" ")).not.toMatch(/Paid, different amount|Missed/);
   });
 
   it("unexplained = 0 shows no notice", () => {
@@ -476,33 +654,36 @@ describe("Banking review — states", () => {
   });
 });
 
-describe("(F4) Balance check — five honest states", () => {
+describe("(F4, Q5) Balance check — honest states, said as one chip", () => {
   const NOW = "2026-10-14T15:00:00.000Z";
   const state = (o: Record<string, unknown>) => {
     h.review = review({ balanceCheck: check({ checkedAt: NOW, ...o }) });
     mount();
   };
 
-  it("matches: 'Matches bank', checked when", () => {
+  it("matches: 'Matches bank' (green), Bank $X · H2 $Y, never greyed", () => {
     state({ status: "matches", reason: null, difference: "0.00", bank: { balance: "2985.00", at: NOW, field: "available" }, h2: { balance: "2985.00" } });
     expect(text("br-tie")).toBe("Matches bank");
     expect(screen.getByTestId("br-tie").className).toContain("ok");
-    expect(text("br-check-when")).toBe("Checked 2 hours ago");
+    expect(text("br-check-compared")).toBe("At the check (Oct 14): bank $2,985.00 · H2 $2,985.00");
+    expect(screen.queryByTestId("br-check-when")).toBeNull();
     expect(screen.queryByTestId("br-investigate")).toBeNull();
   });
 
-  it("off by: the amount, which way, and Investigate with the register", () => {
+  it("off by: the amount and which way in the chip; Bank vs H2; Investigate with the register", () => {
     state({ status: "off_by", reason: null, difference: "62.50", direction: "bank_lower", bank: { balance: "2985.00", at: NOW, field: "available" }, h2: { balance: "3047.50" } });
-    expect(text("br-tie")).toBe("Off by $62.50");
+    expect(text("br-tie")).toBe("Off by $62.50 — bank lower");
     expect(screen.getByTestId("br-tie").className).toContain("bad");
-    expect(text("br-check-direction")).toBe("Bank is $62.50 lower than H2");
+    // (Q5 fix) H2's figure AT THE CHECK is named by its moment: H2's balance today is the summary cell's, and the bank's today is its own line.
+    expect(text("br-check-compared")).toBe("At the check (Oct 14): bank $2,985.00 · H2 $3,047.50");
+    expect(text("br-bank-today")).toBe("Bank $3,205.81");
     expect(screen.getByTestId("br-investigate").textContent).toBe("Investigate");
     expect(screen.getByTestId("br-check-register").getAttribute("href")).toBe("/transactions?account=acct-chk&month=2026-10-01");
   });
 
   it("bank higher reads the other way", () => {
     state({ status: "off_by", reason: null, difference: "10.00", direction: "bank_higher" });
-    expect(text("br-check-direction")).toBe("Bank is $10.00 higher than H2");
+    expect(text("br-tie")).toBe("Off by $10.00 — bank higher");
   });
 
   it("resolved since: says so, and what it was", () => {
@@ -511,32 +692,52 @@ describe("(F4) Balance check — five honest states", () => {
     expect(text("br-check-was")).toContain("It was off by $2,000.00");
   });
 
-  it("stale: greyed, and 'Checked N days ago — Sync to recheck'", () => {
+  it("stale: a grey 'Checked 9 days ago', never green and never the alarm", () => {
     h.review = review({ balanceCheck: check({ status: "matches", reason: null, stale: true, staleReason: "age", checkedAt: "2026-10-05T12:00:00.000Z", difference: "0.00" }) });
     mount();
     expect(screen.getByTestId("br-check").getAttribute("data-stale")).toBe("true");
     // greyed by the chip, never by fading the text (contrast stays ≥ 4.5:1)
     expect(screen.getByTestId("br-check").className).not.toContain("opacity");
     expect(screen.getByTestId("br-tie").className).toContain("gray");
-    expect(text("br-check-when")).toBe("Checked 9 days ago — Sync to recheck");
+    expect(screen.getByTestId("br-tie").className).not.toContain("ok");
+    expect(text("br-tie")).toBe("Checked 9 days ago");
+    expect(text("br-check-when")).toBe("Sync to recheck");
+  });
+
+  it("an old check that was off keeps the fact, greyed: 'Checked 9 days ago · was off by $X'", () => {
+    h.review = review({ balanceCheck: check({ status: "off_by", reason: null, stale: true, staleReason: "age", checkedAt: "2026-10-05T12:00:00.000Z", difference: "62.50", direction: "bank_lower" }) });
+    mount();
+    expect(text("br-tie")).toBe("Checked 9 days ago · was off by $62.50");
+    expect(screen.getByTestId("br-tie").className).toContain("gray");
+    expect(screen.queryByTestId("br-investigate")).toBeNull();
   });
 
   it.each([
-    ["never", "A Sync on the register checks it."],
-    ["not_forecast_account", "H2 checks the balance on the planned account only."],
-    ["anchor_too_old", "The last balance was too old to check. Sync again."],
-    ["balance_unavailable", "The bank gave no balance. Sync again."],
-  ])("not checked yet (%s) gives the reason in words", (reason, words) => {
+    ["never", "Sync to check"],
+    ["not_forecast_account", "planned account only"],
+    ["anchor_too_old", "last balance too old"],
+    ["balance_unavailable", "bank gave no balance"],
+  ])("not checked yet (%s) gives the reason in a few words, grey", (reason, words) => {
     state({ status: "not_checked", reason, checkedAt: reason === "never" ? null : NOW });
-    expect(text("br-tie")).toBe("Not checked yet");
-    expect(text("br-check-reason")).toBe(words);
+    expect(text("br-tie")).toBe(`Not checked yet — ${words}`);
+    expect(screen.getByTestId("br-tie").className).toContain("gray");
   });
 
-  it("stays apart from the review inbox and the synced line", () => {
+  it("a clear review count does not turn a missing check green", () => {
+    h.review = review({
+      balanceCheck: check({ status: "not_checked", reason: "never" }),
+      reviewInbox: { unresolvedInRange: 0, unresolvedScope: "this account · this period", unresolvedFrom: "2026-10-01", unresolvedTo: "2026-10-14", badgeCount: 0, badgeScope: "this calendar month, forecast account" },
+    });
+    mount();
+    expect(text("br-inbox")).toBe("Nothing to review");
+    expect(screen.getByTestId("br-tie").className).not.toContain("ok");
+  });
+
+  it("stays apart from the review count and from 'Updated'", () => {
     state({ status: "matches", reason: null, difference: "0.00" });
-    expect(screen.getByTestId("br-tie-cell").textContent).not.toMatch(/review inbox|synced/i);
-    expect(text("br-inbox")).toBe("16 to review this month");
-    expect(text("br-fresh")).toContain("Synced");
+    expect(screen.getByTestId("br-tie-cell").textContent).not.toMatch(/reconcile|updated/i);
+    expect(text("br-inbox")).toBe("15 to review");
+    expect(text("br-fresh")).toContain("Updated");
   });
 });
 
@@ -600,8 +801,13 @@ describe("(F4) Direction-aware words and the variance first", () => {
     expect(text("br-side-amountDifference-out")).toContain("Bills $12.00 over");
     expect(text("br-side-amountDifference-out")).toContain("−$12.00 cash");
     expect(text("br-sides-amountDifference")).not.toContain("-$96.60");
-    // the rows' full amount stays visible but is labelled, so it never reads as the difference
-    expect(text("br-net-amountDifference")).toBe("$2,239.40 total moved");
+    // Money in and money out follow, apart: never a net called "total moved".
+    expect(text("br-inout-amountDifference-in")).toBe("In $2,391.40");
+    expect(text("br-inout-amountDifference-out")).toBe("Out $152.00");
+    expect(screen.queryByTestId("br-net-amountDifference")).toBeNull();
+    expect(screen.getByTestId("br-bucket-amountDifference").textContent).not.toMatch(/total moved|2,239/);
+    // (Q5 fix) the variance lines the card shows lead its accessible name
+    expect(screen.getByTestId("br-bucket-amountDifference").getAttribute("aria-label")).toBe("Received or paid a different amount: Income $108.60 less than expected, Bills $12.00 over, 2 rows, money in $2,391.40, money out $152.00");
   });
 
   it("a bucket with nothing comparing, or an exact one, shows no variance line", () => {
@@ -630,18 +836,18 @@ describe("(F4) Proposed fixes", () => {
     window: { from: "2026-06-17", to: "2026-10-14", days: 120 }, count: 2, truncated: false,
     items: [
       {
-        key: "k1", kind: "loan_payment", rowCount: 6, truncated: false, total: "3451.20",
+        key: "k1", proposalHash: "h1", kind: "loan_payment", rowCount: 6, truncated: false, total: "3451.20",
         rows: [1, 2, 3, 4, 5, 6].map((i) => ({
           id: `lp${i}`, date: `2026-0${i + 3 > 9 ? 9 : i + 3}-13`, displayName: "Larkspur Lending", description: "LARKSPUR", amount: "-592.60", pending: false,
-          account: { id: "a", institution: "Chase", name: "Total Checking", mask: "4321" }, category: null, occurrence: null,
+          source: "plaid:chase", account: { id: "a", institution: "Chase", name: "Total Checking", mask: "4321", externalId: "ext-chk" }, category: null, occurrence: null,
         })),
         evidence: [{ field: "pfc_primary", value: "LOAN_PAYMENTS" }, { field: "pfc_detailed", value: "LOAN_PAYMENTS_OTHER_PAYMENT" }, { field: "name_match", value: "LARKSPUR LENDING ~ HELOC" }, { field: "amount_match", value: "592.60 ~ 575.00" }],
         action: { code: "file_as_bill_payment", target: { kind: "bill", id: "b1", label: "HELOC", categoryId: null, categoryName: null } },
         applyWith: ["review_mark_matched", "categories_change"],
       },
       {
-        key: "k2", kind: "income_category", rowCount: 1, truncated: false, total: "2391.40",
-        rows: [{ id: "pp", date: "2026-10-09", displayName: "Mapleworks Inc", description: "MAPLEWORKS", amount: "2391.40", pending: false, account: { id: "a", institution: "Chase", name: "Total Checking", mask: "4321" }, category: { id: "d", name: "Dining" }, occurrence: null }],
+        key: "k2", proposalHash: "h2", kind: "income_category", rowCount: 1, truncated: false, total: "2391.40",
+        rows: [{ id: "pp", date: "2026-10-09", displayName: "Mapleworks Inc", description: "MAPLEWORKS", amount: "2391.40", pending: false, source: "plaid:chase", account: { id: "a", institution: "Chase", name: "Total Checking", mask: "4321", externalId: "ext-chk" }, category: { id: "d", name: "Dining" }, occurrence: null }],
         evidence: [{ field: "pfc_primary", value: "INCOME" }],
         action: { code: "file_under_income_category", target: { kind: "category", id: "c", label: "Paycheck", categoryId: "c", categoryName: "Paycheck" } },
         applyWith: ["categories_change"],
@@ -649,37 +855,146 @@ describe("(F4) Proposed fixes", () => {
     ],
   });
 
-  it("is closed by default and reads nothing until it is opened", () => {
-    h.proposals = proposals();
-    mount();
-    expect((screen.getByTestId("br-fixes") as HTMLDetailsElement).open).toBe(false);
-    expect(h.proposalCalls).toBe(0);
+  it("(Round 3) two proposals of one kind never share a control name: Preview, Apply and Why? carry their own subject", () => {
+    const base = proposals();
+    const bm = (key: string, who: string, amount: string) => ({
+      ...base.items[1]!, key, proposalHash: `h-${key}`, kind: "bill_match", rowCount: 1, total: amount,
+      rows: [{ ...(base.items[1]!.rows[0] as object), id: `r-${key}`, displayName: who, amount, date: "2026-10-12" }],
+      evidence: [{ field: "pfc_primary", value: "A" }, { field: "name_match", value: "X ~ Y" }, { field: "amount_match", value: "1.00 ~ 2.00" }],
+      action: { code: "confirm_bill_match", target: { kind: "bill", id: key, label: who, categoryId: null, categoryName: null } },
+    });
+    h.proposals = { ...base, count: 2, items: [bm("a", "Shieldline Life", "-45.00"), bm("b", "Northwind Power", "-120.00")] };
+    mount("/banking?fixes=1");
+    for (const verb of ["Preview", "Apply"]) {
+      const names = screen.getAllByRole("button", { name: new RegExp(`^${verb}:`) }).map((b) => b.getAttribute("aria-label"));
+      expect(new Set(names).size).toBe(2);
+    }
+    const why = screen.getAllByText("Why?").map((el) => el.getAttribute("aria-label"));
+    expect(new Set(why).size).toBe(2);
+    expect(why[0]).toContain("Shieldline Life");
   });
 
-  it("lists the rows, the evidence, the proposed action and the link that applies it; applies nothing", () => {
+  it("is asked on load, so the summary says how many wait and for what scope; it never opens by itself", () => {
+    h.proposals = proposals();
+    mount();
+    expect(h.proposalCalls).toBeGreaterThan(0);
+    expect(text("br-fixes-count")).toBe("2");
+    expect(text("br-fixes-title")).toBe("2 proposed fixes");
+    expect(text("br-fixes-scope")).toBe("All accounts · last 120 days");
+    expect((screen.getByTestId("br-fixes") as HTMLDetailsElement).open).toBe(false);
+    expect(screen.queryAllByTestId("br-fix")).toHaveLength(0);
+  });
+
+  it("while the count is on its way the summary keeps its two lines (nothing below moves), and shows no count", () => {
+    h.proposals = undefined as never;
+    mount();
+    expect(screen.getByTestId("br-fixes-scope")).toBeTruthy();
+    expect(screen.queryByTestId("br-fixes-count")).toBeNull();
+  });
+
+  it("with nothing proposed it stays closed", () => {
+    h.proposals = { window: { from: "a", to: "b", days: 120 }, count: 0, truncated: false, items: [] };
+    mount();
+    expect(text("br-fixes-count")).toBe("0");
+    expect((screen.getByTestId("br-fixes") as HTMLDetailsElement).open).toBe(false);
+  });
+
+  it("lists the rows (each opens its record), the evidence, the proposed change with its scope, and Preview / Apply for the owner", () => {
     h.proposals = proposals();
     mount("/banking?fixes=1");
     const fixes = screen.getAllByTestId("br-fix");
     expect(fixes).toHaveLength(2);
     const first = within(fixes[0]!);
-    expect(first.getAllByTestId("br-fix-row")).toHaveLength(4); // the first four; the rest are counted
-    expect(fixes[0]!.textContent).toContain("and 2 more");
+    expect(first.getAllByTestId("br-fix-row")).toHaveLength(4); // the first four; "Show all" lists the rest
+    expect(first.getByTestId("br-fix-rows-toggle").textContent).toBe("Show all 6 rows");
+    fireEvent.click(first.getByTestId("br-fix-rows-toggle"));
+    expect(first.getAllByTestId("br-fix-row")).toHaveLength(6);
+    expect(first.getByTestId("br-fix-rows-toggle").textContent).toBe("Show fewer");
+    // every row opens its record through the one route rule (account, month, row)
+    const href = first.getAllByTestId("br-fix-row-link")[0]!.getAttribute("href")!;
+    const u = new URL(href, "http://x");
+    expect(u.pathname).toBe("/transactions");
+    expect(u.searchParams.get("account")).toBe("acct-chk");
+    expect(u.searchParams.get("tx")).toBe("lp1");
     expect(first.getByTestId("br-fix-total").textContent).toBe("$3,451.20");
-    expect(first.getByTestId("br-fix-evidence").textContent).toBe("Bank says loan payments · Name fits HELOC · Amount $592.60 vs $575.00 planned");
+    // One line: the first two facts; the rest are behind Why?
+    expect(first.getByTestId("br-fix-evidence").textContent).toBe("Bank says loan payments · Name fits HELOC");
+    expect(first.getByTestId("br-fix-why-lines").textContent).toBe("Bank says loan payments · Name fits HELOC · Amount $592.60 vs $575.00 planned");
+    // each control has a name of its own (a screen reader hears more than "Preview, Apply, Preview, Apply")
+    expect(first.getByTestId("br-fix-preview").getAttribute("aria-label")).toBe("Preview: File as a payment of HELOC: Larkspur Lending -$592.60, Apr 13 and 5 more");
+    expect(first.getByTestId("br-fix-apply").getAttribute("aria-label")).toBe("Apply: File as a payment of HELOC: Larkspur Lending -$592.60, Apr 13 and 5 more");
     expect(first.getByTestId("br-fix-action").textContent).toBe("Proposed: File as a payment of HELOC");
+    expect(first.getByTestId("br-fix-scope").textContent).toBe("Changes 6 rows");
+    expect(first.getByTestId("br-fix-preview").textContent).toBe("Preview");
+    expect(first.getByTestId("br-fix-apply").textContent).toBe("Apply");
     expect(first.getByTestId("br-fix-link-match").getAttribute("href")).toBe("/review");
+    expect(first.getByTestId("br-fix-link-match").textContent).toBe("In Review");
     expect(first.getByTestId("br-fix-link-categories").getAttribute("href")).toBe("/review/categories");
     const second = within(fixes[1]!);
     expect(second.getByTestId("br-fix-action").textContent).toBe("Proposed: File under Paycheck (income)");
     expect(second.queryByTestId("br-fix-link-match")).toBeNull();
-    // read-only: no button anywhere in the panel
-    expect(within(screen.getByTestId("br-fixes")).queryAllByRole("button")).toHaveLength(0);
     expect(text("br-fixes-count")).toBe("2");
+    // nothing is applied by opening the list
+    expect(screen.queryByTestId("fix-dialog")).toBeNull();
+  });
+
+  it("?fixes=1 opens the panel and scrolls to it once the page has its answer", () => {
+    h.proposals = proposals();
+    const scroll = vi.fn();
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      mount("/banking?fixes=1");
+      expect(scroll).toHaveBeenCalledTimes(1);
+      expect((scroll.mock.contexts[0] as HTMLElement).id).toBe("proposed-fixes");
+      expect((screen.getByTestId("br-fixes") as HTMLDetailsElement).open).toBe(true);
+      cleanup();
+      scroll.mockClear();
+      mount("/banking");
+      expect(scroll).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = orig;
+    }
+  });
+
+  it("a member is told who applies, and nothing is asked of the server (it answers a member 403)", () => {
+    h.owner = false;
+    h.proposals = proposals();
+    mount("/banking?fixes=1");
+    expect(text("br-fixes-member")).toBe("The household owner applies fixes.");
+    expect(screen.queryByTestId("br-fixes")).toBeNull();
+    expect(screen.queryByTestId("br-fix")).toBeNull();
+    expect(h.proposalCalls).toBe(0);
   });
 
   it("nothing to propose says so", () => {
     h.proposals = { window: { from: "a", to: "b", days: 120 }, count: 0, truncated: false, items: [] };
     mount("/banking?fixes=1");
     expect(text("br-fixes-none")).toBe("Nothing to propose right now.");
+  });
+});
+
+describe("(Q4) Banking: no other account's review under this account's name", () => {
+  it("the review on screen is still another range's: a skeleton, not its balance and buckets", () => {
+    h.placeholder = true;
+    mount("/banking?account=acct-sav&from=2026-09-01&to=2026-09-30");
+    expect(screen.getByTestId("br-loading")).toBeTruthy();
+    expect(screen.queryByTestId("br-summary")).toBeNull();
+    expect(screen.queryByTestId("br-balance")).toBeNull();
+    expect(screen.queryByTestId("br-notinplan")).toBeNull();
+  });
+
+  it("a Show more answer that lands after the range changed is dropped", async () => {
+    h.pages["unmatched||"] = { bucket: "unmatched", kind: null, limit: 25, nextCursor: "CUR1", rows: [rowOf("p1")] };
+    h.pages["unmatched||CUR1"] = { bucket: "unmatched", kind: null, limit: 25, nextCursor: null, rows: [rowOf("p2")] };
+    let release: () => void = () => {};
+    h.hold = new Promise<void>((r) => (release = r));
+    mount();
+    fireEvent.click(screen.getByTestId("br-more"));
+    // The person picks another range while the cursor is out.
+    fireEvent.click(screen.getByTestId("br-preset-last"));
+    h.hold = null;
+    await act(async () => release());
+    expect(screen.queryByTestId("br-row-p2")).toBeNull();
   });
 });

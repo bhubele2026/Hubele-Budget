@@ -86,6 +86,7 @@ import {
   type Payoff,
 } from "@workspace/avalanche-core";
 import type { CardPayoffMode, CardPayoffModeView } from "./cardPayoffMode";
+import type { CorrectionOverlay } from "./correctionOverlay";
 import type { CardPeriod, CardPeriodsRead } from "./amexAnchor";
 import type { AmexCardCadence } from "./amexCardCadence";
 import { addDaysISO, householdDayOf } from "./householdClock";
@@ -333,6 +334,8 @@ export async function readHookCards(args: {
   settings: HookSettings;
   periods: readonly CardPeriod[];
   credits: { from: string; to: string } | null;
+  /** (Q1) A proposed fix's dry run: the card rows read with the columns it writes. */
+  overlay?: CorrectionOverlay | null;
 }): Promise<HookCardsRead> {
   const [{ readCardPeriods }, { discoverAmexCards }, { loadCardPayoffModes }] = await Promise.all([
     import("./amexAnchor"),
@@ -342,7 +345,7 @@ export async function readHookCards(args: {
   const roster = await discoverAmexCards(args.householdId, args.ownerUserId, { preferences: args.settings.preferences });
   const [modes, cardRead] = await Promise.all([
     loadCardPayoffModes(args.householdId, args.ownerUserId, { preferences: args.settings.preferences, roster }),
-    readCardPeriods(args.householdId, roster, args.periods, args.credits),
+    readCardPeriods(args.householdId, roster, args.periods, args.credits, { overlay: args.overlay ?? null }),
   ]);
   return { roster, modes, cardRead, credits: args.credits };
 }
@@ -392,6 +395,8 @@ export async function loadHookPayoffs(args: {
   cards?: HookCardsRead | null;
   /** (F5) The ledger's one pairing of card credits with checking rows; computed here when absent. */
   creditPairs?: ReturnType<typeof pairCardPaymentCredits> | null;
+  /** (Q1) A proposed fix's dry run: the allowance window (and the cards, when read here) as the fix leaves them. */
+  overlay?: CorrectionOverlay | null;
 }): Promise<Map<string, HookPayoff>> {
   const { householdId, ownerUserId, todayISO, settings, occurrences } = args;
   const out = new Map<string, HookPayoff>();
@@ -438,7 +443,7 @@ export async function loadHookPayoffs(args: {
     // (S3) `loadAllowanceWindow` — the read the money position and the period
     // breakdown classify with (the same `loadMoneyContext` + `loadMovementRows`
     // + `classifyMovement` as before).
-    const { movement } = await loadAllowanceWindow(householdId, { start: rangeStart, end: to }, { tier2PairedTxnIds: args.tier2PairedTxnIds });
+    const { movement } = await loadAllowanceWindow(householdId, { start: rangeStart, end: to }, { tier2PairedTxnIds: args.tier2PairedTxnIds, overlay: args.overlay ?? null });
     // (B6) `allowanceRowOf` + `allowanceTotals` — the money position's own
     // netting: a refund gives back exactly what the card's charges take off.
     const classified = movement.map(({ row, m }) => ({ date: row.occurredOn, row: allowanceRowOf(row, m) }));
@@ -542,6 +547,7 @@ export async function loadHookPayoffs(args: {
         settings,
         periods: hookCardPeriodsOf(occurrences, todayISO),
         credits: sizedFrom <= todayISO ? { from: sizedFrom, to: todayISO } : null,
+        overlay: args.overlay ?? null,
       }),
     spentRead,
   ]);

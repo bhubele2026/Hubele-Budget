@@ -4,7 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CategoryPicker } from "@/components/category-picker";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
-import { RowDateControls } from "@/components/row-date-controls";
+import { RowMenu } from "@/components/row-menu";
 import { cn } from "@/lib/utils";
 import type { AccountAccentName } from "@/lib/accountIdentity";
 import { LEDGER_GRID } from "./ledger-grid";
@@ -42,13 +42,21 @@ export type AccountTransactionRowProps = {
   tx: Transaction;
   selected: boolean;
   onToggleSelect: () => void;
-  categories: { id: string; name: string }[];
+  /** `undefined` while the category list loads. */
+  categories: { id: string; name: string }[] | undefined;
   onCategoryChange: (id: string | null, rememberPattern?: string | null) => void;
   onBucketToggle: (bucket: BucketKey, next: boolean) => void;
   onQuickDate: (raw: string) => void | Promise<boolean>;
   disabled?: boolean;
-  /** Dim the row (reviewed / ignored / forecast-sent). */
-  dimmed?: boolean;
+  /**
+   * A small readable state chip beside the merchant ("Reviewed" / "Ignored").
+   * A financial row is never faded: fading made its amount hard to read, and a
+   * state belongs in words, not in lowered contrast.
+   */
+  stateLabel?: string | null;
+  /** Edit / delete live in the row menu with the date moves. */
+  onEdit?: () => void;
+  onDelete?: () => void;
   /** Hide the inline date editor (pending rows get restamped by Plaid). */
   hideDate?: boolean;
   cardLabel?: string | null;
@@ -81,6 +89,12 @@ const ACCENT_DOT: Record<AccountAccentName, string> = {
   other: "bg-acct-other",
 };
 
+/**
+ * (Q6b) A row scrolled to (a `?tx=` link) lands below the whole sticky stack:
+ * the pinned pane (`--page-sticky-top`), the day head (36 px) and a gap.
+ */
+export const ROW_SCROLL_MARGIN_TOP = "calc(var(--page-sticky-top, 0px) + 56px)";
+
 export function AccountTransactionRow({
   tx,
   selected,
@@ -90,7 +104,9 @@ export function AccountTransactionRow({
   onBucketToggle,
   onQuickDate,
   disabled,
-  dimmed,
+  stateLabel,
+  onEdit,
+  onDelete,
   hideDate,
   cardLabel,
   metaNode,
@@ -103,6 +119,7 @@ export function AccountTransactionRow({
   gridClass = LEDGER_GRID,
   onSplit,
 }: AccountTransactionRowProps) {
+  const merchant = tx.displayName || tx.description;
   return (
     <div
       className={cn(
@@ -117,15 +134,15 @@ export function AccountTransactionRow({
         "flex flex-wrap items-center gap-x-3 gap-y-1",
         "@6xl:grid @6xl:items-center @6xl:gap-y-0",
         gridClass,
-        dimmed && "opacity-50",
       )}
       data-testid={testId}
+      style={{ scrollMarginTop: ROW_SCROLL_MARGIN_TOP }}
       {...rowData}
     >
       <Checkbox
         checked={selected}
         onCheckedChange={() => onToggleSelect()}
-        aria-label="Select"
+        aria-label={`Select ${merchant}`}
         className="shrink-0"
       />
       {/* Merchant + its status chip (metaNode). The name is the row's
@@ -142,10 +159,15 @@ export function AccountTransactionRow({
             className="min-w-0 truncate font-medium text-neutral-700"
             title={tx.description}
           >
-            {tx.displayName || tx.description}
+            {merchant}
           </span>
           <MerchantRenamePopover tx={tx} onSplit={onSplit} />
         </span>
+        {stateLabel ? (
+          <span className="chip gray shrink-0" data-testid={`chip-state-${tx.id}`}>
+            {stateLabel}
+          </span>
+        ) : null}
         {metaNode}
         {tx.expiredHold ? <ExpiredHoldLabel id={tx.id} /> : null}
       </div>
@@ -194,12 +216,17 @@ export function AccountTransactionRow({
         {amountNode}
       </div>
       <div className="shrink-0 flex gap-0.5 items-center @6xl:justify-self-end">
-        {/* Pending rows are restamped by Plaid on the next sync, so the date
-            editor is hidden there to avoid a fix that silently reverts. */}
-        {!hideDate && (
-          <RowDateControls tx={tx} onMove={onQuickDate} disabled={disabled} />
-        )}
         {actionsNode}
+        {/* Pending rows are restamped by Plaid on the next sync, so the date
+            moves are left out there to avoid a fix that silently reverts. */}
+        <RowMenu
+          tx={tx}
+          merchant={merchant}
+          onMove={hideDate ? undefined : onQuickDate}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          disabled={disabled}
+        />
       </div>
     </div>
   );

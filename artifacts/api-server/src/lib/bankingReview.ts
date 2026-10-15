@@ -12,6 +12,7 @@ import {
   BANK_REVIEW_BUCKETS,
   BANK_REVIEW_KINDS,
   bankReviewKindOf,
+  bankReviewPlanOutcome,
   cashVarianceOf,
   classifyMovement,
   directionOfPlanKind,
@@ -47,8 +48,9 @@ import {
   resolveLedgerScope,
   toCents,
 } from "./bankLedger";
-import { computeCashSignalDetailed } from "./cashSignal";
-import { computeBankFreshness } from "./bankFreshness";
+import { computeCashSignalDetailed, type DetailedCashSignal } from "./cashSignal";
+import { patchRows, tier2PairedAfter, type CorrectionOverlay } from "./correctionOverlay";
+import { bankFetchedAt, computeBankFreshness } from "./bankFreshness";
 import { buildMoneyPosition, POSITION_HORIZON_DAYS, tier2PairedTxnIdsOf } from "./moneyPosition";
 import { computeReviewCount } from "./reviewCount";
 import { loadMoneyContext } from "./moneyContext";
@@ -90,7 +92,9 @@ import type { LedgerPlanFate, LedgerPlanOccurrence } from "./forecastLedger";
  *                  the bank's figure (and field) beside H2's, the direction —
  *                  recomputed from the stored previous anchor in one query,
  *                  never a Plaid call. Kept apart from reviewInbox and freshness.
- *   household      secondary: the money position's week, all accounts.
+ *   household      secondary: the money position's week, all accounts —
+ *                  (Q1) the cautious total (`spentWeek`) beside "Counts toward
+ *                  plan" (`knownWeek`) and "Unconfirmed" (`unresolvedWeek`).
  *
  * ⚠️ The plan comparison runs on the forecast's account only, over rows dated
  * from the ledger's matching window (today − 59) through today. Older rows,
@@ -101,6 +105,12 @@ import type { LedgerPlanFate, LedgerPlanOccurrence } from "./forecastLedger";
 export const BANKING_REVIEW_MAX_DAYS = 366;
 export const BANKING_REVIEW_TIMEZONE = "America/Chicago";
 export const BADGE_SCOPE = "this calendar month, forecast account";
+/**
+ * (Q1) What `reviewInbox.unresolvedInRange` counts: THIS review's account and
+ * period (`account`, `period.from`–`period.to`) — rows dated through today, or
+ * flagged for the forecast, that no answer decides. Not the badge's scope.
+ */
+export const INBOX_SCOPE = "this account · this period";
 export const HOUSEHOLD_SCOPE = "all accounts · this week";
 
 const bad = (code: string, message: string) => new LedgerRequestError(400, code, message);
@@ -249,16 +259,22 @@ export function planKindOf(
   return "bill";
 }
 
-/** The household's answers that name these rows, a paused bill's pending review read as its last answer. */
+/**
+ * The household's answers that name these rows, a paused bill's pending review
+ * read as its last answer. (Q1) A dry run's overlay: without the answers the fix
+ * deletes, with the `matched` answers it inserts (the ledger reads the same).
+ */
 async function readRowAnswers(
   householdId: string,
   txnIds: string[],
+  overlay: CorrectionOverlay | null = null,
 ): Promise<Map<string, Array<{ status: string; recurringItemId: string | null; occurrenceDate: string | null }>>> {
   const out = new Map<string, Array<{ status: string; recurringItemId: string | null; occurrenceDate: string | null }>>();
   if (txnIds.length === 0) return out;
-  const [stored, paused] = await Promise.all([
+  const [storedAll, paused] = await Promise.all([
     db
       .select({
+        id: forecastResolutionsTable.id,
         matchedTxnId: forecastResolutionsTable.matchedTxnId,
         status: forecastResolutionsTable.status,
         recurringItemId: forecastResolutionsTable.recurringItemId,
@@ -279,6 +295,21 @@ async function readRowAnswers(
       .where(and(eq(recurringItemsTable.householdId, householdId), ne(recurringItemsTable.active, "true"))),
   ]);
   const pausedIds = new Set(paused.map((p) => p.id));
+  const wanted = new Set(txnIds);
+  const stored = overlay
+    ? [
+        ...storedAll.filter((r) => !overlay.removedResolutionIds.has(r.id)),
+        ...overlay.addMatched
+          .filter((m) => wanted.has(m.txnId))
+          .map((m, i) => ({
+            id: `correction-overlay-${i}-${m.txnId}`,
+            matchedTxnId: m.txnId,
+            status: "matched",
+            recurringItemId: m.recurringItemId,
+            occurrenceDate: m.occurrenceDate,
+          })),
+      ]
+    : storedAll;
   for (const r of stored.map((x) => readPausedReview(x, pausedIds))) {
     if (!r.matchedTxnId) continue;
     const list = out.get(r.matchedTxnId) ?? [];
@@ -384,15 +415,34 @@ const LISTED_FATES: ReadonlySet<LedgerPlanFate> = new Set<LedgerPlanFate>([
   "carried",
 ]);
 
-export async function buildBankingReview(householdId: string, ownerUserId: string, q: BankingReviewQuery) {
+/**
+ * (Q1, the Q2 follow-up) A proposed fix's dry run: the review read as if the fix
+ * were written — `overlay` patches the rows' filing and the answers on them, and
+ * `cash` is the ledger built with the same overlay (`computeCashSignalWithOverlay`)
+ * so the plan comparison is the rebuilt pairing. Never set outside a dry run.
+ */
+export interface BankingReviewOptions {
+  overlay?: CorrectionOverlay | null;
+  cash?: Promise<DetailedCashSignal> | DetailedCashSignal;
+}
+
+export async function buildBankingReview(
+  householdId: string,
+  ownerUserId: string,
+  q: BankingReviewQuery,
+  opts: BankingReviewOptions = {},
+) {
   checkBankingReviewQuery(q, householdTodayISO());
   const cursor = q.cursor !== undefined ? decodeReviewCursor(q.cursor) : null;
+  const overlay = opts.overlay ?? null;
 
   // ONE LEDGER FOR THE REQUEST: the spine's own call (horizon 90, from today).
   // The register's anchor, the plan comparison and the household block all
   // read it. The handlers below are attached so a refused account never leaves
-  // a rejection unhandled.
-  const cashPromise = computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: POSITION_HORIZON_DAYS });
+  // a rejection unhandled. (Q1) A dry run hands its overlay ledger in.
+  const cashPromise = Promise.resolve(
+    opts.cash ?? computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: POSITION_HORIZON_DAYS }),
+  );
   const signalPromise = cashPromise.then((c) => c.signal);
   const freshnessPromise = computeBankFreshness(householdId, ownerUserId);
   for (const p of [cashPromise, signalPromise, freshnessPromise]) p.catch(() => {});
@@ -403,7 +453,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
   debtLinkedRead.catch(() => {});
 
   const t = transactionsTable;
-  const [cash, register, freshness, badgeCount, settingsRows, position, rows] = await Promise.all([
+  const [cash, register, freshness, badgeCount, settingsRows, position, rowsAsStored] = await Promise.all([
     cashPromise,
     loadRegister(scope),
     freshnessPromise,
@@ -412,7 +462,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
       .select({ tie: forecastSettingsTable.lastBankReconciliation, anchorAt: forecastSettingsTable.bankSnapshotAt })
       .from(forecastSettingsTable)
       .where(eq(forecastSettingsTable.userId, ownerUserId)),
-    buildMoneyPosition(householdId, ownerUserId, { cash: cashPromise, freshness: freshnessPromise }),
+    buildMoneyPosition(householdId, ownerUserId, { cash: cashPromise, freshness: freshnessPromise, ...(overlay ? { overlay } : {}) }),
     db
       .select({
         id: t.id,
@@ -446,6 +496,8 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
         ),
       ),
   ]);
+  // (Q1) A dry run's rows carry the columns the fix writes (no amount or date moves).
+  const rows = patchRows(rowsAsStored, overlay);
   const ledger = cash.ledger;
   const today = ledger.todayISO;
   const debtLinkedItemIds = await debtLinkedRead;
@@ -460,7 +512,11 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     readLedgerTotals(scope, { from: q.from, to: q.to }, register),
     // Categories, the filing a posted row inherits, and the checking account —
     // what `classifyMovement` reads — for this range.
-    loadMoneyContext(householdId, range, { tier2PairedTxnIds: tier2PairedTxnIdsOf(ledger) }),
+    loadMoneyContext(householdId, range, {
+      // (Q1) A dry run: its ledger's pairs, less any naming an occurrence the fix answers.
+      tier2PairedTxnIds: overlay ? tier2PairedAfter(ledger.matches, overlay) : tier2PairedTxnIdsOf(ledger),
+      ...(overlay ? { overlay } : {}),
+    }),
   ]);
 
   // ── The rows the register counts in the range (a replaced pending row is out).
@@ -481,7 +537,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     const p = replacedOf(r.id);
     if (p) answerIds.add(p);
   }
-  const answers = await readRowAnswers(householdId, [...answerIds]);
+  const answers = await readRowAnswers(householdId, [...answerIds], overlay);
   const rowDateById = new Map(counted.map((r) => [r.id, r.occurredOn] as const));
   /** The row's own answers; with none, the answers on the pending row it replaced (they carry). */
   const answersOf = (id: string) => {
@@ -713,6 +769,8 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
       actual: moneyOrNull(v.actual),
       variance: moneyOrNull(v.variance),
       varianceKind: v.varianceKind,
+      // (Q1) What happened, in the plan's own direction (received / paid, …).
+      outcome: bankReviewPlanOutcome(o.fate, v.direction, v.varianceKind),
     };
   });
 
@@ -755,13 +813,18 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
       end: balanceAtEndOf(register, q.to),
       unavailableReason: balanceUnavailableReason(scope),
     },
-    freshness: scope.snapshotAccount ? freshness : null,
+    // (Q5 fix) The server's own "last heard" instant (spine.bankConfidence.fetchedAt): a typed balance is
+    // as old as its own time, a live feed does not refresh it. The web never takes a max of its own.
+    freshness: scope.snapshotAccount ? { ...freshness, fetchedAt: bankFetchedAt(freshness, scope.anchor.snapshotAt) } : null,
     cashFlow: {
       moneyIn: totals.moneyIn,
       moneyOut: totals.moneyOut,
       net: totals.net,
       count: totals.count,
       pendingNet: totals.pendingNet,
+      // (Q1) The pending rows the balance counts in the range (`readLedgerTotals`,
+      // the spine's `bankConfidence.pendingCount` over the same rows).
+      pendingCount: totals.pendingCount,
       supersededExcluded: totals.notCounted.superseded,
       otherExcluded: totals.notCounted.other,
     },
@@ -795,7 +858,16 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
         totals.count - placed.length - expiredCounted.length - totals.notCounted.superseded - totals.notCounted.other,
       unexplained: money(placedNet + expiredCountedCents - toCents(totals.net)),
     },
-    reviewInbox: { unresolvedInRange, badgeCount, badgeScope: BADGE_SCOPE },
+    // (Q1) The two counts, each with its own scope: rows HERE no answer decides
+    // (this account, this period) — and the Review badge (its own month and account).
+    reviewInbox: {
+      unresolvedInRange,
+      unresolvedScope: INBOX_SCOPE,
+      unresolvedFrom: q.from,
+      unresolvedTo: q.to,
+      badgeCount,
+      badgeScope: BADGE_SCOPE,
+    },
     balanceTie: tieApplies
       ? { status: tie!.status, checkedAt: tie!.checkedAt, unexplained: tie!.unexplained }
       : { status: "not_checked" as const, checkedAt: null, unexplained: null },
@@ -823,9 +895,17 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
       scope: HOUSEHOLD_SCOPE,
       weekStart: position.weekStart,
       weekEnd: position.weekEnd,
+      // The cautious total (unconfirmed included) — kept, unchanged.
       spentWeek: position.spentWeekDiscretionary,
       weekPlan: position.weekCap,
       remainingWeek: position.remainingWeek,
+      // ⭐ (Q1) The week contract, from the same position (avalanche-core
+      // `glossary.ts`): "Counts toward plan" = knownWeek, "Unconfirmed" =
+      // unresolvedWeek. knownWeek + unresolvedWeek = spentWeek.
+      knownWeek: position.knownWeek,
+      unresolvedWeek: position.unresolvedWeek,
+      provisional: position.provisional,
+      remainingWeekKnown: position.remainingWeekKnown,
     },
     page: q.bucket
       ? { bucket: q.bucket, kind: q.kind ?? null, rows: pageRows.map(rowOut), nextCursor, limit: q.limit }

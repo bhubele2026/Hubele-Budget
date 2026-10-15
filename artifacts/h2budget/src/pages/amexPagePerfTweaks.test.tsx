@@ -214,7 +214,7 @@ describe("Amex page perf tweaks", () => {
     await waitFor(() => {
       expect(screen.getAllByText(/STARBUCKS A/).length).toBeGreaterThan(0);
     });
-    const checkboxes = screen.getAllByLabelText("Select");
+    const checkboxes = screen.getAllByLabelText(/^Select STARBUCKS/);
     expect(checkboxes.length).toBeGreaterThan(0);
     fireEvent.click(checkboxes[0]);
 

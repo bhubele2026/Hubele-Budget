@@ -3,8 +3,10 @@
  *
  * - A new push (a link click) starts at the top.
  * - Back/Forward (popstate) puts you where you were on that URL (path + search),
- *   once the page's data has made the scroller tall enough: it retries on
- *   animation frames and gives up after ~1.5 s. Touching the page (wheel, touch,
+ *   once the page's data has made the scroller tall enough AND the page's
+ *   current-scope data is in (`isSettled`: no query is still showing another
+ *   scope's rows as a placeholder - those are the wrong height): it retries on
+ *   animation frames and gives up after ~4 s. Touching the page (wheel, touch,
  *   key, pointer) cancels it — the person is in charge.
  * - Offsets live in sessionStorage per URL, so a refresh keeps them too.
  *
@@ -15,7 +17,7 @@
  */
 const STORE_KEY = "h2budget:scroll-by-url";
 const MAX_ENTRIES = 60;
-export const RESTORE_GIVE_UP_MS = 1500;
+export const RESTORE_GIVE_UP_MS = 4000;
 /** Frames the offset must hold for before a restore is called done (late content can clamp it). */
 const HOLD_FRAMES = 8;
 
@@ -45,7 +47,11 @@ function writeStore(store: Store): void {
 
 const urlKey = () => `${window.location.pathname}${window.location.search}`;
 
-export function installScrollRestoration(getScroller: () => HTMLElement | null): () => void {
+export function installScrollRestoration(
+  getScroller: () => HTMLElement | null,
+  /** True when the page's data for the current address has arrived (default: always). */
+  isSettled: () => boolean = () => true,
+): () => void {
   let routeKey = urlKey();
   let top = 0;
   let cancel: (() => void) | null = null;
@@ -94,7 +100,7 @@ export function installScrollRestoration(getScroller: () => HTMLElement | null):
     cancel = stop;
     const tick = () => {
       const tall = el.scrollHeight - el.clientHeight >= target;
-      if (tall) {
+      if (tall && isSettled()) {
         if (Math.abs(el.scrollTop - target) > 1) {
           el.scrollTop = target;
           top = el.scrollTop; // (the scroll event follows later; keep our own count true)
@@ -149,4 +155,23 @@ export function installScrollRestoration(getScroller: () => HTMLElement | null):
     window.removeEventListener("replaceState", onReplace);
     window.removeEventListener("pagehide", save);
   };
+}
+
+/**
+ * True while a mounted query is still on ANOTHER scope's data (a placeholder) or
+ * has no data and is loading. A background refresh of data already on screen is
+ * not pending: it would otherwise hold a restore for as long as a poll runs.
+ */
+export function pageDataPending(qc: {
+  getQueryCache: () => { getAll: () => ReadonlyArray<unknown> };
+}): boolean {
+  type Obs = { getCurrentResult: () => { isPlaceholderData?: boolean } };
+  type Q = { observers?: Obs[]; state: { data: unknown; fetchStatus: string } };
+  for (const q of qc.getQueryCache().getAll() as Q[]) {
+    const observers = q.observers ?? [];
+    if (observers.length === 0) continue;
+    if (q.state.data === undefined && q.state.fetchStatus === "fetching") return true;
+    if (observers.some((o) => o.getCurrentResult().isPlaceholderData === true)) return true;
+  }
+  return false;
 }

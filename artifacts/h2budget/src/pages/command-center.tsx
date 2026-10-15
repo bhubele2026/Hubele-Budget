@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useListPlaidItems } from "@workspace/api-client-react";
 import {
@@ -10,8 +10,9 @@ import {
   type GetBankingReviewParams,
 } from "@workspace/api-client-react/features";
 import { SyncButton } from "@/components/sync-button";
+import { scoped } from "@/lib/queryState";
 import { useUrlState, type UrlCodec } from "@/hooks/useUrlState";
-import { householdToday } from "@/lib/householdDay";
+import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries, accountViewOf } from "@/pages/next/accounts/entries";
 import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
@@ -21,7 +22,10 @@ import { BucketRows } from "./banking/BucketRows";
 import { ProposedFixes } from "./banking/ProposedFixes";
 import { PRESETS, isDay, presetOf, presetRange, rangeWords, sanitizeRange } from "./banking/reviewDates";
 import { bankingBase, bankingSummaryParams } from "./banking/reviewParams";
-import { BUCKETS, KIND_ORDER, KIND_WORDS, dayWords, isBucketName, isKind, plannedFateWords, sideWords, signedCash } from "./banking/words";
+import { BUCKETS, KIND_ORDER, KIND_WORDS, bucketAria, dayWords, isBucketName, isKind, isZeroMoney, plannedFateWords, sideWords, signedCash } from "./banking/words";
+import { WEEK_FIGURE_WORDS } from "@workspace/avalanche-core/glossary";
+import { bankFreshWords, freshKindOf } from "@/lib/bankFreshWords";
+import { useSpine } from "@/hooks/useSpine";
 
 /**
  * (W3) ⭐ BANKING › REVIEW — "what wasn't in the plan?" for ONE bank account.
@@ -30,11 +34,16 @@ import { BUCKETS, KIND_ORDER, KIND_WORDS, dayWords, isBucketName, isKind, planne
  * The account's own totals lead. The household's week is one small, labelled
  * block at the end, because it is a different thing (all accounts).
  *
+ * (Q5) The order is the order of the questions: where am I (account, range,
+ * updated, bank vs H2 and its check, pending) → what needs MY decision
+ * (Proposed fixes, the To-review count for this account and range) → what was
+ * not on the plan → what was planned → the household's week, last.
+ *
  * Three words that are NOT the same, and are kept apart on screen:
  *   - "Balance check" — the bank's balance against the ledger (a manual Sync);
- *   - "Review inbox"  — rows still waiting for an answer this month;
+ *   - "To review"     — rows still waiting for an answer (one name: the dashboard tile and the top bar say "review" too);
  *   - "Not in the plan" — rows the plan did not expect, or expected differently.
- * An unmatched payment is not overspending; a card or debt payment is a payment.
+ * A row not on the plan is not overspending; a card or debt payment is a payment.
  *
  * URL state: `?account &from &to &bucket &kind` — a refresh, a shared link and
  * Back from a register land on the same view. The Chase and Amex registers
@@ -53,7 +62,8 @@ const face = (v: string | null | undefined) => (v == null || v === "" ? "—" : 
 const cents = (v: string | null | undefined) => (v == null ? 0 : Math.round(Number(v) * 100));
 
 function BucketCard({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)[number]; bucket: BankingReviewBucket; selected: boolean; onPick: () => void }) {
-  // (F4) Money in and money out are compared apart: never one ambiguous net.
+  // (F4, Q5) The variance leads, per direction: income "less / more than expected", bills "over / under".
+  // Money in and money out are then shown apart (never one ambiguous net, never "total moved").
   const sides = [
     { side: "in" as const, v: bucket.varianceIn },
     { side: "out" as const, v: bucket.varianceOut },
@@ -61,18 +71,26 @@ function BucketCard({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)
     const words = sideWords(x.side, x.v);
     return words && x.v != null ? [{ ...x, words }] : [];
   });
+  const inOut = [
+    { side: "in" as const, label: "In", v: bucket.moneyIn },
+    { side: "out" as const, label: "Out", v: bucket.moneyOut },
+  ].filter((x) => !isZeroMoney(x.v));
+  const aria = bucketAria(meta.title, bucket);  // variance lines first, as the card shows them
   return (
     <button
       type="button"
       onClick={onPick}
       aria-pressed={selected}
+      aria-label={aria}
+      title={aria}
       data-testid={`br-bucket-${meta.name}`}
       className={cn(
-        "press surface rounded-card px-3 py-3 text-left ring-1",
+        "press surface flex flex-col items-stretch justify-start rounded-card px-3 py-3 text-left ring-1",
         selected ? "ring-2 ring-brand-navy" : "ring-brand-line hover:bg-neutral-50",
       )}
     >
       <div className="text-label font-semibold text-brand-navy">{meta.title}</div>
+      <div className="mt-1 font-mono text-title font-semibold tabular-nums text-brand-ink" data-testid={`br-count-${meta.name}`}>{bucket.count}</div>
       {sides.length ? (
         <ul className="mt-1 space-y-0.5" data-testid={`br-sides-${meta.name}`}>
           {sides.map((x) => (
@@ -83,13 +101,15 @@ function BucketCard({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)
           ))}
         </ul>
       ) : null}
-      <div className="mt-1 flex items-baseline justify-between gap-2">
-        <span className="font-mono text-title font-semibold tabular-nums text-brand-ink" data-testid={`br-count-${meta.name}`}>{bucket.count}</span>
-        {/* On a variance card the full amount is context, never the difference: label it. */}
-        <span className={cn("font-mono tabular-nums text-neutral-600", sides.length ? "text-micro" : "text-label")} data-testid={`br-net-${meta.name}`}>
-          {sides.length ? `${formatCurrency(bucket.net)} total moved` : formatCurrency(bucket.net)}
-        </span>
-      </div>
+      {inOut.length ? (
+        <ul className="mt-1 flex flex-wrap gap-x-3 text-micro text-neutral-600" data-testid={`br-inout-${meta.name}`}>
+          {inOut.map((x) => (
+            <li key={x.side} data-testid={`br-inout-${meta.name}-${x.side}`}>
+              {x.label} <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(x.v)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="mt-1 text-micro text-neutral-500">{meta.line}</div>
     </button>
   );
@@ -111,7 +131,10 @@ export default function BankingReviewPage() {
   // ONE first call: the summary also carries each bucket's first page.
   const summaryParams = bankingSummaryParams(base);
   const q = useGetBankingReview(summaryParams, { query: { queryKey: getGetBankingReviewQueryKey(summaryParams), staleTime: MIN } });
-  const d = q.data;
+  // (Q4) The review on screen is for THIS account and range. The previous
+  // one (kept while this loads) is not: its balance, buckets and rows would sit
+  // under the new account's name and the new dates.
+  const d = scoped(q, (r) => r.period.to === range.to).data;
 
   const items = useListPlaidItems({ query: { staleTime: MIN } as never });
   const entries = useMemo(() => buildEntries(items.data), [items.data]);
@@ -166,9 +189,43 @@ export default function BankingReviewPage() {
   const checkMonth = d?.balanceCheck.checkedAt ? `${d.balanceCheck.checkedAt.slice(0, 7)}-01` : null;
   const registerHref = accountId && checkMonth ? `/transactions?account=${encodeURIComponent(accountId)}&month=${checkMonth}` : null;
   const unplaced = d ? cents(d.reconciliation.unexplained) !== 0 || d.reconciliation.rowsUnexplained !== 0 : false;
-  const syncedWords = d?.account.lastSyncedAt ? `Synced ${formatRelativeTime(d.account.lastSyncedAt)}` : d ? "Not synced yet" : "";
+  // (Q5) "Updated 2 h ago" is the FETCH (the bank last told us anything) — the SERVER's instant, never a max the browser
+  // takes itself: the forecast account's is the review's `freshness.fetchedAt` (= spine.bankConfidence.fetchedAt; a typed
+  // balance is as old as its own time, a live feed does not refresh it); another account's is its connection's own
+  // `freshness.fetchedAt` from GET /plaid/items.
+  const itemFresh = here ? (items.data?.find((it) => it.id === here.itemId)?.freshness ?? null) : null;
+  const fresh = d ? (d.freshness ?? itemFresh) : null;
+  const freshWords = d ? bankFreshWords({ kind: freshKindOf(fresh?.stale, fresh?.staleReason), fetchedAt: fresh?.fetchedAt, now: Date.now() }) : null;
+  const syncedWords = freshWords ? [freshWords.status, freshWords.updated ?? "Not updated yet"].filter(Boolean).join(" · ") : "";
+  // "N pending" is the account's, through today (the same figure the dashboard says), not the range's: the forecast account's
+  // from the spine; another account's range count says its range.
+  const spine = useSpine();
+  const pendingWords = !d
+    ? null
+    : d.account.isForecastAccount
+      ? (spine.data?.bankConfidence?.pendingCount ?? 0) > 0 ? `${spine.data!.bankConfidence.pendingCount} pending` : null
+      : d.cashFlow.pendingCount > 0 ? `${d.cashFlow.pendingCount} pending in ${rangeWords(range, today)}` : null;
+  // (Q5 fix) The to-review chip must open a list that has the same scope as its words. The review page is a calendar
+  // month of the planned account: a range that is that month (to today) links there with the month in the address;
+  // any other range says the page's own count and scope instead (the server's badge), so count and destination tie.
+  const monthOfRange = range.from.slice(0, 7);
+  const wholeMonth = range.from === `${monthOfRange}-01` && range.to.slice(0, 7) === monthOfRange && (range.to === today || addDaysISO(range.to, 1).slice(0, 7) !== monthOfRange);
+  // (Round 3) Review opens any month back to 12 months (GET /forecast?fromMonth=); a month it cannot reach says the page's own count.
+  const oldestReviewMonth = (() => { const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7)) - 12; const dt = new Date(Date.UTC(y, m - 1, 1)); return dt.toISOString().slice(0, 7); })();
+  const inboxTies = !!d && d.account.isForecastAccount && wholeMonth && monthOfRange >= oldestReviewMonth && monthOfRange <= today.slice(0, 7);
+  const inboxCount = d ? (inboxTies ? d.reviewInbox.unresolvedInRange : d.reviewInbox.badgeCount) : 0;
+  const inboxScope = inboxTies ? `This account · ${rangeWords(range, today)}` : "Planned account · this month";
+  const inboxHref = inboxTies ? `/review?month=${monthOfRange}` : "/review";
   const needsOwnSync = !!d && d.account.id != null && !/chase|american express|amex/i.test(d.account.institution ?? "");
   const activePreset = presetOf(range, today);
+
+  // (Q5) `?fixes=1` lands on the panel: once the page has its own answer (so the layout is final), once.
+  const [scrolledToFixes, setScrolledToFixes] = useState(false);
+  useEffect(() => {
+    if (fixesParam !== "1" || scrolledToFixes || !d) return;
+    setScrolledToFixes(true);
+    document.getElementById("proposed-fixes")?.scrollIntoView?.({ block: "start" });
+  }, [fixesParam, scrolledToFixes, d]);
 
   return (
     <div className="space-y-4" data-testid="banking-review">
@@ -216,9 +273,9 @@ export default function BankingReviewPage() {
           {syncedWords ? (
             <span className="text-micro text-neutral-600" data-testid="br-fresh">
               {syncedWords}
-              {d?.freshness?.stale ? " · may be out of date" : ""}
             </span>
           ) : null}
+          {pendingWords ? <span className="text-micro text-neutral-600" data-testid="br-pending">{pendingWords}</span> : null}
         </div>
       </header>
 
@@ -233,13 +290,17 @@ export default function BankingReviewPage() {
         )
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-testid="br-summary">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="br-summary">
             <div className={CELL}>
-              <div className={CELL_LABEL}>Balance</div>
+              <div className={CELL_LABEL}>H2 balance</div>
               <div className={CELL_VALUE} data-testid="br-balance">{face(d.balance.today)}</div>
               <div className="mt-1 text-micro text-neutral-500">
                 {d.balance.today != null && d.balance.asOf ? `as of ${dayWords(d.balance.asOf.slice(0, 10))}` : "Not tracked for this account"}
               </div>
+              {/* The bank's own figure today, from the server's confidence read: a separate fact from the check's moment below. */}
+              {d.account.isForecastAccount && spine.data?.bankConfidence?.bankBalance != null ? (
+                <div className="text-micro text-neutral-500" data-testid="br-bank-today">Bank {formatCurrency(spine.data.bankConfidence.bankBalance)}</div>
+              ) : null}
             </div>
             <div className={CELL}>
               <div className={CELL_LABEL}>Money in</div>
@@ -252,20 +313,9 @@ export default function BankingReviewPage() {
             <div className={CELL} data-testid="br-tie-cell">
               <div className={CELL_LABEL}>
                 Balance check
-                <Help>Compares the bank's own balance with H2's ledger at the last Sync.</Help>
+                <Help>Compares the bank's own balance with H2's at the last Sync.</Help>
               </div>
               <BalanceCheck check={d.balanceCheck} registerHref={registerHref} />
-            </div>
-            <div className={cn(CELL, "col-span-2 lg:col-span-1")} data-testid="br-inbox-cell">
-              <div className={CELL_LABEL}>
-                Review inbox
-                <Help>{`Rows waiting for an answer: ${d.reviewInbox.badgeScope}.`}</Help>
-              </div>
-              <div className="mt-1.5">
-                <Link href="/review" className="press chip gray" data-testid="br-inbox">
-                  {d.reviewInbox.badgeCount > 0 ? `${d.reviewInbox.badgeCount} to review this month` : "Review inbox clear"}
-                </Link>
-              </div>
             </div>
           </div>
 
@@ -274,6 +324,24 @@ export default function BankingReviewPage() {
               H2 could not place some rows: {formatCurrency(d.reconciliation.unexplained)}
             </div>
           ) : null}
+
+          <section className="space-y-2" aria-label="Needs your decision" data-testid="br-decide">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+              <h2 className="text-title font-semibold text-brand-navy">Needs your decision</h2>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="br-inbox-cell">
+                <Link
+                  href={inboxHref}
+                  className="press chip gray"
+                  data-testid="br-inbox"
+                  aria-label={inboxCount > 0 ? `${inboxCount} to review, ${inboxScope}` : "Nothing to review"}
+                >
+                  {inboxCount > 0 ? `${inboxCount} to review` : "Nothing to review"}
+                </Link>
+                <span className="text-micro text-neutral-600" data-testid="br-inbox-scope">{inboxScope}</span>
+              </div>
+            </div>
+            <ProposedFixes defaultOpen={fixesParam === "1"} />
+          </section>
 
           <details open className="surface rounded-card ring-1 ring-brand-line" data-testid="br-notinplan">
             <summary className="press cursor-pointer px-4 py-3 text-title font-semibold text-brand-navy">Not in the plan</summary>
@@ -297,7 +365,7 @@ export default function BankingReviewPage() {
 
               {d.notInPlan.unmatched.byKind && d.notInPlan.unmatched.count > 0 ? (
                 <div data-testid="br-kinds">
-                  <div className="text-label font-semibold text-brand-navy">Unmatched, by kind</div>
+                  <div className="text-label font-semibold text-brand-navy">Not on the plan, by kind</div>
                   <div className="mt-1.5 flex flex-wrap gap-2">
                     {KIND_ORDER.filter((k) => d.notInPlan.unmatched.byKind![k].count > 0).map((k) => {
                       const t = d.notInPlan.unmatched.byKind![k];
@@ -319,7 +387,7 @@ export default function BankingReviewPage() {
                       );
                     })}
                   </div>
-                  <p className="mt-1.5 text-micro text-neutral-500">Card and debt payments are not overspending.</p>
+                  <p className="mt-1.5 text-micro text-neutral-500">Card and debt payments and transfers are not spending.</p>
                 </div>
               ) : null}
 
@@ -363,7 +431,7 @@ export default function BankingReviewPage() {
                     <div className="min-w-0">
                       <div className="truncate text-body font-medium text-brand-ink">{p.label}</div>
                       <div className="text-micro text-neutral-500">
-                        Due {dayWords(p.scheduledDate)} · {plannedFateWords(p)}
+                        {p.direction === "in" ? "Expected" : "Due"} {dayWords(p.scheduledDate)} · {plannedFateWords(p)}
                         {p.txnAmount != null && p.txnDate ? ` · ${formatCurrency(Math.abs(Number(p.txnAmount)))} on ${dayWords(p.txnDate)}` : ""}
                       </div>
                     </div>
@@ -378,18 +446,30 @@ export default function BankingReviewPage() {
             )}
           </details>
 
-          <ProposedFixes defaultOpen={fixesParam === "1"} />
-
           {d.household ? (
             <section className="surface rounded-card px-4 py-3 ring-1 ring-brand-line" data-testid="br-household">
               <h2 className="text-label font-semibold text-brand-navy">All accounts · this week</h2>
               <dl className="mt-1.5 flex flex-wrap gap-x-6 gap-y-1 text-label">
-                <div className="flex gap-2"><dt className="text-neutral-600">Counts toward weekly plan</dt><dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-spent">{formatCurrency(d.household.spentWeek)}</dd></div>
+                <div className="flex gap-2"><dt className="text-neutral-600">{WEEK_FIGURE_WORDS.known}</dt><dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-spent">{formatCurrency(d.household.knownWeek)}</dd></div>
+                {!isZeroMoney(d.household.unresolvedWeek) ? (
+                  <div className="flex gap-2"><dt className="text-neutral-600">{WEEK_FIGURE_WORDS.unresolved}</dt><dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-unconfirmed">{formatCurrency(d.household.unresolvedWeek)}</dd></div>
+                ) : null}
                 <div className="flex gap-2">
                   <dt className="text-neutral-600">Plan</dt>
-                  <dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-plan">{d.household.weekPlan == null ? "Plan not set" : formatCurrency(d.household.weekPlan)}</dd>
+                  <dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-plan">{d.household.weekPlan == null ? "Not set" : formatCurrency(d.household.weekPlan)}</dd>
                 </div>
+                {d.household.remainingWeekKnown != null ? (
+                  <div className="flex gap-2">
+                    <dt className="text-neutral-600">{Number(d.household.remainingWeekKnown) < 0 ? "Over" : "Left"}{d.household.provisional ? " so far" : ""}</dt>
+                    <dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-left">{formatCurrency(Math.abs(Number(d.household.remainingWeekKnown)))}</dd>
+                  </div>
+                ) : null}
               </dl>
+              {!isZeroMoney(d.household.unresolvedWeek) ? (
+                <p className="mt-1 text-micro text-neutral-600" data-testid="br-hh-cautious">
+                  {WEEK_FIGURE_WORDS.cautious} <span className="font-mono tabular-nums">{formatCurrency(d.household.spentWeek)}</span>
+                </p>
+              ) : null}
               <Link href="/spending/week" className="press mt-1.5 inline-block text-label font-semibold text-brand-navy hover:underline">Open this week →</Link>
             </section>
           ) : null}

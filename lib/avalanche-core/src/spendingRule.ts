@@ -391,6 +391,43 @@ export function matchesTransferPattern(description: string): boolean {
   return TRANSFER_PAYMENT_PATTERNS.some((p) => d.includes(p));
 }
 
+/** (F6 round 6) `TRANSFER_PAYMENT_PATTERNS` as words (`normalizeDescription`'s form). */
+const TRANSFER_PAYMENT_PHRASES: readonly string[] = TRANSFER_PAYMENT_PATTERNS.map((p) => normalizeDescription(p));
+
+/**
+ * (F6 round 6) The bank's one-word payment codes that may carry a suffix: a
+ * word starting with one counts when the rest is nothing, "ment" ("EPAYMENT"),
+ * or carries a digit (a reference glued on: "EPAY7731") — never a longer word
+ * ("EPAYMENTS PLUMBING LLC", a merchant).
+ */
+const TRANSFER_PAYMENT_WORD_STEMS: readonly string[] = ["epay", "autopay"];
+
+/**
+ * ⭐ (F6 round 6, review finding 5) `matchesTransferPattern` BY WHOLE WORDS — the
+ * expired-hold rule's test (`isPaymentOrTransferCredit`), never the spending
+ * rule's. The substring test found "epay" inside "MURPHY USA PREPAY 7134" (and
+ * "PAYPAL *REPAY", and "chase credit" inside "PURCHASE CREDIT"), so a real
+ * reversal read as a payment, never cancelled its hold, and counted alone (bank
+ * 60 high). Here a phrase matches only as whole words after
+ * `normalizeDescription`, and the one-word codes (`TRANSFER_PAYMENT_WORD_STEMS`)
+ * only as a word of their own: "EPAY", "EPAYMENT", "EPAY7731", "AUTOPAY" still
+ * match ("E-PAYMENT" and "AUTOPAY PAYMENT" are payment words anyway). The
+ * spending rule keeps the substring test (see `TRANSFER_PAYMENT_PATTERNS`).
+ */
+export function matchesTransferPhrase(description: string | null | undefined): boolean {
+  const d = normalizeDescription(description);
+  if (!d) return false;
+  const padded = ` ${d} `;
+  if (TRANSFER_PAYMENT_PHRASES.some((p) => padded.includes(` ${p} `))) return true;
+  return d.split(" ").some((w) =>
+    TRANSFER_PAYMENT_WORD_STEMS.some((s) => {
+      if (!w.startsWith(s)) return false;
+      const rest = w.slice(s.length);
+      return rest === "" || rest === "ment" || /\d/.test(rest);
+    }),
+  );
+}
+
 /**
  * Rule 9: the description names a payment to a credit card.
  *
@@ -824,12 +861,60 @@ export type CardRowKind = "purchase" | "other_charge" | "refund" | "payment" | "
 
 /** Is this credit a payment to the card? (The payment half of `isRefundCandidate`'s exclusions.) */
 function isCardPaymentCredit(tx: SpendTxn, ctx: SpendContext): boolean {
+  if (isDebtCategory(tx, ctx)) return true;
+  return isCardPaymentByRow(tx);
+}
+
+/**
+ * What a row says about itself that can make a credit a payment or a transfer
+ * (F6 round 5). Every field but the description is optional: a caller that
+ * does not read a column passes nothing, and the row reads as not flagged.
+ */
+export interface CreditKindSignals {
+  description: string | null;
+  isTransfer?: boolean | null;
+  debtId?: string | null;
+  isExternalCardPayment?: boolean | null;
+  pfcPrimary?: string | null;
+  pfcDetailed?: string | null;
+}
+
+/** `isCardPaymentCredit` without the category test: what the row alone says. */
+function isCardPaymentByRow(tx: CreditKindSignals): boolean {
   if (tx.isExternalCardPayment === true) return true;
   if (tx.debtId) return true;
-  if (isDebtCategory(tx, ctx)) return true;
   if (/^LOAN_PAYMENTS/.test((tx.pfcDetailed ?? "").toUpperCase())) return true;
-  if (matchesCardPaymentPattern(tx.description)) return true;
+  if (matchesCardPaymentPattern(tx.description ?? "")) return true;
   return readsAsPayment(tx.description);
+}
+
+/** Plaid categories that make a credit a payment or a transfer, never money back from a purchase. */
+const PAYMENT_OR_TRANSFER_PFC = /^(TRANSFER_IN|TRANSFER_OUT|LOAN_PAYMENTS)/;
+
+/**
+ * ⭐ (F6 round 5, review findings 2 and 6) IS THIS CREDIT A PAYMENT OR A
+ * TRANSFER, BY THE ROW ALONE? The expired-hold rule asks it before a pending
+ * credit may reverse an expired charge (`expiredHolds`): a card payment or a
+ * transfer of the same cents is never a hold's reversal, on a card or on
+ * checking. Built only from the existing rules:
+ *   - the payment half of `classifyCardCredit` (`isCardPaymentCredit`): the
+ *     user's card-payment flag, a debt tag, Plaid LOAN_PAYMENTS, an issuer
+ *     payment phrase (`matchesCardPaymentPattern`), payment words
+ *     ("PAYMENT", "PYMT", "PMT", "AUTOPAY", "THANK YOU");
+ *   - the transfer half of `isRefundCandidate`: the transfer flag, Plaid
+ *     TRANSFER_IN / TRANSFER_OUT (primary or detailed), the bank-noise
+ *     transfer phrases — (F6 round 6, finding 5) as whole words
+ *     (`matchesTransferPhrase`): "MURPHY USA PREPAY 7134" is a reversal.
+ * ⚠️ Without the category test (a credit filed in a debt category): every
+ * place that pairs holds reads rows, not the household's categories, and they
+ * must all give one answer. Pure.
+ */
+export function isPaymentOrTransferCredit(tx: CreditKindSignals): boolean {
+  if (isCardPaymentByRow(tx)) return true;
+  if (tx.isTransfer === true) return true;
+  if (PAYMENT_OR_TRANSFER_PFC.test((tx.pfcPrimary ?? "").toUpperCase())) return true;
+  if (PAYMENT_OR_TRANSFER_PFC.test((tx.pfcDetailed ?? "").toUpperCase())) return true;
+  return matchesTransferPhrase(tx.description);
 }
 
 /**

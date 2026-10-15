@@ -7,6 +7,7 @@
  */
 import type { PlaidAccount } from "./plaidAccount";
 import type { PlaidItemDetailAutoUpdates } from "./plaidItemDetailAutoUpdates";
+import type { PlaidItemFreshness } from "./plaidItemFreshness";
 export interface PlaidItemDetail {
     id: string;
     itemId: string;
@@ -49,6 +50,12 @@ export interface PlaidItemDetail {
     lastBankTxOn?: string | null;
     /** @nullable */
     refreshProductDisabledAt?: string | null;
+    /** (Q1) This connection's freshness by the bank balance's own rule
+  (computeBankFreshness): never read failure from lastSyncError (the
+  liabilities refresh writes it too). GET /plaid/items always sends
+  it; the single-item mutation responses leave it out.
+   */
+    freshness?: PlaidItemFreshness;
     /** (V3) Whether this bank tells H2 when something changes. `on` only
   when the webhook address Plaid holds equals the server's current
   PLAID_WEBHOOK_URL.

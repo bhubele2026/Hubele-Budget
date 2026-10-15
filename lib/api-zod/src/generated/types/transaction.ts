@@ -165,7 +165,19 @@ credit expires alone. It counts nowhere: not in spending, owed, the
 card cap, budgets, allowances, review or any total (owner's decision
 2026-10-15); every browser sum skips it. Worked out on read; the row
 is kept and shown. On GET /transactions list rows, the GET /forecast
-bundle's transactions and ledger rows; absent elsewhere.
+bundle's transactions and ledger rows; absent elsewhere. (F6 round 5)
+A reversal is never a payment or a transfer, and each credit takes the
+most recent expired charge on or before it. A hold the bank snapshot
+held and its reversal are not expiredHold: see expiredPair.
  */
   readonly expiredHold?: boolean;
+  /** (F6 round 5) An expired hold the bank snapshot already held, or the
+reversal paired with it. The bank balance counts the reversal (the
+money came back), so the register counts both (they net to 0) and
+neither is labelled - but neither is spending, and neither is asked
+about in review. Cash walks (the Reconcile running balance, cash
+flow) count it; spending sums and review skip it. The same test on
+GET /transactions, the GET /forecast bundle and the ledger rows.
+ */
+  readonly expiredPair?: boolean;
 }

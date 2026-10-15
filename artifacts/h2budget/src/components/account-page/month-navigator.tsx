@@ -22,6 +22,12 @@ export function shiftMonth(mk: MonthKey, delta: number): MonthKey {
   return { year: d.getFullYear(), month: d.getMonth() };
 }
 
+/** "October" (this year) or "October 2025": the month in words, for "Loading October…". */
+export function formatMonthLong(mk: MonthKey, now: Date = new Date()): string {
+  const name = new Date(mk.year, mk.month, 1).toLocaleDateString("en-US", { month: "long" });
+  return mk.year === now.getFullYear() ? name : `${name} ${mk.year}`;
+}
+
 export function formatMonthLabel(mk: MonthKey): string {
   // Compact `MMM 'YY` form (e.g. `May '26`) so the navigator pill stays
   // narrow and leaves more horizontal room for the KPI tiles next to it.

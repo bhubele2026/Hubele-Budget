@@ -1,4 +1,15 @@
 /**
+ * (Q2) The five row flags a hand category pick can move, as a `user` decision
+ * keeps them before and after its write (undo restores what it changed).
+ */
+export interface DecisionRowFlags {
+    isTransfer: boolean;
+    isTransferUserOverridden: boolean;
+    weeklyAllowance: boolean;
+    monthlyAllowance: boolean;
+    unplannedAllowance: boolean;
+}
+/**
  * One row per categorization decision: what the engine (or a person) decided
  * for a transaction, why, how sure, and what happened to it. The engine is
  * idempotent through `(transaction_id, input_hash)`: the same inputs never
@@ -383,6 +394,44 @@ export declare const categoryDecisionsTable: import("drizzle-orm/pg-core").PgTab
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        flagsBefore: import("drizzle-orm/pg-core").PgColumn<{
+            name: "flags_before";
+            tableName: "category_decisions";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: DecisionRowFlags;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: DecisionRowFlags;
+        }>;
+        flagsAfter: import("drizzle-orm/pg-core").PgColumn<{
+            name: "flags_after";
+            tableName: "category_decisions";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: DecisionRowFlags;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: DecisionRowFlags;
+        }>;
     };
     dialect: "pg";
 }>;
@@ -1014,4 +1063,257 @@ export declare const mappingRuleHistoryTable: import("drizzle-orm/pg-core").PgTa
     dialect: "pg";
 }>;
 export type MappingRuleHistoryRow = typeof mappingRuleHistoryTable.$inferSelect;
+/**
+ * (Q2) One proposed fix the owner applied (`POST /review/proposals/:key/apply`)
+ * — everything its undo needs to put back exactly: each row's columns before
+ * and after, the resolutions it created and the neighbours it deleted, the
+ * queue decisions it answered, the merchant memory before and after. Its own
+ * table, not `agent_actions` (whose rows name an agent run).
+ */
+export declare const correctionApplicationsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "correction_applications";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "correction_applications";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        householdId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "household_id";
+            tableName: "correction_applications";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        proposalKey: import("drizzle-orm/pg-core").PgColumn<{
+            name: "proposal_key";
+            tableName: "correction_applications";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        proposalKind: import("drizzle-orm/pg-core").PgColumn<{
+            name: "proposal_kind";
+            tableName: "correction_applications";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        proposalHash: import("drizzle-orm/pg-core").PgColumn<{
+            name: "proposal_hash";
+            tableName: "correction_applications";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        label: import("drizzle-orm/pg-core").PgColumn<{
+            name: "label";
+            tableName: "correction_applications";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        actorUserId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "actor_user_id";
+            tableName: "correction_applications";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        rows: import("drizzle-orm/pg-core").PgColumn<{
+            name: "rows";
+            tableName: "correction_applications";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: unknown;
+            driverParam: unknown;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        resolutions: import("drizzle-orm/pg-core").PgColumn<{
+            name: "resolutions";
+            tableName: "correction_applications";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: unknown;
+            driverParam: unknown;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        reopenedDecisionIds: import("drizzle-orm/pg-core").PgColumn<{
+            name: "reopened_decision_ids";
+            tableName: "correction_applications";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: unknown;
+            driverParam: unknown;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        memory: import("drizzle-orm/pg-core").PgColumn<{
+            name: "memory";
+            tableName: "correction_applications";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: unknown;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        createdAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "created_at";
+            tableName: "correction_applications";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        undoneAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "undone_at";
+            tableName: "correction_applications";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        undoneBy: import("drizzle-orm/pg-core").PgColumn<{
+            name: "undone_by";
+            tableName: "correction_applications";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
+export type CorrectionApplication = typeof correctionApplicationsTable.$inferSelect;
 //# sourceMappingURL=categorization.d.ts.map

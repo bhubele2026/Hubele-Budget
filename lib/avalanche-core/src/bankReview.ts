@@ -172,6 +172,67 @@ export function cashVarianceOf(
 export const directionOfPlanKind = (kind: BankReviewPlanKind | null | undefined): BankReviewDirection =>
   kind === "income" ? "in" : "out";
 
+/**
+ * ⭐ (Q1) WHAT HAPPENED TO A PLAN, IN ITS OWN DIRECTION. The ledger's fate says
+ * how it was decided ("matched", "income_not_arrived"); a screen needs what to
+ * say. Money in reads received / received_different / not_received_yet; money
+ * out reads paid / paid_different / not_paid_yet:
+ *   matched, paid_on_evidence  → received / paid; *_different when the row's
+ *                                amount differs from the plan (a cash variance);
+ *   partial                    → *_different (part of it);
+ *   on_curve, overdue_outside,
+ *   income_not_arrived         → not_received_yet / not_paid_yet;
+ *   suggested                  → suggested (a row may be it: the household decides);
+ *   skipped · missed · carried · not_due → as said (the household's answer, or
+ *                                the ledger's: purchases moved on, nothing due);
+ *   outside_window             → not_decided (before the window the ledger reads).
+ * Pure; words are the web's.
+ */
+export type BankReviewPlanOutcome =
+  | "received"
+  | "received_different"
+  | "not_received_yet"
+  | "paid"
+  | "paid_different"
+  | "not_paid_yet"
+  | "suggested"
+  | "skipped"
+  | "missed"
+  | "carried"
+  | "not_due"
+  | "not_decided";
+
+export function bankReviewPlanOutcome(
+  fate: string,
+  direction: BankReviewDirection,
+  varianceKind: BankReviewVarianceKind | null,
+): BankReviewPlanOutcome {
+  const inward = direction === "in";
+  switch (fate) {
+    case "matched":
+    case "paid_on_evidence":
+      return varianceKind ? (inward ? "received_different" : "paid_different") : inward ? "received" : "paid";
+    case "partial":
+      return inward ? "received_different" : "paid_different";
+    case "on_curve":
+    case "overdue_outside":
+    case "income_not_arrived":
+      return inward ? "not_received_yet" : "not_paid_yet";
+    case "suggested":
+      return "suggested";
+    case "skipped":
+      return "skipped";
+    case "missed":
+      return "missed";
+    case "carried":
+      return "carried";
+    case "not_due":
+      return "not_due";
+    default:
+      return "not_decided";
+  }
+}
+
 export interface BankReviewRowInput {
   occurredOn: string;
   /** Signed: negative is money out. */

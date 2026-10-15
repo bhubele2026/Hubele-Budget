@@ -35,6 +35,8 @@ import {
 import amexRouter from "../routes/amex";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { refreshAmexAnchor } from "../lib/amexAnchor";
+import { householdTodayISO } from "../lib/householdClock";
+import { addDaysISO } from "@workspace/avalanche-core";
 
 const app = express();
 app.use(express.json());
@@ -406,4 +408,90 @@ describe("GET /amex/anchor", () => {
     expect(body.amexEndingBalance).toBeCloseTo(80, 2);
     expect(body.asOf).toBe("2026-09-10");
   });
+
+  // ⭐ (Q3) The computed fallback puts every row on ONE sign before it sums:
+  // the workbook stores a purchase POSITIVE (`source: "amex"`), Plaid stores it
+  // NEGATIVE (`plaid:amex`, the bank sign). Summing the raw column netted a
+  // Plaid purchase against a workbook purchase and read a Plaid payment as a
+  // charge. Synthetic amounts; worked by hand below.
+  const computedAnchor = async (): Promise<{ amexEndingBalance: number; asOf: string; source: string }> => {
+    const res = await fetch(`${baseUrl}/amex/anchor`);
+    expect(res.status).toBe(200);
+    return (await res.json()) as { amexEndingBalance: number; asOf: string; source: string };
+  };
+  const plaidRow = (occurredOn: string, description: string, amount: string) => ({
+    userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
+    occurredOn,
+    description,
+    amount,
+    source: "plaid:amex",
+    plaidAccountId: `q3-unlinked-card-${TEST_USER}`,
+  });
+
+  it("(Q3) Plaid-only rows: a purchase raises what is owed, a payment lowers it", async () => {
+    await db.insert(transactionsTable).values([
+      plaidRow("2026-09-03", "Q3 GROCER", "-64.00"), //   purchase  +64.00
+      plaidRow("2026-09-05", "Q3 FUEL", "-38.75"), //     purchase  +38.75
+      plaidRow("2026-09-08", "Q3 PAYMENT", "50.00"), //   payment   −50.00
+      plaidRow("2026-09-09", "Q3 REFUND", "12.10"), //    refund    −12.10
+    ]);
+    // 64.00 + 38.75 − 50.00 − 12.10 = 40.65 owed (the raw sum read −40.65).
+    const body = await computedAnchor();
+    expect(body.source).toBe("computed");
+    expect(body.amexEndingBalance).toBe(40.65);
+    expect(body.asOf).toBe("2026-09-09");
+  });
+
+  it("(Q3) both sources: each is put on the owed sign before the sum", async () => {
+    await db.insert(transactionsTable).values([
+      { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, occurredOn: "2026-08-02", description: "Q3 WB CHARGE", amount: "30.00", source: "amex" }, // +30.00
+      { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, occurredOn: "2026-08-04", description: "Q3 WB CREDIT", amount: "-5.00", source: "amex" }, //  −5.00
+      plaidRow("2026-09-03", "Q3 GROCER", "-64.00"), //  +64.00
+      plaidRow("2026-09-08", "Q3 PAYMENT", "100.00"), // −100.00
+    ]);
+    // Workbook 30.00 − 5.00 = 25.00; Plaid 64.00 − 100.00 = −36.00; owed −11.00
+    // (a credit balance). The raw sum read 30 − 5 − 64 + 100 = 61.00.
+    const body = await computedAnchor();
+    expect(body.source).toBe("computed");
+    expect(body.amexEndingBalance).toBe(-11);
+    expect(body.asOf).toBe("2026-09-08");
+  });
+
+  // ⭐ (F6 round 5, review finding 1, secondary) The computed balance is the sum of
+  // the rows that COUNT: an expired hold counts nowhere, this sum included. The
+  // page walks back from it subtracting only counted rows (`isCounted`), so a sum
+  // holding the hold read every month before high by it (round 4).
+  // (F6 ⇄ Q3 merge) On the owed sign (Q3): workbook 30 + 50 = 80 owed; Plaid
+  // −52 (expired hold) and −10 (young) are purchases, +52 and +10 owed.
+  // Rule on: 80 + 10 = 90 (the hold left out). Kill switch: 80 + 52 + 10 = 142.
+  // (The F6 line, on the raw sum, read 70 and 18.)
+  it("(F6 round 5) a computed balance leaves out an expired pending hold; a young pending row still counts (kill switch: every row)", async () => {
+    const today = householdTodayISO();
+    const pendingPlaidRow = (on: string, amount: string, description: string) => ({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: on,
+      description,
+      amount,
+      source: "plaid:amex",
+      plaidAccountId: `acct-amex-f6r5-${TEST_USER}`,
+      pending: true,
+    });
+    await db.insert(transactionsTable).values([
+      { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, occurredOn: "2026-09-02", description: "Amex groceries", amount: "30.00", source: "amex" },
+      { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, occurredOn: "2026-09-10", description: "Amex gas", amount: "50.00", source: "amex" },
+      pendingPlaidRow(addDaysISO(today, -20), "-52.00", "HARBOR HOTEL HOLD"),
+      pendingPlaidRow(addDaysISO(today, -2), "-10.00", "CORNER CAFE"),
+    ]);
+    const read = async () => (await (await fetch(`${baseUrl}/amex/anchor`)).json()) as { amexEndingBalance: number; source: string };
+    expect(await read()).toMatchObject({ source: "computed", amexEndingBalance: 90 });
+    vi.stubEnv("EXPIRED_HOLDS_RULE", "off");
+    try {
+      expect((await read()).amexEndingBalance).toBeCloseTo(142, 2);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
+

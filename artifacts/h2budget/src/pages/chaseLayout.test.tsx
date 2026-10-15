@@ -242,7 +242,7 @@ describe("Chase page — the panel grid (C9)", () => {
     show();
     await ready();
     const row = screen.getByTestId("row-tx-t1");
-    fireEvent.click(within(row).getByRole("checkbox", { name: "Select" }));
+    fireEvent.click(within(row).getByRole("checkbox", { name: /^Select / }));
     const bar = await screen.findByTestId("bulk-bar");
     expect(bar.style.top).toBe("var(--page-sticky-top, 0px)");
     expect(bar.className).toContain("sticky");

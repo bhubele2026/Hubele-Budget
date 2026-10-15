@@ -268,7 +268,7 @@ describe("/forecast and /review are the one forecast screen (C13)", () => {
     expect(within(side).getByTestId("forecast-date-balance")).toBeTruthy();
   });
 
-  it("/review: the 'Register & reconcile' view under the 'Review' title; the overall-only cards stay out", () => {
+  it("/review: the 'Register & review' view under the 'Review' title; the overall-only cards stay out", () => {
     mount(<ForecastPage mode="review" />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Review");
     expect(screen.getByTestId("tab-register").getAttribute("aria-current")).toBe("page");

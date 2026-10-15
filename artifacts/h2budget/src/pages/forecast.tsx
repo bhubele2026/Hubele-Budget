@@ -81,10 +81,11 @@ import { ToastAction } from "@/components/ui/toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { FreshnessLine } from "@/components/data-state";
-import { dataState } from "@/lib/queryState";
+import { dataState, scoped } from "@/lib/queryState";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { householdDayOfAt, householdToday } from "@/lib/householdDay";
 import {
+  asksForAnswer,
   buildLineRegister,
   filterForecastTxns,
   buildBucket,
@@ -381,7 +382,40 @@ export default function ForecastPage({
   }, []);
   const hashRedirectTo = hashTabRedirect(mode, hash);
 
-  const { data, isLoading, isError: forecastError, refetch: refetchForecast } = useGetForecast({ days: deferredHorizonDays });
+  const today = useMemo(() => new Date(), []);
+  const currentMonth = useMemo(
+    () => `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`,
+    [today],
+  );
+  // (Q5 fix) `/review?month=2026-09`: the Banking page's to-review chip opens the month its count was for.
+  const [monthFilter, setMonthFilter] = useState(() => {
+    if (mode !== "review" || typeof window === "undefined") return currentMonth;
+    const m = new URLSearchParams(window.location.search).get("month");
+    return m && /^\d{4}-(0[1-9]|1[0-2])$/.test(m) && m <= currentMonth ? m : currentMonth;
+  });
+  // (#621) Defer the month-bucket filter the same way we defer the
+  // horizon and from-date — switching the active month should flip the
+  // picker immediately while the heavy bucket/inbox/reconcile recompute
+  // happens at lower priority. Combined with React Query's
+  // `keepPreviousData`, this keeps the prior bucket on screen with a
+  // subtle pending spinner instead of blocking the click.
+  const deferredMonthFilter = useDeferredValue(monthFilter);
+  const monthSwitchPending = deferredMonthFilter !== monthFilter;
+  // (Round 3) The register's data starts at the first of last month; a month the picker (or `/review?month=`) names
+  // before that asks the server to start there, so the page lists that month's rows too. Absent for this month and last.
+  const reviewFromMonth = mode === "review" && deferredMonthFilter < (() => { const lm = new Date(today.getFullYear(), today.getMonth() - 1, 1); return `${lm.getFullYear()}-${String(lm.getMonth() + 1).padStart(2, "0")}`; })() ? deferredMonthFilter : undefined;
+
+  const forecastQuery = useGetForecast({ days: deferredHorizonDays, ...(reviewFromMonth ? { fromMonth: reviewFromMonth } : {}) });
+  const { data, isLoading, isError: forecastError, refetch: refetchForecast } = forecastQuery;
+  // (Final W3) An older month asks for a longer window. While the previous window is held for it, the picked month's
+  // rows are not in it: say "Loading", never "Review is empty · 0 pending".
+  const monthWindowPending =
+    !!reviewFromMonth && data !== undefined && forecastQuery.isPlaceholderData && !(data.fromDate <= `${reviewFromMonth}-01`);
+  // (Q5 fix) The register LIST is this query's. While it holds the previous horizon's answer (placeholder), the horizon it
+  // belongs to is the last one it answered itself — said below, never a silent mismatch when the cash signal lands first.
+  const listAnswered = useRef<number | null>(null);
+  if (data !== undefined && !forecastQuery.isPlaceholderData) listAnswered.current = deferredHorizonDays;
+  const listShown = data !== undefined && forecastQuery.isPlaceholderData ? listAnswered.current : null;
   // (Decision 16, PR-K round 2) ONE CACHE ENTRY PER HORIZON. With look-back
   // closed the chart starts today, so the request leaves `fromDate` out and
   // the server uses the household day. The 90-day tab therefore reads the same
@@ -400,6 +434,20 @@ export default function ForecastPage({
   );
   const { data: cashProjection, isLoading: cashProjectionLoading, isError: projectionError, refetch: refetchProjection } =
     cashProjectionQuery;
+  // (Q5) `keepPreviousData` keeps the last horizon's curve on screen while the new one loads. That is
+  // fine only if it SAYS so: a 30-day curve under a "90 days" tab is another scope's number.
+  const projScope = scoped(cashProjectionQuery, (c) => c.horizonDays == null || c.horizonDays === deferredHorizonDays);
+  const shownHorizon = cashProjection?.horizonDays ?? null;
+  const otherScope =
+    cashProjection != null && (horizonSwitchPending || projScope.isSwitching) && shownHorizon != null && shownHorizon !== horizonDays
+      ? { shown: shownHorizon, asked: horizonDays }
+      : listShown != null && listShown !== horizonDays
+        ? { shown: listShown, asked: horizonDays }
+        : null;
+  const otherFrom =
+    cashProjection != null && lookbackOpen && fromDatePicked && cashProjection.fromDate && cashProjection.fromDate !== forecastFromDate
+      ? { shown: cashProjection.fromDate, asked: forecastFromDate }
+      : null;
   // The spine carries the server's freshness verdict for the bank card's
   // snapshot line. It shares the app-wide spine cache, so it adds no endpoint,
   // but mounting refetches a copy older than the spine's 60s staleTime.
@@ -652,20 +700,6 @@ export default function ForecastPage({
     });
   const clearBankSelection = () => setSelectedBankIds(new Set());
 
-  const today = useMemo(() => new Date(), []);
-  const currentMonth = useMemo(
-    () => `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`,
-    [today],
-  );
-  const [monthFilter, setMonthFilter] = useState(currentMonth);
-  // (#621) Defer the month-bucket filter the same way we defer the
-  // horizon and from-date — switching the active month should flip the
-  // picker immediately while the heavy bucket/inbox/reconcile recompute
-  // happens at lower priority. Combined with React Query's
-  // `keepPreviousData`, this keeps the prior bucket on screen with a
-  // subtle pending spinner instead of blocking the click.
-  const deferredMonthFilter = useDeferredValue(monthFilter);
-  const monthSwitchPending = deferredMonthFilter !== monthFilter;
 
   const closedMonths = useMemo(
     () => new Set(data?.closedMonths ?? []),
@@ -846,7 +880,8 @@ export default function ForecastPage({
   const inbox: InboxCard[] = useMemo(() => {
     if (!register) return [];
     return register.allBank
-      .filter((b) => b.status === "pending_bank")
+      // (F6 round 5) A held hold and its reversal walk the balance but ask for no answer.
+      .filter((b) => b.status === "pending_bank" && asksForAnswer(b.txn))
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
       .map((b) => ({ id: `inbox:${b.txn.id}`, bank: b }));
   }, [register]);
@@ -2063,6 +2098,13 @@ export default function ForecastPage({
           <button type="button" className={btnLink} onClick={() => { void refetchForecast(); void refetchProjection(); }}>Retry forecast</button>
         </div>
       )}
+{(otherScope || otherFrom) && (
+        <p className="text-micro text-neutral-600" role="status" data-testid="forecast-other-scope">
+          {otherScope ? `Showing ${otherScope.shown} days while ${otherScope.asked} days loads.` : null}
+          {otherScope && otherFrom ? " " : null}
+          {otherFrom ? `Showing from ${formatDate(otherFrom.shown)} while ${formatDate(otherFrom.asked)} loads.` : null}
+        </p>
+      )}
 </>
   );
 
@@ -2382,7 +2424,7 @@ export default function ForecastPage({
                   spineData.bank.asOfDate &&
                   Date.parse(spineData.bank.asOfDate) === Date.parse(data.bankSnapshot.at) ? (
                     <div>
-                      <FreshnessLine bank={spineData.bank} />
+                      <FreshnessLine bank={spineData.bank} fetchedAt={spineData.bankConfidence?.fetchedAt} />
                     </div>
                   ) : (
                     <BankSnapshotFreshness
@@ -2496,7 +2538,12 @@ export default function ForecastPage({
           {monthPicker}
         </div>
       )}
-      {mode === "review" && bankInbox.length === 0 && (
+      {mode === "review" && monthWindowPending && (
+        <section className={kitCard} data-testid="review-month-loading" aria-busy="true" role="status">
+          <div className="px-4 py-4 text-body text-neutral-600">Loading {monthFilter}…</div>
+        </section>
+      )}
+      {mode === "review" && !monthWindowPending && bankInbox.length === 0 && (
         // Single-flow restore: a forecast-flagged checking txn IS in
         // Review, so an empty Review just means nothing's flagged /
         // everything's matched. One honest empty state, pointing back
@@ -2558,7 +2605,7 @@ export default function ForecastPage({
         onDragEnd={onDragEnd}
         onDragCancel={() => setActiveDragId(null)}
       >
-        {mode === "review" && (
+        {mode === "review" && !monthWindowPending && (
           <section className={kitCard} data-testid="card-from-bank">
               <div className={`${cardHead} flex-wrap`}>
                 <Landmark

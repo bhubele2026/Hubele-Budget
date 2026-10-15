@@ -213,6 +213,20 @@ export interface BankBalanceCheckArgs {
 }
 
 /**
+ * (Final #13) Is the anchor the check read still the anchor now? The same
+ * MOMENT, whatever its format: "2026-10-14T07:00:00-05:00" and
+ * "2026-10-14T12:00:00.000Z" are one anchor (a string compare called it
+ * changed, and the tile read "Checked 1 d ago" instead of "Matches bank"). A
+ * time that does not parse is compared as written. No anchor now: changed.
+ */
+export function sameAnchorMoment(checked: string, current: string | null): boolean {
+  if (current == null) return false;
+  const a = Date.parse(checked);
+  const b = Date.parse(current);
+  return Number.isNaN(a) || Number.isNaN(b) ? checked === current : a === b;
+}
+
+/**
  * ⭐ THE REVIEW'S BALANCE CHECK.
  *
  *   not_checked     never (no check of this account) · not_forecast_account ·
@@ -271,7 +285,7 @@ export function bankBalanceCheckOf(args: BankBalanceCheckArgs): BankBalanceCheck
     const gapNow = bank.balanceCents - Math.round(args.recompute.predicted * 100);
     if (Math.abs(gapNow) < 1) status = "resolved_since";
   }
-  const anchorChanged = !!rec.anchor && rec.anchor.at !== args.currentAnchorAt;
+  const anchorChanged = !!rec.anchor && !sameAnchorMoment(rec.anchor.at, args.currentAnchorAt);
   const rowsSince = (args.recompute?.lateRows ?? 0) > 0;
   const staleReason: BankCheckStaleReason | null = anchorChanged ? "anchor_changed" : rowsSince ? "rows_since" : old ? "age" : null;
   return {
