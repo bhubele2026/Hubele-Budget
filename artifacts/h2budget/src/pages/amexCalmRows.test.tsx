@@ -10,8 +10,8 @@ import React from "react";
  *   - Amounts are signed ("-$64.00" a purchase, "+$10.00" a refund); a workbook
  *     charge is flipped for display ("-$40.00").
  *   - A day total shows money out and money in apart, never a sum of absolutes.
- *   - The desktop row has the same external-card chip the mobile row has.
- *   - Dates move through the row menu (keyboard), not four inline buttons.
+ *   - (P1) One row per transaction, phone and desktop alike (no "-mobile-" copy).
+ *   - (P1) The card-payment flag and the date moves live in the row's Details.
  */
 
 class ResizeObserverStub {
@@ -42,6 +42,7 @@ vi.mock("@/components/category-picker", () => ({
   defaultRememberPattern: (s: string) => s,
 }));
 vi.mock("@/components/bucket-bubbles", () => ({ BucketBubbles: () => null }));
+vi.mock("@/components/amex-over-link", () => ({ AmexOverLink: () => null }));
 // The chart draws only with a window: a marker stands in for the drawing.
 vi.mock("@/components/account-page/balance-trend-chart", async () => {
   const R = await import("react");
@@ -205,19 +206,20 @@ describe("(Q6a) calm Amex rows", () => {
   it("fades no row: a reviewed row carries a Reviewed chip, never opacity", async () => {
     renderAt(`?card=${PLAT}&month=2026-09-01&mode=week`);
     await waitFor(() => expect(screen.getByTestId("row-amex-p2")).toBeTruthy());
-    for (const id of ["row-amex-p1", "row-amex-p2", "row-amex-mobile-p2"]) {
+    for (const id of ["row-amex-p1", "row-amex-p2"]) {
       expect(screen.getByTestId(id).className).not.toMatch(/opacity/);
     }
     expect(screen.getByTestId("chip-state-p2").textContent).toBe("Reviewed");
-    expect(screen.getByTestId("chip-state-mobile-p2").textContent).toBe("Reviewed");
     expect(screen.queryByTestId("chip-state-p1")).toBeNull();
+    // (P1) One DOM row per transaction.
+    expect(screen.queryByTestId("row-amex-mobile-p2")).toBeNull();
+    expect(document.querySelectorAll('[data-testid="row-amex-p2"]').length).toBe(1);
   });
 
   it("each checkbox is named for its merchant", async () => {
     renderAt(`?card=${PLAT}&month=2026-09-01&mode=week`);
     await waitFor(() => expect(screen.getByTestId("row-amex-p1")).toBeTruthy());
     expect(within(screen.getByTestId("row-amex-p1")).getByRole("checkbox", { name: "Select P1" })).toBeTruthy();
-    expect(within(screen.getByTestId("row-amex-mobile-p1")).getByRole("checkbox", { name: "Select P1" })).toBeTruthy();
   });
 
   it("amounts are signed; a day total is money out and money in, apart", async () => {
@@ -225,7 +227,6 @@ describe("(Q6a) calm Amex rows", () => {
     await waitFor(() => expect(screen.getByTestId("row-amex-p1")).toBeTruthy());
     expect(screen.getByTestId("amount-p1").textContent).toBe("-$64.00");
     expect(screen.getByTestId("amount-p1r").textContent).toBe("+$10.00");
-    expect(screen.getByTestId("amount-mobile-p1").textContent).toBe("-$64.00");
     // Sep 15: one purchase of 64.00 and one refund of 10.00 (not 74.00, not 54.00).
     const total = screen.getByTestId("day-total-2026-09-15").textContent;
     expect(total).toBe("-$64.00 out · +$10.00 in");
@@ -246,11 +247,10 @@ describe("(Q6a) calm Amex rows", () => {
     expect(screen.getByTestId("day-total-2026-09-15").textContent).toBe("-$71.00 out · +$10.00 in");
     // One label says what it is, on desktop and phone; "Pending" stays on the young row only.
     expect(within(screen.getByTestId("row-amex-hx")).getByTestId("label-expired-hold-hx").textContent).toBe("Expired hold · not counted");
-    expect(within(screen.getByTestId("row-amex-mobile-hx")).getByTestId("label-expired-hold-hx").textContent).toBe("Expired hold · not counted");
     expect(screen.queryByTestId("chip-pending-hx")).toBeNull();
-    expect(screen.queryByTestId("chip-pending-mobile-hx")).toBeNull();
     expect(screen.getByTestId("chip-pending-py").textContent).toBe("Pending");
-    expect(screen.getByTestId("chip-pending-mobile-py").textContent).toBe("Pending");
+    // (P1) Its spending cell says nothing more: the label already says "not counted".
+    expect(screen.queryByTestId("spending-hx")).toBeNull();
     // The row and its amount stay visible (nothing hidden, nothing deleted).
     expect(screen.getByTestId("amount-hx").textContent).toBe("-$150.00");
   });
@@ -262,25 +262,32 @@ describe("(Q6a) calm Amex rows", () => {
     expect(screen.getByTestId("day-total-2026-09-14").textContent).toBe("-$78.75 out");
   });
 
-  it("the desktop row shows the external-card chip the mobile row has", async () => {
+  it("(P1) a transfer row says Transfer; marking a card payment lives in its details", async () => {
     renderAt(`?card=${PLAT}&month=2026-09-01&mode=week`);
     await waitFor(() => expect(screen.getByTestId("row-amex-p3")).toBeTruthy());
-    expect(screen.getByTestId("button-mark-external-card-p3")).toBeTruthy();
-    expect(screen.getByTestId("button-mark-external-card-mobile-p3")).toBeTruthy();
+    expect(screen.getByTestId("badge-transfer-p3").textContent).toBe("Transfer");
+    expect(screen.queryByTestId("button-mark-external-card-p3")).toBeNull();
+    fireEvent.click(screen.getByTestId("button-row-details-p3"));
+    expect(within(screen.getByTestId("amex-row-details-p3")).getByTestId("button-mark-external-card-p3").textContent).toBe(
+      "Paid to a card outside the debt plan",
+    );
   });
 
-  it("dates move through the keyboard row menu", async () => {
+  it("(P1) dates move in the row's details (posted rows only); no row menu", async () => {
+    EXTRA.push(row("pp", "2026-09-15", "-7.00", { pending: true, description: "CORNER CAFE" }));
     renderAt(`?card=${PLAT}&month=2026-09-01&mode=week`);
     await waitFor(() => expect(screen.getByTestId("row-amex-p1")).toBeTruthy());
-    // No inline ‹1d / calendar buttons until the menu is open.
+    expect(screen.queryByTestId("button-row-menu-p1")).toBeNull();
     expect(screen.queryByTestId("button-bump-date-back-p1")).toBeNull();
-    const btn = within(screen.getByTestId("row-amex-p1")).getByRole("button", { name: "More actions for P1" });
-    btn.focus();
-    fireEvent.keyDown(btn, { key: "Enter" });
-    expect(await screen.findByTestId("button-bump-date-back-p1")).toBeTruthy();
-    expect(screen.getByTestId("button-inline-date-p1")).toBeTruthy();
-    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    fireEvent.click(screen.getByTestId("button-row-details-p1"));
+    const d = screen.getByTestId("amex-row-details-p1");
+    expect(within(d).getByTestId("button-bump-date-back-p1").textContent).toBe("Move back 1 day");
+    expect((within(d).getByTestId("input-inline-date-p1") as HTMLInputElement).value).toBe("2026-09-15");
+    // A pending row: the bank sets its date.
+    fireEvent.click(screen.getByTestId("button-row-details-pp"));
+    const dp = screen.getByTestId("amex-row-details-pp");
+    expect(within(dp).queryByTestId("button-bump-date-back-pp")).toBeNull();
+    expect(within(dp).getByTestId("text-pending-date-pp").textContent).toBe("The bank sets the date when it posts.");
   });
 
   it("the hide-reviewed toggle says what it does", async () => {

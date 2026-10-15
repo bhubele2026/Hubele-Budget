@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, fireEvent, within } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent, within, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -9,15 +9,16 @@ import React from "react";
  * `amex*` tests, which this restyle left unchanged.
  *
  * - Head: h1 "American Express" (e2e finds it by role), with the selected
- *   card's chip under it, or "All cards".
- * - The card band renders GRID CELLS: an "All cards" panel and one panel per
- *   card with the Amex identity edge, its ••mask and its tier dot, sized so
- *   the row stays full (with a host's `lead` panel too).
+ *   card's chip under it — (P1) in its tab's words — or "All cards".
+ * - (P1) /amex has no card band: the shell's card tabs select. Embedded
+ *   (`/next/accounts/:id`) keeps the band, which renders GRID CELLS: an "All
+ *   cards" panel and one panel per card with the Amex identity edge, its
+ *   ••mask and its tier dot, sized so the row stays full beside the `lead`.
  * - The ledger is ONE sticky-safe panel whose pinned pane holds the
- *   hide-reviewed control; day groups are flush sections; the bulk bar
- *   sticks under the pane via `--page-sticky-top`.
- * - Rows: the card label keeps its exact text, with the account's accent dot
- *   beside it on both row layouts.
+ *   Categorize and hide-reviewed controls; day groups are flush sections; the
+ *   bulk bar sticks under the pane via `--page-sticky-top`.
+ * - Rows: ONE row per transaction (P1); the card label keeps its exact text,
+ *   with the account's accent dot beside it.
  * - D3: a card chosen by the route (`/next/accounts/:id`) or by `?accountId=`
  *   survives a cold load — the options are empty until the rows and the
  *   linked items answer, and the page no longer resets to "All cards" then.
@@ -40,6 +41,8 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/amex", () => undefined] as const,
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+// (P1) The household link reads the plan state (spine / period breakdown): not this test's subject.
+vi.mock("@/components/amex-over-link", () => ({ AmexOverLink: () => null }));
 vi.mock("@/components/plaid-link-button", () => ({ PlaidLinkButton: () => null }));
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => null }));
 vi.mock("@/components/category-picker", () => ({
@@ -55,6 +58,7 @@ const state = vi.hoisted(() => ({
   monthTxns: undefined as Array<Record<string, unknown>> | undefined,
   items: undefined as unknown[] | undefined,
   payoff: undefined as unknown,
+  settings: undefined as unknown,
   /** (WP7c) Every list read's params, in order. */
   listParams: [] as Array<Record<string, unknown>>,
 }));
@@ -120,7 +124,7 @@ vi.mock("@workspace/api-client-react", () => {
   const mutation = () => ({ mutate: () => undefined, mutateAsync: async () => undefined, isPending: false });
   return {
     TransactionWeeklyBucket,
-    useGetSettings: () => ({ data: undefined }),
+    useGetSettings: () => ({ data: state.settings }),
     useGetAmexWeeklyPayoff: () => ({ data: state.payoff, isLoading: false }),
     getGetAmexWeeklyPayoffQueryKey: () => ["/api/amex/weekly-payoff"],
     useListTransactions: (params: { limit?: number } = {}) => {
@@ -183,8 +187,17 @@ beforeEach(() => {
   state.wideTxns = undefined;
   state.items = ITEMS;
   state.payoff = PAYOFF;
+  // The household's own names for its cards (Settings), as the tabs read them.
+  state.settings = { preferences: { amexCardNames: { "ext-gold": "Gold" } } };
   state.listParams = [];
 });
+
+/** A section tab: wouter is mocked here, so fire the event its history patch would. */
+const pushTab = (url: string) =>
+  act(() => {
+    window.history.pushState(null, "", url);
+    window.dispatchEvent(new Event("pushState"));
+  });
 afterEach(() => cleanup());
 
 /** A card's panel (two cards of one tier share `amex-tile-<tier>`). */
@@ -196,41 +209,37 @@ async function ready() {
 }
 
 describe("Amex page — the panel grid (C10)", () => {
-  it("head: an h1 with 'All cards' until a card is picked, then that card's chip", async () => {
+  it("head: an h1 with 'All cards' until a card's tab is chosen, then that card's chip, in its tab's words", async () => {
     render(tree());
     await ready();
     expect(screen.getByRole("heading", { level: 1, name: /american express/i })).toBeTruthy();
     expect(screen.getByTestId("amex-head-all-cards").textContent).toBe("All cards");
-    fireEvent.click(within(tile("ext-gold")).getByRole("button", { pressed: false }));
+    pushTab("/amex?card=ext-gold");
     await waitFor(() => expect(screen.getByTestId("account-head-identity").textContent).toContain("Gold"));
     expect(screen.getByTestId("account-head-identity").textContent).toContain("••2002");
+    // The household's name, not Plaid's ("American Express Gold"): the tab's words.
+    expect(screen.getByTestId("account-head-identity").textContent).not.toContain("American Express");
     expect(screen.getByTestId("account-head-identity").querySelector('[data-accent="amex"]')).toBeTruthy();
-    // The drill still filters the ledger to that card (AX-04).
+    expect(screen.queryByTestId("amex-head-all-cards")).toBeNull();
+    // The tab filters the ledger to that card (AX-04).
     expect(screen.queryByTestId("row-amex-p1")).toBeNull();
     expect(screen.getByTestId("row-amex-g1")).toBeTruthy();
   });
 
-  it("card band: grid cells — an 'All cards' panel and an Amex-accent panel per card with its mask", async () => {
+  it("(P1) one card's words still loading: a same-height placeholder, never 'All cards'", async () => {
+    state.payoff = undefined;
+    window.history.replaceState(null, "", "/amex?card=ext-gold");
+    render(tree());
+    await waitFor(() => expect(screen.getByTestId("row-amex-g1")).toBeTruthy());
+    expect(screen.getByTestId("amex-head-card-loading")).toBeTruthy();
+    expect(screen.queryByTestId("amex-head-all-cards")).toBeNull();
+  });
+
+  it("(P1) /amex has no card band: the shell's card tabs choose the card", async () => {
     render(tree());
     await ready();
-    const all = screen.getByTestId("amex-tile-all");
-    const plat = tile("ext-plat");
-    // Cells of the page grid, not a grid of their own; three cells → span-4
-    // (a fourth card would make them span-3; two cells span-6).
-    expect(all.parentElement!.className).toContain("grid-12");
-    expect(plat.parentElement).toBe(all.parentElement);
-    for (const el of [all, plat]) expect(el.className).toContain("span-4");
-    expect(plat.className).toContain("panel-accent-amex");
-    expect(all.className).not.toContain("panel-accent");
-    expect(plat.textContent).toContain("••1005");
-    // (W7) Owed and purchases are the server's Summary figures (components/amexCardBand.test.tsx).
-    expect(plat.textContent).toContain("Owed");
-    expect(plat.textContent).not.toContain("cleared"); // (Q6b) the band is a selector: name + owed
-    // Add to Avalanche rides on every card panel (AX-27), not on "All cards".
-    expect(within(plat).getByText("add")).toBeTruthy();
-    expect(within(tile("ext-gold")).getByText("add")).toBeTruthy();
-    expect(within(all).queryByText("add")).toBeNull();
-    expect(all.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByTestId("amex-tile-all")).toBeNull();
+    expect(document.querySelector("[data-account-id]")).toBeNull();
   });
 
   it("ledger: one sticky-safe panel; its pane holds hide-reviewed; flush day groups; bulk bar under the pane", async () => {
@@ -243,11 +252,12 @@ describe("Amex page — the panel grid (C10)", () => {
     const pane = within(ledger).getByTestId("ledger-pane");
     expect(pane.className).toMatch(/^sticky top-0 /);
     expect(within(pane).getByTestId("button-hide-reviewed")).toBeTruthy();
+    expect(within(pane).getByTestId("amex-rowmode-toggle")).toBeTruthy();
     expect(screen.getByTestId("amex-page").style.getPropertyValue("--page-sticky-top")).toMatch(/px$/);
     expect(ledger.querySelectorAll('[data-variant="flush"]').length).toBeGreaterThan(0);
-    // Both row layouts are mounted (AX-31), inside the ledger panel.
-    expect(within(ledger).getByTestId("row-amex-p1")).toBeTruthy();
-    expect(within(ledger).getByTestId("row-amex-mobile-p1")).toBeTruthy();
+    // (P1) ONE row per transaction, phone and desktop alike, inside the ledger panel.
+    expect(within(ledger).getAllByTestId("row-amex-p1")).toHaveLength(1);
+    expect(within(ledger).queryByTestId("row-amex-mobile-p1")).toBeNull();
     fireEvent.click(within(screen.getByTestId("row-amex-p1")).getByRole("checkbox", { name: /^Select / }));
     const bar = await screen.findByTestId("amex-bulk-bar");
     expect(bar.style.top).toBe("var(--page-sticky-top, 0px)");
@@ -255,18 +265,40 @@ describe("Amex page — the panel grid (C10)", () => {
     expect(within(bar).getByTestId("button-bulk-mark-reviewed")).toBeTruthy();
   });
 
-  it("rows: the card label keeps its text on both layouts, with the Amex accent dot beside it", async () => {
+  it("rows: the card label keeps its text, with the Amex accent dot beside it; one card's rows have no Card column", async () => {
     render(tree());
     await ready();
-    for (const id of ["text-card-p1", "text-card-mobile-p1"]) {
-      const label = screen.getByTestId(id);
-      expect(label.textContent).toBe("Platinum ••1005");
-      expect(label.parentElement!.querySelector('[aria-hidden="true"]')!.className).toContain("bg-acct-amex");
-    }
+    const label = screen.getByTestId("text-card-p1");
+    expect(label.textContent).toBe("Platinum ••1005");
+    expect(label.className).not.toContain("truncate");
+    expect(label.parentElement!.querySelector('[aria-hidden="true"]')!.className).toContain("bg-acct-amex");
+    expect(screen.queryByTestId("text-card-mobile-p1")).toBeNull();
+    pushTab("/amex?card=ext-plat");
+    await waitFor(() => expect(screen.queryByTestId("row-amex-g1")).toBeNull());
+    expect(screen.queryByTestId("text-card-p1")).toBeNull();
   });
 });
 
 describe("Amex page embedded (/next/accounts/:id) — the same layout", () => {
+  it("the band renders grid cells: an 'All cards' panel and an Amex-accent panel per card with its mask", async () => {
+    render(tree({ embedded: true, accountId: "ext-plat" }));
+    await ready();
+    const all = screen.getByTestId("amex-tile-all");
+    const plat = tile("ext-plat");
+    // Cells of the page grid, not a grid of their own; three cells → span-4.
+    expect(all.parentElement!.className).toContain("grid-12");
+    expect(plat.parentElement).toBe(all.parentElement);
+    for (const el of [all, plat]) expect(el.className).toContain("span-4");
+    expect(plat.className).toContain("panel-accent-amex");
+    expect(all.className).not.toContain("panel-accent");
+    expect(plat.textContent).toContain("••1005");
+    expect(plat.textContent).toContain("Owed");
+    // Add to Avalanche rides on every card panel (AX-27), not on "All cards".
+    expect(within(plat).getByText("add")).toBeTruthy();
+    expect(within(tile("ext-gold")).getByText("add")).toBeTruthy();
+    expect(within(all).queryByText("add")).toBeNull();
+  });
+
   it("drops the title, keeps the actions, and puts the host's lead first in the card row", async () => {
     render(tree({ embedded: true, accountId: "ext-plat", lead: <section data-testid="lead" className="panel span-4" /> }));
     await ready();
@@ -330,7 +362,8 @@ describe("D3 — the card scope survives a cold load", () => {
     view.rerender(tree());
     await ready();
     expect(screen.queryByTestId("row-amex-g1")).toBeNull();
-    expect(tile("ext-plat").className).toContain("ring-2");
+    expect(screen.getByTestId("account-head-identity").textContent).toContain("••1005");
+    expect(screen.queryByTestId("amex-head-all-cards")).toBeNull();
   });
 
   it("(Q6b r3 review B) a card the band knows but with no rows yet stays chosen", async () => {
@@ -339,12 +372,12 @@ describe("D3 — the card scope survives a cold load", () => {
     state.payoff = { ...PAYOFF, cards: [...PAYOFF.cards, { ...PAYOFF.cards[0]!, accountId: "ext-new", plaidAccountId: "row-new", name: "Blue Cash", weekCharges: 0, chargeCount: 0 }] };
     state.wideTxns = ROWS(); // no row on ext-new anywhere in 12 months
     render(tree());
-    // Its own (empty) ledger: no other card's rows, and the band's tile for it stays selected.
-    await waitFor(() => expect(tile("ext-new")?.className ?? "").toContain("ring-2"));
+    // Its own (empty) ledger: no other card's rows, and the header still names it.
+    await waitFor(() => expect(screen.getByTestId("account-head-identity").textContent).toContain("••3003"));
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByTestId("row-amex-p1")).toBeNull();
     expect(screen.queryByTestId("row-amex-g1")).toBeNull();
-    expect(tile("ext-new").className).toContain("ring-2");
+    expect(screen.getByTestId("account-head-identity").textContent).toContain("••3003");
     expect(window.location.search).toContain("ext-new");
   });
 
@@ -354,6 +387,6 @@ describe("D3 — the card scope survives a cold load", () => {
     render(tree());
     await ready();
     await waitFor(() => expect(screen.getByTestId("row-amex-g1")).toBeTruthy());
-    expect(screen.getByTestId("amex-tile-all").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("amex-head-all-cards")).toBeTruthy();
   });
 });

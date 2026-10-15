@@ -251,6 +251,8 @@ test.describe("Ignore'd row dimming (#629)", () => {
       provisionedUserIds,
     );
 
+    // (P1) The bucket marks sit in the rows in Categorize mode (Review, the default, says it in words).
+    await page.addInitScript(() => window.localStorage.setItem("amex.rowMode", "categorize"));
     await signInAndOpen(page, email, password, "/amex");
     await expect(
       page.getByRole("heading", { name: /american express/i }),
@@ -346,7 +348,8 @@ test.describe("Ignore'd row dimming (#629)", () => {
       await expect(row).toHaveAttribute("data-ignored", "true", {
         timeout: 10_000,
       });
-      await expect(row).toHaveClass(/opacity-50/);
+      // (Q6a → P1) An Amex row is never faded: it says "Ignored" in words.
+      await expect(row.getByTestId(`chip-ignored-${txn.id}`)).toBeVisible();
 
       // --- WK bubble doesn't cancel the dim.
       {
@@ -355,7 +358,7 @@ test.describe("Ignore'd row dimming (#629)", () => {
         await reqP;
       }
       await expect(row).toHaveAttribute("data-ignored", "true");
-      await expect(row).toHaveClass(/opacity-50/);
+      await expect(row.getByTestId(`chip-ignored-${txn.id}`)).toBeVisible();
 
       // --- Restore to the non-Ignore category clears the dim.
       {
@@ -399,8 +402,8 @@ test.describe("Ignore'd row dimming (#629)", () => {
     // --- Desktop layout (≥md → table row).
     await exerciseLayout(`row-amex-${txn.id}`);
 
-    // --- Mobile layout (<md → stacked card row).
+    // --- Phone width: (P1) the same single row, wrapped.
     await page.setViewportSize({ width: 390, height: 844 });
-    await exerciseLayout(`row-amex-mobile-${txn.id}`);
+    await exerciseLayout(`row-amex-${txn.id}`);
   });
 });

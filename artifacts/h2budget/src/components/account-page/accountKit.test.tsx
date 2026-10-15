@@ -27,7 +27,15 @@ import { LedgerPanel } from "./ledger-panel";
 import { DayGroup } from "./day-group";
 import { LedgerColumns } from "./ledger-columns";
 import { AccountTransactionRow } from "./transaction-row";
-import { LEDGER_GRID, LEDGER_GRID_WIDE_ACTIONS } from "./ledger-grid";
+import {
+  AMEX_GRID_CATEGORIZE,
+  AMEX_GRID_CATEGORIZE_CARD,
+  AMEX_GRID_REVIEW,
+  AMEX_GRID_REVIEW_CARD,
+  LEDGER_GRID,
+  LEDGER_GRID_WIDE_ACTIONS,
+  amexLedgerGrid,
+} from "./ledger-grid";
 import { BalanceTrendChart } from "./balance-trend-chart";
 import { AccountPageHeader } from "./account-page-header";
 import { identityOf } from "@/lib/accountIdentity";
@@ -120,6 +128,45 @@ describe("ledger geometry is container-driven", () => {
     expect(cols.className).toContain(LEDGER_GRID_WIDE_ACTIONS);
     expect(cols.className).not.toMatch(/(^|\s)xl:/);
   });
+
+  it("(P1) the Amex tracks: a Card column only on All cards, words or marks in the spending column", () => {
+    expect(amexLedgerGrid("review", true)).toBe(AMEX_GRID_REVIEW_CARD);
+    expect(amexLedgerGrid("review", false)).toBe(AMEX_GRID_REVIEW);
+    expect(amexLedgerGrid("categorize", true)).toBe(AMEX_GRID_CATEGORIZE_CARD);
+    expect(amexLedgerGrid("categorize", false)).toBe(AMEX_GRID_CATEGORIZE);
+    for (const [g, n] of [[AMEX_GRID_REVIEW_CARD, 7], [AMEX_GRID_CATEGORIZE_CARD, 7], [AMEX_GRID_REVIEW, 6], [AMEX_GRID_CATEGORIZE, 6]] as const) {
+      expect(g).toMatch(/^@6xl:grid-cols-\[/);
+      expect(g.split("[")[1]!.split("_")).toHaveLength(n);
+    }
+    // The heads drop the Card column with the rows, and name the spending column.
+    render(<LedgerColumns gridClass={AMEX_GRID_REVIEW} cardLabel={null} bucketsLabel="Spending" />);
+    const cols = screen.getByTestId("ledger-columns");
+    expect(cols.children).toHaveLength(6);
+    expect(cols.textContent).not.toContain("Card");
+    expect(cols.textContent).toContain("Spending");
+  });
+});
+
+describe("LedgerPanel (P1)", () => {
+  it("can leave out the bucket legend and hand its heading to the page", () => {
+    const ref = createRef<HTMLDivElement>();
+    const title = createRef<HTMLHeadingElement>();
+    render(
+      <LedgerPanel title="Activity" paneRef={ref} pane={<span />} legend={false} titleRef={title}>
+        <div />
+      </LedgerPanel>,
+    );
+    expect(screen.queryByTestId("bucket-legend")).toBeNull();
+    expect(title.current?.textContent).toBe("Activity");
+    expect(title.current?.getAttribute("tabindex")).toBe("-1");
+    cleanup();
+    render(
+      <LedgerPanel title="Activity" paneRef={ref} pane={<span />}>
+        <div />
+      </LedgerPanel>,
+    );
+    expect(screen.getByTestId("bucket-legend")).toBeTruthy();
+  });
 });
 
 describe("AccountTransactionRow", () => {
@@ -203,6 +250,55 @@ describe("AccountTransactionRow", () => {
     expect(label.className).toContain("chip gray");
     row();
     expect(screen.queryByTestId("label-expired-hold-t1")).toBeNull();
+  });
+
+  it("(P1) with no slots (Chase) the row is unchanged: picker, marks, card cell, state chip, row menu", () => {
+    row({ stateLabel: "Reviewed", cardLabel: "Chase ••5526", hideDate: false });
+    const el = screen.getByTestId("row-tx-t1");
+    expect(screen.getByTestId("button-category-picker")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Weekly bucket" })).toBeTruthy();
+    expect(screen.getByTestId("text-card-t1").className).toContain("truncate");
+    expect(screen.getByTestId("chip-state-t1").textContent).toBe("Reviewed");
+    expect(screen.getByRole("button", { name: "More actions for HY-VEE #1234" })).toBeTruthy();
+    expect(el.lastElementChild!.className).not.toContain("basis-full");
+  });
+
+  it("(P1) the opt-in slots: own category and spending cells, no card cell, own statuses, a full-width region below", () => {
+    row({
+      categoryNode: <span data-testid="cat-slot">Dining</span>,
+      bucketsNode: <span data-testid="spend-slot">Weekly</span>,
+      showCard: false,
+      hideRename: true,
+      hideDate: true,
+      stateLabel: "Ignored",
+      statusNode: <span data-testid="status-slot">Pending</span>,
+      belowNode: <div data-testid="below-slot">details</div>,
+      wrapIndent: true,
+    });
+    expect(screen.getByTestId("cat-slot")).toBeTruthy();
+    expect(screen.queryByTestId("button-category-picker")).toBeNull();
+    expect(screen.getByTestId("spend-slot")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Weekly bucket" })).toBeNull();
+    expect(screen.queryByTestId("text-card-t1")).toBeNull();
+    // The page's statuses replace the state chip.
+    expect(screen.getByTestId("status-slot")).toBeTruthy();
+    expect(screen.queryByTestId("chip-state-t1")).toBeNull();
+    // No row menu (the page moves dates elsewhere).
+    expect(screen.queryByRole("button", { name: /More actions/ })).toBeNull();
+    const below = screen.getByTestId("below-slot").parentElement!;
+    expect(below.className).toContain("basis-full");
+    expect(below.className).toContain("@6xl:col-span-full");
+    expect(screen.getByTestId("row-tx-t1").contains(below)).toBe(true);
+    // Narrow two-line layout: merchant + amount first, a break, then the rest; the wide grid ignores it.
+    const brk = screen.getByTestId("row-tx-t1").querySelector('[aria-hidden="true"].basis-full')!;
+    expect(brk.className).toContain("@6xl:hidden");
+    expect(brk.className).toContain("order-2");
+  });
+
+  it("(P1) a household card name wraps instead of being cut", () => {
+    row({ cardLabel: "Platinum Card® ••2007", cardWrap: true });
+    expect(screen.getByTestId("text-card-t1").className).not.toContain("truncate");
+    expect(screen.getByTestId("text-card-t1").textContent).toBe("Platinum Card® ••2007");
   });
 
   it("a row with no label shows a dash and no dot (the Amex default grid)", () => {

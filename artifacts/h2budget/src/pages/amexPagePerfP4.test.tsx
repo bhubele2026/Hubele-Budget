@@ -42,6 +42,8 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/amex", () => undefined] as const,
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+// (P1) The household link reads the plan state (spine / period breakdown): not this test's subject.
+vi.mock("@/components/amex-over-link", () => ({ AmexOverLink: () => null }));
 vi.mock("@/components/plaid-link-button", () => ({ PlaidLinkButton: () => null }));
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => null }));
 vi.mock("@/components/category-picker", () => ({
@@ -215,10 +217,13 @@ afterEach(() => cleanup());
 const trendCalls = () => h.txCalls.filter((c) => c.limit >= 5000);
 
 describe("Amex page — fewer, earlier calls (P4)", () => {
-  it("the card band and the summary render while the month's rows are still loading", async () => {
+  it("the summary (with its By card list) renders while the month's rows are still loading", async () => {
     h.monthPending = true;
     renderPage();
-    await waitFor(() => expect(screen.getByTestId("amex-tile-all")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("amex-fig-owed").textContent).toContain("$1,234.50"));
+    expect(screen.getByTestId("amex-card-balances")).toBeTruthy();
+    // (P1) No standalone card band on /amex: the shell's card tabs select.
+    expect(screen.queryByTestId("amex-tile-all")).toBeNull();
     expect(screen.queryByTestId("account-page-skeleton")).toBeNull();
     expect(screen.getByTestId("ledger-chart-skeleton")).toBeTruthy();
   });
@@ -228,8 +233,8 @@ describe("Amex page — fewer, earlier calls (P4)", () => {
     await waitFor(() => expect(screen.getAllByText(/STARBUCKS/).length).toBeGreaterThan(0));
     expect(trendCalls().length).toBeGreaterThan(0);
     expect(trendCalls().every((c) => c.enabled === false)).toBe(true);
-    // (Q3) "All cards" draws no combined chart: the cards' balances hold its
-    // slot, and the 12-month read still waits until that slot is near.
+    // (Q3) "All cards" draws no combined chart. (P1) The 12-month read waits until the
+    // bottom of the activity (its slot) is near.
     expect(screen.getByTestId("amex-card-balances")).toBeTruthy();
     expect(screen.queryByTestId("amex-trend-pending")).toBeNull();
     act(() => {

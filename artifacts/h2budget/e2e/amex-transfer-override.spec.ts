@@ -140,11 +140,11 @@ test.describe("Transfer override flow on the Amex page (#494)", () => {
       page.getByRole("heading", { name: /^american express$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
-    // Both the desktop and mobile layouts render simultaneously
-    // (Tailwind `md:hidden` / `hidden md:block`). Click the desktop
-    // X — that's the one Playwright's default 1280x720 viewport sees.
+    // (P1) One row per transaction. The row says "Transfer"; clearing it
+    // ("Count as spending") lives in the row's Details.
     const transferBadge = page.getByTestId(`badge-transfer-${pillRow.id}`);
     await expect(transferBadge).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId(`button-row-details-${pillRow.id}`).click();
 
     const clearReqPromise = page.waitForRequest(
       (req) =>
