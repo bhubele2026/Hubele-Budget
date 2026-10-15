@@ -857,7 +857,7 @@ export default function AvalanchePage() {
                               {fmtMoney(t.minPayment)} min + {fmtMoney(t.extraForTarget)} extra
                             </span>
                             {t.killedThisMonth ? (
-                              <span className="chip ok">killed this month</span>
+                              <span className="chip ok">Killed this month</span>
                             ) : killDate ? (
                               <span className="text-micro text-neutral-400">
                                 projected kill{" "}

@@ -20,6 +20,8 @@ const h = vi.hoisted(() => ({
   placeholder: false,
   /** (Q4) Holds `getBankingReview` (the Show more cursor request) until released. */
   hold: null as Promise<void> | null,
+  /** The next Show more request fails once. */
+  failNext: false,
   /** (Q5) The signed-in person is the household owner. */
   owner: true as boolean,
   /** (Q5 fix) The spine's bank confidence (the account-wide pending count, the bank's figure today). */
@@ -48,6 +50,10 @@ vi.mock("@workspace/api-client-react/features", async (orig) => ({
   getBankingReview: async (params: Record<string, unknown>) => {
     h.calls.push({ ...params, via: "fetch" });
     if (h.hold) await h.hold;
+    if (h.failNext) {
+      h.failNext = false;
+      throw new Error("network");
+    }
     const key = `${params.bucket}|${params.kind ?? ""}|${params.cursor ?? ""}`;
     return { ...h.review, page: h.pages[key] ?? { bucket: params.bucket, kind: params.kind ?? null, rows: [], nextCursor: null, limit: 25 } };
   },
@@ -105,7 +111,14 @@ const totals = (count: number, net: string, o: Record<string, unknown> = {}) => 
   byReason: null,
   ...o,
 });
-const kt = (count: number, net: string) => ({ count, moneyIn: "0.00", moneyOut: "0.00", net, pendingNet: "0.00" });
+// A negative net is money out, a positive one money in (the server's own in / out split).
+const kt = (count: number, net: string) => ({
+  count,
+  moneyIn: Number(net) > 0 ? net : "0.00",
+  moneyOut: Number(net) < 0 ? net.replace("-", "") : "0.00",
+  net,
+  pendingNet: "0.00",
+});
 const flags = (o: Record<string, boolean> = {}) => ({
   unplannedAllowance: false,
   weeklyAllowance: false,
@@ -305,11 +318,11 @@ describe("Banking review — header and summary", () => {
     expect(within(screen.getByTestId("br-tie-cell")).getByText("Balance check")).toBeTruthy();
     expect(text("br-tie")).toBe("Not checked");
     // One name everywhere (the dashboard tile and the top bar say "review"). The count is THIS account and range, not the badge's.
-    expect(text("br-inbox")).toBe("15 to review");
+    expect(text("br-inbox")).toBe("15 charges to match");
     expect(text("br-inbox-scope")).toBe("This account · Oct 1 – Oct 14");
     // (Q5 fix) The destination opens on that month, so the list has the scope the chip names.
     expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review?month=2026-10");
-    expect(screen.getByTestId("br-inbox").getAttribute("aria-label")).toBe("15 to review, This account · Oct 1 – Oct 14");
+    expect(screen.getByTestId("br-inbox").getAttribute("aria-label")).toBe("15 charges to match, This account · Oct 1 – Oct 14");
     expect(screen.getByTestId("banking-review").textContent).not.toMatch(/Review inbox|to review this month|reconcile/i);
     expect(screen.getByTestId("br-tie-cell").textContent).not.toMatch(/reconcile|review/i);
   });
@@ -317,7 +330,7 @@ describe("Banking review — header and summary", () => {
   it("(Q5 fix) the to-review chip always ties to its destination: last month links to that month; a range the review page cannot show says the page's own count", () => {
     h.review = review({ reviewInbox: { unresolvedInRange: 1, unresolvedScope: "this account · this period", unresolvedFrom: "2026-09-01", unresolvedTo: "2026-09-30", badgeCount: 9, badgeScope: "this calendar month, forecast account" } });
     mount("/banking?from=2026-09-01&to=2026-09-30");
-    expect(text("br-inbox")).toBe("1 to review");
+    expect(text("br-inbox")).toBe("1 charge to match");
     expect(text("br-inbox-scope")).toBe("This account · Sep 1 – Sep 30");
     expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review?month=2026-09");
     cleanup();
@@ -332,21 +345,21 @@ describe("Banking review — header and summary", () => {
     cleanup();
     // This week is part of a month (the review page lists the whole month): the chip says the page's count and scope.
     mount("/banking?from=2026-10-11&to=2026-10-14");
-    expect(text("br-inbox")).toBe("9 to review");
+    expect(text("br-inbox")).toBe("9 charges to match");
     expect(text("br-inbox-scope")).toBe("Planned account · this month");
     expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review");
     cleanup();
     // Another account: the review page lists the planned account only.
     h.review = review({ account: { id: "acct-sav", institution: "Chase", name: "Savings", mask: "8802", isForecastAccount: false, lastSyncedAt: null }, freshness: null });
     mount("/banking?account=acct-sav");
-    expect(text("br-inbox")).toBe("16 to review");
+    expect(text("br-inbox")).toBe("16 charges to match");
     expect(text("br-inbox-scope")).toBe("Planned account · this month");
   });
 
-  it("an empty inbox reads 'Nothing to review'", () => {
+  it("an empty inbox reads 'Nothing to match'", () => {
     h.review = review({ reviewInbox: { unresolvedInRange: 0, unresolvedScope: "this account · this period", unresolvedFrom: "2026-10-01", unresolvedTo: "2026-10-14", badgeCount: 0, badgeScope: "this calendar month, forecast account" } });
     mount();
-    expect(text("br-inbox")).toBe("Nothing to review");
+    expect(text("br-inbox")).toBe("Nothing to match");
   });
 
   it("the order is the order of the questions: context, then what needs a decision, then not on the plan, planned, household", () => {
@@ -399,10 +412,13 @@ describe("Banking review — Not in the plan", () => {
     }
     expect(text("br-inout-unmatched-out")).toBe("Out $737.80");
     expect(screen.queryByTestId("br-inout-unmatched-in")).toBeNull();
-    const titles = ["Not on the plan", "Received or paid a different amount", "On a different day", "Marked not in plan", "Not sure"];
+    const titles = ["Unplanned activity", "Amount differences", "Timing differences", "Marked unplanned", "Unclear"];
     for (const t of titles) expect(screen.getAllByText(t).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Money in or out the plan did not list").length).toBeGreaterThan(0);
-    expect(screen.getByText("H2 can't tell yet")).toBeTruthy();
+    // compact pills in one labelled group; the selected one is pressed
+    const group = screen.getByRole("group", { name: "Not in the plan" });
+    expect(within(group).getAllByRole("button")).toHaveLength(5);
+    expect(screen.getByTestId("br-bucket-unmatched").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("br-bucket-amountDifference").getAttribute("aria-pressed")).toBe("false");
   });
 
   it("the section is open by default", () => {
@@ -414,8 +430,8 @@ describe("Banking review — Not in the plan", () => {
   it("a bucket reads aloud with its count, money in and money out apart", () => {
     h.review = review({ notInPlan: { ...review().notInPlan, unmatched: totals(2, "275.00", { moneyIn: "300.00", moneyOut: "25.00" }) } });
     mount();
-    expect(screen.getByTestId("br-bucket-unmatched").getAttribute("aria-label")).toBe("Not on the plan: 2 rows, money in $300.00, money out $25.00");
-    expect(screen.getByTestId("br-bucket-unmatched").getAttribute("title")).toBe("Not on the plan: 2 rows, money in $300.00, money out $25.00");
+    expect(screen.getByTestId("br-bucket-unmatched").getAttribute("aria-label")).toBe("Unplanned activity: 2 rows, money in $300.00, money out $25.00");
+    expect(screen.getByTestId("br-bucket-unmatched").getAttribute("title")).toBe("Unplanned activity: 2 rows, money in $300.00, money out $25.00");
     expect(text("br-inout-unmatched-in")).toBe("In $300.00");
     expect(text("br-inout-unmatched-out")).toBe("Out $25.00");
   });
@@ -423,9 +439,13 @@ describe("Banking review — Not in the plan", () => {
   it("Unmatched is split by kind, with the note that card payments, debt payments and transfers are not spending", () => {
     mount();
     const kinds = screen.getByTestId("br-kinds");
-    expect(text("br-kind-card_payment")).toContain("Card payment");
-    expect(text("br-kind-card_payment")).toContain("-$250.00");
-    expect(text("br-kind-debt_payment")).toContain("-$300.00");
+    // in / out apart, never a signed net
+    expect(text("br-kind-card_payment")).toBe("Card payment 1 · Out $250.00");
+    expect(text("br-kind-debt_payment")).toBe("Debt payment 1 · Out $300.00");
+    expect(text("br-kind-spending")).toBe("Spending 3 · Out $112.80");
+    expect(text("br-kind-income")).toBe("Income 1 · In $300.00");
+    expect(text("br-kind-all")).toBe("All 9");
+    expect(kinds.textContent).not.toMatch(/−|\+\$/);
     expect(kinds.textContent).toContain("Card and debt payments and transfers are not spending.");
     for (const k of ["spending", "transfer", "income", "refund", "other"]) expect(screen.getByTestId(`br-kind-${k}`)).toBeTruthy();
   });
@@ -490,7 +510,48 @@ describe("Banking review — Not in the plan", () => {
     expect(window.location.search).toContain("bucket=unmatched");
     expect(window.location.search).toContain("kind=card_payment");
     expect(h.calls.some((c) => c.bucket === "unmatched" && c.kind === "card_payment")).toBe(true);
-    expect(screen.getByTestId("br-detail").textContent).toContain("Not on the plan · Card payment");
+    expect(screen.getByTestId("br-detail").textContent).toContain("Unplanned activity · Card payment");
+  });
+
+  it("'All' clears the kind filter; kind chips live only inside Unplanned activity", () => {
+    mount("/banking?bucket=unmatched&kind=card_payment");
+    expect(screen.getByTestId("br-kind-all").getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId("br-kind-card_payment").getAttribute("aria-pressed")).toBe("true");
+    // the selected title shows that kind's own in / out
+    expect(text("br-sel-out")).toBe("Out $250.00");
+    expect(screen.queryByTestId("br-sel-in")).toBeNull();
+    fireEvent.click(screen.getByTestId("br-kind-all"));
+    expect(window.location.search).not.toContain("kind=");
+    expect(screen.getByTestId("br-kind-all").getAttribute("aria-pressed")).toBe("true");
+    // another bucket has no kind chips
+    fireEvent.click(screen.getByTestId("br-bucket-timingDifference"));
+    expect(screen.queryByTestId("br-kinds")).toBeNull();
+    expect(text("br-sel-note")).toBe("On the plan, but more than 3 days early or late");
+  });
+
+  it("one box: the rows sit directly under the title, no nested card, the household is a footnote", () => {
+    mount();
+    const detail = screen.getByTestId("br-detail");
+    expect(detail.className).not.toMatch(/ring-1|rounded-card|bg-neutral-50/);
+    expect(screen.getByTestId("br-household").className).not.toMatch(/ring-1|surface/);
+    expect(within(detail).getByRole("heading", { name: /Unplanned activity/ })).toBeTruthy();
+  });
+
+  it("Unclear says why: reason counts under the title", () => {
+    mount("/banking?bucket=uncertain");
+    expect(text("br-sel-note")).toBe("1 needs review · 1 suggested match");
+  });
+
+  it("Show more says it is loading, and a failed page says so and can be tried again", async () => {
+    h.pages["unmatched||"] = { bucket: "unmatched", kind: null, limit: 25, nextCursor: "CUR1", rows: [rowOf("p1")], truncated: true } as never;
+    mount();
+    const btn = screen.getByTestId("br-more");
+    expect(btn.textContent).toBe("Show more");
+    h.failNext = true;
+    fireEvent.click(btn);
+    expect(await screen.findByTestId("br-more-error")).toBeTruthy();
+    expect(screen.getByTestId("br-more-error").getAttribute("role")).toBe("alert");
+    expect(screen.getByTestId("br-more").textContent).toBe("Show more");
   });
 
   it("first load is ONE review request: the summary carries the default bucket's first page", () => {
@@ -525,7 +586,7 @@ describe("Banking review — Not in the plan", () => {
       planned: [],
     });
     mount();
-    expect(text("br-no-compare")).toContain("Not sure");
+    expect(text("br-no-compare")).toContain("Unclear");
   });
 });
 
@@ -789,14 +850,14 @@ describe("(F4, Q5, T2) Balance check — one state machine: one chip, one line, 
       reviewInbox: { unresolvedInRange: 0, unresolvedScope: "this account · this period", unresolvedFrom: "2026-10-01", unresolvedTo: "2026-10-14", badgeCount: 0, badgeScope: "this calendar month, forecast account" },
     });
     mount();
-    expect(text("br-inbox")).toBe("Nothing to review");
+    expect(text("br-inbox")).toBe("Nothing to match");
     expect(screen.getByTestId("br-tie").className).not.toContain("ok");
   });
 
   it("stays apart from the review count and from 'Updated'", () => {
     state({ status: "matches", reason: null, difference: "0.00" });
     expect(screen.getByTestId("br-tie-cell").textContent).not.toMatch(/reconcile|updated/i);
-    expect(text("br-inbox")).toBe("15 to review");
+    expect(text("br-inbox")).toBe("15 charges to match");
     expect(text("br-fresh")).toContain("Updated");
   });
 });
@@ -848,7 +909,7 @@ describe("(F4) Direction-aware words and the variance first", () => {
     expect(text("br-variance-elec")).toBe("$12.00 over");
     expect(screen.getByTestId("br-variance-pay").className).toContain("font-semibold");
     expect(screen.getByTestId("br-amount-pay").className).toContain("text-micro");
-    expect(text("br-amount-pay")).toBe("$2,391.40");
+    expect(text("br-amount-pay")).toBe("+$2,391.40");
     // costs cash -> the wrong colour; an under / more is not
     expect(screen.getByTestId("br-variance-elec").className).toContain("text-bad-ink");
     expect(screen.getByTestId("br-variance-under").className).not.toContain("text-bad-ink");
@@ -856,18 +917,18 @@ describe("(F4) Direction-aware words and the variance first", () => {
 
   it("the bucket card keeps money in and money out apart, each with its effect on cash", () => {
     diff();
-    expect(text("br-side-amountDifference-in")).toContain("Income $108.60 less than expected");
-    expect(text("br-side-amountDifference-in")).toContain("−$108.60 cash");
-    expect(text("br-side-amountDifference-out")).toContain("Bills $12.00 over");
-    expect(text("br-side-amountDifference-out")).toContain("−$12.00 cash");
-    expect(text("br-sides-amountDifference")).not.toContain("-$96.60");
-    // Money in and money out follow, apart: never a net called "total moved".
-    expect(text("br-inout-amountDifference-in")).toBe("In $2,391.40");
-    expect(text("br-inout-amountDifference-out")).toBe("Out $152.00");
+    expect(text("br-side-amountDifference-in")).toBe("Income $108.60 less");
+    expect(text("br-side-amountDifference-out")).toBe("Bills $12.00 over");
+    expect(text("br-sides-amountDifference")).not.toMatch(/cash|−|-\$96.60/);
+    // The pill says the variance; money in and out are in the aria and, once selected, the heading: never a net.
+    expect(screen.queryByTestId("br-inout-amountDifference-in")).toBeNull();
+    expect(text("br-sel-in")).toBe("In $2,391.40");
+    expect(text("br-sel-out")).toBe("Out $152.00");
+    expect(text("br-sel-note")).toBe("Income $108.60 less than expected · Bills $12.00 over");
     expect(screen.queryByTestId("br-net-amountDifference")).toBeNull();
     expect(screen.getByTestId("br-bucket-amountDifference").textContent).not.toMatch(/total moved|2,239/);
     // (Q5 fix) the variance lines the card shows lead its accessible name
-    expect(screen.getByTestId("br-bucket-amountDifference").getAttribute("aria-label")).toBe("Received or paid a different amount: Income $108.60 less than expected, Bills $12.00 over, 2 rows, money in $2,391.40, money out $152.00");
+    expect(screen.getByTestId("br-bucket-amountDifference").getAttribute("aria-label")).toBe("Amount differences: Income $108.60 less than expected, Bills $12.00 over, 2 rows, money in $2,391.40, money out $152.00");
   });
 
   it("a bucket with nothing comparing, or an exact one, shows no variance line", () => {

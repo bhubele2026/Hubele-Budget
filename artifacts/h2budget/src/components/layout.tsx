@@ -82,6 +82,17 @@ const MobileNav = lazy(importMobileNav);
 // Amex's per-card tabs are fed by their own small chunk, for the same reason.
 const AmexCardTabsFeed = lazy(() => import("@/components/amex-card-tabs-feed"));
 
+/**
+ * The Review pill says its two queues apart for a screen reader (the visible number stays the umbrella):
+ * "36 to review: 2 charges to match, 34 categories to confirm". An unknown queue is left out, never a zero.
+ */
+function reviewPillWords(total: number, charges: number | null | undefined, queue: number | null | undefined): string {
+  const c = charges ?? 0;
+  const q = queue ?? 0;
+  const parts = [c > 0 && `${c} charge${c === 1 ? "" : "s"} to match`, q > 0 && `${q} categor${q === 1 ? "y" : "ies"} to confirm`].filter(Boolean);
+  return `${total} to review${parts.length ? `: ${parts.join(", ")}` : ""}`;
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const search = useSearch();
@@ -315,7 +326,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link
                   href={reviewPillHref}
                   {...warmHandlers(prefetch, reviewPillHref)}
-                  aria-label={`${reviewCount} items to review`}
+                  aria-label={reviewPillWords(reviewCount, forecastReview, queueTotal)}
+                  title={reviewPillWords(reviewCount, forecastReview, queueTotal)}
                   data-testid="topnav-review-badge"
                   className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink"
                 >

@@ -336,7 +336,7 @@ describe("This week", () => {
     expect(order).toEqual(["$156.60", "$92.40", "$50.00"]);
     expect(screen.getByTestId("sp-usual-c-gro").textContent).toBe("usual by Wed $45.00");
     const chip = screen.getByTestId("sp-above-c-gro");
-    expect(chip.textContent).toBe("above usual $111.60");
+    expect(chip.textContent).toBe("Above usual $111.60");
     expect(chip.className).toContain("warn");
     expect(chip.className).not.toContain("bad");
     expect(screen.queryByTestId("sp-above-c-gas")).toBeNull();

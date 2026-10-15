@@ -173,13 +173,13 @@ export function catColor(index: number): string {
  * One speed dial for the whole kit. Everything below is `base * SPEED`, so
  * the charts draw at the same calm pace as the rest of the app's motion.
  */
-export const SPEED = 2.2;
+export const SPEED = 1;
 
 /** Full entrance sweep — bars grow, lines draw, areas rise. */
-export const REVEAL_MS = Math.round(700 * SPEED); // 1540
+export const REVEAL_MS = Math.round(700 * SPEED); // 700
 
 /** A shape MOVING to a new value (rank change, rescale) rather than arriving. */
-export const MORPH_MS = Math.round(600 * SPEED); // 1320
+export const MORPH_MS = Math.round(600 * SPEED); // 600
 
 /**
  * Recharts animates in JS, so the global CSS reduced-motion guard cannot

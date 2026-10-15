@@ -176,7 +176,7 @@ describe("palette — no aliases, no collisions", () => {
 
 describe("motion presets", () => {
   it("derives every duration from the one SPEED dial", () => {
-    expect(SPEED).toBe(2.2);
+    expect(SPEED).toBe(1);
     expect(REVEAL_MS).toBe(Math.round(700 * SPEED));
     expect(MORPH_MS).toBe(Math.round(600 * SPEED));
   });

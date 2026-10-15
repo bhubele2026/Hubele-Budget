@@ -16,14 +16,14 @@ import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries, accountViewOf } from "@/pages/next/accounts/entries";
 import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
-import { Help, input } from "@/ui";
+import { Help, figLabel, input, toggle } from "@/ui";
 import { BalanceCheck } from "./banking/BalanceCheck";
 import { BankBalanceWhy } from "@/components/bank-balance-why";
 import { BucketRows } from "./banking/BucketRows";
 import { ProposedFixes } from "./banking/ProposedFixes";
 import { PRESETS, isDay, presetOf, presetRange, rangeWords, sanitizeRange } from "./banking/reviewDates";
 import { bankingBase, bankingSummaryParams } from "./banking/reviewParams";
-import { BUCKETS, KIND_ORDER, KIND_WORDS, bucketAria, dayWords, isBucketName, isKind, isZeroMoney, plannedFateWords, sideWords, signedCash } from "./banking/words";
+import { BUCKETS, KIND_ORDER, KIND_WORDS, bucketAria, bucketNote, dayWords, isBucketName, isKind, isZeroMoney, kindChipWords, plannedFateWords, sideShort } from "./banking/words";
 import { WEEK_FIGURE_WORDS } from "@workspace/avalanche-core/glossary";
 import { bankFreshWords, freshKindOf } from "@/lib/bankFreshWords";
 import { useSpine } from "@/hooks/useSpine";
@@ -59,27 +59,28 @@ const dayCodec: UrlCodec<string> = { read: (raw) => (isDay(raw) ? raw : null), w
 const MIN = 60_000;
 
 const CELL = "surface rounded-card px-4 py-3 ring-1 ring-brand-line";
-const CELL_LABEL = "flex items-center gap-1.5 text-micro font-semibold uppercase tracking-wide text-neutral-500";
-const CELL_VALUE = "mt-1 font-mono text-display font-semibold tabular-nums text-brand-ink";
+const CELL_LABEL = cn("flex items-center gap-1.5", figLabel);
+const CELL_VALUE = "mt-1 whitespace-nowrap font-mono text-kpi font-semibold tabular-nums text-brand-ink";
 
 const face = (v: string | null | undefined) => (v == null || v === "" ? "—" : formatCurrency(v));
 const cents = (v: string | null | undefined) => (v == null ? 0 : Math.round(Number(v) * 100));
 
-function BucketCard({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)[number]; bucket: BankingReviewBucket; selected: boolean; onPick: () => void }) {
-  // (F4, Q5) The variance leads, per direction: income "less / more than expected", bills "over / under".
-  // Money in and money out are then shown apart (never one ambiguous net, never "total moved").
+/**
+ * One bucket as a compact pill: label and count, then the direction-aware total. Amount differences say
+ * the variance ("Income $87.87 less · Bills $12.00 over"); the others say what came in and went out
+ * ("In $135.13 · Out $4,603.46"). Never a net, never a signed cash line.
+ */
+function BucketPill({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)[number]; bucket: BankingReviewBucket; selected: boolean; onPick: () => void }) {
   const sides = [
-    { side: "in" as const, v: bucket.varianceIn },
-    { side: "out" as const, v: bucket.varianceOut },
-  ].flatMap((x) => {
-    const words = sideWords(x.side, x.v);
-    return words && x.v != null ? [{ ...x, words }] : [];
-  });
+    { side: "in" as const, words: sideShort("in", bucket.varianceIn) },
+    { side: "out" as const, words: sideShort("out", bucket.varianceOut) },
+  ].filter((x): x is { side: "in" | "out"; words: string } => !!x.words);
   const inOut = [
     { side: "in" as const, label: "In", v: bucket.moneyIn },
     { side: "out" as const, label: "Out", v: bucket.moneyOut },
   ].filter((x) => !isZeroMoney(x.v));
-  const aria = bucketAria(meta.title, bucket);  // variance lines first, as the card shows them
+  const aria = bucketAria(meta.title, bucket);  // variance lines first, then the count, then in and out
+  const second = meta.name === "amountDifference" && sides.length ? "sides" : "inout";
   return (
     <button
       type="button"
@@ -88,34 +89,35 @@ function BucketCard({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)
       aria-label={aria}
       title={aria}
       data-testid={`br-bucket-${meta.name}`}
-      className={cn(
-        "press surface flex flex-col items-stretch justify-start rounded-card px-3 py-3 text-left ring-1",
-        selected ? "ring-2 ring-brand-navy" : "ring-brand-line hover:bg-neutral-50",
-      )}
+      className={cn(toggle(selected), "flex flex-col items-stretch justify-start px-3 py-2 text-left")}
     >
-      <div className="text-label font-semibold text-brand-navy">{meta.title}</div>
-      <div className="mt-1 font-mono text-title font-semibold tabular-nums text-brand-ink" data-testid={`br-count-${meta.name}`}>{bucket.count}</div>
-      {sides.length ? (
-        <ul className="mt-1 space-y-0.5" data-testid={`br-sides-${meta.name}`}>
-          {sides.map((x) => (
-            <li key={x.side} className="text-label" data-testid={`br-side-${meta.name}-${x.side}`}>
-              <span className="block font-semibold text-brand-ink">{x.words}</span>
-              <span className="block font-mono text-micro tabular-nums text-neutral-600">{signedCash(x.v!)} cash</span>
-            </li>
-          ))}
-        </ul>
+      <span className="flex items-baseline justify-between gap-2">
+        <span className="text-label font-semibold">{meta.title}</span>
+        <span className="font-mono text-label font-semibold tabular-nums" data-testid={`br-count-${meta.name}`}>{bucket.count}</span>
+      </span>
+      {second === "sides" ? (
+        <span className="mt-0.5 flex flex-wrap gap-x-2 text-label font-normal text-neutral-600" data-testid={`br-sides-${meta.name}`}>
+          {sides.map((x) => <span key={x.side} className="tabular-nums" data-testid={`br-side-${meta.name}-${x.side}`}>{x.words}</span>)}
+        </span>
+      ) : inOut.length ? (
+        <span className="mt-0.5 flex flex-wrap gap-x-2 text-label font-normal text-neutral-600" data-testid={`br-inout-${meta.name}`}>
+          {inOut.map((x) => <span key={x.side} className="tabular-nums" data-testid={`br-inout-${meta.name}-${x.side}`}>{x.label} {formatCurrency(x.v)}</span>)}
+        </span>
       ) : null}
-      {inOut.length ? (
-        <ul className="mt-1 flex flex-wrap gap-x-3 text-micro text-neutral-600" data-testid={`br-inout-${meta.name}`}>
-          {inOut.map((x) => (
-            <li key={x.side} data-testid={`br-inout-${meta.name}-${x.side}`}>
-              {x.label} <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(x.v)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="mt-1 text-micro text-neutral-500">{meta.line}</div>
     </button>
+  );
+}
+
+/** The page's loading shape: the same blocks as the loaded page, so switching account or range does not collapse it. */
+function ReviewSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" data-testid="br-loading">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-24 rounded-card" />)}
+      </div>
+      <div className="skeleton h-10 w-full rounded-card" />
+      <div className="skeleton h-72 w-full rounded-card" />
+    </div>
   );
 }
 
@@ -189,6 +191,13 @@ export default function BankingReviewPage() {
   const selMeta = BUCKETS.find((b) => b.name === selected)!;
   const selBucket = bucketOf(selected);
   const selCount = kind && selBucket?.byKind ? selBucket.byKind[kind].count : (selBucket?.count ?? 0);
+  // The selected title's own In / Out: the kind's, when a kind is chosen.
+  const selTotals = kind && selBucket?.byKind ? selBucket.byKind[kind] : selBucket;
+  const showIn = !!selTotals && !isZeroMoney(selTotals.moneyIn);
+  const showOut = !!selTotals && !isZeroMoney(selTotals.moneyOut);
+  const selNote = selBucket ? bucketNote(selected, selBucket) : null;
+  const byKindSel = selected === "unmatched" ? selBucket?.byKind : null;
+  const notSpending = !!byKindSel && (byKindSel.card_payment.count > 0 || byKindSel.debt_payment.count > 0 || byKindSel.transfer.count > 0);
 
   // Where a row opens: the one route rule, with the account, month and row in the address.
   const ext = here?.plaidAccountId ?? null;
@@ -224,6 +233,7 @@ export default function BankingReviewPage() {
   const oldestReviewMonth = (() => { const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7)) - 12; const dt = new Date(Date.UTC(y, m - 1, 1)); return dt.toISOString().slice(0, 7); })();
   const inboxTies = !!d && d.account.isForecastAccount && wholeMonth && monthOfRange >= oldestReviewMonth && monthOfRange <= today.slice(0, 7);
   const inboxCount = d ? (inboxTies ? d.reviewInbox.unresolvedInRange : d.reviewInbox.badgeCount) : 0;
+  const inboxWords = inboxCount === 1 ? "1 charge to match" : inboxCount > 0 ? `${inboxCount} charges to match` : "Nothing to match";
   const inboxScope = inboxTies ? `This account · ${rangeWords(range, today)}` : "Planned account · this month";
   const inboxHref = inboxTies ? `/review?month=${monthOfRange}` : "/review";
   const needsOwnSync = !!d && d.account.id != null && !/chase|american express|amex/i.test(d.account.institution ?? "");
@@ -271,10 +281,7 @@ export default function BankingReviewPage() {
                 aria-pressed={activePreset === p.key}
                 onClick={() => pickRange(presetRange(p.key, today))}
                 data-testid={`br-preset-${p.key}`}
-                className={cn(
-                  "press rounded-control px-2.5 py-1 text-label font-semibold ring-1",
-                  activePreset === p.key ? "bg-brand-navy text-white ring-brand-navy" : "bg-white text-neutral-700 ring-brand-line hover:bg-neutral-50",
-                )}
+                className={toggle(activePreset === p.key)}
               >
                 {p.label}
               </button>
@@ -296,7 +303,7 @@ export default function BankingReviewPage() {
             <button type="button" className="underline" onClick={() => void q.refetch()}>Try again</button>
           </div>
         ) : (
-          <div className="skeleton h-24 w-full rounded-card" aria-busy="true" data-testid="br-loading" />
+          <ReviewSkeleton />
         )
       ) : (
         <>
@@ -362,9 +369,9 @@ export default function BankingReviewPage() {
                   href={inboxHref}
                   className="press chip gray"
                   data-testid="br-inbox"
-                  aria-label={inboxCount > 0 ? `${inboxCount} to review, ${inboxScope}` : "Nothing to review"}
+                  aria-label={`${inboxWords}, ${inboxScope}`}
                 >
-                  {inboxCount > 0 ? `${inboxCount} to review` : "Nothing to review"}
+                  {inboxWords}
                 </Link>
                 <span className="text-micro text-neutral-600" data-testid="br-inbox-scope">{inboxScope}</span>
               </div>
@@ -372,17 +379,17 @@ export default function BankingReviewPage() {
             <ProposedFixes defaultOpen={fixesParam === "1"} />
           </section>
 
-          <details open className="surface rounded-card ring-1 ring-brand-line" data-testid="br-notinplan">
+          <details open className="surface overflow-hidden rounded-card ring-1 ring-brand-line" data-testid="br-notinplan">
             <summary className="press cursor-pointer px-4 py-3 text-title font-semibold text-brand-navy">Not in the plan</summary>
-            <div className="space-y-3 border-t border-brand-line p-4">
+            <div className="space-y-3 border-t border-brand-line pt-3">
               {!d.planComparison.available ? (
-                <p className="text-label text-neutral-600" data-testid="br-no-compare">
-                  H2 plans from one account. Rows here are listed as "Not sure".
+                <p className="px-4 text-label text-neutral-600" data-testid="br-no-compare">
+                  Plans are compared on the planned account only. Rows here are listed as "Unclear".
                 </p>
               ) : null}
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              <div role="group" aria-label="Not in the plan" className="grid auto-rows-fr grid-cols-2 gap-2 px-4 sm:grid-cols-3 lg:grid-cols-5">
                 {BUCKETS.map((b) => (
-                  <BucketCard
+                  <BucketPill
                     key={b.name}
                     meta={b}
                     bucket={d.notInPlan[b.name]}
@@ -392,58 +399,62 @@ export default function BankingReviewPage() {
                 ))}
               </div>
 
-              {d.notInPlan.unmatched.byKind && d.notInPlan.unmatched.count > 0 ? (
-                <div data-testid="br-kinds">
-                  <div className="text-label font-semibold text-brand-navy">Not on the plan, by kind</div>
-                  <div className="mt-1.5 flex flex-wrap gap-2">
-                    {KIND_ORDER.filter((k) => d.notInPlan.unmatched.byKind![k].count > 0).map((k) => {
-                      const t = d.notInPlan.unmatched.byKind![k];
-                      const on = selected === "unmatched" && kind === k;
-                      return (
-                        <button
-                          key={k}
-                          type="button"
-                          aria-pressed={on}
-                          onClick={() => pickBucket("unmatched", k)}
-                          data-testid={`br-kind-${k}`}
-                          className={cn(
-                            "press rounded-control px-2.5 py-1 text-label ring-1",
-                            on ? "bg-brand-navy text-white ring-brand-navy" : "bg-white text-neutral-700 ring-brand-line hover:bg-neutral-50",
-                          )}
-                        >
-                          {KIND_WORDS[k]} <span className="font-mono tabular-nums">{t.count}</span> · <span className="font-mono tabular-nums">{formatCurrency(t.net)}</span>
-                        </button>
-                      );
-                    })}
+              <section className="border-t border-brand-line" data-testid="br-detail" aria-label={selMeta.title}>
+                <div className="space-y-1 px-4 pt-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <h3 className="text-body font-semibold text-brand-navy">
+                      {selMeta.title}{kind ? ` · ${KIND_WORDS[kind]}` : ""}
+                      <span className="ml-2 font-mono text-label tabular-nums text-neutral-600" data-testid="br-sel-count">{selCount}</span>
+                    </h3>
+                    {showIn || showOut ? (
+                      <p className="flex gap-x-3 text-label text-neutral-600">
+                        {showIn ? <span data-testid="br-sel-in">In <span className="font-mono tabular-nums">{formatCurrency(selTotals!.moneyIn)}</span></span> : null}
+                        {showOut ? <span data-testid="br-sel-out">Out <span className="font-mono tabular-nums">{formatCurrency(selTotals!.moneyOut)}</span></span> : null}
+                      </p>
+                    ) : null}
                   </div>
-                  <p className="mt-1.5 text-micro text-neutral-500">Card and debt payments and transfers are not spending.</p>
-                </div>
-              ) : null}
-
-              <section className="overflow-hidden rounded-card ring-1 ring-brand-line" data-testid="br-detail" aria-label={selMeta.title}>
-                <div className="border-b border-brand-line bg-neutral-50 px-4 py-2.5">
-                  <h2 className="text-body font-semibold text-brand-navy">
-                    {selMeta.title}{kind ? ` · ${KIND_WORDS[kind]}` : ""}
-                    <span className="ml-2 font-mono text-label tabular-nums text-neutral-500">{selCount}</span>
-                  </h2>
-                  <p className="text-micro text-neutral-500">{selMeta.line}</p>
+                  {selNote ? <p className="text-label text-neutral-600" data-testid="br-sel-note">{selNote}</p> : null}
                   {selected === "uncertain" && selBucket?.byReason && selBucket.byReason.not_compared.count > 0 ? (
-                    <p className="mt-0.5 text-micro text-neutral-500" data-testid="br-not-compared">
+                    <p className="text-label text-neutral-600" data-testid="br-not-compared">
                       {selBucket.byReason.not_compared.count} not compared: older than 60 days, after today, or on another account.
                     </p>
                   ) : null}
+                  {selected === "unmatched" && d.notInPlan.unmatched.byKind && d.notInPlan.unmatched.count > 0 ? (
+                    <div className="space-y-1.5 pb-1 pt-1" data-testid="br-kinds">
+                      <div role="group" aria-label="Filter by kind" className="flex flex-wrap gap-2">
+                        <button type="button" aria-pressed={kind === null} onClick={() => pickBucket("unmatched")} data-testid="br-kind-all" className={toggle(kind === null)}>
+                          All <span className="font-mono tabular-nums">{d.notInPlan.unmatched.count}</span>
+                        </button>
+                        {KIND_ORDER.filter((k) => d.notInPlan.unmatched.byKind![k].count > 0).map((k) => (
+                          <button
+                            key={k}
+                            type="button"
+                            aria-pressed={kind === k}
+                            onClick={() => pickBucket("unmatched", k)}
+                            data-testid={`br-kind-${k}`}
+                            className={toggle(kind === k)}
+                          >
+                            {kindChipWords(k, d.notInPlan.unmatched.byKind![k])}
+                          </button>
+                        ))}
+                      </div>
+                      {notSpending ? <p className="text-label text-neutral-600">Card and debt payments and transfers are not spending.</p> : null}
+                    </div>
+                  ) : null}
                 </div>
-                <BucketRows
-                  key={`${accountId}|${range.from}|${range.to}|${selected}|${kind ?? ""}|${rowsKey}`}
-                  base={base}
-                  bucket={selected}
-                  kind={kind}
-                  cursors={cursors}
-                  onMore={(c) => setCursors((cur) => [...cur, c])}
-                  hrefOf={hrefOf}
-                  empty={selCount === 0}
-                  seed={selBucket ? { rows: selBucket.rows, truncated: selBucket.truncated } : null}
-                />
+                <div className="mt-2 border-t border-brand-line/70">
+                  <BucketRows
+                    key={`${accountId}|${range.from}|${range.to}|${selected}|${kind ?? ""}|${rowsKey}`}
+                    base={base}
+                    bucket={selected}
+                    kind={kind}
+                    cursors={cursors}
+                    onMore={(c) => setCursors((cur) => [...cur, c])}
+                    hrefOf={hrefOf}
+                    empty={selCount === 0}
+                    seed={selBucket ? { rows: selBucket.rows, truncated: selBucket.truncated } : null}
+                  />
+                </div>
               </section>
             </div>
           </details>
@@ -476,7 +487,7 @@ export default function BankingReviewPage() {
           </details>
 
           {d.household ? (
-            <section className="surface rounded-card px-4 py-3 ring-1 ring-brand-line" data-testid="br-household">
+            <section className="border-t border-brand-line pt-3" data-testid="br-household">
               <h2 className="text-label font-semibold text-brand-navy">All accounts · this week</h2>
               <dl className="mt-1.5 flex flex-wrap gap-x-6 gap-y-1 text-label">
                 <div className="flex gap-2"><dt className="text-neutral-600">{WEEK_FIGURE_WORDS.known}</dt><dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-spent">{formatCurrency(d.household.knownWeek)}</dd></div>

@@ -61,7 +61,6 @@ import { moneyFace } from "@/components/data-state";
 import { CHART } from "@/lib/chartTokens";
 import { emptyNote, fieldLabel, Help } from "@/ui";
 import { Panel, StatBlock, type PanelSpan } from "@/components/next";
-import { useCountUp } from "@/hooks/useCountUp";
 
 // Recharts ships these as class components, which TypeScript + React 19's
 // @types/react can no longer accept as JSX element constructors. Re-bind each
@@ -263,8 +262,7 @@ export function Stat(props: {
   span?: PanelSpan | null;
   "data-testid"?: string;
 }) {
-  const counted = useCountUp(typeof props.value === "number" ? props.value : null);
-  const shown = typeof props.value === "number" ? String(Math.round(counted)) : props.value;
+  const shown = typeof props.value === "number" ? String(Math.round(props.value)) : props.value;
   const span = props.span === undefined ? 3 : props.span;
   return (
     <div

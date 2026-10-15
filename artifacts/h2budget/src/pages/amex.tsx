@@ -80,7 +80,6 @@ import {
   BalanceTrendChart,
   DayGroup,
   MonthNavigator,
-  StatChip,
   monthKeyOf,
   monthKeyFromISO,
   compareMonth,

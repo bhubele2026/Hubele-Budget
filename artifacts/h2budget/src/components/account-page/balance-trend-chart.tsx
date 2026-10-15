@@ -12,7 +12,7 @@ import {
   RcReferenceLine as ReferenceLine,
   RcLabel as RechartsLabel,
 } from "@/lib/charts";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Panel } from "@/components/next/Panel";
 import type { AccountAccentName } from "@/lib/accountIdentity";
@@ -451,39 +451,43 @@ function MultiSeriesBalanceTrendChart({
   // historical and actual-from-today series are folded into a single
   // `actual` field so they render as one continuous solid line that
   // meets — and then continues past — today's real balance.
-  const byDate = new Map<string, MergedRow>();
-  const ensure = (date: string): MergedRow => {
-    let row = byDate.get(date);
-    if (!row) {
-      row = { date, actual: null, forecast: null };
-      byDate.set(date, row);
-    }
-    return row;
-  };
-  // Seed the full window scaffold first so the axis spans the whole
-  // ~12-month range even when the forecast is sparse or still loading.
-  for (const d of axisDates ?? []) ensure(d);
-  for (const p of historicalActual) ensure(p.date).actual = p.balance;
-  for (const p of actualFromToday) ensure(p.date).actual = p.balance;
-  for (const p of forecastFromToday) ensure(p.date).forecast = p.balance;
+  // Memoised on the CONTENT (a fresh array each render restarts the chart's draw), before the early return.
+  const fp = JSON.stringify([axisDates ?? [], historicalActual, actualFromToday, forecastFromToday]);
+  const { merged, monthTicks } = useMemo(() => {
+    const byDate = new Map<string, MergedRow>();
+    const ensure = (date: string): MergedRow => {
+      let row = byDate.get(date);
+      if (!row) {
+        row = { date, actual: null, forecast: null };
+        byDate.set(date, row);
+      }
+      return row;
+    };
+    // Seed the full window scaffold first so the axis spans the whole
+    // ~12-month range even when the forecast is sparse or still loading.
+    for (const d of axisDates ?? []) ensure(d);
+    for (const p of historicalActual) ensure(p.date).actual = p.balance;
+    for (const p of actualFromToday) ensure(p.date).actual = p.balance;
+    for (const p of forecastFromToday) ensure(p.date).forecast = p.balance;
 
-  const merged = Array.from(byDate.values()).sort((a, b) =>
-    a.date.localeCompare(b.date),
-  );
+    const rows = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Explicit monthly ticks: the first bucket date of each distinct
+    // calendar month present in the data. Keeps the axis to clean monthly
+    // labels across the ~12-month span instead of one tick per week.
+    const ticks: string[] = [];
+    const seenMonths = new Set<string>();
+    for (const row of rows) {
+      const mk = row.date.slice(0, 7);
+      if (!seenMonths.has(mk)) {
+        seenMonths.add(mk);
+        ticks.push(row.date);
+      }
+    }
+    return { merged: rows, monthTicks: ticks };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fp]);
   if (merged.length === 0) return null;
-
-  // Explicit monthly ticks: the first bucket date of each distinct
-  // calendar month present in the data. Keeps the axis to clean monthly
-  // labels across the ~12-month span instead of one tick per week.
-  const monthTicks: string[] = [];
-  const seenMonths = new Set<string>();
-  for (const row of merged) {
-    const mk = row.date.slice(0, 7);
-    if (!seenMonths.has(mk)) {
-      seenMonths.add(mk);
-      monthTicks.push(row.date);
-    }
-  }
 
   return (
     <ChartFrame

@@ -19,11 +19,10 @@ const QUIET = "bg-transparent px-1 text-label font-semibold text-brand-navy ring
 
 /** The morning text preview (and the request behind it) load on first open only. */
 const RecapPreview = lazyWithPreload(() => import("./RecapPreview"));
-const BankConfidence = lazyWithPreload(() => import("./BankConfidence"));
 
 /**
- * ⭐ THE HEADER: what day it is, one factual line built from the spine, how
- * fresh each bank is, and ONE action. Eager (first screen), no panel chrome:
+ * ⭐ THE HEADER: what day it is, how fresh each bank connection is (the check and
+ * the pending count live on the Banking tile, once), and ONE action. Eager (first screen), no panel chrome:
  * it is the page's own head, not a card.
  */
 export default function DashboardHeader() {
@@ -65,7 +64,7 @@ export default function DashboardHeader() {
             Today <span className="font-normal text-neutral-500">· {weekdayLabel(today)}</span>
           </h1>
           {banks.length ? (
-            <ul className="mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-micro text-neutral-600" data-testid="dash-bank-fresh">
+            <ul className="mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-label text-neutral-600" data-testid="dash-bank-fresh">
               {banks.map((b) => (
                 <li key={b.itemId} data-state={b.state}>
                   <span
@@ -78,11 +77,6 @@ export default function DashboardHeader() {
                 </li>
               ))}
             </ul>
-          ) : null}
-          {s?.bankConfidence ? (
-            // (Q5) Two lines are reserved below sm (the line wraps there): the tiles do not move when the chunk lands.
-            // The checking account's confidence: updated · check · pending, apart. Green only for a matching, fresh check.
-            <div className="mt-1 min-h-[2.25rem] sm:min-h-4"><Suspense fallback={null}><BankConfidence s={s} variant="header" /></Suspense></div>
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>

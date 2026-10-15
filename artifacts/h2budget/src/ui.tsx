@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
-import { useCountUp } from "@/hooks/useCountUp";
 
 /**
  * The kit — shared class strings and the four components the whole app builds
@@ -59,8 +58,20 @@ export const inputInline =
 export const fieldLabel =
   "text-micro font-semibold uppercase tracking-wide text-neutral-500";
 
+/** A figure's label above its number: label size, readable grey (dashboard `LABEL` stays: it doubles as group headings). */
+export const figLabel = "text-label font-medium text-neutral-600";
+
+/**
+ * A toggle (range preset, pill, kind chip, horizon): selected is the quiet navy tint with a navy ring, so
+ * solid navy stays the primary button (`btn`). Pair with `aria-pressed`.
+ */
+export const toggle = (on: boolean) =>
+  `press rounded-control px-2.5 py-1 text-label font-semibold ring-1 ${
+    on ? "bg-acct-checking-bg text-brand-navy ring-2 ring-brand-navy" : "bg-white text-neutral-700 ring-brand-line hover:bg-neutral-50"
+  }`;
+
 export const th =
-  "whitespace-nowrap border-b border-brand-line px-4 py-2.5 text-left text-micro font-semibold uppercase tracking-wide text-neutral-400";
+  "whitespace-nowrap border-b border-brand-line px-4 py-2.5 text-left text-micro font-semibold uppercase tracking-wide text-neutral-500";
 export const td = "border-b border-brand-line/70 px-4 py-2 text-body";
 /** Money and counts: mono, tabular, right-aligned. They must line up down a
  *  column and must never reflow as they update. */
@@ -68,7 +79,7 @@ export const tdNum = `${td} text-right font-mono text-label tabular-nums`;
 
 export const errorBanner =
   "mb-4 rounded-card bg-bad-bg px-4 py-2.5 text-body text-bad ring-1 ring-bad/15";
-export const emptyNote = "px-4 py-5 text-center text-body text-neutral-400";
+export const emptyNote = "px-4 py-5 text-center text-body text-neutral-600";
 
 /** A titled page. No padding of its own: the shell's `.shell-pad` already pads
  *  every page, and a second `px-6 py-8` inside it doubled the gutter. */
@@ -96,7 +107,7 @@ export function Crumbs(props: {
   return (
     <nav
       aria-label="Breadcrumb"
-      className={`mb-1 flex flex-wrap items-center gap-1 text-micro ${strong ? "text-muted-foreground" : "text-neutral-400"}`}
+      className={`mb-1 flex flex-wrap items-center gap-1 text-micro ${strong ? "text-muted-foreground" : "text-neutral-500"}`}
     >
       {props.trail.map((c, i) => (
         <span key={`${c.label}-${i}`} className="flex items-center gap-1">
@@ -113,7 +124,7 @@ export function Crumbs(props: {
               {c.label}
             </Link>
           ) : (
-            <span className={strong ? "px-1 py-0.5 font-semibold text-brand-navy" : "px-1 py-0.5 text-neutral-400"}>
+            <span className={strong ? "px-1 py-0.5 font-semibold text-brand-navy" : "px-1 py-0.5 text-neutral-500"}>
               {c.label}
             </span>
           )}
@@ -147,11 +158,9 @@ export function Stat(props: {
   "data-testid"?: string;
 }) {
   const tone = props.tone === "bad" ? "text-bad" : "text-brand-navy";
-  // A plain number rises into place; anything pre-formatted ("5 / 12", money)
+  // A plain number is rounded; anything pre-formatted ("5 / 12", money)
   // is rendered as given — never re-format someone else's string.
-  const counted = useCountUp(typeof props.value === "number" ? props.value : null);
-  const shown =
-    typeof props.value === "number" ? Math.round(counted) : props.value;
+  const shown = typeof props.value === "number" ? Math.round(props.value) : props.value;
   const clickable = props.onClick
     ? "surface-lift cursor-pointer text-left hover:ring-brand-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
     : "";
@@ -171,7 +180,7 @@ export function Stat(props: {
       <div className={`mt-0.5 font-mono text-title font-semibold tabular-nums ${tone}`}>
         {shown}
       </div>
-      {props.hint ? <div className="mt-0.5 text-micro text-neutral-400">{props.hint}</div> : null}
+      {props.hint ? <div className="mt-0.5 text-micro text-neutral-600">{props.hint}</div> : null}
     </Tag>
   );
 }
@@ -192,7 +201,7 @@ export function Help(props: { children: string; className?: string }) {
       tabIndex={0}
       role="note"
       aria-label={props.children}
-      className={`press inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full text-[9px] font-semibold text-neutral-400 ring-1 ring-brand-line hover:text-brand-navy hover:ring-brand-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 ${props.className ?? ""}`}
+      className={`press inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full text-[9px] font-semibold text-neutral-500 ring-1 ring-brand-line hover:text-brand-navy hover:ring-brand-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 ${props.className ?? ""}`}
     >
       ?
     </span>
@@ -213,7 +222,7 @@ export function Foot(props: {
   return (
     <p
       data-testid={props["data-testid"]}
-      className={`border-t border-brand-line px-4 py-2 text-micro text-neutral-400 ${props.className ?? ""}`}
+      className={`border-t border-brand-line px-4 py-2 text-micro text-neutral-600 ${props.className ?? ""}`}
     >
       {props.children}
     </p>

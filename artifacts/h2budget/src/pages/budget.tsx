@@ -838,7 +838,7 @@ export default function BudgetPage() {
                 className="mt-1 font-mono text-hero font-semibold leading-none tabular-nums text-brand-navy"
                 data-testid="hero-planned"
               >
-                <MoneyText countUp amount={plannedTotal} />
+                <MoneyText amount={plannedTotal} />
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-label text-neutral-500">
                 <span data-testid="hero-basis">
@@ -858,14 +858,12 @@ export default function BudgetPage() {
               <StatBlock
                 data-testid="tile-spent"
                 label="Spent so far"
-                countUp
                 value={actualTotal}
                 hint={`of ${formatCurrency(plannedTotal)} planned`}
               />
               <StatBlock
                 data-testid="tile-left-to-earn"
                 label="Left over"
-                countUp
                 value={Number(plan.net)}
                 tone={Number(plan.net) < 0 ? "bad" : "neutral"}
                 hint="income less the plan"
@@ -873,7 +871,6 @@ export default function BudgetPage() {
               <StatBlock
                 data-testid="tile-income"
                 label="Income"
-                countUp
                 value={plannedIncome}
                 hint={`${formatCurrency(plan.income.actual)} in so far`}
               />

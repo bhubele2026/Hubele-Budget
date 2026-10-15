@@ -20,6 +20,7 @@ import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
 import { SpendingWhy } from "@/pages/next/dashboard/SpendingPanel";
 import { cn, formatCurrency } from "@/lib/utils";
+import { figLabel } from "@/ui";
 import { periodParams, PERIOD_MIN } from "./periodParams";
 import { Breakdown, provisionalLine } from "./Breakdown";
 import { weekStatus, withinOfRemaining } from "@/lib/weekFigures";
@@ -44,8 +45,8 @@ const NONE: string[] = [];
 const MIN = PERIOD_MIN;
 
 const CELL = "surface rounded-card px-4 py-3 ring-1 ring-brand-line";
-const CELL_LABEL = "text-micro font-semibold uppercase tracking-wide text-neutral-600";
-const CELL_VALUE = "mt-1 font-mono text-display font-semibold tabular-nums";
+const CELL_LABEL = figLabel;
+const CELL_VALUE = "mt-1 whitespace-nowrap font-mono text-kpi font-semibold tabular-nums";
 
 export function PeriodView({ view }: { view: PeriodView }) {
   const today = useMemo(() => householdToday(new Date()), []);

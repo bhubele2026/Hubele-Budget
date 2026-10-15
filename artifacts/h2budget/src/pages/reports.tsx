@@ -216,7 +216,7 @@ export default function ReportsPage() {
           index={2}
           label="Spending"
           href="/reports/spending"
-          value={facts ? <MoneyText countUp amount={spent} /> : "—"}
+          value={facts ? <MoneyText amount={spent} /> : "—"}
           sub={
             uncategorizedSpent > 0 ? (
               <>

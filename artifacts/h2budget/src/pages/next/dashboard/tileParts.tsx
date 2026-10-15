@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { cn } from "@/lib/utils";
+import { figLabel } from "@/ui";
 import { money, rise } from "./shared";
 
 /** The tile shell and its small parts, shared by Tiles.tsx and the lazy week tile. */
@@ -84,7 +85,7 @@ export function Fig({ label, value, tone = "neutral", big = false, testid }: {
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-micro font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
+      <div className={figLabel}>{label}</div>
       <div
         data-testid={testid}
         className={cn("font-mono font-semibold tabular-nums", big ? "text-kpi" : "text-body", tone === "bad" ? "text-bad-ink" : "text-brand-navy")}

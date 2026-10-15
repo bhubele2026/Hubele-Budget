@@ -141,32 +141,16 @@ describe("header", () => {
     expect(li.getAttribute("data-state")).toBe("ok");
     expect(li.textContent).not.toContain("not synced yet");
   });
-  it("(Q5 fix) the confidence line's room is reserved below sm (it wraps there), so the tiles do not move when its chunk lands", async () => {
+  it("the header carries the bank connection lines only: the check, updated and pending live once, on the Banking tile", () => {
     h.spine.data = spine({ bankConfidence: { fetchedAt: "2026-10-08T15:00:00Z", bankBalance: "4180.50", bankAsOf: null, h2Balance: "4200.50", pendingCount: 1, check: { status: "matches", reason: null, stale: false, staleReason: null, checkedAt: "2026-10-08T14:00:00Z", difference: "0.00", direction: null } } });
     wrap(<DashboardHeader />);
-    const line = await screen.findByTestId("dash-bank-confidence");
-    expect(line.parentElement!.className).toContain("min-h-[2.25rem]");
-    expect(line.parentElement!.className).toContain("sm:min-h-4");
-  });
-  it("(Q5) the checking account's confidence, apart from the per-bank dots: updated, check, pending", async () => {
-    const bc = (check: Record<string, unknown>, o: Record<string, unknown> = {}) => ({
-      fetchedAt: "2026-10-08T15:00:00Z", bankBalance: "4180.50", bankAsOf: "2026-10-07T20:00:00Z", h2Balance: "4200.50", pendingCount: 1,
-      check: { status: "matches", reason: null, stale: false, staleReason: null, checkedAt: "2026-10-08T14:00:00Z", difference: "0.00", direction: null, ...check }, ...o,
-    });
-    h.spine.data = spine({ bankConfidence: bc({}) });
-    const a = wrap(<DashboardHeader />);
-    const line = await screen.findByTestId("dash-bank-confidence");
-    expect(line.getAttribute("data-tone")).toBe("ok");
-    expect(screen.getByTestId("dash-bank-updated").textContent).toBe("Updated 2 h ago");
-    expect(screen.getByTestId("dash-bank-check").textContent).toBe("Balances match");
-    expect(screen.getByTestId("dash-bank-pending").textContent).toBe("1 pending");
-    a.unmount();
-    // Never checked: grey, with the reason; an all-clear review count cannot make it green.
-    h.spine.data = spine({ reviewCount: 0, bankConfidence: bc({ status: "not_checked", reason: "anchor_too_old", checkedAt: null, difference: null }, { pendingCount: 0 }) });
-    wrap(<DashboardHeader />);
-    expect((await screen.findByTestId("dash-bank-confidence")).getAttribute("data-tone")).toBe("grey");
-    expect(screen.getByTestId("dash-bank-check").textContent).toBe("Not checked");
+    expect(screen.queryByTestId("dash-bank-confidence")).toBeNull();
+    expect(screen.queryByTestId("dash-bank-updated")).toBeNull();
+    expect(screen.queryByTestId("dash-bank-check")).toBeNull();
     expect(screen.queryByTestId("dash-bank-pending")).toBeNull();
+    expect(screen.getByTestId("dash-bank-fresh").textContent).toContain("Chase · synced 2 h ago");
+    // the connection lines are label size now
+    expect(screen.getByTestId("dash-bank-fresh").className).toContain("text-label");
   });
   it("ONE action by priority: Reconnect beats a week over plan, which beats Afford", () => {
     h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "refresh_failed" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00", remainingWeekKnown: "-25.00" } });
@@ -841,6 +825,21 @@ describe("cash-flow forecast", () => {
     expect(h.horizons.at(-1)).toBe(30);
     expect(screen.getByTestId("dash-horizon-30").getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("dash-forecast-low").textContent).toContain("these 30 days");
+  });
+  it("offers 30, 90 and 120 days (the server's horizons), never 180", () => {
+    h.Q.cash = ok(signal());
+    wrap(<ForecastPanel />);
+    expect(screen.getByTestId("dash-horizon-120")).toBeTruthy();
+    expect(screen.queryByTestId("dash-horizon-180")).toBeNull();
+  });
+  it("a horizon switch keeps the last answer mounted, dimmed and busy, and says 'Loading N days…' instead of the old low point", () => {
+    h.Q.cash = { ...ok(signal()), isPlaceholderData: true };
+    wrap(<ForecastPanel />);
+    expect(screen.getByTestId("dash-forecast-chart").className).toContain("opacity-60");
+    expect(screen.getByTestId("dash-forecast-chart").getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByTestId("dash-forecast-loading").textContent).toBe("Loading 90 days…");
+    expect(screen.queryByTestId("dash-forecast-low")).toBeNull();
+    expect(screen.getByTestId("chart-stub")).toBeTruthy();
   });
   it("draws nothing false when there is no bank balance", () => {
     h.Q.cash = ok(signal({ status: "no_data" }));

@@ -20,7 +20,7 @@ import {
   niceAxis,
   useXTicks,
 } from "@/lib/charts";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { PlanLine } from "@/lib/forecastMatch";
 import { tooltipPlanLine } from "@/lib/forecastPastDue";
 import { runsBelow, type MarkerGroup } from "@/lib/forecastEventKinds";
@@ -89,6 +89,9 @@ function useScale(series: DailyPoint[], cashBuffer: number) {
   }, [len, firstX, lastX, cashBuffer]);
 }
 
+/** Session keys that have already drawn their sweep (module scope: survives leaving and returning to the page). */
+const DRAWN = new Set<string>();
+
 export function ProjectedBalanceChart({
   data,
   cashBuffer,
@@ -110,6 +113,7 @@ export function ProjectedBalanceChart({
   lowLabel = "full",
   monthTicks = false,
   startLabel = null,
+  sessionKey,
 }: {
   data: DailyPoint[];
   cashBuffer: number;
@@ -153,8 +157,21 @@ export function ProjectedBalanceChart({
    * first point (`cashSignal.startingBalance`, the day the reading rolls to).
    */
   startLabel?: string | null;
+  /**
+   * Classic only: the chart sweeps in ONCE per session for this key (the dashboard's "dash-forecast"). A later
+   * mount, or a new horizon's data on the mounted chart, appears without a re-sweep.
+   */
+  sessionKey?: string;
 }) {
   const expanded = variant === "expanded";
+  const [firstDraw] = useState(() => !(sessionKey && !expanded && DRAWN.has(sessionKey)));
+  const [swept, setSwept] = useState(false);
+  useEffect(() => {
+    if (!sessionKey || expanded) return;
+    DRAWN.add(sessionKey);
+    const t = setTimeout(() => setSwept(true), ANIM_AREA.animationDuration + 150);
+    return () => clearTimeout(t);
+  }, [sessionKey, expanded]);
   // Content fingerprint — see the draw-restart note above.
   const fp = data.map((d) => `${d.rawDate}:${d.balance}`).join("|");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -191,7 +208,7 @@ export function ProjectedBalanceChart({
     const t = setTimeout(() => setSettledFp(fp), ANIM_AREA.animationDuration + 150);
     return () => clearTimeout(t);
   }, [expanded, fp]);
-  const animateNow = !expanded || settledFp !== fp;
+  const animateNow = expanded ? settledFp !== fp : !sessionKey || (firstDraw && !swept);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
@@ -232,7 +249,7 @@ export function ProjectedBalanceChart({
   return (
     // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
     // left→right so the curve reads as being plotted across the horizon.
-    <div key={expanded ? horizonKey : undefined} className="chart-in area-draw h-full w-full">
+    <div key={expanded ? horizonKey : undefined} className={cn(firstDraw && "chart-in area-draw", "h-full w-full")}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={chartData}

@@ -1,4 +1,5 @@
 import { Suspense, useMemo, useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { Link, useLocation } from "wouter";
 import { Panel, shortDate } from "@/components/next";
@@ -8,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useCashSignalQ } from "./queries";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
+import { toggle } from "@/ui";
 import { Gate, LINK, money, rise, weekdayLabel } from "./shared";
 
 /** The chart (and recharts with it) loads only when this panel mounts. */
@@ -15,21 +17,23 @@ const Chart = lazyWithPreload(() =>
   import("@/pages/forecast/ProjectedBalanceChart").then((m) => ({ default: m.ProjectedBalanceChart })),
 );
 
-export const HORIZONS = [30, 90, 180] as const;
+export const HORIZONS = [30, 90, 120] as const;
 const noop = () => {};
 
 /**
  * "Will we run short, and when?" The projected checking balance over 30, 90 or
- * 180 days: the buffer line, days under it shaded, the low point marked, a
+ * 120 days: the buffer line, days under it shaded, the low point marked, a
  * tooltip per day. The chart draws once per answer (its own fingerprint memo);
- * a horizon switch crossfades. Every link goes to the full forecast.
+ * a horizon switch keeps the chart in place (dimmed, "Loading N days…") while the new one loads. Every link goes to the full forecast.
  */
 export default function ForecastPanel() {
   const minH = useFoldMinH("forecast");
   const [days, setDays] = useState<number>(90);
   const [, navigate] = useLocation();
-  const q = useCashSignalQ(days);
+  const q = useCashSignalQ(days, { placeholderData: keepPreviousData });
   const proj = q.data;
+  // The last horizon's answer stays mounted while this one loads: no skeleton swap, no remount, no re-sweep.
+  const loading = q.isPlaceholderData;
 
   const view = useMemo(() => {
     if (!proj) return null;
@@ -61,10 +65,7 @@ export default function ForecastPanel() {
           {HORIZONS.map((h) => (
             <button key={h} type="button" onClick={() => setDays(h)} aria-pressed={days === h}
               data-testid={`dash-horizon-${h}`}
-              className={cn(
-                "press rounded-control px-2 py-0.5 text-micro font-semibold ring-1 ring-brand-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40",
-                days === h ? "bg-brand-navy text-white" : "bg-white text-neutral-600 hover:bg-platinum-3",
-              )}>
+              className={cn(toggle(days === h), "px-2 py-0.5 text-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40")}>
               <span className="sm:hidden" aria-hidden>{h}d</span>
               <span className="hidden sm:inline">{h} days</span>
               <span className="sr-only sm:hidden">{h} days</span>
@@ -92,7 +93,9 @@ export default function ForecastPanel() {
                     Buffer {money(view!.buffer)}
                   </span>
                   {/* (T2) Only a projected NEGATIVE is rust; under the buffer at or above $0 is quiet. */}
-                  {view!.lowestPoint ? (
+                  {loading ? (
+                    <span data-testid="dash-forecast-loading" role="status">Loading {days} days…</span>
+                  ) : view!.lowestPoint ? (
                     <span data-testid="dash-forecast-low">
                       Low point in these {days} days:{" "}
                       <span className={cn("font-mono font-semibold tabular-nums", view!.lowestPoint.y < 0 ? "text-bad-ink" : "text-brand-ink")} data-tone={view!.lowestPoint.y < 0 ? "bad" : "neutral"}>
@@ -102,7 +105,7 @@ export default function ForecastPanel() {
                     </span>
                   ) : null}
                 </div>
-                <div className="h-80 w-full" data-testid="dash-forecast-chart">
+                <div className={cn("h-80 w-full transition-opacity", loading && "opacity-60")} aria-busy={loading} data-testid="dash-forecast-chart">
                   <Suspense fallback={<div className="skeleton h-full w-full rounded-control" />}>
                     <Chart
                       data={view!.series}
@@ -114,6 +117,7 @@ export default function ForecastPanel() {
                       onMarkMissed={noop}
                       lowLabel="short"
                       monthTicks
+                      sessionKey="dash-forecast"
                     />
                   </Suspense>
                 </div>
