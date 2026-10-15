@@ -223,7 +223,11 @@ export function AccountTransactionRow({
             <span aria-hidden className={cn("size-2 shrink-0 rounded-full", ACCENT_DOT[cardAccent])} />
           ) : null}
           <span
-            className={cn(cardWrap ? "min-w-0 [overflow-wrap:anywhere]" : "truncate", "text-micro text-neutral-500")}
+            className={cn(
+              "text-micro",
+              // A household name reads in full, at the readable grey (it holds on a hovered row's tint).
+              cardWrap ? "min-w-0 text-neutral-600 [overflow-wrap:anywhere]" : "truncate text-neutral-500",
+            )}
             data-testid={`text-card-${tx.id}`}
           >
             {cardLabel || "—"}
