@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import {
   db,
   avalancheSettingsTable,
@@ -10,7 +10,8 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { monthEndExclusive } from "../lib/monthBounds";
-import { householdTodayISO, monthBounds } from "../lib/householdClock";
+import { addDaysISO, householdTodayISO, monthBounds } from "../lib/householdClock";
+import { expiredHoldsRuleOn, findSupersededPendingForRange } from "../lib/supersededPending";
 import { UpdateAvalancheSettingsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -246,6 +247,19 @@ function monthEndStr(monthStart: string): string {
   return monthEndExclusive(monthStart);
 }
 
+/**
+ * ⭐ (F6 round 4, finding 1) The "actual" sums below leave out expired holds —
+ * pending more than 7 days after their date, never replaced, and their
+ * reversals — as every other actual does (`findSupersededPendingForRange`).
+ * A SQL condition; none with the rule off (`EXPIRED_HOLDS_RULE=off`) or when the
+ * month has none. `monthEnd` is exclusive.
+ */
+async function expiredHoldsWhere(householdId: string, monthStart: string, monthEnd: string) {
+  if (!expiredHoldsRuleOn()) return undefined;
+  const { expiredIds } = await findSupersededPendingForRange(householdId, monthStart, addDaysISO(monthEnd, -1));
+  return expiredIds.size > 0 ? notInArray(transactionsTable.id, [...expiredIds]) : undefined;
+}
+
 export async function resolveExtraForUser(
   householdId: string,
   ownerUserId: string,
@@ -304,6 +318,8 @@ export async function resolveExtraForUser(
       );
 
     const isIncome = cat?.kind === "income";
+    // (F6 round 4) An expired hold counts in no actual.
+    const notExpired = await expiredHoldsWhere(householdId, monthStart, monthEnd);
     // For income categories, "actual" = sum of positive amounts (incoming money).
     // For expense categories, "actual" = sum of |amount| where amount < 0 (spend).
     const [actualRow] = await db
@@ -324,6 +340,7 @@ export async function resolveExtraForUser(
           // external card) — are excluded from avalanche actuals so
           // they never inflate the "extra" available for debt payoff.
           eq(transactionsTable.isExternalCardPayment, false),
+          notExpired,
         ),
       );
 
@@ -380,6 +397,8 @@ export async function resolveExtraForUser(
     // "actual" mirrors the planned-mode categorization basis. Uncategorized
     // transactions are intentionally excluded (they do not belong to any
     // budget category and so should not move the avalanche extra).
+    // (F6 round 4) An expired hold counts in no actual.
+    const notExpired = await expiredHoldsWhere(householdId, monthStart, monthEnd);
     const actualRows = await db
       .select({
         kind: budgetCategoriesTable.kind,
@@ -401,6 +420,7 @@ export async function resolveExtraForUser(
           sql`${transactionsTable.occurredOn} < ${monthEnd}`,
           // (#632 follow-up) See per-category actual query above.
           eq(transactionsTable.isExternalCardPayment, false),
+          notExpired,
         ),
       )
       .groupBy(budgetCategoriesTable.kind);

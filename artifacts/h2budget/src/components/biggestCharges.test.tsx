@@ -43,6 +43,16 @@ describe("BiggestCharges", () => {
     expect(h.calls[0]).toMatchObject({ limit: 1000 });
   });
 
+  it("(F6 round 4, finding 5) never lists an expired hold: the hotel hold the server marks expired is no charge", () => {
+    h.txns = [
+      { ...t("hold", "HARBOR HOTEL HOLD", "-480.00", "2026-10-04"), pending: true, expiredHold: true },
+      t("b", "SOME BISTRO", "-85.00", "2026-10-06"),
+    ];
+    render(<BiggestCharges monthStart="2026-10-01" monthLabel="October 2026" />);
+    const items = [...screen.getByTestId("bars").querySelectorAll("li")].map((l) => l.textContent);
+    expect(items).toEqual(["SOME BISTRO:85"]);
+  });
+
   it("says so when there are none", () => {
     h.txns = [];
     render(<BiggestCharges monthStart="2026-10-01" monthLabel="October 2026" />);

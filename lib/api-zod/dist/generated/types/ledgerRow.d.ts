@@ -37,7 +37,9 @@ export type LedgerRow = Transaction & {
   same Plaid transaction id); not_bank (a mask-twin row, which the
   bank balance does not read); claim_confirmed (PR-D: a payment
   logged in the app that a bank row confirmed — the bank row is
-  the payment).
+  the payment); expired (F6 round 3: an expired hold, still
+  pending more than 7 days after its date and never replaced, or
+  its reversal — it counts nowhere).
    */
     balanceReason: string;
     /**
@@ -54,9 +56,16 @@ export type LedgerRow = Transaction & {
     afterToday: boolean;
     /** Still pending and dated more than 14 days before the household's
   today. A label only: the row moves the balance as balanceReason
-  says. A leftover pending row its posted row could not replace
-  counts beside that posted row.
+  says. (F6 round 3) Such a row that no posted row replaced is an
+  expired hold (balanceReason expired): it moves the balance by 0.
    */
     stalePending: boolean;
+    /** (F6 round 3) balanceReason is expired: an expired hold or its
+  reversal. It moves the register by 0 and is in no total. (F6
+  round 4) A hold the bank snapshot held and its reversal are not:
+  the balance counts the reversal, so the register counts both
+  (net 0) and neither is labelled.
+   */
+    expiredHold: boolean;
 };
 //# sourceMappingURL=ledgerRow.d.ts.map

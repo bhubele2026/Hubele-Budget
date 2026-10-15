@@ -155,5 +155,17 @@ export interface Transaction {
      * @nullable
      */
     confirmedByTxnId?: string | null;
+    /** (F6 round 3) An expired hold: still pending more than 7 days after
+  its date (the household's today, America/Chicago) with no posted row
+  that replaced it — or the pending reversal paired with one. (F6
+  round 4) A reversal is a pending credit on the same account, of the
+  same amount, dated up to 31 days after an expired charge; an expired
+  credit expires alone. It counts nowhere: not in spending, owed, the
+  card cap, budgets, allowances, review or any total (owner's decision
+  2026-10-15); every browser sum skips it. Worked out on read; the row
+  is kept and shown. On GET /transactions list rows, the GET /forecast
+  bundle's transactions and ledger rows; absent elsewhere.
+   */
+    readonly expiredHold?: boolean;
 }
 //# sourceMappingURL=transaction.d.ts.map

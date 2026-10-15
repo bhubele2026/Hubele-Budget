@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { db, debtsTable, plaidAccountsTable, transactionsTable } from "@workspace/db";
 import { classifyLiabilityRow } from "@workspace/avalanche-core";
 import { householdDayOf } from "./householdClock";
+import { findExpiredHoldsAmong } from "./supersededPending";
 
 /**
  * ⭐ THE SERVER'S ONE VIEW OF "PAID BUT NOT YET POSTED".
@@ -45,6 +46,11 @@ import { householdDayOf } from "./householdClock";
  *     paid the debt. Mis-tagged history is left as stored and excluded here.
  *   - THE CLAIM. A payment logged in the app that a bank row confirmed is one
  *     payment: the bank row that confirmed it never counts again.
+ *   - ⭐ (F6 round 4, finding 7) AN EXPIRED HOLD. A payment row still pending
+ *     more than 7 days after its date that no posted row replaced (or the
+ *     reversal of one) counts nowhere — the owner's rule (2026-10-15) — so it
+ *     never nets a debt either: the card's own ledger, the weekly payoff and
+ *     the cap already leave it out. When it posts, the posted row nets.
  */
 
 export type DebtRow = typeof debtsTable.$inferSelect;
@@ -93,6 +99,8 @@ export type PendingRowInput = {
   confirmsClaim: boolean;
   /** A row the household typed that a sync merge later adopted (`adopted_from_household`). */
   adoptedFromHousehold?: boolean;
+  /** (F6 round 4) An expired hold or its reversal (`findExpiredHoldsAmong`): it nets nothing. */
+  expiredHold?: boolean;
 };
 
 /**
@@ -122,6 +130,7 @@ export function pendingFromRows(
     // Payment direction (positive): pays the debt down.
     if (!Number.isFinite(amt) || amt <= 0) continue;
     if (r.confirmsClaim) continue;
+    if (r.expiredHold === true) continue;
     if (!isManualRow(r) && classifyLiabilityRow(r)?.kind !== "payment") continue;
     const asOfDay = asOfDayByDebt.get(r.debtId) ?? null;
     if (asOfDay && r.occurredOn.slice(0, 10) <= asOfDay) continue;
@@ -185,9 +194,12 @@ export async function loadPendingPayments(
   const [rows, asOf] = await Promise.all([
     db
       .select({
+        id: t.id,
         debtId: t.debtId,
         amount: t.amount,
         occurredOn: t.occurredOn,
+        pending: t.pending,
+        plaidAccountId: t.plaidAccountId,
         source: t.source,
         plaidTransactionId: t.plaidTransactionId,
         description: t.description,
@@ -212,10 +224,18 @@ export async function loadPendingPayments(
   ]);
   const asOfDay = new Map<string, string | null>();
   for (const [id, at] of asOf) asOfDay.set(id, at ? householdDayOf(at) : null);
+  // (F6 round 4) Which of the rows that could net (dated after their debt's
+  // as-of day) are expired holds: one range read over their pending days, none
+  // when none of them is pending (the usual case).
+  const afterAsOf = rows.filter((r) => {
+    const day = r.debtId ? asOfDay.get(r.debtId) : undefined;
+    return !!r.debtId && day !== undefined && (day === null || r.occurredOn.slice(0, 10) > day);
+  });
+  const expired = await findExpiredHoldsAmong(householdId, afterAsOf);
   return pendingFromRows(
     rows
       .filter((r): r is typeof r & { debtId: string } => !!r.debtId)
-      .map((r) => ({ ...r, confirmsClaim: r.confirmsClaim === true })),
+      .map((r) => ({ ...r, confirmsClaim: r.confirmsClaim === true, expiredHold: expired.has(r.id) })),
     asOfDay,
   );
 }

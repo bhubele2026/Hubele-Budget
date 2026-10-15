@@ -6,6 +6,7 @@ import {
   type SpendTxn,
 } from "@/lib/avalanche";
 import type { PlaidItemDetail } from "@workspace/api-client-react";
+import { isCounted } from "@/lib/countedRows";
 
 /**
  * ⭐ "INCOME FILED UNDER AN EXPENSE CATEGORY" — a deterministic review flag.
@@ -52,6 +53,8 @@ export interface DirectionTxn {
   pfcDetailed?: string | null;
   /** Plaid's EXTERNAL account id — the key of `accountTypesOf`. */
   plaidAccountId?: string | null;
+  /** (F6 round 4) The server's answer: an expired hold counts nowhere and asks for nothing. */
+  expiredHold?: boolean | null;
 }
 
 /**
@@ -131,11 +134,15 @@ export function directionConflictOfTxn(
   });
 }
 
-/** Money in, filed under an expense category (see the header). */
+/**
+ * Money in, filed under an expense category (see the header). (F6 round 4) Never
+ * an expired hold (`isCounted`): it counts nowhere, so there is nothing to re-file.
+ */
 export function isInflowFiledAsExpense(
   txn: DirectionTxn,
   categoriesById: ReadonlyMap<string, DirectionCategory>,
   opts: { isCardAccount: boolean },
 ): boolean {
+  if (!isCounted(txn)) return false;
   return directionConflictOfTxn(txn, categoriesById, opts) === "inflow_into_expense";
 }

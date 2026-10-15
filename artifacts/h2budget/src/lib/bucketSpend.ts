@@ -1,4 +1,5 @@
 import { effectiveBucket, type AllowanceBucket } from "@/lib/weeklyBuckets";
+import { isCounted } from "@/lib/countedRows";
 
 /**
  * Single source of truth for weekly / monthly / unplanned SPEND.
@@ -24,6 +25,8 @@ export type BucketTxn = {
   isExternalCardPayment?: boolean | null;
   reimbursable?: boolean | null;
   debtId?: string | null;
+  /** (F6 round 4) The server's answer: an expired hold counts nowhere. */
+  expiredHold?: boolean | null;
 };
 
 /**
@@ -62,6 +65,8 @@ export function bucketSpendInWindow(
     if (!t.occurredOn || t.occurredOn < startISO || t.occurredOn > endISO)
       continue;
     if (!isCountableSpend(t)) continue;
+    // (F6 round 4) An expired hold counts nowhere.
+    if (!isCounted(t)) continue;
     if (effectiveBucket(t) !== bucket) continue;
     sum += expenseMagnitude(t);
   }

@@ -1,5 +1,5 @@
 import { isInSnapshot, pendingChargeWasInBalance, type SnapshotLedgerRow } from "./snapshotInclusion";
-import { pairPendingWithPosted } from "./pendingSupersede";
+import { expiredHolds, pairPendingWithPosted, type SupersedeRow } from "./pendingSupersede";
 
 /** A ledger row, as the cash rule reads it. */
 export type CashRow = {
@@ -34,6 +34,7 @@ export type CashAnchor = { at: Date; day: string };
  *   row is held only when its pending half is held too;
  * - `not_bank`: not on the snapshot's account — adds 0;
  * - `superseded`: a pending row its posted row replaced (`pairPendingWithPosted`) — adds 0;
+ * - `expired` (F6 round 3): an expired hold or its reversal (`expiredHolds`) — adds 0;
  * - `duplicate`: a second row with the same Plaid transaction id — adds 0 (defensive: the id is unique);
  * - `claim_confirmed` (PR-D): a payment logged in the app that a bank row has
  *   confirmed (`claimConfirmed`) — adds 0, because the bank row it paired with
@@ -47,6 +48,7 @@ export type CashRowReason =
   | "not_bank"
   | "claim_confirmed"
   | "superseded"
+  | "expired"
   | "duplicate"
   | "adjusted"
   | "counted";
@@ -61,6 +63,12 @@ export type CashRowOutcome = {
   contribution: number;
   /** For a posted row that replaced a pending row: that pending row's id. */
   replacedId: string | null;
+  /**
+   * (F6 round 4) For the pending credit that reversed an expired hold (with the
+   * rule on): that hold's id — whether the credit adds 0 (`expired`) or counts
+   * (the snapshot held its hold). Null for every other row.
+   */
+  reversalOf: string | null;
 };
 
 export type CashRowsResult = {
@@ -113,6 +121,16 @@ export function isBankRow(
  *      row that confirmed it is the same payment, and that row counts;
  *   3. adds 0 when it is the pending half of a pair (`pairPendingWithPosted`,
  *      run over the bank rows only, held ones included);
+ *   3b. ⭐ (F6 round 3, with `expiredHolds: true`) adds 0 when it is an expired
+ *      hold — pending more than SUPERSEDE_MAX_DAYS after its date, never
+ *      replaced — or the reversal paired with one (`expiredHolds`, over the
+ *      same bank rows and pairs). ONE EXCEPTION: a reversal whose hold the
+ *      anchor holds still counts. `available` held that hold, so the reversal
+ *      is the money coming back (the cash today the ledger read before the
+ *      rule). (F6 round 4) A reversal comes up to REVERSAL_MAX_DAYS after its
+ *      hold, so its hold can sit before the rows passed in: `priorRows` carries
+ *      those (dated before the anchor day, so held — the reversal counts).
+ *      Without an anchor nothing is held: the pair adds 0;
  *   4. adds 0 when an earlier row carried the same Plaid transaction id;
  *   5. otherwise adds its amount — less the pending amount when it is the
  *      posted half of a pair whose pending half was a charge with evidence it
@@ -134,7 +152,31 @@ export function isBankRow(
  */
 export function classifyCashRows(
   rows: readonly CashRow[],
-  opts: { anchor: CashAnchor | null; accountExternalId: string | null; todayISO: string },
+  opts: {
+    anchor: CashAnchor | null;
+    accountExternalId: string | null;
+    todayISO: string;
+    /**
+     * (F6 round 3) Apply the expired-hold rule (step 3b). The server passes
+     * `expiredHoldsRuleOn()` (its kill switch, `EXPIRED_HOLDS_RULE=off`); false
+     * reads every row exactly as before the rule.
+     */
+    expiredHolds: boolean;
+    /**
+     * ⭐ (F6 round 4) Rows dated BEFORE `rows` — the ledger's lower edge, the
+     * anchor day − SUPERSEDE_MAX_DAYS — that an expired hold in them may own a
+     * reversal in `rows` from (a reversal comes up to REVERSAL_MAX_DAYS after
+     * its hold). Read ONLY by the expired-hold rule: never classified, never in
+     * the pending → posted pairing of `rows`, absent from the outcomes. Such a
+     * hold is dated before the anchor day, so it is held, and its reversal is
+     * the money coming back: it counts. Without them a reversal that is itself
+     * more than 7 days old and whose hold sits before `rows` would read as an
+     * expired credit and add 0 — on a snapshot more than 8 days old, the bank
+     * balance would drop by a refund the day it turned 8 days old.
+     * `lib/ledgerCashRows.ts` (`readReversalHoldRows`) reads them.
+     */
+    priorRows?: readonly CashRow[];
+  },
 ): CashRowsResult {
   const { anchor, accountExternalId, todayISO } = opts;
   const toSnapshotRow = (r: CashRow): SnapshotLedgerRow => ({
@@ -148,21 +190,44 @@ export function classifyCashRows(
   const pendingWasInBalance = (r: CashRow): boolean =>
     !!anchor && pendingChargeWasInBalance(toSnapshotRow(r), anchor.at, anchor.day);
 
-  const supersededBy = pairPendingWithPosted(
-    rows
-      .filter((r) => isBankRow(r.source, r.plaidAccountId, accountExternalId))
-      .map((r) => ({
-        id: r.id,
-        plaidAccountId: r.plaidAccountId,
-        pending: r.pending,
-        occurredOn: r.occurredOn,
-        amount: r.amount,
-        description: r.description,
-        createdAt: r.createdAt,
-      })),
-  );
+  const toSupersedeRow = (r: CashRow): SupersedeRow => ({
+    id: r.id,
+    plaidAccountId: r.plaidAccountId,
+    pending: r.pending,
+    occurredOn: r.occurredOn,
+    amount: r.amount,
+    description: r.description,
+    createdAt: r.createdAt,
+  });
+  const bankRows = rows.filter((r) => isBankRow(r.source, r.plaidAccountId, accountExternalId)).map(toSupersedeRow);
+  const supersededBy = pairPendingWithPosted(bankRows);
   const supersededIds = new Set([...supersededBy.values()].map((p) => p.id));
   const rowById = new Map(rows.map((r) => [r.id, r] as const));
+  // (F6 round 3) Expired holds and their reversals, on the same bank rows and pairs.
+  // (F6 round 4) With the rows before them that can hold a reversal's hold
+  // (`priorRows`): their own replaced rows are paired among them and `rows` (a
+  // posted row up to 7 days later sits in either), only to know which of them
+  // can be a hold; the pairs of `rows` stay `supersededBy`.
+  let expired: ReturnType<typeof expiredHolds> | null = null;
+  const holdById = new Map(rowById);
+  if (opts.expiredHolds) {
+    const priorBank = (opts.priorRows ?? []).filter((r) => isBankRow(r.source, r.plaidAccountId, accountExternalId));
+    let replaced: ReadonlySet<string> = supersededIds;
+    if (priorBank.length > 0) {
+      const priorIds = new Set(priorBank.map((r) => r.id));
+      for (const r of priorBank) holdById.set(r.id, r);
+      const wider = pairPendingWithPosted([...priorBank.map(toSupersedeRow), ...bankRows]);
+      replaced = new Set([...supersededIds, ...[...wider.values()].map((p) => p.id).filter((id) => priorIds.has(id))]);
+    }
+    expired = expiredHolds([...priorBank.map(toSupersedeRow), ...bankRows], todayISO, replaced);
+  }
+  const expiredHere = (r: CashRow): boolean => {
+    if (!expired?.expiredIds.has(r.id)) return false;
+    const holdId = expired.holdOf.get(r.id);
+    const hold = holdId ? holdById.get(holdId) : undefined;
+    // A reversal of a hold the anchor holds is the money coming back: it counts.
+    return !(hold && held(hold));
+  };
 
   const out: CashRowOutcome[] = [];
   let rowCount = 0;
@@ -171,7 +236,12 @@ export function classifyCashRows(
   for (const r of rows) {
     const replaced = supersededBy.get(r.id);
     const replacedRow = replaced ? rowById.get(replaced.id) : undefined;
-    const base = { id: r.id, occurredOn: r.occurredOn, replacedId: replaced?.id ?? null };
+    const base = {
+      id: r.id,
+      occurredOn: r.occurredOn,
+      replacedId: replaced?.id ?? null,
+      reversalOf: expired?.holdOf.get(r.id) ?? null,
+    };
     let reason: CashRowReason;
     let contribution = 0;
     if (held(r) && (!replacedRow || held(replacedRow))) {
@@ -182,6 +252,8 @@ export function classifyCashRows(
       reason = "claim_confirmed";
     } else if (supersededIds.has(r.id)) {
       reason = "superseded";
+    } else if (expiredHere(r)) {
+      reason = "expired";
     } else if (r.plaidTransactionId && seenPlaidIds.has(r.plaidTransactionId)) {
       reason = "duplicate";
     } else {

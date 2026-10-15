@@ -44,6 +44,7 @@
 
 import { aggregateBudgetMonth, spendCents, type BudgetMonthRow } from "./budgetActuals";
 import { effectiveFiling, type FilingContext } from "./pendingFiling";
+import { countsNowhere } from "@workspace/avalanche-core";
 import type { SupersededPending } from "./supersededPending";
 import {
   classifyOutflow,
@@ -94,7 +95,7 @@ const centsOf = (amount: string): number => Math.round((parseFloat(amount) || 0)
  */
 export function reconcileMonthSpend(
   rows: readonly ReconcileRow[],
-  supersede: Pick<SupersededPending, "replacedIds" | "replacedBy">,
+  supersede: Pick<SupersededPending, "replacedIds" | "replacedBy" | "expiredIds">,
   filingCtx: FilingContext,
   spendCtx: SpendContext,
   splitParts: ReadonlyMap<string, readonly { categoryId: string; amount: string }[]>,
@@ -120,8 +121,8 @@ export function reconcileMonthSpend(
   let attributedA = 0;
 
   for (const row of rows) {
-    // Replaced pending rows count in neither figure.
-    if (supersede.replacedIds.has(row.id)) continue;
+    // Replaced pending rows — and (F6 round 3) expired holds — count in neither figure.
+    if (countsNowhere(supersede, row.id)) continue;
     const t = effectiveFiling(row, supersede.replacedBy.get(row.id), filingCtx);
 
     // ── A: what the Budget's expense lines count of this row (aggregateBudgetMonth's shares).

@@ -3,6 +3,7 @@ import {
   spendAmount,
   type SpendContext,
 } from "@workspace/avalanche-core";
+import { isCounted } from "./countedRows";
 
 /**
  * (PR7) Which ledger rows the Spending page's "Needs a category" popover
@@ -23,6 +24,8 @@ export type SpendRow = {
   isExternalCardPayment: boolean;
   reimbursable: boolean;
   pfcDetailed?: string | null;
+  /** (F6 round 4) The server's answer: an expired hold counts nowhere, so it is never "uncategorized spend". */
+  expiredHold?: boolean | null;
 };
 
 /**
@@ -47,6 +50,7 @@ export function isUncategorizedSpendRow(
   t: SpendRow,
   categoryIds: Iterable<string> = [],
 ): boolean {
+  if (!isCounted(t)) return false;
   const c = classifyOutflow(
     {
       amount: t.amount,

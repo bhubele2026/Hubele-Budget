@@ -41,7 +41,7 @@ const CATEGORIES = [
 ] as const;
 
 const filingCtx: FilingContext = { uncategorizedIds: uncategorizedCategoryIds(CATEGORIES) };
-const noSupersede = { replacedIds: new Set<string>(), replacedBy: new Map<string, ReplacedPending>() };
+const noSupersede = { replacedIds: new Set<string>(), replacedBy: new Map<string, ReplacedPending>(), expiredIds: new Set<string>() };
 
 function movementCtx(
   matchedTxnIds: ReadonlySet<string> = new Set(),
@@ -176,7 +176,7 @@ const PATTERN_DESCRIPTIONS = [
 
 interface Unit {
   rows: ClassifierBudgetMonthRow[];
-  supersede: { replacedIds: Set<string>; replacedBy: Map<string, ReplacedPending> };
+  supersede: { replacedIds: Set<string>; replacedBy: Map<string, ReplacedPending>; expiredIds: Set<string> };
   /** The row that counts: the lone row, or the posted half of a pair. */
   counted: ClassifierBudgetMonthRow;
   movement: MovementContext;
@@ -223,7 +223,7 @@ function makeGenerator(seed: number) {
       const r = genRow();
       return {
         rows: [r],
-        supersede: { replacedIds: new Set(), replacedBy: new Map() },
+        supersede: { replacedIds: new Set(), replacedBy: new Map(), expiredIds: new Set() },
         counted: r,
         movement: movementCtx(matched ? new Set([r.id]) : new Set(), tier2 ? new Set([r.id]) : new Set()),
       };
@@ -258,7 +258,7 @@ function makeGenerator(seed: number) {
     };
     return {
       rows: bool(0.5) ? [pending, posted] : [posted, pending],
-      supersede: { replacedIds: new Set([pending.id]), replacedBy: new Map([[posted.id, replaced]]) },
+      supersede: { replacedIds: new Set([pending.id]), replacedBy: new Map([[posted.id, replaced]]), expiredIds: new Set<string>() },
       counted: posted,
       movement: movementCtx(matched ? new Set([posted.id]) : new Set(), tier2 ? new Set([posted.id]) : new Set()),
     };
@@ -426,7 +426,7 @@ describe("classifierAllowanceRows — pending pairs, same as today", () => {
     const rows: ClassifierBudgetMonthRow[] = [
       row({ id: "pending-1", pending: true, weeklyAllowance: true, amount: "-40.00" }),
     ];
-    const supersede = { replacedIds: new Set(["pending-1"]), replacedBy: new Map<string, ReplacedPending>() };
+    const supersede = { replacedIds: new Set(["pending-1"]), replacedBy: new Map<string, ReplacedPending>(), expiredIds: new Set<string>() };
     expect(aggregateBudgetMonth(rows, supersede, filingCtx).allowanceRows).toEqual([]);
     expect(classifierAllowanceRows(rows, supersede, filingCtx, movementCtx())).toEqual([]);
   });
@@ -438,6 +438,7 @@ describe("classifierAllowanceRows — pending pairs, same as today", () => {
     const pending = row({ id: "p", pending: true, weeklyAllowance: true, weeklyBucket: "dining", amount: "-40.00" });
     const posted = row({ id: "q", categoryId: null, amount: "-48.00" });
     const supersede = {
+      expiredIds: new Set<string>(),
       replacedIds: new Set(["p"]),
       replacedBy: new Map<string, ReplacedPending>([
         [

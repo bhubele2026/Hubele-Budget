@@ -28,6 +28,19 @@ describe("computeRunningBalances", () => {
     expect(m.get("b")).toBe(112.34);
   });
 
+  it("⭐ (F6 round 3) skips an expired hold: no balance of its own, and the rows older than it read as if it were not there", () => {
+    const rows = [
+      { id: "a", occurredOn: "2026-10-12", amount: "-25.00" },
+      { id: "hold", occurredOn: "2026-10-03", amount: "-150.00", expiredHold: true },
+      { id: "b", occurredOn: "2026-10-01", amount: "-100.00" },
+    ];
+    const m = computeRunningBalances(rows, 1000);
+    expect([...m.entries()]).toEqual([
+      ["a", 1000],
+      ["b", 1025],
+    ]);
+  });
+
   it("returns empty map for empty input", () => {
     expect(computeRunningBalances([], 500).size).toBe(0);
   });

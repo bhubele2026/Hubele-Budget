@@ -32,6 +32,7 @@ import { remapOrphanResolutions } from "../lib/resolutionRemap";
 import { readPausedReview } from "../lib/oneTimeBillMove";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
+import { findExpiredHoldsAmong } from "../lib/supersededPending";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
 import { loadInFullDebtIds } from "../lib/cardPayoffMode";
 import {
@@ -360,7 +361,13 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
         // review queues"). Send to Forecast = in Review = on the curve.
       ),
     );
-  const txns = txnsAll.filter((t) => isBankRow(t.source, t.plaidAccountId));
+  const txnsBank = txnsAll.filter((t) => isBankRow(t.source, t.plaidAccountId));
+  // ⭐ (F6 round 4, finding 4) Each row says whether it is an expired hold — the
+  // same answer as GET /transactions (`findExpiredHoldsAmong`). It counts
+  // nowhere: the Reconcile register keeps it out of its inbox and its running
+  // balance (`filterForecastTxns`), as the review badge and the curve do.
+  const expiredTxnIds = await findExpiredHoldsAmong(householdId, txnsBank);
+  const txns = txnsBank.map((t) => ({ ...t, expiredHold: expiredTxnIds.has(t.id) }));
 
   const resolutionRows = await db
     .select({

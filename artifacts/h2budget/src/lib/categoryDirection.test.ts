@@ -130,3 +130,12 @@ describe("(WP5c) directionConflictOfTxn — the shared rule, both ways", () => {
     expect(directionConflictOfTxn(tx({ categoryId: "pay" }), cats, CHK)).toBeNull();
   });
 });
+
+describe("(F6 round 4) an expired hold asks for nothing", () => {
+  it("money in under an expense category, marked expired by the server: no 'Income in an expense category' flag", () => {
+    expect(isInflowFiledAsExpense(tx(), cats, CHK)).toBe(true);
+    expect(isInflowFiledAsExpense(tx({ expiredHold: true }), cats, CHK)).toBe(false);
+    expect(isInflowFiledAsExpense(tx({ expiredHold: false }), cats, CHK)).toBe(true);
+  });
+});
+

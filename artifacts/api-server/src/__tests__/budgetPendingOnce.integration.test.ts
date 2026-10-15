@@ -21,7 +21,7 @@
 // (Venmo/Zelle/PayPal, PFC TRANSFER_OUT — review H2). Round 4 decides both
 // from the stored `isTransferUserOverridden` flag and never re-reads rules.
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
@@ -191,6 +191,20 @@ const spendingTotal = async (from: string, to: string, categoryId: string) => {
   return f.byCategory.find((c) => c.categoryId === categoryId)?.total ?? 0;
 };
 
+/**
+ * ⭐ (F6 round 3) The household's today for a scenario: a pending row counts
+ * only while it is at most 7 days old (the owner's 2026-10-15 rule — older, it
+ * is an expired hold that counts nowhere), so a "still pending" scenario runs
+ * on a day its pending row is fresh. Noon Central.
+ */
+const onDay = (day: string) => {
+  vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+  vi.setSystemTime(new Date(`${day}T17:00:00Z`));
+};
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 // One Plaid account per scenario, so no scenario's rows can pair with another's.
 const acct = (name: string) => `acct-${name}-${randomUUID()}`;
 
@@ -264,6 +278,7 @@ afterAll(async () => {
 
 describe("(PR-D) a category's actual counts a pending purchase once", () => {
   it("⭐ the owner's example: $40 pending → posted 0 / pending 40 / combined 40; it posts at $48 → 48 / 0 / 48, never 88", async () => {
+    onDay("2026-07-15");
     const cat = await addCategory("Restaurants PR-D");
     const card = acct("restaurant");
     const pendingId = await addTxn({
@@ -320,6 +335,7 @@ describe("(PR-D) a category's actual counts a pending purchase once", () => {
   });
 
   it("a pending row with no posted successor counts once; a posted row too large to be its successor is a second charge", async () => {
+    onDay("2026-07-22");
     const cat = await addCategory("Coffee PR-D");
     const card = acct("coffee");
     // Still pending.
@@ -335,9 +351,16 @@ describe("(PR-D) a category's actual counts a pending purchase once", () => {
       actual: "60.00",
     });
     expect(await spendingTotal("2026-07-01", "2026-07-31", cat)).toBe(60);
+
+    // ⭐ (F6 round 3) Still pending 8 days after its date: an expired hold. It
+    // counts nowhere — the Budget line and Spending alike (before the rule: 60).
+    onDay("2026-07-28");
+    expect(split(lineFor(await month("2026-07-01"), cat))).toEqual({ posted: "40.00", pending: "0.00", combined: "40.00", actual: "40.00" });
+    expect(await spendingTotal("2026-07-01", "2026-07-31", cat)).toBe(40);
   });
 
   it("⚠️ a pair across a month boundary counts once, in the month it posted — the earlier month falls when it posts", async () => {
+    onDay("2026-10-01");
     const cat = await addCategory("Dinner out PR-D");
     const card = acct("boundary");
     await addTxn({ occurredOn: "2026-09-30", description: "CHIPOTLE 2231", amount: "-40.00", plaidAccountId: card, categoryId: cat, pending: true });
@@ -732,6 +755,7 @@ describe("(PR-D review M3) pairing runs at most once per month read, and not at 
 
 describe("(PR-D) the allowance card counts a pending purchase once", () => {
   it("posted / pending / combined per bucket and in total; the $40 → $48 pair counts $48 (both halves filed by hand)", async () => {
+    onDay("2026-08-12");
     const card = acct("allowance-card");
     const other = acct("allowance-other");
     await addTxn({

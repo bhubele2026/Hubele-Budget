@@ -91,9 +91,17 @@ export {
 } from "./bankReview";
 export {
   canSupersede,
+  countsNowhere,
+  expiredHolds,
+  isExpiredByAge,
+  notCountedIdsOf,
+  type NotCountedSets,
   pairPendingWithPosted,
   pairPendingWithPostedAmong,
+  REVERSAL_MAX_DAYS,
   SUPERSEDE_MAX_DAYS,
+  type ExpiredHoldRow,
+  type ExpiredHolds,
   type SupersedeRow,
 } from "./pendingSupersede";
 export {

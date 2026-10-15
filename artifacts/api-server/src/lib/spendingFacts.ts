@@ -100,6 +100,13 @@ export interface SpendingFacts {
      * The charge counts once, on its posted row; this is the half left out.
      */
     replacedPending: number;
+    /**
+     * ⭐ (F6 round 3) Outflows on expired holds — pending more than 7 days after
+     * their date, never replaced — and their reversals (`expiredIds`). They
+     * count nowhere; listed here so spend + every bucket still equals the
+     * range's raw outflow.
+     */
+    expiredHolds: number;
   };
   byCategory: {
     categoryId: string;
@@ -164,7 +171,7 @@ export async function buildSpendingFacts(
      * `findSupersededPendingForRange` result whose range covers it, or
      * `findSupersededPending`. Omitted, they are read here for this range.
      */
-    supersede?: Pick<SupersededPending, "replacedIds" | "replacedBy">;
+    supersede?: Pick<SupersededPending, "replacedIds" | "replacedBy" | "expiredIds">;
   } = {},
 ): Promise<SpendingFacts> {
   // (PR2) The default window is the household's last 30 days, ending on the
@@ -300,6 +307,7 @@ export async function buildSpendingFacts(
   let cardPaymentsTotal = 0;
   let reimbursableExcludedTotal = 0;
   let replacedPendingTotal = 0;
+  let expiredHoldsTotal = 0;
 
   const byCat = new Map<string, { total: number; txnCount: number }>();
   const byMerch = new Map<
@@ -328,6 +336,11 @@ export async function buildSpendingFacts(
     // The posted row carries the charge, with its own date and amount.
     if (supersede.replacedIds.has(row.id)) {
       replacedPendingTotal += spendAmount(row);
+      continue;
+    }
+    // ⭐ (F6 round 3) An expired hold (or its reversal) counts nowhere either.
+    if (supersede.expiredIds.has(row.id)) {
+      expiredHoldsTotal += spendAmount(row);
       continue;
     }
 
@@ -619,6 +632,7 @@ export async function buildSpendingFacts(
       cardPayments: round2(cardPaymentsTotal),
       reimbursable: round2(reimbursableExcludedTotal),
       replacedPending: round2(replacedPendingTotal),
+      expiredHolds: round2(expiredHoldsTotal),
     },
     byCategory,
     byMerchant,
@@ -672,7 +686,7 @@ export async function buildSpendingFacts(
  *      "a reimbursable charge shows as its own row").
  *
  * `rows` must already be in EFFECTIVE-FILING form (`effectiveFiling`) with
- * replaced-pending rows left out — the same preparation `buildSpendingFacts`
+ * replaced-pending rows and (F6 round 3) expired holds left out — the same preparation `buildSpendingFacts`
  * does before it calls `classifyOutflow`. This function does not re-pair or
  * re-file; it only classifies and sums.
  */

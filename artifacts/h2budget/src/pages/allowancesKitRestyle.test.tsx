@@ -492,3 +492,52 @@ describe("Allowances — carry-over and the way back (F7)", () => {
     expect(screen.queryByTestId("allowance-carry-over")).toBeNull();
   });
 });
+
+// ⭐ (F6 round 4, review finding 2) The page's own sums — the streak chip, the
+// 8-week bars, the drill-down groups — leave out an expired hold, as the
+// server's totals above them do. Synthetic: weekly plan 450; last week (5/3–5/9)
+// an expired hold −500 beside a real −30; the week before (4/26–5/2) another
+// expired −500 beside a real −20. This month a −52.00 pickup hold (expired) and
+// its −49.37 final, both monthly and unfiled.
+describe("Allowances — an expired hold counts nowhere on the page (F6 round 4)", () => {
+  const EXPIRED_TXNS: Tx[] = [
+    { ...tx({ id: "x1", amount: "-500.00", occurredOn: "2026-05-05", weeklyAllowance: true }), expiredHold: true } as Tx,
+    tx({ id: "r1", amount: "-30.00", occurredOn: "2026-05-06", weeklyAllowance: true }),
+    { ...tx({ id: "x2", amount: "-500.00", occurredOn: "2026-05-01", weeklyAllowance: true }), expiredHold: true } as Tx,
+    tx({ id: "r2", amount: "-20.00", occurredOn: "2026-05-02", weeklyAllowance: true }),
+    { ...tx({ id: "x3", amount: "-52.00", occurredOn: "2026-05-06", monthlyAllowance: true }), expiredHold: true } as Tx,
+    tx({ id: "r3", amount: "-49.37", occurredOn: "2026-05-07", monthlyAllowance: true }),
+  ];
+
+  it("the streak reads the real weeks (30 and 20, under 450): 'Under budget · 2 weeks running' — it read 'Over budget · 2 weeks running'", () => {
+    txns = EXPIRED_TXNS;
+    renderPage();
+    expect(screen.queryByTestId("allowance-over-streak")).toBeNull();
+    expect(screen.getByTestId("allowance-praise").textContent).toContain("2 weeks running");
+    // The bars: last week 420 left (450 − 30), the week before 430 — no overspent week.
+    const list = screen.getByLabelText("Weekly allowance money left or over plan, by week");
+    const titles = Array.from(list.querySelectorAll<HTMLElement>("[title]")).map((el) => el.getAttribute("title") ?? "");
+    expect(titles.some((t) => t.includes(usd(420).replace("$", "")))).toBe(true);
+    expect(titles.some((t) => t.includes(usd(430).replace("$", "")))).toBe(true);
+  });
+
+  it("the drill-down lists the hold, labelled, at $0: 'Uncategorized 2 · $49.37' (it read $101.37)", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    txns = EXPIRED_TXNS;
+    renderPage();
+    fireEvent.click(screen.getByTestId("allowance-bucket-monthly"));
+    const group = screen.getByTestId("allowance-group-_uncat");
+    expect(group.textContent).toContain(usd(49.37));
+    expect(group.textContent).not.toContain(usd(101.37));
+    fireEvent.click(group);
+    expect(screen.getByTestId("label-expired-hold-x3").textContent).toBe("Expired hold · not counted");
+    expect(screen.queryByTestId("label-expired-hold-r3")).toBeNull();
+  });
+
+  it("without the server's flag (an older response) every row counts, as before: over budget two weeks running", () => {
+    txns = EXPIRED_TXNS.map((t) => ({ ...t, expiredHold: false }) as Tx);
+    renderPage();
+    expect(screen.getByTestId("allowance-over-streak").textContent).toContain("2 weeks running");
+  });
+});
+

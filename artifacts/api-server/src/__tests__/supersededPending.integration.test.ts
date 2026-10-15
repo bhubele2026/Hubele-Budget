@@ -2,7 +2,7 @@
 // the household's whole ledger, reads only rows that can pair, and never pairs
 // across households.
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { db, transactionsTable } from "@workspace/db";
@@ -222,9 +222,17 @@ describe("findSupersededPending — household scope (review N3)", () => {
     expect(c.replacedIds.size).toBe(1);
 
     const week = ["2026-05-03", "2026-05-09"] as const;
-    const fa = await buildSpendingFacts(households.houseA, ...week);
-    const fb = await buildSpendingFacts(households.houseB, ...week);
-    const fc = await buildSpendingFacts(households.houseC, ...week);
+    // (F6 round 3) Read on 5/09, while house A's pending row is fresh (5 days
+    // old): later than 7 days it is an expired hold and counts nowhere.
+    vi.setSystemTime(new Date("2026-05-09T17:00:00Z"));
+    let fa, fb, fc;
+    try {
+      fa = await buildSpendingFacts(households.houseA, ...week);
+      fb = await buildSpendingFacts(households.houseB, ...week);
+      fc = await buildSpendingFacts(households.houseC, ...week);
+    } finally {
+      vi.useRealTimers();
+    }
     expect(fa.householdSpend.total).toBe(45);
     expect(fa.excluded.replacedPending).toBe(0);
     expect(fb.householdSpend.total).toBe(47.4);

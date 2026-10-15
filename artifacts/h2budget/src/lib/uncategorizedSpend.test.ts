@@ -43,3 +43,12 @@ describe("isUncategorizedSpendRow — the popover's rows are the server's rows",
     expect(spendAmountOf({ amount: "12.50", source: "amex" })).toBe(12.5);
   });
 });
+
+describe("(F6 round 4) an expired hold is never an uncategorized purchase to fix (the server counts it nowhere)", () => {
+  it("the same row with expiredHold: true is left out; false or absent, as before", () => {
+    expect(isUncategorizedSpendRow(row({ expiredHold: true }), ["groceries"])).toBe(false);
+    expect(isUncategorizedSpendRow(row({ expiredHold: false }), ["groceries"])).toBe(true);
+    expect(isUncategorizedSpendRow(row(), ["groceries"])).toBe(true);
+  });
+});
+

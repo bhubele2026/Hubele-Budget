@@ -23,6 +23,7 @@ import {
   type SnapshotAccountResolution,
 } from "./resolveSnapshotAccount";
 import { findMatchedRuleId, loadUserRules } from "./autoCategorize";
+import { expiredHoldsRuleOn } from "./supersededPending";
 import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
 
 /**
@@ -69,7 +70,8 @@ import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
  *     count in the bank balance today.
  *   - A pending row its posted row cannot replace (a hold that posts lower, a
  *     posting above the pairing cap, a merchant name that changes) counts
- *     beside it. Only a row categorised while pending survives the sync's
+ *     beside it — (F6 round 3) until it is more than 7 days old: then it is an
+ *     expired hold and moves the register by 0 (`expired`). Only a row categorised while pending survives the sync's
  *     sweeps to do this. While the snapshot is fresh both rows are inside it, so
  *     cash today does not move, but the register counts both. Such a row is
  *     labelled `stalePending` once it is more than STALE_PENDING_DAYS old.
@@ -470,8 +472,10 @@ export async function resolveLedgerScope(
  * - `superseded`: 0 — a pending row its posted row replaced (PR4c);
  * - `duplicate`: 0 — a second row with the same Plaid transaction id;
  * - `not_bank`: 0 — a mask-twin row; the bank balance reads only the snapshot's account.
+ * - `expired` (F6 round 3): 0 — an expired hold, pending more than 7 days after
+ *   its date and never replaced, or its reversal (core `expiredHolds`).
  */
-export type BalanceReason = "counted" | "superseded" | "duplicate" | "not_bank" | "claim_confirmed";
+export type BalanceReason = "counted" | "superseded" | "duplicate" | "not_bank" | "claim_confirmed" | "expired";
 
 export type RegisterRow = {
   id: string;
@@ -483,6 +487,13 @@ export type RegisterRow = {
   replacedPendingId: string | null;
   /** Dated after the snapshot day, but already inside the snapshot balance. */
   heldAhead: boolean;
+  /**
+   * ⭐ (F6 round 4) An expired hold the snapshot held, or the reversal of one:
+   * the register counts both at full amount (they net to 0 — the bank balance
+   * counts the reversal), but they are still expired holds for every other
+   * reader: no spending, and never asked about in review.
+   */
+  expiredPair: boolean;
   /** Running sum of `balanceCents` through this row, in ledger order. */
   cumCents: number;
 };
@@ -499,14 +510,18 @@ export type Register = {
 /**
  * ⭐ WHAT ONE ROW MOVES THE REGISTER BY. `classifyCashRows` ran with no anchor,
  * so no row is `held` and none is `adjusted`: every row the cash rule counts
- * moves the register by its full amount, and every other row by 0.
+ * moves the register by its full amount, and every other row by 0. (F6 round 4)
+ * An expired hold the snapshot held and its reversal arrive here as `counted`
+ * (`loadRegister`, finding 11).
  *
  * ⚠️ OPEN — Brad's decisions (CLAUDE.md §1), two of them:
  *   - a manual "Payment — <debt>" row logged beside the bank's own debit for
  *     that payment. Both count today, here and in the bank balance;
  *   - a leftover pending row its posted row cannot replace (`stalePending`
  *     after STALE_PENDING_DAYS). Both count here; the proposal is to count a
- *     stale one as 0.
+ *     stale one as 0. ⭐ (F6 round 3, the owner's 2026-10-15 decision) Decided
+ *     from 7 days: such a row is an expired hold (`expired`, below) — 0 here
+ *     and in the bank balance. Within 7 days it still counts beside its twin.
  * A rule for either belongs here, as one more reason that moves a row by 0, and
  * in the bank balance's rule at the same time.
  */
@@ -520,6 +535,10 @@ function registerAmount(
     case "superseded":
     case "duplicate":
     case "not_bank":
+    // ⭐ (F6 round 3) The second OPEN item above, decided by the owner (2026-10-15):
+    // a hold still pending more than 7 days after its date counts nowhere — here
+    // and in the bank balance alike (its reversal too).
+    case "expired":
     // (PR-D) The first OPEN item above, decided: a logged payment a bank row
     // confirmed moves the register by 0 — here and in the bank balance alike.
     case "claim_confirmed":
@@ -589,7 +608,7 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
     if (part.length === 0) continue;
     classifyCashRows(
       part.map((i) => cashRows[i]!),
-      { anchor: null, accountExternalId: scope.accountExternalId, todayISO: today },
+      { anchor: null, accountExternalId: scope.accountExternalId, todayISO: today, expiredHolds: expiredHoldsRuleOn() },
     ).rows.forEach((outcome, k) => {
       outcomes[part[k]!] = outcome;
     });
@@ -606,6 +625,27 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
       : null;
   const indexById = new Map(rows.map((r, i) => [r.id, i] as const));
   const held = (i: number): boolean => anchor !== null && isInSnapshot(cashRows[i]!, anchor.at, anchor.day);
+
+  // ⭐ (F6 round 4, finding 11) A HELD HOLD AND ITS REVERSAL COUNT HERE, AT FULL
+  // AMOUNT. The bank balance counts the reversal of a hold the snapshot held —
+  // `available` had the hold, the reversal is the money coming back (the cash
+  // rule's step 3b exception). This run reads no anchor, so it calls both rows
+  // `expired`; the anchor's own `held()` test decides here instead: when it
+  // holds the hold, the hold and its reversal both move the register by their
+  // amounts. They net to 0, the running balance meets the snapshot on its day,
+  // and the rows since it are the ones "Why this number?" lists. Neither is
+  // labelled expired (`expiredPair` marks them for the readers that still
+  // leave them out: spending, review).
+  const expiredPair = new Set<number>();
+  outcomes.forEach((o, i) => {
+    if (o.reason !== "expired" || o.reversalOf === null) return;
+    const h = indexById.get(o.reversalOf);
+    if (h === undefined || outcomes[h]!.reason !== "expired" || !held(h)) return;
+    for (const k of [h, i]) {
+      expiredPair.add(k);
+      outcomes[k] = { ...outcomes[k]!, reason: "counted", counts: true, contribution: cashRows[k]!.amount };
+    }
+  });
 
   const ordered: RegisterRow[] = [];
   let cum = 0;
@@ -629,6 +669,7 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
         row.occurredOn > anchor.day &&
         held(i) &&
         (replacedIndex === undefined || held(replacedIndex)),
+      expiredPair: expiredPair.has(i),
       cumCents: cum,
     });
   }
@@ -756,6 +797,8 @@ export type LedgerPageRow = Record<string, unknown> & {
   afterToday: boolean;
   /** Still pending and dated more than STALE_PENDING_DAYS before today. A label only. */
   stalePending: boolean;
+  /** (F6 round 3) An expired hold or its reversal: the register moves by 0 (`balanceReason` "expired"). */
+  expiredHold: boolean;
 };
 
 export type LedgerPage = {
@@ -917,6 +960,7 @@ export async function readLedgerPage(
       heldAhead: reg?.heldAhead ?? false,
       afterToday: r.occurred_on > today,
       stalePending: isStalePending(row.pending === true, r.occurred_on, today),
+      expiredHold: reg?.balanceReason === "expired",
     });
   }
 

@@ -22,7 +22,7 @@ import { AMEX_MONTH_LIMIT, amexAllScope, amexMonthParams, amexSummaryParams } fr
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { RowDateControls } from "@/components/row-date-controls";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
-import { AccountTransactionRow } from "@/components/account-page/transaction-row";
+import { AccountTransactionRow, ExpiredHoldLabel } from "@/components/account-page/transaction-row";
 import { SplitByCategoryHost } from "@/components/splits/SplitByCategoryHost";
 import {
   useBulkRecategorizePrompt,
@@ -87,6 +87,7 @@ import { currentRowDeepLink, rowDeepLinkStatus } from "@/lib/rowDeepLink";
 import { replaceUrlParam, useUrlState } from "@/hooks/useUrlState";
 import { modeParam, monthParam, pickParam, urlHasMonth } from "@/lib/ledgerUrl";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
+import { isCounted } from "@/lib/countedRows";
 import { AMEX_BALANCE_DISTINCTION } from "@/lib/reportsBalances";
 import {
   compareNewestFirst,
@@ -829,6 +830,8 @@ export default function AmexPage({
     let charges = 0;
     let paymentsAndCredits = 0;
     for (const t of filtered) {
+      // (F6 round 4) An expired hold counts nowhere.
+      if (!isCounted(t)) continue;
       const a = parseSigned(t.amount);
       if (a >= 0) charges += a;
       else paymentsAndCredits += a; // negative
@@ -1235,6 +1238,7 @@ export default function AmexPage({
       cardFilter === "all"
         ? monthScoped
         : monthScoped.filter((t) => (t.plaidAccountId ?? "") === cardFilter);
+    // (F6 round 3) The walk skips an expired hold (`computeRunningBalances`): it shows no "bal".
     return computeRunningBalances(sortNewestFirst(series), endingBalance.value);
   }, [monthScoped, endingBalance.value, cardFilter]);
 
@@ -2440,7 +2444,8 @@ export default function AmexPage({
           <DayGroupsList
             groups={groups}
             renderGroup={([dayKey, items], groupIndex) => {
-            const dayTotal = items.reduce((s, t) => s + parseAbs(t.amount), 0);
+            // (F6 round 3) An expired hold is listed but not in the day's total.
+            const dayTotal = items.reduce((s, t) => (isCounted(t) ? s + parseAbs(t.amount) : s), 0);
             const ids = items.map((t) => t.id);
             const allSelected = ids.every((id) => selected.has(id));
             const someSelected = !allSelected && ids.some((id) => selected.has(id));
@@ -2498,6 +2503,7 @@ export default function AmexPage({
                           </span>
                           <MerchantRenamePopover tx={t} onSplit={() => setSplitTx(t)} />
                         </div>
+                        {t.expiredHold ? <ExpiredHoldLabel id={t.id} /> : null}
                         {t.notes && (
                           <div className="break-words text-micro text-neutral-500" title={t.notes}>
                             {t.notes}

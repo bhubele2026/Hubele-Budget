@@ -77,6 +77,7 @@ const ROWS = [
   uncategorized, parked, refund, transfer, paycheck, pendingHalf, postedHalf,
 ];
 const supersede = {
+  expiredIds: new Set<string>(),
   replacedIds: new Set([pendingHalf.id]),
   replacedBy: new Map<string, ReplacedPending>([
     [postedHalf.id, { id: pendingHalf.id, occurredOn: pendingHalf.occurredOn, description: pendingHalf.description, filing: pendingHalf }],
@@ -130,7 +131,7 @@ describe("reconcileMonthSpend — Budget actual vs household spending to date", 
   it("a refund never takes an account below zero: only what was spent there is netted", () => {
     const bigRefund = row({ description: "SOFA STORE REFUND", amount: "900.00", plaidAccountId: "acct-other", occurredOn: "2026-10-09" });
     const smallBuy = row({ description: "SOFA STORE", amount: "-100.00", plaidAccountId: "acct-other" });
-    const x = reconcileMonthSpend([bigRefund, smallBuy], { replacedIds: new Set<string>(), replacedBy: new Map<string, ReplacedPending>() }, filingCtx, spendCtx, new Map(), {
+    const x = reconcileMonthSpend([bigRefund, smallBuy], { replacedIds: new Set<string>(), replacedBy: new Map<string, ReplacedPending>(), expiredIds: new Set<string>() }, filingCtx, spendCtx, new Map(), {
       today: TODAY,
       expenseLineIds,
       cardAccountIds: NO_CARDS,
@@ -145,7 +146,7 @@ describe("reconcileMonthSpend — Budget actual vs household spending to date", 
     const buy = row({ description: "TARGET T-1234", amount: "-80.00", plaidAccountId: CARD });
     const back = row({ description: "TARGET T-1234", amount: "30.00", plaidAccountId: CARD, occurredOn: "2026-10-03" });
     const pay = row({ description: "Payment Thank You-Mobile", amount: "200.00", plaidAccountId: CARD, categoryId: null, occurredOn: "2026-10-04" });
-    const none = { replacedIds: new Set<string>(), replacedBy: new Map<string, ReplacedPending>() };
+    const none = { replacedIds: new Set<string>(), replacedBy: new Map<string, ReplacedPending>(), expiredIds: new Set<string>() };
     const run = (cardAccountIds: ReadonlySet<string>) =>
       reconcileMonthSpend([buy, back, pay], none, filingCtx, spendCtx, new Map(), { today: TODAY, expenseLineIds, cardAccountIds });
     // Before S6 (the card not known as one): the return netted nothing.

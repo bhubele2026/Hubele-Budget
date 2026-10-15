@@ -2,7 +2,7 @@
 // test-only deep freeze — the mechanics, with builds the test controls.
 // The ledger itself is proven in __tests__/ledgerSharing.integration.test.ts.
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import {
   bumpLedgerGeneration,
@@ -144,6 +144,15 @@ describe("cashSignalShareKey — every input that changes the result", () => {
     expect(cashSignalShareKey("hh-1", "owner-1", {}, "2026-10-14")).not.toBe(base);
     expect(cashSignalShareKey("hh-1", "owner-1", { horizonDays: 90, fromDate: "2026-10-01" }, "2026-10-14")).not.toBe(base);
     expect(cashSignalShareKey("hh-1", "owner-1", { horizonDays: 90 }, "2026-10-15")).not.toBe(base);
+  });
+  it("(F6 round 3) differs with the expired-hold rule's kill switch", () => {
+    vi.stubEnv("EXPIRED_HOLDS_RULE", "off");
+    try {
+      expect(cashSignalShareKey("hh-1", "owner-1", { horizonDays: 90 }, "2026-10-14")).not.toBe(base);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(cashSignalShareKey("hh-1", "owner-1", { horizonDays: 90 }, "2026-10-14")).toBe(base);
   });
   it("is the same for the same inputs (an absent fromDate is absent)", () => {
     expect(cashSignalShareKey("hh-1", "owner-1", { horizonDays: 90, fromDate: undefined }, "2026-10-14")).toBe(base);

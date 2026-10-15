@@ -68,6 +68,7 @@ import { confirmDebtPaymentClaims } from "../lib/debtPaymentConfirm";
 import { recordDebtStatements, syncDebtLedgerEvents } from "../lib/debtLedger";
 import { writeAchievedMilestones, writeDebtProgressSnapshots } from "../lib/debtProgressSnapshot";
 import { withPendingPayments } from "../lib/debtPending";
+import { loadConfirmedPayments } from "../lib/debtPlan";
 import { householdTodayISO } from "../lib/householdClock";
 
 const router = express.Router();
@@ -450,6 +451,21 @@ describe("GET /debt-plan", () => {
     expect(keys.filter((k) => /balance|owed|remaining/i.test(k.split(".").pop()!))).toEqual([]);
     // …and the exemption is real (so the walk above is not vacuous about it).
     expect(keyPaths(plan, "$", new Set()).some((k) => k.endsWith(".balance"))).toBe(true);
+  });
+
+  it("⭐ (F6 round 4) an expired pending payment (12 days, never posted) is no payment made; a 2-day-old one is (kill switch: both)", async () => {
+    const visa = await addDebt({ name: "Visa" });
+    await addTxn({ occurredOn: addDaysISO(TODAY, -12), amount: "-150.00", debtId: visa.id, description: "VISA PMT", pending: true });
+    await addTxn({ occurredOn: addDaysISO(TODAY, -2), amount: "-60.00", debtId: visa.id, description: "VISA PMT", pending: true });
+    const amounts = async () =>
+      (await loadConfirmedPayments(HH, { overdueAssumedPaid: [] }, addDaysISO(TODAY, -20), TODAY)).map((p) => p.amount);
+    expect(await amounts()).toEqual([60]);
+    vi.stubEnv("EXPIRED_HOLDS_RULE", "off");
+    try {
+      expect(await amounts()).toEqual([150, 60]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("is household-scoped: another household's debts and payments never appear", async () => {

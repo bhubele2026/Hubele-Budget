@@ -68,7 +68,7 @@ import { loadAllowanceWindow, type MovementRowRead } from "./moneyContext";
 import { POSITION_HORIZON_DAYS, tier2PairedTxnIdsOf } from "./moneyPosition";
 import { displayNameOf, loadMerchantAliases } from "./periodBreakdown";
 import { TRACKING_START } from "./spendingFacts";
-import { findSupersededPendingForRange } from "./supersededPending";
+import { findSupersededPendingForRange, notCountedIdsOf } from "./supersededPending";
 
 /** A row on a card, as this summary reads it: the spending rule's fields, identity and `pending`. */
 interface CardTxn {
@@ -326,7 +326,7 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
     // above is dated in [from, to] — without reading the whole ledger
     // (`findSupersededPendingForRange`, exact for every row in its range).
     scopeIds.length > 0
-      ? findSupersededPendingForRange(householdId, from, to).then((r) => r.replacedIds)
+      ? findSupersededPendingForRange(householdId, from, to).then(notCountedIdsOf)
       : Promise.resolve(new Set<string>()),
     loadMerchantAliases(householdId),
     cashRead,
@@ -393,6 +393,7 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
   for (const t of txns) {
     if (!t.plaidAccountId || !inScope.has(t.plaidAccountId)) continue;
     // (PR7b) A pending charge its posted row replaced is the same charge: counted once, on the posted row.
+    // ⭐ (F6 round 3) An expired hold (or its reversal) counts in no bucket (`notCountedIdsOf`).
     if (replacedPendingIds.has(t.id)) continue;
     // Marked "not mine": the payoff leaves it out, so its own bucket here (charges less credits).
     if (roster.excludedTxnIds.has(t.id)) {

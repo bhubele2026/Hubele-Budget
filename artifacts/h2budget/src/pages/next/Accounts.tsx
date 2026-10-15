@@ -59,6 +59,8 @@ function CombinedActivity({ entries, entriesKnown }: { entries: ReturnType<typeo
         amount: displayAmount(t.amount, identity, t.source),
         identity,
         pending: t.pending,
+        // (F6 round 4) An expired hold says so, in place of "Pending".
+        expiredHold: t.expiredHold === true,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
         href: route.href ?? undefined,
         note: route.note,

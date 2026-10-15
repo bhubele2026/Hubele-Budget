@@ -32,7 +32,7 @@ import {
   type SpendTxn,
 } from "./spendingFilter";
 import { TRACKING_START } from "./spendingFacts";
-import { findSupersededPendingForRange } from "./supersededPending";
+import { findSupersededPendingForRange, notCountedIdsOf } from "./supersededPending";
 import { expandItem } from "./cashSignal";
 import { addDaysISO, householdTodayDate, householdTodayISO } from "./householdClock";
 
@@ -509,9 +509,11 @@ export async function buildBehaviorFacts(
   // [TRACKING_START, today]. Both lie in [TRACKING_START, max(end, today)], and
   // `findSupersededPendingForRange` is the whole-ledger answer for every row in
   // its range — without the full-history pairing `loadSupersededPendingIds` ran.
-  const replacedPendingIds = (
-    await findSupersededPendingForRange(householdId, TRACKING_START, end > todayIso ? end : todayIso)
-  ).replacedIds;
+  // ⭐ (F6 round 3) …and an expired hold (with its reversal) is no visit at all
+  // (`notCountedIdsOf`: replaced ∪ expired, from the same read).
+  const replacedPendingIds = notCountedIdsOf(
+    await findSupersededPendingForRange(householdId, TRACKING_START, end > todayIso ? end : todayIso),
+  );
 
   // --- Range transactions (for range-bound facts) ------------------------
   const rangeTxnsAll = (await db

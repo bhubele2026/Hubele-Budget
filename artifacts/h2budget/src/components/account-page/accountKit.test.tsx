@@ -170,6 +170,27 @@ describe("AccountTransactionRow", () => {
     expect(label.parentElement!.textContent).toBe("Chase · Plaid ••5526");
   });
 
+  it("⭐ (F6 round 3) an expired hold says so quietly on the row; any other row carries no such label", () => {
+    render(
+      <AccountTransactionRow
+        tx={{ ...tx, id: "t2", pending: true, expiredHold: true } as Transaction}
+        selected={false}
+        onToggleSelect={() => {}}
+        categories={[]}
+        onCategoryChange={() => {}}
+        onBucketToggle={() => {}}
+        onQuickDate={() => {}}
+        amountNode={<span>-$12.00</span>}
+        testId="row-tx-t2"
+      />,
+    );
+    const label = screen.getByTestId("label-expired-hold-t2");
+    expect(label.textContent).toBe("Expired hold · not counted");
+    expect(label.className).toContain("chip gray");
+    row();
+    expect(screen.queryByTestId("label-expired-hold-t1")).toBeNull();
+  });
+
   it("a row with no label shows a dash and no dot (the Amex default grid)", () => {
     row();
     const label = screen.getByTestId("text-card-t1");

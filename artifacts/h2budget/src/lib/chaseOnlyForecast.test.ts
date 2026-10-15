@@ -250,3 +250,24 @@ describe("Forecast inclusion: posted rows are cash, the flag gates only the futu
     expect(filterForecastTxns(all, checking, TODAY)).toHaveLength(0);
   });
 });
+
+// ⭐ (F6 round 4, review finding 4) Forecast › Reconcile: an expired hold (the
+// server's `expiredHold` on the bundle's rows) never asks for an answer and never
+// moves the running balance — as the review badge and the curve leave it out.
+describe("Forecast Reconcile: an expired hold is in neither the inbox nor the running balance", () => {
+  const checking = new Set<string>([CHASE_ACCT]);
+  it("a gym hold −35 (05-05, still pending on 05-15) beside a +1,000 payroll: the inbox holds the payroll only; the balance after it is 2,000.00 (it read 1,965.00)", () => {
+    const hold = { ...txn("hold", "2026-05-05", "-35.00", { plaidAccountId: CHASE_ACCT, source: "plaid:chase" }), expiredHold: true };
+    const pay = { ...txn("pay", "2026-05-09", "1000.00", { plaidAccountId: CHASE_ACCT, source: "plaid:chase" }), expiredHold: false };
+    const filtered = filterForecastTxns([hold, pay], checking, TODAY);
+    expect(filtered.map((t) => t.id)).toEqual(["pay"]);
+    const { rows, allBank } = buildLineRegister({ ...baseOpts, snapshotISO: "2026-05-02", txns: filtered, resolutions: [] });
+    expect(allBank.filter((b) => b.status === "pending_bank").map((b) => b.txn.id)).toEqual(["pay"]);
+    expect(rows.find((r) => r.kind === "bank" && r.txn.id === "pay")?.runningBalance).toBe(2000);
+    // An older bundle without the flag: as before.
+    const before = filterForecastTxns([{ ...hold, expiredHold: undefined }, pay], checking, TODAY);
+    const was = buildLineRegister({ ...baseOpts, snapshotISO: "2026-05-02", txns: before, resolutions: [] });
+    expect(was.rows.find((r) => r.kind === "bank" && r.txn.id === "pay")?.runningBalance).toBe(1965);
+  });
+});
+

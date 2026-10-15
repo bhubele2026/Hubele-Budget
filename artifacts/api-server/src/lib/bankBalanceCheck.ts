@@ -38,7 +38,8 @@ import {
   type BankCheckIds,
   type BankCheckLedger,
 } from "@workspace/avalanche-core";
-import { ledgerActualRowsWhere, toCashRow } from "./ledgerCashRows";
+import { ledgerActualRowsWhere, readReversalHoldRows, toCashRow } from "./ledgerCashRows";
+import { expiredHoldsRuleOn } from "./supersededPending";
 import { anchorIsReconcilable, reconcileBankBalance } from "./reconcileBankBalance";
 import { householdDayOf, householdTodayISO } from "./householdClock";
 
@@ -105,10 +106,22 @@ export async function readBankCheckLedger(opts: {
       }),
     );
   const cashRows = rows.map(toCashRow);
+  const ruleOn = expiredHoldsRuleOn();
   const { rows: outcomes } = classifyCashRows(cashRows, {
     anchor: { at: opts.prevAnchor.at, day: anchorDay },
     accountExternalId: opts.accountExternalId,
     todayISO: opts.checkDay,
+    // (F6 round 3) An expired hold at the check's day counts nowhere (kill switch: `EXPIRED_HOLDS_RULE=off`).
+    expiredHolds: ruleOn,
+    // (F6 round 4) A reversal's hold before the lower edge (a second query only when one can matter).
+    priorRows: await readReversalHoldRows({
+      householdId: opts.householdId,
+      anchorDay,
+      accountExternalId: opts.accountExternalId,
+      todayISO: todayISO < opts.checkDay ? opts.checkDay : todayISO,
+      rows: cashRows,
+      ruleOn,
+    }),
   });
   const ledger = bankCheckLedger({
     rows: cashRows,

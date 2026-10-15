@@ -8,8 +8,8 @@
 
 export interface BankingReviewReconciliation {
   rowsPlaced: number;
-  /** cashFlow.count − rowsPlaced − excluded rows; always 0 */
+  /** cashFlow.count − rowsPlaced − excluded rows − (F6 round 4) counted expired holds; always 0 */
   rowsUnexplained: number;
-  /** (Σ buckets' net + asPlanned.net) − cashFlow.net; always "0.00" */
+  /** (Σ buckets' net + asPlanned.net + (F6 round 4) counted expired holds' net) − cashFlow.net; always "0.00". A counted expired hold is one the bank snapshot held, and its reversal: the balance counts the pair (net 0), no bucket lists it. */
   unexplained: string;
 }

@@ -166,6 +166,14 @@ describe("ledgerRowLabels: the words carry the state", () => {
     expect(twin.map((l) => l.label)).toEqual(["Not counted"]);
     expect(twin[0]!.title).toBe("Replaced by its posted row.");
   });
+  it("(F6 round 3) an expired hold takes neither \"Not counted\" nor \"Pending 14+ days\": the row's own label says it", () => {
+    expect(ledgerRowLabels({ ...base, countsInBalance: false, balanceReason: "expired", stalePending: true })).toEqual([]);
+    // A stale row its posted row replaced keeps both of its labels.
+    expect(ledgerRowLabels({ ...base, countsInBalance: false, balanceReason: "superseded", stalePending: true }).map((l) => l.label)).toEqual([
+      "Pending 14+ days",
+      "Not counted",
+    ]);
+  });
 });
 
 describe("(PR14 review M1) counted amounts", () => {

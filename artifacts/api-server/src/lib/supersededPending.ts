@@ -10,17 +10,30 @@
 // with that row's filing, so the posted row can carry it (`effectiveFiling`).
 // (PR-D review M3) And it can answer for a date range without reading the
 // household's whole history (`findSupersededPendingForRange`).
+//
+// ⭐ (F6 round 3, owner's decision 2026-10-15) The same call also says which rows
+// are EXPIRED HOLDS — pending more than SUPERSEDE_MAX_DAYS after their date and
+// never replaced, plus the reversal paired with each (core `expiredHolds`).
+// "Stop counting it everywhere — worked out, nothing deleted." Every reader that
+// leaves out a replaced pending row leaves these out too: `countsNowhere` /
+// `notCountedIdsOf`. Computed at read time only; no row is written. Kill switch:
+// `EXPIRED_HOLDS_RULE=off` (`expiredHoldsRuleOn`) restores the reads before it.
 
 import { and, eq, gt, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, transactionsTable } from "@workspace/db";
 import {
   canSupersede,
+  countsNowhere,
+  expiredHolds,
+  notCountedIdsOf,
   pairPendingWithPostedAmong,
+  REVERSAL_MAX_DAYS,
   SUPERSEDE_MAX_DAYS,
+  type ExpiredHoldRow,
   type SupersedeRow,
 } from "@workspace/avalanche-core";
-import { addDaysISO } from "./householdClock";
+import { addDaysISO, householdTodayISO } from "./householdClock";
 import type { Filing } from "./pendingFiling";
 
 /** `db` or a transaction on it: everything here only reads. */
@@ -46,6 +59,12 @@ export type SupersededPending = {
   replacedIds: Set<string>;
   /** Posted row id → the pending row it replaced. */
   replacedBy: Map<string, ReplacedPending>;
+  /**
+   * ⭐ (F6 round 3) Expired holds and the reversals paired with them (core
+   * `expiredHolds`): they count nowhere, like a replaced pending row. Never a
+   * replaced row. Empty with the rule off (`EXPIRED_HOLDS_RULE=off`).
+   */
+  expiredIds: Set<string>;
   /** Candidate (pending, posted) pairs the pairing was offered. */
   candidatePairs: number;
   /** Distinct rows those pairs name: what the pairing actually read. */
@@ -61,6 +80,26 @@ export type SupersededPendingInRange = SupersededPending & {
    */
   windowStart: string | null;
 };
+
+/**
+ * ⭐ (F6 round 3) THE KILL SWITCH. `EXPIRED_HOLDS_RULE=off` (any case) turns the
+ * expired-hold rule off everywhere it is read — `expiredIds` comes back empty
+ * and the cash rule (`classifyCashRows`) is run without it — so every figure
+ * reads exactly as before the rule. Read on each call, so a restart with the
+ * variable set is all a rollback takes.
+ */
+export function expiredHoldsRuleOn(): boolean {
+  return (process.env.EXPIRED_HOLDS_RULE ?? "").trim().toLowerCase() !== "off";
+}
+
+/** (F6 round 3) The readers' helpers — pure, in avalanche-core; re-exported here beside the read. */
+export { countsNowhere, notCountedIdsOf };
+
+/** The household's today unless the caller (a test) names one. */
+export interface SupersedeReadOptions {
+  /** The household's today (YYYY-MM-DD) for the expired-hold rule; default `householdTodayISO()`. */
+  today?: string;
+}
 
 /**
  * ⭐ THE PENDING ROWS A POSTED ROW REPLACED — the same answer as running
@@ -97,9 +136,15 @@ export type SupersededPendingInRange = SupersededPending & {
 export async function findSupersededPending(
   householdId: string,
   reader: DbReader = db,
+  opts: SupersedeReadOptions = {},
 ): Promise<SupersededPending> {
   const candidates = await supersedeCandidatesQuery(householdId, reader);
-  return pairCandidates(candidates, null);
+  const answer = pairCandidates(candidates, null);
+  if (!expiredHoldsRuleOn()) return answer;
+  // (F6 round 3) Every pending Plaid row of the household: few, and read through
+  // the partial pending index.
+  const pending = await pendingRowsQuery(householdId, reader);
+  return { ...answer, expiredIds: expiredHolds(pending.map(expiredRowOf), opts.today ?? householdTodayISO(), answer.replacedIds).expiredIds };
 }
 
 /** First lookback before `from`, in days; doubled while no clean cut is found. */
@@ -149,6 +194,7 @@ export async function findSupersededPendingForRange(
   from: string,
   to: string,
   reader: DbReader = db,
+  opts: SupersedeReadOptions = {},
 ): Promise<SupersededPendingInRange> {
   const [inReach] = await reader
     .select({ id: transactionsTable.id })
@@ -166,13 +212,103 @@ export async function findSupersededPendingForRange(
     return {
       replacedIds: new Set(),
       replacedBy: new Map(),
+      expiredIds: new Set(),
       candidatePairs: 0,
       rowsRead: 0,
       queries: 0,
       windowStart: null,
     };
   }
+  if (!expiredHoldsRuleOn()) return (await pairedForRange(householdId, from, to, reader)).answer;
 
+  // ⭐ (F6 round 3) EXPIRED HOLDS, THE WHOLE-LEDGER ANSWER FOR THE RANGE.
+  // A row dated before `young` (today − SUPERSEDE_MAX_DAYS) is expired exactly
+  // when it is pending, on a Plaid account and not replaced: no pairing decides
+  // it. A row dated on or after `young` is expired only as the REVERSAL of an
+  // expired hold (F6 round 4: a pending credit, dated up to REVERSAL_MAX_DAYS
+  // after an expired charge), and that pairing — one to one, oldest hold first —
+  // can chain back through older pending rows (an older hold takes the credit a
+  // younger one would have taken). So, when the range holds such days, the
+  // pairing starts at a clean cut (`reversalCleanCuts`) on or before the
+  // earliest hold that can take one of them (that day − REVERSAL_MAX_DAYS), and
+  // the replaced answer is read from there too — about a month before `from`.
+  const today = opts.today ?? householdTodayISO();
+  const young = addDaysISO(today, -SUPERSEDE_MAX_DAYS);
+  const youngStart = from > young ? from : young;
+  // The holds that can take a reversal dated in the range: dated from
+  // `youngStart` − REVERSAL_MAX_DAYS, and before `young` (older than 7 days).
+  const holdsFrom = addDaysISO(youngStart, -REVERSAL_MAX_DAYS);
+  let pairFrom = from;
+  let pairTo = to;
+  let pending: PendingRow[];
+  if (youngStart <= to && holdsFrom < young) {
+    // ⚠️ AND FORWARD: a hold prefers a fuzzy-equal reversal over an older one, so
+    // which row a hold takes can depend on rows up to REVERSAL_MAX_DAYS after it
+    // — after `to`. The holds that matter are dated before `young`, so the read
+    // runs to the last such hold's day + REVERSAL_MAX_DAYS (or `to` + that, when
+    // `to` is earlier), and the replaced rows with it.
+    const lastHold = addDaysISO(young, -1);
+    const reach = addDaysISO(lastHold < to ? lastHold : to, REVERSAL_MAX_DAYS);
+    if (reach > pairTo) pairTo = reach;
+    const found = await reversalWindow(householdId, reader, dayNumber(holdsFrom), from, pairTo);
+    pending = found.rows;
+    const cut = found.cut === null ? found.rows.reduce((d, r) => (r.occurredOn < d ? r.occurredOn : d), from) : dayISO(found.cut);
+    if (cut < pairFrom) pairFrom = cut;
+  } else {
+    pending = await pendingRowsQuery(householdId, reader, { from, to });
+  }
+  // One pairing over [pairFrom, pairTo]: exact for every row there (the pairing
+  // needs the replaced rows among the holds before `from` and the reversals
+  // after `to`), reported for the range.
+  const { answer, dayOf } = await pairedForRange(householdId, pairFrom, pairTo, reader);
+  const { expiredIds } = expiredHolds(
+    pending.filter((r) => r.occurredOn >= pairFrom && r.occurredOn <= pairTo).map(expiredRowOf),
+    today,
+    answer.replacedIds,
+  );
+  const inRange = (day: string | undefined) => day !== undefined && day >= from && day <= to;
+  return {
+    ...answer,
+    replacedIds: new Set([...answer.replacedIds].filter((id) => inRange(dayOf.get(id)))),
+    replacedBy: new Map([...answer.replacedBy].filter(([postedId]) => inRange(dayOf.get(postedId)))),
+    expiredIds: new Set(pending.filter((r) => inRange(r.occurredOn) && expiredIds.has(r.id)).map((r) => r.id)),
+  };
+}
+
+/**
+ * ⭐ (F6 round 4) WHICH OF THESE ROWS COUNT NOWHERE AS EXPIRED HOLDS — the range
+ * read's answer (`findSupersededPendingForRange`, the whole ledger's) over the
+ * days of the rows that can be one: pending, on a Plaid account. One answer for
+ * every reader that holds rows rather than a range (the list rows of
+ * GET /transactions and GET /forecast, the rows an answer names, the payments
+ * tagged to a debt). No query when none can be one, or with the rule off.
+ */
+export async function findExpiredHoldsAmong(
+  householdId: string,
+  rows: ReadonlyArray<{ id: string; pending: boolean | null; plaidAccountId: string | null; occurredOn: string }>,
+  reader: DbReader = db,
+  opts: SupersedeReadOptions = {},
+): Promise<Set<string>> {
+  if (!expiredHoldsRuleOn()) return new Set();
+  const days = rows.filter((r) => r.pending === true && !!r.plaidAccountId).map((r) => r.occurredOn).sort();
+  if (days.length === 0) return new Set();
+  const { expiredIds } = await findSupersededPendingForRange(householdId, days[0]!, days[days.length - 1]!, reader, opts);
+  const asked = new Set(rows.map((r) => r.id));
+  return new Set([...expiredIds].filter((id) => asked.has(id)));
+}
+
+/**
+ * The pending → posted pairs, exact for every row dated in [from, to] and
+ * reported for them — the body of the range read before F6 round 3, unchanged
+ * (`expiredIds` empty: the caller fills it) — and the day of every row the
+ * pairing read (`dayOf`), so a caller can cut the answer to a narrower range.
+ */
+async function pairedForRange(
+  householdId: string,
+  from: string,
+  to: string,
+  reader: DbReader,
+): Promise<{ answer: SupersededPendingInRange; dayOf: Map<string, string> }> {
   const range = { from, to };
   const postedTo = addDaysISO(to, SUPERSEDE_MAX_DAYS + 1);
   const latestCut = dayNumber(from) - SUPERSEDE_MAX_DAYS;
@@ -190,13 +326,138 @@ export async function findSupersededPendingForRange(
       (c) => dayNumber(c.qOn) >= (cuts.get(c.pAccount ?? "") ?? latestCut),
     );
     return {
-      ...pairCandidates(kept, range),
-      queries,
-      windowStart: dayISO(Math.min(latestCut, ...cuts.values())),
+      answer: {
+        ...pairCandidates(kept, range),
+        queries,
+        windowStart: dayISO(Math.min(latestCut, ...cuts.values())),
+      },
+      dayOf: daysOf(kept),
     };
   }
   const all = await supersedeCandidatesQuery(householdId, reader);
-  return { ...pairCandidates(all, range), queries: queries + 1, windowStart: null };
+  return { answer: { ...pairCandidates(all, range), queries: queries + 1, windowStart: null }, dayOf: daysOf(all) };
+}
+
+/** Row id → its day, for every row the candidates name. */
+function daysOf(candidates: readonly CandidateRow[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const c of candidates) {
+    out.set(c.pId, c.pOn);
+    out.set(c.qId, c.qOn);
+  }
+  return out;
+}
+
+/** (F6 round 3) A pending Plaid row, as the expired-hold rule reads it. */
+type PendingRow = Awaited<ReturnType<typeof pendingRowsQuery>>[number];
+
+/** (F6 round 3) The household's pending Plaid rows (dated in the window, when given). */
+function pendingRowsQuery(householdId: string, reader: DbReader, window?: { from: string | null; to: string }) {
+  return reader
+    .select({
+      id: transactionsTable.id,
+      plaidAccountId: transactionsTable.plaidAccountId,
+      occurredOn: transactionsTable.occurredOn,
+      amount: transactionsTable.amount,
+      description: transactionsTable.description,
+    })
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        eq(transactionsTable.pending, true),
+        isNotNull(transactionsTable.plaidAccountId),
+        window?.from ? gte(transactionsTable.occurredOn, window.from) : undefined,
+        window ? lte(transactionsTable.occurredOn, window.to) : undefined,
+      ),
+    );
+}
+
+const expiredRowOf = (r: PendingRow): ExpiredHoldRow => ({
+  id: r.id,
+  plaidAccountId: r.plaidAccountId,
+  pending: true,
+  occurredOn: r.occurredOn,
+  amount: Number(r.amount) || 0,
+  description: r.description,
+});
+
+/**
+ * (F6 round 3) The pending rows the reversal pairing needs, and the day it may
+ * start from: the latest day on or before `latestCut` that no possible (hold,
+ * reversal) pair crosses on any account (`reversalCleanCuts`), the earliest of
+ * the accounts' cuts. The lookback doubles like the replaced read's (32, 64, …,
+ * 1024 days); past that every pending row up to `to` is read and `cut` is null.
+ * Rows from `from` on are always in the read.
+ */
+async function reversalWindow(
+  householdId: string,
+  reader: DbReader,
+  latestCut: number,
+  from: string,
+  to: string,
+): Promise<{ rows: PendingRow[]; cut: number | null }> {
+  for (let lookback = RANGE_LOOKBACK_DAYS; lookback <= RANGE_LOOKBACK_MAX_DAYS; lookback *= 2) {
+    // A pair crossing a day of the span has its hold at most REVERSAL_MAX_DAYS
+    // before that day: read that far before the span too, or a crossing pair
+    // whose hold is unread would leave its day looking clean.
+    const readFrom = dayISO(latestCut - lookback - REVERSAL_MAX_DAYS);
+    const rows = await pendingRowsQuery(householdId, reader, { from: readFrom < from ? readFrom : from, to });
+    const cuts = reversalCleanCuts(rows, latestCut - lookback, latestCut);
+    if (cuts) return { rows, cut: Math.min(latestCut, ...cuts.values()) };
+  }
+  return { rows: await pendingRowsQuery(householdId, reader, { from: null, to }), cut: null };
+}
+
+/**
+ * Per account, the latest day in [earliest, latest] no POSSIBLE reversal pair
+ * crosses (hold day < cut ≤ reversal day): (F6 round 4) a pending CHARGE and a
+ * pending CREDIT of the same amount to the cent, the credit dated
+ * 1–REVERSAL_MAX_DAYS days after the charge. Every pair the rule can make is
+ * among them (it also needs the hold expired and neither row replaced), so a
+ * day clean of these is clean of the rule's pairs: the rows on or after it pair
+ * only among themselves. Accounts with no crossing are absent. Null when some
+ * account has no clean day in the span.
+ */
+function reversalCleanCuts(rows: readonly PendingRow[], earliest: number, latest: number): Map<string, number> | null {
+  const byKey = new Map<string, { on: number; sign: number }[]>();
+  for (const r of rows) {
+    const amount = Number(r.amount) || 0;
+    if (!r.plaidAccountId || amount === 0) continue;
+    const key = `${r.plaidAccountId}|${Math.round(Math.abs(amount) * 100)}`;
+    const list = byKey.get(key) ?? [];
+    list.push({ on: dayNumber(r.occurredOn), sign: Math.sign(amount) });
+    byKey.set(key, list);
+  }
+  const crossed = new Map<string, Uint8Array>();
+  for (const [key, list] of byKey) {
+    const account = key.slice(0, key.lastIndexOf("|"));
+    list.sort((a, b) => a.on - b.on);
+    for (let i = 0; i < list.length; i += 1) {
+      // Only a charge takes a reversal, and the reversal is a later credit.
+      if (list[i]!.sign >= 0) continue;
+      for (let j = i + 1; j < list.length && list[j]!.on - list[i]!.on <= REVERSAL_MAX_DAYS; j += 1) {
+        if (list[j]!.sign <= 0 || list[j]!.on === list[i]!.on) continue;
+        const first = Math.max(list[i]!.on + 1, earliest);
+        const last = Math.min(list[j]!.on, latest);
+        if (first > last) continue;
+        let days = crossed.get(account);
+        if (!days) {
+          days = new Uint8Array(latest - earliest + 1);
+          crossed.set(account, days);
+        }
+        for (let d = first; d <= last; d += 1) days[d - earliest] = 1;
+      }
+    }
+  }
+  const cuts = new Map<string, number>();
+  for (const [account, days] of crossed) {
+    let cut = latest;
+    while (cut >= earliest && days[cut - earliest]) cut -= 1;
+    if (cut < earliest) return null;
+    cuts.set(account, cut);
+  }
+  return cuts;
 }
 
 const DAY_MS = 86_400_000;
@@ -401,6 +662,7 @@ function pairCandidates(
   return {
     replacedIds,
     replacedBy,
+    expiredIds: new Set(),
     candidatePairs: candidates.length,
     rowsRead: rows.size,
   };

@@ -338,6 +338,27 @@ describe("⭐ (F5 round 2) capHookObligationsAtBalance — a card's carried + cu
     expect(a.get("a")).toMatchObject({ incurredCents: 0, cappedCents: 18000, carriedTo: null, curveCents: 0, amountCents: 0 });
     expect(a.get("b")).toMatchObject({ incurredCents: 19000, paidCents: 2000, cappedCents: 5000, carriedCents: 0, curveCents: 19000, amountCents: 21000 });
   });
+
+  it("⭐ (F6) the open week is in the capped set: due 580 fits under owed-now 610, due + this week's 90 does not — 60 cut off the oldest week, the open week keeps its 90, held = 610", () => {
+    const obligations = [
+      ob("w|9-26", "2026-09-26", "plat", 21000),
+      ob("w|10-03", "2026-10-03", "plat", 18000),
+      ob("w|10-10", "2026-10-10", "plat", 26000),
+      ob("w|10-17", "2026-10-17", "plat", 9000), // the open week (pending purchases)
+    ];
+    const allocations = [{ txnId: "stmt", key: "w|9-26", accountId: "plat", cents: 7000 }];
+    const cut = capHookObligationsAtBalance(obligations, allocations, new Map([["plat", 61000]]));
+    expect(cut).toEqual([{ txnId: "", key: "w|9-26", accountId: "plat", cents: 6000 }]);
+    const unpaid = obligations.reduce((s, o) => s + o.cents, 0) - 7000 - cut.reduce((s, c) => s + c.cents, 0);
+    expect(unpaid).toBe(61000);
+    // Owed-now below this week's purchases: every carried week goes first; the open week is cut last.
+    expect(capHookObligationsAtBalance(obligations, allocations, new Map([["plat", 5000]]))).toEqual([
+      { txnId: "", key: "w|9-26", accountId: "plat", cents: 14000 },
+      { txnId: "", key: "w|10-03", accountId: "plat", cents: 18000 },
+      { txnId: "", key: "w|10-10", accountId: "plat", cents: 26000 },
+      { txnId: "", key: "w|10-17", accountId: "plat", cents: 4000 },
+    ]);
+  });
 });
 
 // ⭐ (F5 round 3) A MONTH'S PURCHASES ARE PAID ONLY BY PAYMENTS MADE AFTER THEM; A
@@ -412,6 +433,24 @@ describe("⭐ (F5 round 3/4) cardOwedNowCents / outsideCardBalanceRead — which
   });
   const synced = (ids: string[] = []) => read(ids);
   const r = (txnId: string, on: string, cents: number, more: Partial<CardBalanceRow> = {}): CardBalanceRow => ({ txnId, on, cents, pending: false, createdAt: `${on}T05:00:00.000Z`, ...more });
+
+  it("⭐ (F6 round 3) owed-now reads every purchase it is handed by the base rule, whatever its date — round 2's read-day cut is gone: expired holds never reach it (the card's rows drop them upstream), and a posted row keeps the base rule", () => {
+    // Round 2 read a purchase dated more than 7 days before the read's day as
+    // inside the balance. A pending one is outside again (an expired hold is
+    // simply not among the rows — `readCardPeriods` drops it with its reversal).
+    expect(cardOwedNowCents(read(), [r("p", "2026-10-06", 3500, { pending: true })], [], 0)).toBe(32000);
+    // ⭐ Review finding 3: pending at a Sync's read, dated 8+ days before it,
+    // posted in place since — outside the balance it was read with (round 2: 285).
+    expect(cardOwedNowCents(synced(["late"]), [r("late", "2026-10-02", 5000)], [], 0)).toBe(33500);
+    // Stored after a Sync's read: outside by the store time, as before round 2.
+    expect(cardOwedNowCents(synced(), [r("new", "2026-10-13", 4000, { createdAt: "2026-10-14T20:00:00.000Z" })], [], 0)).toBe(32500);
+    // ⭐ Review finding 1: a pending hold and its pending reversal handed in
+    // together cancel (+50 − 50); round 2 kept the reversal and dropped the hold.
+    const pair = [r("h", "2026-10-05", 5000, { pending: true }), r("v", "2026-10-08", -5000, { pending: true })];
+    expect(cardOwedNowCents(read(), pair, [], 0)).toBe(28500);
+    // Credits keep their own rule (never over): a pending payment credit is subtracted.
+    expect(cardOwedNowCents(read(), [], [r("k", "2026-09-30", 5000, { pending: true })], 0)).toBe(23500);
+  });
 
   it("any read: pending now and dated after the read's day are outside; posted on or before it, inside", () => {
     for (const at of [read(), synced()]) {

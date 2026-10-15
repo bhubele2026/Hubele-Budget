@@ -4,6 +4,15 @@ import { addDaysISO } from "./householdTime";
 /** A posted row can replace a pending row dated up to this many days before it. */
 export const SUPERSEDE_MAX_DAYS = 7;
 
+/**
+ * ⭐ (F6 round 4, lead's decision) An expired charge takes its reversal credit
+ * dated up to this many days after it. Hotel and car-rental holds are reversed
+ * late — a reversal 8 days after its hold must still cancel it, or it counts
+ * alone as a refund (finding 8: owed-now read 150 low, real carried purchases
+ * cut). 31 days: one card cycle. A credit dated later is not a reversal.
+ */
+export const REVERSAL_MAX_DAYS = 31;
+
 export type SupersedeRow = {
   id: string;
   plaidAccountId: string | null;
@@ -53,6 +62,120 @@ export function canSupersede(pending: SupersedeRow, posted: SupersedeRow): boole
   if (q < p || q > Math.round(p * 1.3) + 100) return false;
   if (!hasRealDescription(pending.description) || !hasRealDescription(posted.description)) return false;
   return descriptionsFuzzyEqual(pending.description, posted.description);
+}
+
+/** A pending row as the expired-hold rule reads it. */
+export type ExpiredHoldRow = Pick<SupersedeRow, "id" | "plaidAccountId" | "pending" | "occurredOn" | "amount" | "description">;
+
+/** What `expiredHolds` answers. */
+export type ExpiredHolds = {
+  /** The expired holds, and the reversals paired with them. They count nowhere. */
+  expiredIds: Set<string>;
+  /** A reversal's id → the expired hold it reversed (one to one). */
+  holdOf: Map<string, string>;
+};
+
+/**
+ * Is this row an expired hold on its own: still pending now, on a Plaid
+ * account, and dated more than SUPERSEDE_MAX_DAYS before the household's today?
+ * (Whether a posted row replaced it is the caller's: `expiredHolds` takes the
+ * replaced ids.) Exactly 7 days: no; 8: yes.
+ */
+export function isExpiredByAge(row: Pick<SupersedeRow, "pending" | "plaidAccountId" | "occurredOn">, todayISO: string): boolean {
+  return row.pending && !!row.plaidAccountId && row.occurredOn < addDaysISO(todayISO, -SUPERSEDE_MAX_DAYS);
+}
+
+/** Negative when `a` is the better reversal for `hold` than `b`. */
+function rankReversal(a: ExpiredHoldRow, b: ExpiredHoldRow, hold: ExpiredHoldRow): number {
+  const named = (r: ExpiredHoldRow) =>
+    hasRealDescription(hold.description) && hasRealDescription(r.description) && descriptionsFuzzyEqual(hold.description, r.description) ? 0 : 1;
+  const gap = (r: ExpiredHoldRow) => Date.parse(`${r.occurredOn}T00:00:00Z`) - Date.parse(`${hold.occurredOn}T00:00:00Z`);
+  return named(a) - named(b) || gap(a) - gap(b) || a.occurredOn.localeCompare(b.occurredOn) || a.id.localeCompare(b.id);
+}
+
+/**
+ * ⭐ (F6 round 3, owner's decision 2026-10-15) EXPIRED HOLDS COUNT NOWHERE.
+ * "A charge that is still pending more than 7 days after its date: stop
+ * counting it everywhere — worked out, nothing deleted. If it posts later, the
+ * posted charge counts."
+ *
+ * An EXPIRED HOLD is a row that is pending now, on a Plaid account, dated more
+ * than SUPERSEDE_MAX_DAYS before `todayISO` (the household's today), and not
+ * replaced by a posted row (`replacedIds`: the pending → posted pairing; a
+ * replaced row is never also expired). Any sign: a pending credit that old is
+ * no more real than a pending charge. Manual rows never.
+ *
+ * Its REVERSAL is expired WITH it, even when younger than 7 days: a pending
+ * CREDIT on the same account, of the same amount to the cent, dated on the
+ * hold's day or up to REVERSAL_MAX_DAYS (31) after it, not replaced.
+ * (Lead's amendment) No description test — a bank describes the reversal of a
+ * restaurant hold generically ("Restaurant Transaction"), not by the merchant.
+ * ⭐ (F6 round 4) ONLY A CHARGE TAKES A REVERSAL. An expired hold that is money
+ * out (a charge) may take a pending credit; an expired CREDIT expires alone and
+ * never takes a charge — an orphan "Restaurant Transaction" credit whose hold a
+ * tipped final replaced must not take a real 3-day-old purchase of the same
+ * amount with it (finding 10: that purchase counted nowhere).
+ * One to one, deterministic: holds pair oldest first (then id); each takes,
+ * among the credits still free, a fuzzy-equal description first
+ * (`descriptionsFuzzyEqual`, both real), then the closest date, the oldest,
+ * then id. A row in a pair is never in another.
+ *
+ * Pure: the caller chooses the rows (all the pending rows that can pair with
+ * the ones it asks about — see `findSupersededPendingForRange`). Non-pending
+ * rows in `rows` are ignored.
+ */
+export function expiredHolds(
+  rows: readonly ExpiredHoldRow[],
+  todayISO: string,
+  replacedIds: ReadonlySet<string>,
+): ExpiredHolds {
+  const expiredIds = new Set<string>();
+  const holdOf = new Map<string, string>();
+  const live = rows.filter((r) => r.pending && r.plaidAccountId && !replacedIds.has(r.id));
+  // Candidate reversals — pending CREDITS only — by account and amount in cents.
+  const creditsByKey = new Map<string, ExpiredHoldRow[]>();
+  for (const r of live) {
+    if (!(r.amount > 0)) continue;
+    const key = `${r.plaidAccountId}|${cents(r.amount)}`;
+    const list = creditsByKey.get(key);
+    if (list) list.push(r);
+    else creditsByKey.set(key, [r]);
+  }
+  const holds = live
+    .filter((r) => isExpiredByAge(r, todayISO))
+    .sort((a, b) => a.occurredOn.localeCompare(b.occurredOn) || a.id.localeCompare(b.id));
+  const taken = new Set<string>();
+  for (const hold of holds) {
+    expiredIds.add(hold.id);
+    // (F6 round 4) Only an expired CHARGE takes a reversal; a credit expires alone.
+    if (!(hold.amount < 0)) continue;
+    const last = addDaysISO(hold.occurredOn, REVERSAL_MAX_DAYS);
+    let best: ExpiredHoldRow | null = null;
+    for (const r of creditsByKey.get(`${hold.plaidAccountId}|${cents(hold.amount)}`) ?? []) {
+      if (taken.has(r.id)) continue;
+      if (r.occurredOn < hold.occurredOn || r.occurredOn > last) continue;
+      if (!best || rankReversal(r, best, hold) < 0) best = r;
+    }
+    if (best) {
+      taken.add(best.id);
+      expiredIds.add(best.id);
+      holdOf.set(best.id, hold.id);
+    }
+  }
+  return { expiredIds, holdOf };
+}
+
+/** A read's pending answer: rows a posted row replaced, and (F6 round 3) expired holds. */
+export type NotCountedSets = { replacedIds: ReadonlySet<string>; expiredIds: ReadonlySet<string> };
+
+/** ⭐ (F6 round 3) Does this row count nowhere: a pending row a posted row replaced, or an expired hold (or its reversal)? */
+export function countsNowhere(s: NotCountedSets, id: string): boolean {
+  return s.replacedIds.has(id) || s.expiredIds.has(id);
+}
+
+/** ⭐ (F6 round 3) Every id that counts nowhere (`countsNowhere`), as one set. */
+export function notCountedIdsOf(s: NotCountedSets): Set<string> {
+  return new Set([...s.replacedIds, ...s.expiredIds]);
 }
 
 /** Negative when `a` is the better pending row for `posted` than `b`. */

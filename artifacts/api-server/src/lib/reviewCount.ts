@@ -11,7 +11,7 @@ import { inForecastWhere } from "./forecastInclusion";
 import { householdTodayISO, monthBounds } from "./householdClock";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { readPausedReview } from "./oneTimeBillMove";
-import { findSupersededPendingForRange } from "./supersededPending";
+import { countsNowhere, findSupersededPendingForRange } from "./supersededPending";
 
 /**
  * The Review-inbox count: unresolved BANK txns in the current calendar month
@@ -44,6 +44,10 @@ import { findSupersededPendingForRange } from "./supersededPending";
  * of its own (`rowAnswersResolve`, the banking review's rule). Before S6 an
  * unanswered pair counted twice, and a charge answered while pending was asked
  * about again once it posted.
+ *
+ * ⭐ (F6 round 3) An expired hold — pending more than 7 days after its date,
+ * never replaced — and its reversal count nowhere, so they never ask for review
+ * (`countsNowhere`, the same read's `expiredIds`).
  */
 export async function computeReviewCount(
   householdId: string,
@@ -82,7 +86,7 @@ export async function computeReviewCount(
         ),
       ),
     // (S6) Which pending rows a posted row replaced — exact for every row of the month.
-    findSupersededPendingForRange(householdId, monthStart, monthEnd),
+    findSupersededPendingForRange(householdId, monthStart, monthEnd, db, { today }),
   ]);
 
   const stored = await db
@@ -134,7 +138,8 @@ export async function computeReviewCount(
       if (s === "amex" || s.startsWith("plaid:")) continue;
     }
     // (S6) The pending half of a pair counts once, on its posted row.
-    if (supersede.replacedIds.has(t.id)) continue;
+    // ⭐ (F6 round 3) An expired hold (or its reversal) counts nowhere: it never asks for review.
+    if (countsNowhere(supersede, t.id)) continue;
     if (resolved(t.id)) continue;
     count++;
   }

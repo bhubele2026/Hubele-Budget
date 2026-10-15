@@ -7,7 +7,7 @@
  */
 
 /**
- * GET /transactions/ledger's totals for the same account and range, to the cent. count covers every row in the range; supersededExcluded and otherExcluded are the rows the register moves by 0 (a pending row its posted row replaced; a repeated Plaid id, a mask-twin row or a logged payment a bank row confirmed).
+ * GET /transactions/ledger's totals for the same account and range, to the cent. count covers every row in the range; supersededExcluded and otherExcluded are the rows the register moves by 0 (a pending row its posted row replaced; a repeated Plaid id, a mask-twin row, a logged payment a bank row confirmed, or (F6 round 3) an expired hold or its reversal).
  */
 export interface BankingReviewCashFlow {
   moneyIn: string;

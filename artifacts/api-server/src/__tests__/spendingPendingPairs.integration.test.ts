@@ -97,6 +97,8 @@ type Facts = {
     cardPayments: number;
     reimbursable: number;
     replacedPending: number;
+    /** (F6 round 3) Outflows on expired holds and their reversals. */
+    expiredHolds: number;
   };
 };
 type Spine = { spentWeek: number; spentMonth: number };
@@ -153,6 +155,20 @@ async function addTxn(row: {
     })
     .returning({ id: transactionsTable.id });
   return t!.id;
+}
+
+/**
+ * ⭐ (F6 round 3) Read on another household day (noon Central), then back to
+ * NOW: a pending row counts only while it is at most 7 days old (the owner's
+ * 2026-10-15 rule — older, it is an expired hold that counts nowhere).
+ */
+async function on<T>(day: string, read: () => Promise<T>): Promise<T> {
+  vi.setSystemTime(new Date(`${day}T17:00:00Z`));
+  try {
+    return await read();
+  } finally {
+    vi.setSystemTime(NOW);
+  }
 }
 
 beforeAll(async () => {
@@ -236,10 +252,16 @@ describe("PR7b — a pending charge and its posted row count once in spending", 
     await addTxn({ occurredOn: "2026-07-20", description: "KWIK TRIP 812", amount: "-20.00", plaidAccountId: card, pending: true });
     await addTxn({ occurredOn: "2026-07-21", description: "KWIK TRIP 812", amount: "-40.00", plaidAccountId: card });
 
-    const f = await facts({ from: "2026-07-19", to: "2026-07-25" });
+    const f = await on("2026-07-22", () => facts({ from: "2026-07-19", to: "2026-07-25" }));
     // 30 + 60 + 60 + 20 + 40: every row counts.
     expect(f.householdSpend).toEqual({ total: 210, transactionCount: 5 });
     expect(f.excluded.replacedPending).toBe(0);
+    expect(f.excluded.expiredHolds).toBe(0);
+    // ⭐ (F6 round 3) Months on (NOW), the three still pending are expired holds:
+    // 30 + 60 + 20 count nowhere, listed apart (before the rule: 210 / 5).
+    const later = await facts({ from: "2026-07-19", to: "2026-07-25" });
+    expect(later.householdSpend).toEqual({ total: 100, transactionCount: 2 });
+    expect(later.excluded.expiredHolds).toBe(110);
   });
 
   it("a pair straddling a week boundary counts once, in the week it posted; the weeks add up to the fortnight", async () => {
@@ -268,12 +290,18 @@ describe("PR7b — a pending charge and its posted row count once in spending", 
     await addTxn({ occurredOn: "2026-09-06", description: "PANERA BREAD 601", amount: "-45.00", plaidAccountId: card, pending: true });
     await addTxn({ occurredOn: "2026-09-07", description: "PANERA BREAD 601", amount: "-47.40", plaidAccountId: card });
 
-    const prevWeek = await facts({ from: "2026-08-30", to: "2026-09-05" });
-    const week = await facts({ from: "2026-09-06", to: "2026-09-12" });
+    const prevWeek = await on("2026-09-12", () => facts({ from: "2026-08-30", to: "2026-09-05" }));
+    const week = await on("2026-09-12", () => facts({ from: "2026-09-06", to: "2026-09-12" }));
     expect(prevWeek.householdSpend.total).toBe(0);
     expect(prevWeek.excluded.replacedPending).toBe(45);
     expect(week.householdSpend).toEqual({ total: 92.4, transactionCount: 2 });
     expect(week.excluded.replacedPending).toBe(0);
+    // ⭐ (F6 round 3) At NOW Sunday's meal is still pending a month on: an expired
+    // hold (before the rule: 92.40 / 2). The replaced Saturday row stays replaced.
+    const weekLater = await facts({ from: "2026-09-06", to: "2026-09-12" });
+    expect(weekLater.householdSpend).toEqual({ total: 47.4, transactionCount: 1 });
+    expect(weekLater.excluded).toMatchObject({ replacedPending: 0, expiredHolds: 45 });
+    expect((await facts({ from: "2026-08-30", to: "2026-09-05" })).excluded).toMatchObject({ replacedPending: 45, expiredHolds: 0 });
   });
 
   it("pairing does not depend on where the window starts, even through a chain longer than 7 days", async () => {
@@ -288,16 +316,27 @@ describe("PR7b — a pending charge and its posted row count once in spending", 
     await addTxn({ occurredOn: "2026-08-23", description: "STARBUCKS STORE 1234", amount: "-5.00", plaidAccountId: card, pending: true });
     await addTxn({ occurredOn: "2026-08-24", description: "STARBUCKS STORE 1234", amount: "-6.00", plaidAccountId: card });
 
-    const w1 = await facts({ from: "2026-08-09", to: "2026-08-15" });
-    const w2 = await facts({ from: "2026-08-16", to: "2026-08-22" });
-    const w3 = await facts({ from: "2026-08-23", to: "2026-08-29" });
-    const all = await facts({ from: "2026-08-09", to: "2026-08-29" });
+    // Read on 8/29: the 8/23 hold is 6 days old and still counts.
+    const [w1, w2, w3, all] = await on("2026-08-29", () =>
+      Promise.all([
+        facts({ from: "2026-08-09", to: "2026-08-15" }),
+        facts({ from: "2026-08-16", to: "2026-08-22" }),
+        facts({ from: "2026-08-23", to: "2026-08-29" }),
+        facts({ from: "2026-08-09", to: "2026-08-29" }),
+      ]),
+    );
     expect(w1.householdSpend.total).toBe(0);
     expect(w2.householdSpend.total).toBe(6);
     expect(w3.householdSpend).toEqual({ total: 11, transactionCount: 2 });
     expect(w3.excluded.replacedPending).toBe(0);
     expect(all.householdSpend).toEqual({ total: 17, transactionCount: 3 });
     expect(all.excluded.replacedPending).toBe(10);
+    // ⭐ (F6 round 3) At NOW the 8/23 hold never posted: expired, it counts nowhere
+    // (before the rule: 11 / 2 and 17 / 3); the pairs are unchanged.
+    const w3Later = await facts({ from: "2026-08-23", to: "2026-08-29" });
+    expect(w3Later.householdSpend).toEqual({ total: 6, transactionCount: 1 });
+    expect(w3Later.excluded).toMatchObject({ replacedPending: 0, expiredHolds: 5 });
+    expect((await facts({ from: "2026-08-09", to: "2026-08-29" })).householdSpend).toEqual({ total: 12, transactionCount: 2 });
   });
 
   it("a pending deposit its posted row replaced is not income twice", async () => {

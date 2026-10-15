@@ -1737,7 +1737,7 @@ export interface BankingReviewFreshness {
     staleReason: BankingReviewFreshnessStaleReason;
 }
 /**
- * GET /transactions/ledger's totals for the same account and range, to the cent. count covers every row in the range; supersededExcluded and otherExcluded are the rows the register moves by 0 (a pending row its posted row replaced; a repeated Plaid id, a mask-twin row or a logged payment a bank row confirmed).
+ * GET /transactions/ledger's totals for the same account and range, to the cent. count covers every row in the range; supersededExcluded and otherExcluded are the rows the register moves by 0 (a pending row its posted row replaced; a repeated Plaid id, a mask-twin row, a logged payment a bank row confirmed, or (F6 round 3) an expired hold or its reversal).
  */
 export interface BankingReviewCashFlow {
     moneyIn: string;
@@ -2109,9 +2109,9 @@ export interface BankingReviewAsPlanned {
 }
 export interface BankingReviewReconciliation {
     rowsPlaced: number;
-    /** cashFlow.count − rowsPlaced − excluded rows; always 0 */
+    /** cashFlow.count − rowsPlaced − excluded rows − (F6 round 4) counted expired holds; always 0 */
     rowsUnexplained: number;
-    /** (Σ buckets' net + asPlanned.net) − cashFlow.net; always "0.00" */
+    /** (Σ buckets' net + asPlanned.net + (F6 round 4) counted expired holds' net) − cashFlow.net; always "0.00". A counted expired hold is one the bank snapshot held, and its reversal: the balance counts the pair (net 0), no bucket lists it. */
     unexplained: string;
 }
 export type BankingReviewInboxBadgeScope = (typeof BankingReviewInboxBadgeScope)[keyof typeof BankingReviewInboxBadgeScope];
@@ -2792,6 +2792,18 @@ export interface Transaction {
      * @nullable
      */
     confirmedByTxnId?: string | null;
+    /** (F6 round 3) An expired hold: still pending more than 7 days after
+  its date (the household's today, America/Chicago) with no posted row
+  that replaced it — or the pending reversal paired with one. (F6
+  round 4) A reversal is a pending credit on the same account, of the
+  same amount, dated up to 31 days after an expired charge; an expired
+  credit expires alone. It counts nowhere: not in spending, owed, the
+  card cap, budgets, allowances, review or any total (owner's decision
+  2026-10-15); every browser sum skips it. Worked out on read; the row
+  is kept and shown. On GET /transactions list rows, the GET /forecast
+  bundle's transactions and ledger rows; absent elsewhere.
+   */
+    readonly expiredHold?: boolean;
 }
 export type LedgerRow = Transaction & {
     /** (PR-A2) How many parts the charge is split into; 0 when it is not split. */
@@ -2824,7 +2836,9 @@ export type LedgerRow = Transaction & {
   same Plaid transaction id); not_bank (a mask-twin row, which the
   bank balance does not read); claim_confirmed (PR-D: a payment
   logged in the app that a bank row confirmed — the bank row is
-  the payment).
+  the payment); expired (F6 round 3: an expired hold, still
+  pending more than 7 days after its date and never replaced, or
+  its reversal — it counts nowhere).
    */
     balanceReason: string;
     /**
@@ -2841,10 +2855,17 @@ export type LedgerRow = Transaction & {
     afterToday: boolean;
     /** Still pending and dated more than 14 days before the household's
   today. A label only: the row moves the balance as balanceReason
-  says. A leftover pending row its posted row could not replace
-  counts beside that posted row.
+  says. (F6 round 3) Such a row that no posted row replaced is an
+  expired hold (balanceReason expired): it moves the balance by 0.
    */
     stalePending: boolean;
+    /** (F6 round 3) balanceReason is expired: an expired hold or its
+  reversal. It moves the register by 0 and is in no total. (F6
+  round 4) A hold the bank snapshot held and its reversal are not:
+  the balance counts the reversal, so the register counts both
+  (net 0) and neither is labelled.
+   */
+    expiredHold: boolean;
 };
 export interface LedgerAnchor {
     /** The household's today (America/Chicago), YYYY-MM-DD. */
@@ -5402,6 +5423,8 @@ export type SpendingFactsExcluded = {
     reimbursable: number;
     /** Pending outflows a posted row replaced when the sync never linked them (pairPendingWithPosted, PR4c). The charge counts once, on its posted row; this is the pending half left out. No row is deleted or re-tagged. */
     replacedPending: number;
+    /** (F6 round 3) Outflows on expired holds - rows still pending more than 7 days after their date that no posted row replaced - and their reversals. They count nowhere (owner's decision 2026-10-15). Worked out on read; no row is deleted or re-tagged. */
+    expiredHolds: number;
 };
 export type SpendingFactsByCategoryItem = {
     categoryId: string;

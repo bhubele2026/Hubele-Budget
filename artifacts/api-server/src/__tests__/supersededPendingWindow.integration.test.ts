@@ -16,7 +16,7 @@ vi.mock("@workspace/avalanche-core", async () => {
 });
 
 import { db, transactionsTable } from "@workspace/db";
-import { pairPendingWithPosted, pairPendingWithPostedAmong } from "@workspace/avalanche-core";
+import { expiredHolds, pairPendingWithPosted, pairPendingWithPostedAmong } from "@workspace/avalanche-core";
 import {
   findSupersededPending,
   findSupersededPendingForRange,
@@ -29,6 +29,10 @@ const USERS = {
   chain: `prd-win-chain-${RUN}`,
   none: `prd-win-none-${RUN}`,
   filing: `prd-win-filing-${RUN}`,
+  expired: `prd-win-expired-${RUN}`,
+  reversalChain: `prd-win-revchain-${RUN}`,
+  outside: `prd-win-outside-${RUN}`,
+  lateReversal: `prd-win-late-${RUN}`,
 };
 const households = {} as Record<keyof typeof USERS, string>;
 
@@ -255,5 +259,159 @@ describe("findSupersededPendingForRange — the whole-ledger answer inside the r
       // (F2) Its Plaid categories ride along as evidence (never filing); this row has none.
       pfc: { pfcPrimary: null, pfcDetailed: null },
     });
+  });
+});
+
+// ⭐ (F6 round 3) THE EXPIRED HOLDS IN A RANGE ARE THE WHOLE LEDGER'S. A row dated
+// before today − 7 is expired when pending and not replaced; a younger one only
+// as the reversal of an expired hold — and that pairing (one to one, oldest hold
+// first) chains back through older pending rows of the same amount and opposite
+// signs. The range read starts its pairing at a clean cut before the range (and
+// reads the replaced rows from there); these tests hold it to the whole-ledger
+// answer: `expiredHolds` over every row, with the whole ledger's replaced rows.
+async function wholeLedgerExpired(householdId: string, from: string, to: string, today: string): Promise<string[]> {
+  const all = await db
+    .select({
+      id: transactionsTable.id,
+      plaidAccountId: transactionsTable.plaidAccountId,
+      pending: transactionsTable.pending,
+      occurredOn: transactionsTable.occurredOn,
+      amount: transactionsTable.amount,
+      description: transactionsTable.description,
+      createdAt: transactionsTable.createdAt,
+    })
+    .from(transactionsTable)
+    .where(eq(transactionsTable.householdId, householdId));
+  const rows = all.map((r) => ({ ...r, amount: Number(r.amount) }));
+  const replaced = new Set([...pairPendingWithPosted(rows).values()].map((p) => p.id));
+  const { expiredIds } = expiredHolds(rows, today, replaced);
+  return rows.filter((r) => r.occurredOn >= from && r.occurredOn <= to && expiredIds.has(r.id)).map((r) => r.id).sort();
+}
+
+describe("(F6 round 3) findSupersededPendingForRange — expired holds, the whole-ledger answer inside the range", () => {
+  it("⭐ equals expiredHolds over the whole ledger on a dense randomized ledger of ± holds, reversals and postings, for 60 ranges and three todays", async () => {
+    let seed = 20261015;
+    const rand = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const accounts = [`acct-x1-${RUN}`, `acct-x2-${RUN}`];
+    const descs = ["SOME TAVERN 0042", "Restaurant Transaction", "HARBOR HOTEL HOLD", "Hotel Transaction"];
+    const rows: Row[] = [];
+    for (let i = 0; i < 600; i += 1) {
+      const day = addDays("2026-10-01", Math.floor(rand() * 75));
+      const pending = rand() < 0.7;
+      const sign = rand() < 0.5 ? "-" : "";
+      rows.push({
+        occurredOn: day,
+        amount: `${sign}${rand() < 0.5 ? "20.00" : "35.50"}`,
+        description: descs[Math.floor(rand() * descs.length)]!,
+        plaidAccountId: accounts[Math.floor(rand() * accounts.length)]!,
+        pending,
+        createdAt: at(day, Math.floor(rand() * 2880)),
+      });
+    }
+    await insertRows("expired", rows);
+
+    let compared = 0;
+    let young = 0;
+    for (const today of ["2026-11-20", "2026-12-01", "2026-12-14"]) {
+      const ranges: [string, string][] = [
+        ["2026-10-01", "2026-12-14"],
+        [addDays(today, -6), today],
+        [addDays(today, -13), addDays(today, -7)],
+      ];
+      for (let i = 0; i < 17; i += 1) {
+        const from = addDays("2026-09-25", Math.floor(rand() * 85));
+        ranges.push([from, addDays(from, Math.floor(rand() * 20))]);
+      }
+      for (const [from, to] of ranges) {
+        const reference = await wholeLedgerExpired(households.expired, from, to, today);
+        const r = await findSupersededPendingForRange(households.expired, from, to, db, { today });
+        expect([...r.expiredIds].sort(), `${from}..${to} on ${today}`).toEqual(reference);
+        compared += reference.length;
+        if (to >= addDays(today, -7)) young += reference.length;
+      }
+    }
+    // The fixture exercises what it claims: many expired rows, in ranges that reach the young days.
+    expect(compared).toBeGreaterThan(300);
+    expect(young).toBeGreaterThan(0);
+  });
+
+  it("a young reversal in the range whose hold is OUTSIDE it is still named (the read reaches back for the hold)", async () => {
+    const card = `acct-outside-${RUN}`;
+    const [hold, reversal] = await insertRows("outside", [
+      { occurredOn: "2026-10-03", amount: "-64.18", description: "SOME TAVERN 0042", plaidAccountId: card, pending: true, createdAt: at("2026-10-03") },
+      { occurredOn: "2026-10-09", amount: "64.18", description: "Restaurant Transaction", plaidAccountId: card, pending: true, createdAt: at("2026-10-09") },
+    ]);
+    const today = "2026-10-15";
+    const week = await findSupersededPendingForRange(households.outside, "2026-10-04", "2026-10-10", db, { today });
+    expect([...week.expiredIds]).toEqual([reversal]);
+    // The hold's own week names the hold; the whole ledger names both.
+    expect([...(await findSupersededPendingForRange(households.outside, "2026-09-27", "2026-10-03", db, { today })).expiredIds]).toEqual([hold]);
+    expect([...(await findSupersededPending(households.outside, db, { today })).expiredIds].sort()).toEqual([hold!, reversal!].sort());
+    // A day earlier the reversal's hold was 11 days old too, so the same; the
+    // reversal itself only became "young" — the rule never needed its own age.
+    expect([...(await findSupersededPendingForRange(households.outside, "2026-10-04", "2026-10-10", db, { today: "2026-10-14" })).expiredIds]).toEqual([reversal]);
+    // Before the hold was 8 days old: nothing.
+    expect((await findSupersededPendingForRange(households.outside, "2026-10-01", "2026-10-10", db, { today: "2026-10-10" })).expiredIds.size).toBe(0);
+  });
+
+  it("⭐ (F6 round 4) a chain of charges and credits of one amount, each credit up to 31 days from several charges, pushes the pairing's start back instead of re-pairing", async () => {
+    const card = `acct-revchain-${RUN}`;
+    // Charges −20 every 5 days 9/01 … 10/01 (all expired on 10/15) and credits
+    // +20 six days after each of the first six (9/07 … 10/02), then one young
+    // credit 10/12 (3 days old). Oldest first, each charge takes the closest
+    // free credit: 9/01↔9/07, 9/06↔9/12, … 9/26↔10/02 — and 10/01 takes 10/12,
+    // which is expired WITH it. A read starting after 9/01 would let 9/06 take
+    // 9/07 (1 day), every later charge the credit one earlier, and 10/01 take
+    // 10/02: 10/12 left counting.
+    const charges = Array.from({ length: 7 }, (_, i) => addDays("2026-09-01", i * 5));
+    const credits = charges.slice(0, 6).map((d) => addDays(d, 6)).concat(["2026-10-12"]);
+    const rows = [
+      ...charges.map((d) => ({ occurredOn: d, amount: "-20.00", description: "PARKING GARAGE", plaidAccountId: card, pending: true, createdAt: at(d) })),
+      ...credits.map((d) => ({ occurredOn: d, amount: "20.00", description: "Parking Transaction", plaidAccountId: card, pending: true, createdAt: at(d) })),
+    ];
+    await insertRows("reversalChain", rows);
+    const today = "2026-10-15";
+    const ids = await db.select({ id: transactionsTable.id, on: transactionsTable.occurredOn, amount: transactionsTable.amount }).from(transactionsTable).where(eq(transactionsTable.householdId, households.reversalChain));
+    const young = ids.find((r) => r.on === "2026-10-12")!.id;
+    const all = await findSupersededPending(households.reversalChain, db, { today });
+    expect(all.expiredIds.size).toBe(14);
+    expect(all.expiredIds.has(young)).toBe(true);
+    for (const [from, to] of [
+      ["2026-10-08", "2026-10-15"],
+      ["2026-10-11", "2026-10-17"],
+      ["2026-10-12", "2026-10-12"],
+      ["2026-10-01", "2026-10-15"],
+      ["2026-09-01", "2026-10-15"],
+    ] as const) {
+      const r = await findSupersededPendingForRange(households.reversalChain, from, to, db, { today });
+      expect([...r.expiredIds].sort(), `${from}..${to}`).toEqual(await wholeLedgerExpired(households.reversalChain, from, to, today));
+    }
+    const week = await findSupersededPendingForRange(households.reversalChain, "2026-10-11", "2026-10-17", db, { today });
+    expect(week.expiredIds.has(young)).toBe(true);
+    // The chain reaches back about six weeks from the range: the pairing started at 9/01 or before.
+    expect(week.windowStart === null || week.windowStart <= "2026-09-01").toBe(true);
+  });
+
+  it("⭐ (F6 round 4) a reversal 30 days after its hold is named by a range holding only the reversal; 32 days after, it is not a reversal", async () => {
+    const card = `acct-late-${RUN}`;
+    await insertRows("lateReversal", [
+      { occurredOn: "2026-09-12", amount: "-150.00", description: "HARBOR HOTEL HOLD", plaidAccountId: card, pending: true, createdAt: at("2026-09-12") },
+      { occurredOn: "2026-10-12", amount: "150.00", description: "Hotel Transaction", plaidAccountId: card, pending: true, createdAt: at("2026-10-12") },
+      { occurredOn: "2026-09-10", amount: "-75.00", description: "CITY CAR RENTAL HOLD", plaidAccountId: card, pending: true, createdAt: at("2026-09-10") },
+      { occurredOn: "2026-10-12", amount: "75.00", description: "Car Rental Transaction", plaidAccountId: card, pending: true, createdAt: at("2026-10-12") },
+    ]);
+    const today = "2026-10-15";
+    const rows = await db.select({ id: transactionsTable.id, amount: transactionsTable.amount }).from(transactionsTable).where(eq(transactionsTable.householdId, households.lateReversal));
+    const byAmount = (a: string) => rows.find((r) => r.amount === a)!.id;
+    const week = await findSupersededPendingForRange(households.lateReversal, "2026-10-11", "2026-10-17", db, { today });
+    // 9/12 → 10/12 is 30 days: a reversal, expired with its hold. 9/10 → 10/12 is 32: the credit (3 days old) counts.
+    expect([...week.expiredIds]).toEqual([byAmount("150.00")]);
+    expect([...week.expiredIds].sort()).toEqual(await wholeLedgerExpired(households.lateReversal, "2026-10-11", "2026-10-17", today));
+    expect((await findSupersededPending(households.lateReversal, db, { today })).expiredIds.has(byAmount("75.00"))).toBe(false);
   });
 });

@@ -14,6 +14,7 @@ import {
   recurringMerchantsFrom,
 } from "@/lib/discretionarySpend";
 import { emptyNote, Foot } from "@/ui";
+import { isCounted } from "@/lib/countedRows";
 
 /**
  * (W3) "Biggest charges" — moved here from the Banking page, which is now the
@@ -70,6 +71,8 @@ export function BiggestCharges({ monthStart, monthLabel }: { monthStart: string;
       .filter(
         (t: Transaction) =>
           t.occurredOn?.startsWith(ym) &&
+          // (F6 round 4, finding 5) An expired hold is no charge: not listed.
+          isCounted(t) &&
           isSplurge(t, isRecurring) &&
           !recurringMerchants.has(merchantKey(t.description ?? "")),
       )

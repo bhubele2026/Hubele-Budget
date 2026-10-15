@@ -9,6 +9,7 @@ import {
   type AmexTxnInput,
 } from "./amexEndingBalance";
 import { monthKeyFromISO } from "@/components/account-page";
+import { computeRunningBalances, sortNewestFirst } from "./runningBalance";
 
 // (#689) The user's dashboard tile reported "$20,000 Amex Ending
 // Balance" — actually their Amex Pay-Over-Time / "Plan-It"
@@ -408,3 +409,36 @@ describe("(PR2b) a computed Amex anchor counts its latest day once", () => {
     expect(balanceAtEndOf(monthKeyFromISO("2026-09-01"))).toBeCloseTo(130, 2);
   });
 });
+
+// ⭐ (F6 round 4, review finding 3) An expired hold counts nowhere on the card
+// page either: not in the ending-balance tile, not in the 12-month chart, and
+// the running-balance walk skips it — so they agree, and each month's walk
+// starts at the month before's ending balance. Synthetic: the card read 10/03 at
+// 1,000.00; 10/01 A 10 posted; 10/05 H 52 an expired hold; 10/06 B 20 posted.
+describe("(F6 round 4) the tile, the chart and the walk leave out an expired hold together", () => {
+  const anchor: AmexAnchor = { balance: 1000, asOf: "2026-10-03T15:00:00Z" };
+  const rows = [
+    { id: "A", occurredOn: "2026-10-01", amount: "10.00" },
+    { id: "H", occurredOn: "2026-10-05", amount: "52.00", expiredHold: true },
+    { id: "B", occurredOn: "2026-10-06", amount: "20.00" },
+  ];
+  it("October ends at 1,020.00 (the card's real balance; it read 1,072.00); September at 990.00", () => {
+    const at = makeAmexBalanceAtEndOf({ anchor, amexTransactions: rows });
+    expect(at(monthKeyFromISO("2026-10-01"))).toBeCloseTo(1020, 2);
+    expect(at(monthKeyFromISO("2026-09-01"))).toBeCloseTo(990, 2);
+    // Without the server's flag (an older response): as before, 1,072.00.
+    const before = makeAmexBalanceAtEndOf({ anchor, amexTransactions: rows.map(({ expiredHold: _e, ...r }) => r) });
+    expect(before(monthKeyFromISO("2026-10-01"))).toBeCloseTo(1072, 2);
+  });
+  it("the October walk from its ending balance opens at September's ending balance (it opened 52.00 above)", () => {
+    const at = makeAmexBalanceAtEndOf({ anchor, amexTransactions: rows });
+    const end = at(monthKeyFromISO("2026-10-01"))!;
+    const walk = computeRunningBalances(sortNewestFirst(rows), end);
+    expect(walk.get("B")).toBeCloseTo(1020, 2);
+    expect(walk.has("H")).toBe(false);
+    expect(walk.get("A")).toBeCloseTo(1000, 2);
+    const opening = walk.get("A")! - 10;
+    expect(opening).toBeCloseTo(at(monthKeyFromISO("2026-09-01"))!, 2);
+  });
+});
+

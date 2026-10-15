@@ -1,14 +1,17 @@
-import { and, eq, gt, gte, lte } from "drizzle-orm";
+import { and, eq, gt, gte, lt, lte } from "drizzle-orm";
 import { db, transactionsTable } from "@workspace/db";
 import {
   addDaysISO,
   classifyCashRows,
+  isBankRow,
+  REVERSAL_MAX_DAYS,
   SUPERSEDE_MAX_DAYS,
   type CashAnchor,
   type CashRow,
   type CashRowsResult,
 } from "@workspace/avalanche-core";
 import { inForecastWhere } from "./forecastInclusion";
+import { expiredHoldsRuleOn } from "./supersededPending";
 
 type TransactionRow = typeof transactionsTable.$inferSelect;
 
@@ -44,6 +47,54 @@ export function ledgerActualRowsWhere(opts: {
       : gt(transactionsTable.occurredOn, anchorISO),
     lte(transactionsTable.occurredOn, upperISO),
   );
+}
+
+/**
+ * ⭐ (F6 round 4) THE ROWS BEFORE THE LEDGER'S LOWER EDGE THAT CAN HOLD A
+ * REVERSAL'S HOLD — `classifyCashRows`' `priorRows`.
+ *
+ * A pending credit reverses an expired hold dated up to REVERSAL_MAX_DAYS
+ * before it, so the hold of a reversal the ledger reads can sit before the
+ * ledger's lower edge (anchor day − SUPERSEDE_MAX_DAYS). Such a hold is dated
+ * before the anchor day — held — so its reversal is the money coming back and
+ * counts. These are the snapshot account's rows from REVERSAL_MAX_DAYS before
+ * that edge up to it (pending and posted: a posted row tells which pending row
+ * it replaced, which is then no hold).
+ *
+ * Read only when they can change an outcome: the rule is on (`ruleOn`), there
+ * is an anchor and an account, and some row the ledger read is a pending credit
+ * on that account dated after the anchor day (only a credit is a reversal, and
+ * one dated on or before the anchor day is held whatever it pairs with).
+ * Otherwise none, and no query — the usual case.
+ */
+export async function readReversalHoldRows(opts: {
+  householdId: string;
+  anchorDay: string | null;
+  accountExternalId: string | null;
+  todayISO: string;
+  rows: readonly CashRow[];
+  ruleOn: boolean;
+}): Promise<CashRow[]> {
+  const { householdId, anchorDay, accountExternalId, todayISO, rows } = opts;
+  if (!opts.ruleOn || !anchorDay || !accountExternalId) return [];
+  const needed = rows.some(
+    (r) => r.pending && r.amount > 0 && r.occurredOn > anchorDay && isBankRow(r.source, r.plaidAccountId, accountExternalId),
+  );
+  if (!needed) return [];
+  const edge = addDaysISO(anchorDay, -SUPERSEDE_MAX_DAYS);
+  const prior = await db
+    .select()
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        eq(transactionsTable.plaidAccountId, accountExternalId),
+        inForecastWhere(todayISO),
+        gte(transactionsTable.occurredOn, addDaysISO(edge, -REVERSAL_MAX_DAYS)),
+        lt(transactionsTable.occurredOn, edge),
+      ),
+    );
+  return prior.map(toCashRow);
 }
 
 /** A transactions row as the cash rule reads it. */
@@ -106,7 +157,10 @@ export async function classifyLedgerRowsThroughToday(opts: {
       }),
     );
   const cashRows = rows.map(toCashRow);
-  const result = classifyCashRows(cashRows, { anchor, accountExternalId, todayISO });
+  const ruleOn = expiredHoldsRuleOn();
+  // (F6 round 4) The holds before the lower edge a reversal here can pair with — the ledger's own read.
+  const priorRows = await readReversalHoldRows({ householdId, anchorDay: anchor.day, accountExternalId, todayISO, rows: cashRows, ruleOn });
+  const result = classifyCashRows(cashRows, { anchor, accountExternalId, todayISO, expiredHolds: ruleOn, priorRows });
   // Outcomes come back in input order. A manual row never pairs and never shares
   // a Plaid id, so leaving it out moves no other row's outcome.
   let rowCount = 0;

@@ -1251,6 +1251,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         merchantSignature: zod.ZodOptional<zod.ZodString>;
         paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
         confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        expiredHold: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         source: string;
@@ -1290,6 +1291,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }, {
         id: string;
         source: string;
@@ -1329,6 +1331,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }>, "many">;
     topCategories: zod.ZodArray<zod.ZodObject<{
         categoryName: zod.ZodString;
@@ -1426,6 +1429,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -1493,6 +1497,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -1598,6 +1603,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     merchantSignature: zod.ZodOptional<zod.ZodString>;
     paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    expiredHold: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     source: string;
@@ -1637,6 +1643,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     merchantSignature?: string | undefined;
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
+    expiredHold?: boolean | undefined;
 }, {
     id: string;
     source: string;
@@ -1676,6 +1683,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     merchantSignature?: string | undefined;
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
+    expiredHold?: boolean | undefined;
 }>;
 export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -1722,6 +1730,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     merchantSignature: zod.ZodOptional<zod.ZodString>;
     paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    expiredHold: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     source: string;
@@ -1761,6 +1770,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     merchantSignature?: string | undefined;
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
+    expiredHold?: boolean | undefined;
 }, {
     id: string;
     source: string;
@@ -1800,6 +1810,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     merchantSignature?: string | undefined;
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
+    expiredHold?: boolean | undefined;
 }>, "many">;
 export declare const createTransactionBodyPlaidAccountIdMax = 128;
 export declare const createTransactionBodySplitOfMax = 64;
@@ -1999,6 +2010,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     merchantSignature: zod.ZodOptional<zod.ZodString>;
     paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    expiredHold: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     source: string;
@@ -2038,6 +2050,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     merchantSignature?: string | undefined;
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
+    expiredHold?: boolean | undefined;
 }, {
     id: string;
     source: string;
@@ -2077,6 +2090,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     merchantSignature?: string | undefined;
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
+    expiredHold?: boolean | undefined;
 }>, zod.ZodObject<{
     repointedRules: zod.ZodArray<zod.ZodObject<{
         ruleId: zod.ZodString;
@@ -2347,6 +2361,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     merchantSignature: zod.ZodOptional<zod.ZodString>;
     paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    expiredHold: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     source: string;
@@ -2386,6 +2401,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     merchantSignature?: string | undefined;
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
+    expiredHold?: boolean | undefined;
 }, {
     id: string;
     source: string;
@@ -2425,6 +2441,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     merchantSignature?: string | undefined;
     paymentState?: "claimed" | "confirmed" | null | undefined;
     confirmedByTxnId?: string | null | undefined;
+    expiredHold?: boolean | undefined;
 }>;
 /**
  * @summary Bulk re-categorize past transactions whose description matches a
@@ -2939,6 +2956,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature: zod.ZodOptional<zod.ZodString>;
         paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
         confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        expiredHold: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         source: string;
@@ -2978,6 +2996,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }, {
         id: string;
         source: string;
@@ -3017,6 +3036,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }>, zod.ZodObject<{
         splitCount: zod.ZodNumber;
         categoryProvisional: zod.ZodBoolean;
@@ -3028,7 +3048,9 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         heldAhead: zod.ZodBoolean;
         afterToday: zod.ZodBoolean;
         stalePending: zod.ZodBoolean;
+        expiredHold: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
+        expiredHold: boolean;
         splitCount: number;
         categoryProvisional: boolean;
         runningBalance: string | null;
@@ -3040,6 +3062,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         afterToday: boolean;
         stalePending: boolean;
     }, {
+        expiredHold: boolean;
         splitCount: number;
         categoryProvisional: boolean;
         runningBalance: string | null;
@@ -3158,7 +3181,9 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     } & {
+        expiredHold: boolean;
         splitCount: number;
         categoryProvisional: boolean;
         runningBalance: string | null;
@@ -3238,7 +3263,9 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     } & {
+        expiredHold: boolean;
         splitCount: number;
         categoryProvisional: boolean;
         runningBalance: string | null;
@@ -7669,6 +7696,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         merchantSignature: zod.ZodOptional<zod.ZodString>;
         paymentState: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"claimed">, zod.ZodLiteral<"confirmed">, zod.ZodLiteral<null>]>>>;
         confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        expiredHold: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         source: string;
@@ -7708,6 +7736,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }, {
         id: string;
         source: string;
@@ -7747,6 +7776,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }>, "many">;
     resolutions: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
@@ -8507,6 +8537,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }[];
     resolutions: {
         status: string;
@@ -8731,6 +8762,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
+        expiredHold?: boolean | undefined;
     }[];
     resolutions: {
         status: string;
@@ -10240,6 +10272,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         cardPayments: zod.ZodNumber;
         reimbursable: zod.ZodNumber;
         replacedPending: zod.ZodNumber;
+        expiredHolds: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         reimbursable: number;
         cardPayments: number;
@@ -10248,6 +10281,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         replacedPending: number;
+        expiredHolds: number;
     }, {
         reimbursable: number;
         cardPayments: number;
@@ -10256,6 +10290,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         replacedPending: number;
+        expiredHolds: number;
     }>;
     byCategory: zod.ZodArray<zod.ZodObject<{
         categoryId: zod.ZodString;
@@ -10446,6 +10481,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         replacedPending: number;
+        expiredHolds: number;
     };
     byCategory: {
         categoryId: string;
@@ -10544,6 +10580,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         replacedPending: number;
+        expiredHolds: number;
     };
     byCategory: {
         categoryId: string;

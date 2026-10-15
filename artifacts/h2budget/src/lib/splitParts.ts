@@ -1,4 +1,5 @@
 import type { Transaction } from "@workspace/api-client-react";
+import { isCounted } from "./countedRows";
 
 /**
  * (F4b) CATEGORY SPLITS IN THE CLIENT'S GROUPINGS.
@@ -11,7 +12,7 @@ import type { Transaction } from "@workspace/api-client-react";
  * rules (Reports › Cash flow money flow; Budget actuals popover), kept pure so
  * a test can pin them against the old loops.
  */
-type Row = Pick<Transaction, "id" | "occurredOn" | "amount" | "categoryId" | "isTransfer" | "description"> & {
+type Row = Pick<Transaction, "id" | "occurredOn" | "amount" | "categoryId" | "isTransfer" | "description" | "expiredHold"> & {
   splits?: ReadonlyArray<{ categoryId: string; amount: string }>;
 };
 
@@ -25,7 +26,8 @@ export function splitPartsOf(t: Pick<Row, "splits">): ReadonlyArray<{ categoryId
 /**
  * Cash flow money flow: expense per category name for one month, and income
  * per source. An expense charge with a valid split adds each part under its
- * own category; everything else is as it always was.
+ * own category; everything else is as it always was. (F6 round 4, finding 12)
+ * An expired hold counts nowhere (`isCounted`), as in `groupTxnsByCategory`.
  */
 export function monthMoneyFlow(
   txns: readonly Row[],
@@ -38,6 +40,7 @@ export function monthMoneyFlow(
     categoryId ? (catNameById.get(categoryId) ?? "Uncategorized") : "Uncategorized";
   for (const t of txns) {
     if (!t.occurredOn.startsWith(flowMonth)) continue;
+    if (!isCounted(t)) continue;
     const a = Number(t.amount) || 0;
     if (a > 0) {
       const k = t.description?.split(" ")[0] ?? "Income";
@@ -64,7 +67,9 @@ export function monthMoneyFlow(
  * amount is that part (same id; parts of one category are added up), so the
  * drill ties to the server's per-category actual. Other rows are filed as
  * before: under the category they inherited from a replaced pending row, else
- * their own.
+ * their own. (F6 round 3) An expired hold (`expiredHold`, the server's own
+ * answer on the list row) counts in no actual, so it is left out like a
+ * replaced pending row.
  */
 export function groupTxnsByCategory<T extends Row>(
   txns: readonly T[],
@@ -83,7 +88,7 @@ export function groupTxnsByCategory<T extends Row>(
   };
   for (const t of txns) {
     if (t.isTransfer) continue;
-    if (opts.replaced.has(t.id)) continue;
+    if (opts.replaced.has(t.id) || !isCounted(t)) continue;
     if (t.occurredOn < opts.start || t.occurredOn >= opts.end) continue;
     const parts = splitPartsOf(t);
     if (parts) {

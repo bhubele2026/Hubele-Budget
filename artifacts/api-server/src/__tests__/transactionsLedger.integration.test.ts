@@ -624,6 +624,7 @@ async function heldAheadTheOldWay(page: LedgerBody, rows: Row[]): Promise<Map<st
     anchor: { at: new Date(page.anchor.snapshotAt!), day },
     accountExternalId: page.account.plaidAccountIds[0] ?? null,
     todayISO: page.anchor.today,
+    expiredHolds: true,
   });
   return new Map(result.rows.map((o) => [o.id, o.reason === "held" && o.occurredOn > day]));
 }
@@ -1265,19 +1266,23 @@ describe("scope edges", () => {
 });
 
 describe("second review (R1–R3)", () => {
-  it("R1: a pending row dated more than 14 days before today is labelled stalePending, and still moves the balance as before", async () => {
+  it("R1: a pending row dated more than 14 days before today is labelled stalePending; (F6 round 3) one no posted row replaced, more than 7 days old, is an expired hold and moves the balance by 0", async () => {
     actingUser = STALE_USER;
     try {
       const rows = rowsOf(await walk("", 100));
       expect(rows).toHaveLength(11);
       const row = (key: string) => rows.find((r) => r.id === staleIds.get(key))!;
-      // The unmatched gas hold beside its lower posting: stale, and still counted
-      // at its full amount (the open decision; nothing moves in this PR).
-      expect(row("gasHold")).toMatchObject({ pending: true, stalePending: true, countsInBalance: true, balanceReason: "counted", balanceAmount: "-100.00" });
-      expect(row("gasPosted")).toMatchObject({ pending: false, stalePending: false, balanceAmount: "-45.00" });
-      // More than 14 days: 05-05 is stale, 05-06 (exactly 14) is not.
-      expect(row("pending15")).toMatchObject({ stalePending: true, balanceAmount: "-8.00" });
-      expect(row("pending14")).toMatchObject({ stalePending: false, balanceAmount: "-7.00" });
+      // ⭐ (F6 round 3) The unmatched gas hold beside its lower posting: stale, and
+      // — the open decision, now the owner's (2026-10-15) — an expired hold: it
+      // moves the register by 0 (before: −100.00, counted beside its posting).
+      expect(row("gasHold")).toMatchObject({ pending: true, stalePending: true, countsInBalance: false, balanceReason: "expired", expiredHold: true, balanceAmount: "0.00" });
+      expect(row("gasPosted")).toMatchObject({ pending: false, stalePending: false, balanceAmount: "-45.00", expiredHold: false });
+      // More than 14 days: 05-05 is stale, 05-06 (exactly 14) is not. Both are
+      // more than 7 days old: expired holds, 0.00 (before: −8.00 and −7.00).
+      expect(row("pending15")).toMatchObject({ stalePending: true, balanceAmount: "0.00", balanceReason: "expired" });
+      expect(row("pending14")).toMatchObject({ stalePending: false, balanceAmount: "0.00", balanceReason: "expired" });
+      // Fresh pending rows are not: the 05-19 one is replaced, today's counts.
+      expect(row("coffeePending")).toMatchObject({ expiredHold: false, balanceReason: "counted" });
       expect(rows.filter((r) => r.stalePending).map((r) => r.id).sort()).toEqual(
         [staleIds.get("gasHold")!, staleIds.get("pending15")!].sort(),
       );
@@ -1319,13 +1324,14 @@ describe("second review (R1–R3)", () => {
       expect(row("wfPostedFlagged")).toMatchObject({ afterToday: true, runningBalance: null, replacedPendingId: staleIds.get("wfPending") });
 
       // Every row dated through today added back to 968.00, except the replaced
-      // pending rows: 968 + 100 + 45 + 8 + 7 + 30 + 20 + 12. Pairing across today
-      // gave 1,178.00 (the pending coffee at 0).
-      expect(page.balanceStart).toBe("1190.00");
+      // pending rows and (F6 round 3) the expired holds (100, 8, 7):
+      // 968 + 45 + 30 + 20 + 12 (before the rule: 1,190.00). Pairing across today
+      // gave 1,063.00 (the pending coffee at 0).
+      expect(page.balanceStart).toBe("1075.00");
       const b = await get(`/transactions/balances?dates=2026-04-19,2026-05-15,2026-05-16,2026-05-18,2026-05-19,${TODAY},2026-05-21`);
       expect(b.status, JSON.stringify(b.json)).toBe(200);
       expect((b.json as { balances: unknown }).balances).toEqual([
-        { date: "2026-04-19", balance: "1190.00" },
+        { date: "2026-04-19", balance: "1075.00" },
         // The snapshot's 1,000.00 plus the held-ahead −30.00, which sits on 05-16.
         { date: "2026-05-15", balance: "1030.00" },
         // 1,000.00 − the posted Target −20.00: what the bank held after 05-16.
@@ -1341,12 +1347,13 @@ describe("second review (R1–R3)", () => {
 
       // Money out through today on balance amounts is the start less today.
       const throughToday = (await get(`/transactions/ledger?to=${TODAY}&limit=1`)).json as LedgerBody;
-      expect(throughToday.totals).toEqual({ count: 9, moneyIn: "0.00", moneyOut: "222.00", net: "-222.00" });
-      expect(cents(throughToday.balanceStart) - cents(throughToday.balanceToday)).toBe(cents("222.00"));
+      // (F6 round 3) Less the three expired holds (before: out 222.00).
+      expect(throughToday.totals).toEqual({ count: 9, moneyIn: "0.00", moneyOut: "107.00", net: "-107.00" });
+      expect(cents(throughToday.balanceStart) - cents(throughToday.balanceToday)).toBe(cents("107.00"));
       // With no end date the rows after today are in the totals at their amounts,
       // so the coffee's −12.00 is in twice until its posted row's day arrives and
       // it pairs. Residual in the review note.
-      expect(page.totals).toEqual({ count: 11, moneyIn: "0.00", moneyOut: "243.00", net: "-243.00" });
+      expect(page.totals).toEqual({ count: 11, moneyIn: "0.00", moneyOut: "128.00", net: "-128.00" });
     } finally {
       actingUser = MAIN_USER;
     }

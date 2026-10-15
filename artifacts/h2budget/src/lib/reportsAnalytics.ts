@@ -9,6 +9,7 @@ import type {
 } from "@workspace/api-client-react";
 import { simulate, type SimResult, type Strategy, type SimDebt } from "./avalanche";
 import { effectiveDebtBalance, remainingDebtTotal } from "./debtBalance";
+import { isCounted } from "./countedRows";
 
 /**
  * ⛔ THIS MODULE OWNS NO COLOURS.
@@ -77,6 +78,8 @@ export function dailyCashFlow(
 ): CashFlowDay[] {
   const map = new Map<string, CashFlowDay>();
   for (const t of txns) {
+    // ⭐ (F6 round 4, finding 6) An expired hold counts nowhere.
+    if (!isCounted(t)) continue;
     // (#624) Skip transactions whose category is flagged
     // `excludeFromBudget` (system-managed Uncategorized / Transfer /
     // Ignore) so they don't pollute the Reports daily cash-flow chart.

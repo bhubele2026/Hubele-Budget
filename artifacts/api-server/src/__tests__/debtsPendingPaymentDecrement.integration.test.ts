@@ -523,4 +523,57 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
     expect(body.pendingPaymentTotal).toBeNull();
     expect(body.pendingPaymentCount).toBeNull();
   });
+
+  // ⭐ (F6 round 4, review finding 7) A payment row still pending more than 7 days
+  // after its date, never replaced, is an expired hold: it counts nowhere (owner's
+  // rule, 2026-10-15) — the card's ledger, the weekly payoff and the cap already
+  // leave it out — so it nets no debt either. Once it posts, the posted row nets.
+  it("⭐ (F6 round 4) an expired pending payment nets nothing; a young one nets; once the old one posts, it nets (kill switch: the base nets both)", async () => {
+    const today = householdTodayISO();
+    const card = await seedCard({ mask: "7373", liabilityBalance: "900.00" });
+    const [debt] = await db
+      .insert(debtsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        name: "Travel Card",
+        balance: "900",
+        apr: "0.2",
+        minPayment: "25",
+        plaidAccountId: card.rowId,
+        balanceSource: "plaid",
+        // The balance was read 20 days ago: every payment below is after it.
+        plaidLastSyncedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+        status: "active",
+      })
+      .returning();
+    const payment = (on: string, amount: string) => ({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: on,
+      description: "PAYMENT - THANK YOU",
+      amount,
+      debtId: debt!.id,
+      source: "plaid:testbank",
+      plaidAccountId: card.externalId,
+      plaidTransactionId: `f6r4-pay-${randomUUID().slice(0, 8)}`,
+      pending: true,
+    });
+    const [old] = await db
+      .insert(transactionsTable)
+      .values([payment(addDaysISO(today, -12), "200.00"), payment(addDaysISO(today, -3), "50.00")])
+      .returning({ id: transactionsTable.id });
+    // 12 days old and still pending: expired — only the 3-day-old 50 nets.
+    expect((await loadPendingPayments(TEST_HOUSEHOLD_ID, [debt!])).get(debt!.id)).toEqual({ total: 50, count: 1 });
+    // Kill switch: the base nets both.
+    vi.stubEnv("EXPIRED_HOLDS_RULE", "off");
+    try {
+      expect((await loadPendingPayments(TEST_HOUSEHOLD_ID, [debt!])).get(debt!.id)).toEqual({ total: 250, count: 2 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    // It posts (in place): the posted payment nets.
+    await db.update(transactionsTable).set({ pending: false }).where(eq(transactionsTable.id, old!.id));
+    expect((await loadPendingPayments(TEST_HOUSEHOLD_ID, [debt!])).get(debt!.id)).toEqual({ total: 250, count: 2 });
+  });
 });

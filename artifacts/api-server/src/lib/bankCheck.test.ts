@@ -39,7 +39,7 @@ function row(id: string, occurredOn: string, amount: number, extra: Partial<Cash
 }
 
 function ledger(rows: CashRow[], over: Partial<BankCheckLedgerInputs> = {}) {
-  const { rows: outcomes } = classifyCashRows(rows, { anchor: ANCHOR, accountExternalId: CHASE, todayISO: CHECK_DAY });
+  const { rows: outcomes } = classifyCashRows(rows, { anchor: ANCHOR, accountExternalId: CHASE, todayISO: CHECK_DAY, expiredHolds: true });
   return bankCheckLedger({
     rows,
     outcomes,
@@ -52,7 +52,7 @@ function ledger(rows: CashRow[], over: Partial<BankCheckLedgerInputs> = {}) {
 }
 /** What the cash rule alone adds through the check's day (Plaid rows), for comparison. */
 function cashRuleNet(rows: CashRow[]): number {
-  const r = classifyCashRows(rows, { anchor: ANCHOR, accountExternalId: CHASE, todayISO: CHECK_DAY });
+  const r = classifyCashRows(rows, { anchor: ANCHOR, accountExternalId: CHASE, todayISO: CHECK_DAY, expiredHolds: true });
   return r.rows.reduce((a, o, i) => a + (o.counts && o.occurredOn <= CHECK_DAY && rows[i]!.plaidAccountId ? o.contribution : 0), 0);
 }
 

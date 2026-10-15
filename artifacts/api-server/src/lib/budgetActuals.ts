@@ -19,6 +19,7 @@
 
 import type { AllowanceAggregateRow } from "./budgetAllowance";
 import { effectiveFiling, type Filing, type FilingContext } from "./pendingFiling";
+import { countsNowhere } from "@workspace/avalanche-core";
 import type { SupersededPending } from "./supersededPending";
 import { classifyMovement, type MovementContext, type MovementRow } from "./spendingFilter";
 
@@ -66,7 +67,7 @@ export function inflowCents(source: string, cents: number): number {
 
 export function aggregateBudgetMonth(
   rows: readonly BudgetMonthRow[],
-  supersede: Pick<SupersededPending, "replacedIds" | "replacedBy">,
+  supersede: Pick<SupersededPending, "replacedIds" | "replacedBy" | "expiredIds">,
   ctx: FilingContext,
   /**
    * (PR-A) `expandSplits` output: a row listed here files its category totals
@@ -86,6 +87,10 @@ export function aggregateBudgetMonth(
       replacedPendingIds.push(row.id);
       continue;
     }
+    // ⭐ (F6 round 3) An expired hold (or its reversal) counts nowhere either:
+    // not a category actual, not the allowance. The page's drill leaves it out
+    // by the row's own `expiredHold` (GET /transactions), the same rule.
+    if (supersede.expiredIds.has(row.id)) continue;
     const t = effectiveFiling(row, supersede.replacedBy.get(row.id), ctx);
     if (t.categoryId && t.categoryId !== row.categoryId) {
       inheritedCategories.push({ transactionId: row.id, categoryId: t.categoryId });
@@ -188,7 +193,7 @@ export interface ClassifierBudgetMonthRow
  */
 export function classifierAllowanceRows(
   rows: readonly ClassifierBudgetMonthRow[],
-  supersede: Pick<SupersededPending, "replacedIds" | "replacedBy">,
+  supersede: Pick<SupersededPending, "replacedIds" | "replacedBy" | "expiredIds">,
   ctx: FilingContext,
   movement: MovementContext,
   opts: { mode?: "today" | "forward" } = {},
@@ -197,7 +202,7 @@ export function classifierAllowanceRows(
   const out: AllowanceAggregateRow[] = [];
 
   for (const row of rows) {
-    if (supersede.replacedIds.has(row.id)) continue;
+    if (countsNowhere(supersede, row.id)) continue;
     const t = effectiveFiling(row, supersede.replacedBy.get(row.id), ctx);
     const movementRow: MovementRow = {
       ...t,

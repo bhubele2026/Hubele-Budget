@@ -28,6 +28,7 @@ import { forecastTodayISO } from "../lib/forecastInclusion";
 import { recordRuleChange, ruleSnapshot } from "../lib/mappingRuleAudit";
 import { cleanMerchant, merchantSignature } from "../lib/merchantNameExtract";
 import { isUuid } from "../lib/bankLedger";
+import { findExpiredHoldsAmong } from "../lib/supersededPending";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
   isExcludedCategory,
@@ -159,6 +160,12 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   // whose splits do not add up (or are flagged invalid) gets no `splits` key
   // and counts whole, exactly as the server's category totals do.
   const partsByTxn = expandSplits(rows, await loadSplitsForTxns(req.householdId!, rows.map((r) => r.id)));
+  // ⭐ (F6 round 3) Each row says whether it is an expired hold — pending more
+  // than 7 days after its date, never replaced, or the reversal of one — which
+  // counts nowhere. Only a pending Plaid row can be one, so the read spans just
+  // the page's pending days (the whole-ledger answer for them), and is skipped
+  // when the page has none (F6 round 4: `findExpiredHoldsAmong`, shared).
+  const expiredIds = await findExpiredHoldsAmong(req.householdId!, rows);
   const annotated = rows.map((r) => {
     // (#888) displayName precedence: a user/AI alias keyed on the row's
     // stable signature wins; otherwise fall back to cleanMerchant. Never
@@ -173,6 +180,7 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
       merchantSignature: sig,
       displayName: alias ?? cleanMerchant(r.description),
       ...(partsByTxn.has(r.id) ? { splits: partsByTxn.get(r.id) } : {}),
+      expiredHold: expiredIds.has(r.id),
     };
   });
   res.json(annotated);

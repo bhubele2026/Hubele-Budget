@@ -66,6 +66,15 @@ describe("with NO splits every figure is identical to main", () => {
   });
 });
 
+describe("(F6 round 3) the Budget drill leaves out an expired hold, as the server's actuals do", () => {
+  it("a row the server marks expiredHold is in no category; everything else is filed as before", () => {
+    const rows = [...PLAIN, tx("hold", "2026-09-05", "-150.00", "g", { pending: true, expiredHold: true })];
+    const now = groupTxnsByCategory(rows, OPTS);
+    expect(now.get("g")!.map((r) => r.id)).not.toContain("hold");
+    expect(now).toEqual(groupTxnsByCategory(PLAIN, OPTS));
+  });
+});
+
 const SPLIT = tx("s", "2026-09-12", "-100.00", "g", {
   splits: [
     { categoryId: "h", amount: "-60.00" },
@@ -122,3 +131,21 @@ describe("an invalid split counts whole (the server sends no `splits`)", () => {
     expect(splitPartsOf({ splits: [] })).toBeNull();
   });
 });
+
+describe("(F6 round 4, findings 6 and 12) Reports › Cash flow money flow leaves out an expired hold, as the Budget drill does", () => {
+  it("a Dining tavern hold −64.18 (expired) beside its posted −90.00: Dining 90.00 in both groupings (it read 154.18 in the money flow)", () => {
+    const rows = [
+      tx("hold", "2026-09-05", "-64.18", "g", { pending: true, expiredHold: true }),
+      tx("posted", "2026-09-07", "-90.00", "g"),
+      tx("refund", "2026-09-08", "64.18", null, { pending: true, expiredHold: true, description: "REVERSAL X" }),
+    ];
+    const flow = monthMoneyFlow(rows, "2026-09", NAMES);
+    expect(flow.expenseByCat).toEqual(new Map([["Groceries", 90]]));
+    expect(flow.incomeByDesc.size).toBe(0);
+    const drill = groupTxnsByCategory(rows, OPTS).get("g")!;
+    expect(drill.reduce((s, r) => s + Number(r.amount), 0)).toBe(-90);
+    // Without the flag (an older response): as before.
+    expect(monthMoneyFlow(rows.map((r) => ({ ...r, expiredHold: false })), "2026-09", NAMES).expenseByCat.get("Groceries")).toBeCloseTo(154.18, 2);
+  });
+});
+

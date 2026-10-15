@@ -678,6 +678,12 @@ export const GetDashboardResponse = zod.object({
         .string()
         .nullish()
         .describe("(PR-D) The bank row that confirmed this claim."),
+      expiredHold: zod
+        .boolean()
+        .optional()
+        .describe(
+          "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+        ),
     }),
   ),
   topCategories: zod.array(
@@ -843,6 +849,12 @@ export const ListTransactionsResponseItem = zod.object({
     .string()
     .nullish()
     .describe("(PR-D) The bank row that confirmed this claim."),
+  expiredHold: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+    ),
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
 
@@ -1056,6 +1068,12 @@ export const UpdateTransactionResponse = zod
       .string()
       .nullish()
       .describe("(PR-D) The bank row that confirmed this claim."),
+    expiredHold: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+      ),
   })
   .and(
     zod.object({
@@ -1331,6 +1349,12 @@ export const ClearTransferOverrideResponse = zod.object({
     .string()
     .nullish()
     .describe("(PR-D) The bank row that confirmed this claim."),
+  expiredHold: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+    ),
 });
 
 /**
@@ -1905,6 +1929,12 @@ export const GetTransactionsLedgerResponse = zod.object({
           .string()
           .nullish()
           .describe("(PR-D) The bank row that confirmed this claim."),
+        expiredHold: zod
+          .boolean()
+          .optional()
+          .describe(
+            "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+          ),
       })
       .and(
         zod.object({
@@ -1936,7 +1966,7 @@ export const GetTransactionsLedgerResponse = zod.object({
           balanceReason: zod
             .string()
             .describe(
-              "counted (moves the balance by its amount); superseded (a pending\nrow its posted row replaced); duplicate (a second row with the\nsame Plaid transaction id); not_bank (a mask-twin row, which the\nbank balance does not read); claim_confirmed (PR-D: a payment\nlogged in the app that a bank row confirmed — the bank row is\nthe payment).\n",
+              "counted (moves the balance by its amount); superseded (a pending\nrow its posted row replaced); duplicate (a second row with the\nsame Plaid transaction id); not_bank (a mask-twin row, which the\nbank balance does not read); claim_confirmed (PR-D: a payment\nlogged in the app that a bank row confirmed — the bank row is\nthe payment); expired (F6 round 3: an expired hold, still\npending more than 7 days after its date and never replaced, or\nits reversal — it counts nowhere).\n",
             ),
           replacedPendingId: zod
             .string()
@@ -1957,7 +1987,12 @@ export const GetTransactionsLedgerResponse = zod.object({
           stalePending: zod
             .boolean()
             .describe(
-              "Still pending and dated more than 14 days before the household's\ntoday. A label only: the row moves the balance as balanceReason\nsays. A leftover pending row its posted row could not replace\ncounts beside that posted row.\n",
+              "Still pending and dated more than 14 days before the household's\ntoday. A label only: the row moves the balance as balanceReason\nsays. (F6 round 3) Such a row that no posted row replaced is an\nexpired hold (balanceReason expired): it moves the balance by 0.\n",
+            ),
+          expiredHold: zod
+            .boolean()
+            .describe(
+              "(F6 round 3) balanceReason is expired: an expired hold or its\nreversal. It moves the register by 0 and is in no total. (F6\nround 4) A hold the bank snapshot held and its reversal are not:\nthe balance counts the reversal, so the register counts both\n(net 0) and neither is labelled.\n",
             ),
         }),
       ),
@@ -4305,6 +4340,12 @@ export const GetForecastResponse = zod.object({
         .string()
         .nullish()
         .describe("(PR-D) The bank row that confirmed this claim."),
+      expiredHold: zod
+        .boolean()
+        .optional()
+        .describe(
+          "(F6 round 3) An expired hold: still pending more than 7 days after\nits date (the household's today, America\/Chicago) with no posted row\nthat replaced it — or the pending reversal paired with one. (F6\nround 4) A reversal is a pending credit on the same account, of the\nsame amount, dated up to 31 days after an expired charge; an expired\ncredit expires alone. It counts nowhere: not in spending, owed, the\ncard cap, budgets, allowances, review or any total (owner's decision\n2026-10-15); every browser sum skips it. Worked out on read; the row\nis kept and shown. On GET \/transactions list rows, the GET \/forecast\nbundle's transactions and ledger rows; absent elsewhere.\n",
+        ),
     }),
   ),
   resolutions: zod.array(
@@ -5436,6 +5477,11 @@ export const GetReportsSpendingFactsResponse = zod.object({
       .number()
       .describe(
         "Pending outflows a posted row replaced when the sync never linked them (pairPendingWithPosted, PR4c). The charge counts once, on its posted row; this is the pending half left out. No row is deleted or re-tagged.",
+      ),
+    expiredHolds: zod
+      .number()
+      .describe(
+        "(F6 round 3) Outflows on expired holds - rows still pending more than 7 days after their date that no posted row replaced - and their reversals. They count nowhere (owner's decision 2026-10-15). Worked out on read; no row is deleted or re-tagged.",
       ),
   }),
   byCategory: zod.array(
@@ -9687,7 +9733,7 @@ export const GetBankingReviewResponse = zod
         otherExcluded: zod.number(),
       })
       .describe(
-        "GET \/transactions\/ledger's totals for the same account and range, to the cent. count covers every row in the range; supersededExcluded and otherExcluded are the rows the register moves by 0 (a pending row its posted row replaced; a repeated Plaid id, a mask-twin row or a logged payment a bank row confirmed).",
+        "GET \/transactions\/ledger's totals for the same account and range, to the cent. count covers every row in the range; supersededExcluded and otherExcluded are the rows the register moves by 0 (a pending row its posted row replaced; a repeated Plaid id, a mask-twin row, a logged payment a bank row confirmed, or (F6 round 3) an expired hold or its reversal).",
       ),
     planComparison: zod.object({
       available: zod.boolean(),
@@ -11052,11 +11098,13 @@ export const GetBankingReviewResponse = zod
       rowsPlaced: zod.number(),
       rowsUnexplained: zod
         .number()
-        .describe("cashFlow.count − rowsPlaced − excluded rows; always 0"),
+        .describe(
+          "cashFlow.count − rowsPlaced − excluded rows − (F6 round 4) counted expired holds; always 0",
+        ),
       unexplained: zod
         .string()
         .describe(
-          '(Σ buckets\' net + asPlanned.net) − cashFlow.net; always \"0.00\"',
+          "(Σ buckets' net + asPlanned.net + (F6 round 4) counted expired holds' net) − cashFlow.net; always \"0.00\". A counted expired hold is one the bank snapshot held, and its reversal: the balance counts the pair (net 0), no bucket lists it.",
         ),
     }),
     reviewInbox: zod.object({

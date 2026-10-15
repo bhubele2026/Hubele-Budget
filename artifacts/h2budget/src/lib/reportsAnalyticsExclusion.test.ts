@@ -79,3 +79,20 @@ describe("(#624) Reports analytics excludes system categories", () => {
     expect(naive.length).toBeGreaterThan(1);
   });
 });
+
+describe("(F6 round 4, finding 6) Reports › Cash flow: an expired hold is in no day", () => {
+  it("a −52.00 pickup hold (expired) and its −49.37 final: the day's expense is the final only (it read 101.37)", () => {
+    const rows = [
+      txn({ id: "hold", occurredOn: "2026-10-02", amount: "-52.00", pending: true, expiredHold: true } as Partial<Transaction>),
+      txn({ id: "final", occurredOn: "2026-10-02", amount: "-49.37" }),
+      txn({ id: "rev", occurredOn: "2026-10-03", amount: "52.00", pending: true, expiredHold: true } as Partial<Transaction>),
+    ];
+    const days = dailyCashFlow(rows);
+    expect(days).toHaveLength(1);
+    expect(days[0]).toMatchObject({ date: "2026-10-02", income: 0 });
+    expect(days[0]!.expense).toBeCloseTo(49.37, 2);
+    const before = dailyCashFlow(rows.map((r) => ({ ...r, expiredHold: false })));
+    expect(before.reduce((s, d) => s + d.expense, 0)).toBeCloseTo(101.37, 2);
+  });
+});
+

@@ -1954,9 +1954,59 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       pending: true,
       createdAt: new Date("2026-05-01T14:00:00Z"), // pending at 09:00 CT, before the read
     });
+    // (F6 round 3) While it is a fresh pending deposit (6 days old on 05-08), it counts.
+    vi.setSystemTime(new Date("2026-05-08T17:00:00Z"));
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
     expect(sig.bankToday).toBe("3000.00");
     expect(sig.daily?.[0].balance).toBe("3000.00");
+    // ⭐ (F6 round 3) Still pending 12 days after its date (PINNED_NOW 05-14): an
+    // expired hold — it counts nowhere (before the rule: 3000.00).
+    vi.setSystemTime(PINNED_NOW);
+    expect((await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 })).bankToday).toBe("1000.00");
+  });
+
+  // ⭐ (F6 round 4) A reversal comes up to 31 days after its hold, so its hold can
+  // sit before the rows the ledger reads (the anchor day − 7 = 04-24). The hold
+  // (04-10, a car rental) is held by the 05-01 read; its reversal (05-05) is the
+  // money coming back and counts — also once it is itself more than 7 days old.
+  // Round 3 paired a reversal only within 7 days and read no row before 04-24:
+  // the credit counted while young (1,080.00 on 05-10) and dropped out of the
+  // balance the day it turned 8 days old (1,000.00 on 05-14).
+  it("(F6 round 4) a held hold's reversal 25 days later counts, before and after it is 8 days old — 1,080.00 (the ledger reads the hold before its lower edge); 'Why this number?' agrees", async () => {
+    const chase = await snapshotReadAt10am();
+    await addLedgerTxn({ occurredOn: "2026-04-10", amount: "-80.00", plaidAccountId: chase.externalId, source: "plaid:chase", pending: true, description: "CITY CAR RENTAL HOLD" });
+    await addLedgerTxn({ occurredOn: "2026-05-05", amount: "80.00", plaidAccountId: chase.externalId, source: "plaid:chase", pending: true, description: "Car Rental Transaction" });
+    await expectCashOn("2026-05-10", "1080.00");
+    await expectCash("1080.00");
+    const { classifyLedgerRowsThroughToday } = await import("../lib/ledgerCashRows");
+    const why = await classifyLedgerRowsThroughToday({
+      householdId: TEST_HOUSEHOLD_ID,
+      anchor: { at: new Date("2026-05-01T15:00:00Z"), day: "2026-05-01" },
+      accountExternalId: chase.externalId,
+      todayISO: "2026-05-14",
+    });
+    expect(why.throughToday).toEqual({ rowCount: 1, net: 80 });
+    // The kill switch: the base, the same 1,080.00.
+    vi.stubEnv("EXPIRED_HOLDS_RULE", "off");
+    try {
+      await expectCash("1080.00");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("(F6 round 4) an orphan pending credit (no hold within 31 days before it), 9 days old after the read: an expired credit, it adds nothing — 1,000.00 (base 1,080.00)", async () => {
+    const chase = await snapshotReadAt10am();
+    await addLedgerTxn({ occurredOn: "2026-03-30", amount: "-80.00", plaidAccountId: chase.externalId, source: "plaid:chase", pending: true, description: "CITY CAR RENTAL HOLD" });
+    await addLedgerTxn({ occurredOn: "2026-05-05", amount: "80.00", plaidAccountId: chase.externalId, source: "plaid:chase", pending: true, description: "Car Rental Transaction" });
+    // 03-30 → 05-05 is 36 days: no reversal. The credit, 9 days old, is expired on its own.
+    await expectCash("1000.00");
+    vi.stubEnv("EXPIRED_HOLDS_RULE", "off");
+    try {
+      await expectCash("1080.00");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   // ⭐ PR4c — a pending row its posted row replaced counts once. Balance 1,000.00
@@ -1997,6 +2047,19 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
     expect(sig.bankToday).toBe(value);
     expect(sig.daily?.[0].balance).toBe(value);
   }
+  /**
+   * (F6 round 3) `expectCash` on another household day (noon Central): the
+   * unpaired pending rows below are fresh on 05-10 and expired holds (more than
+   * 7 days old) at PINNED_NOW 05-14. Puts the clock back.
+   */
+  async function expectCashOn(day: string, value: string): Promise<void> {
+    vi.setSystemTime(new Date(`${day}T17:00:00Z`));
+    try {
+      await expectCash(value);
+    } finally {
+      vi.setSystemTime(PINNED_NOW);
+    }
+  }
 
   it("(PR4c) pending −48.20 held by the snapshot, posted −55.00 the next day: only the tip counts — 993.20", async () => {
     await pendingThenPosted({
@@ -2027,17 +2090,26 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       postedOn: "2026-05-04",
       postedAmount: "-55.00",
     });
-    await expectCash("895.00");
+    await expectCashOn("2026-05-10", "895.00");
+    // ⭐ (F6 round 3) 11 days on, the SHELL hold is still pending: expired, it counts nowhere (before: 895.00).
+    await expectCash("945.00");
   });
 
   it("(PR4c) not a pair: the posted amount is more than 1.30 × the pending amount + $1.00", async () => {
     await pendingThenPosted({ pendingOn: "2026-05-03", pendingAmount: "-40.00", postedOn: "2026-05-04", postedAmount: "-55.00" });
-    await expectCash("905.00");
+    await expectCashOn("2026-05-10", "905.00");
+    // ⭐ (F6 round 3) The unpaired −40 hold, 11 days old: expired (before: 905.00).
+    await expectCash("945.00");
   });
 
   it("(PR4c) not a pair: posted eight days after the pending row", async () => {
     await pendingThenPosted({ pendingOn: "2026-05-03", pendingAmount: "-48.20", postedOn: "2026-05-11", postedAmount: "-55.00" });
-    await expectCash("896.80");
+    // ⭐ (F6 round 3) By the day its posting lands the hold is 8 days old: an
+    // expired hold, so the charge counts once, posted (before the rule: 896.80,
+    // twice). Through 05-10 the hold alone counts.
+    await expectCashOn("2026-05-10", "951.80");
+    await expectCashOn("2026-05-11", "945.00");
+    await expectCash("945.00");
   });
 
   it("(PR4c review R1) a pending deposit held by the snapshot, posted the next day: the deposit counts in full — 3000.00", async () => {
@@ -2108,7 +2180,9 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
     await rowAt("2026-05-03", "-40.00", true, "TST* CORNER BISTRO");
     await rowAt("2026-05-04", "-30.00", true, "TST* CORNER BISTRO");
     await rowAt("2026-05-05", "-40.00", false, "CORNER BISTRO");
-    await expectCash("930.00");
+    await expectCashOn("2026-05-10", "930.00");
+    // ⭐ (F6 round 3) The newer −30 hold, still pending 10 days on: expired (before: 930.00).
+    await expectCash("960.00");
   });
 
   // ⚠️ THE FROZEN-BALANCE TRAP (2026-08-25 investigation — Brad: "my Chase

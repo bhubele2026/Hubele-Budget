@@ -27,11 +27,14 @@ import {
   type MonthKey,
 } from "@/components/account-page/month-navigator";
 import { computeBalanceAtEndOf } from "./accountBalance";
+import { isCounted } from "./countedRows";
 import { householdDayOfAt } from "./householdDay";
 
 export type AmexTxnInput = {
   occurredOn: string;
   amount: string | number;
+  /** (F6 round 4) The server's answer on the list row: an expired hold counts nowhere. */
+  expiredHold?: boolean | null;
 };
 
 export type AmexAnchor = {
@@ -301,8 +304,13 @@ export function makeAmexBalanceAtEndOf(args: {
     ? monthKeyFromISO(householdDayOfAt(anchor.asOf))
     : (fallbackMonth ?? monthKeyOf(new Date()));
 
+  // ⭐ (F6 round 4, finding 3) An expired hold counts nowhere: not in a month's
+  // net change, not in the anchor month's rows — so the tile, the 12-month chart
+  // and the running-balance walk (`computeRunningBalances`, which skips it too)
+  // agree, and a month's walk starts at the month before's ending balance.
+  const counted = amexTransactions.filter(isCounted);
   const netChangeByMonth = new Map<string, number>();
-  for (const t of amexTransactions) {
+  for (const t of counted) {
     const mk = monthKeyFromISO(t.occurredOn);
     const k = `${mk.year}-${mk.month}`;
     netChangeByMonth.set(
@@ -311,7 +319,7 @@ export function makeAmexBalanceAtEndOf(args: {
     );
   }
 
-  const anchorMonthTxns = amexTransactions.filter(
+  const anchorMonthTxns = counted.filter(
     (t) => compareMonth(monthKeyFromISO(t.occurredOn), anchorMonth) === 0,
   );
 

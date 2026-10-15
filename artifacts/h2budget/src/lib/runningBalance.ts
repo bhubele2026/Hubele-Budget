@@ -1,8 +1,12 @@
+import { isCounted } from "./countedRows";
+
 export type RowLike = {
   id: string;
   occurredOn: string;
   amount: string | number;
   occurredAt?: string | null;
+  /** (F6 round 3) The server's answer: an expired hold counts nowhere. */
+  expiredHold?: boolean;
 };
 
 /**
@@ -49,6 +53,10 @@ export function sortNewestFirst<T extends RowLike>(rows: readonly T[]): T[] {
  * Input rows are expected to already be sorted descending by date
  * (newest first) — typically via {@link sortNewestFirst}. Returns a
  * Map keyed by row id → running balance value.
+ *
+ * (F6 round 3) An expired hold (`expiredHold`: still pending more than 7 days
+ * after its date, never replaced, or its reversal) counts nowhere: the walk
+ * skips it, and it gets no balance.
  */
 export function computeRunningBalances(
   rows: RowLike[],
@@ -58,6 +66,7 @@ export function computeRunningBalances(
   let bal = Math.round(anchorBalance * 100) / 100;
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
+    if (!isCounted(r)) continue;
     out.set(r.id, bal);
     const amt = Number(r.amount) || 0;
     bal = Math.round((bal - amt) * 100) / 100;

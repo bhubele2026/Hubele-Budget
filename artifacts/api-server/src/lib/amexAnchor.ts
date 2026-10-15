@@ -12,7 +12,7 @@ import {
   spendAmount,
   type SpendContext,
 } from "./spendingFilter";
-import { findSupersededPendingForRange } from "./supersededPending";
+import { findSupersededPendingForRange, notCountedIdsOf } from "./supersededPending";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
@@ -314,7 +314,9 @@ type CardRuleRow = Parameters<typeof classifyCardCredit>[0] & { id: string };
  * rule, moved verbatim out of `computeWeeklyPayoff` (F1) so the everyday hooks'
  * obligations (`readCardPeriods`) read every row exactly as the Amex page does:
  *   - a "not mine" row (`amexExcludedTxnIds`) and a pending row its posted row
- *     replaced (PR7b: counted once, on the posted row) → nothing;
+ *     replaced (PR7b: counted once, on the posted row) → nothing; (F6 round 3)
+ *     so is an expired hold or its reversal — `replacedPendingIds` is the
+ *     read's `notCountedIdsOf` (replaced ∪ expired);
  *   - (PR7) the one spending rule, with one exception: a reimbursable charge is
  *     still owed to Amex. (S5) Through `classifyCardCredit`, the card summary's
  *     own rule: "purchase" is `classifyOutflow(…).kind === "spend"` and "refund"
@@ -483,7 +485,7 @@ export async function computeWeeklyPayoff(
     // replaces `loadSupersededPendingIds`, the full-history pairing, which this
     // ran once per hook period on every forecast build).
     externalIds.length > 0
-      ? findSupersededPendingForRange(householdId, queryStart, queryEnd).then((r) => r.replacedIds)
+      ? findSupersededPendingForRange(householdId, queryStart, queryEnd).then(notCountedIdsOf)
       : Promise.resolve(new Set<string>()),
   ]);
   const categoriesById = new Map<
@@ -724,7 +726,10 @@ export async function readCardPeriods(
           lte(transactionsTable.occurredOn, to),
         ),
       ),
-    findSupersededPendingForRange(householdId, from, to).then((r) => r.replacedIds),
+    // ⭐ (F6 round 3) Replaced pending rows AND expired holds with their
+    // reversals (`notCountedIdsOf`): out of the charges, the payment credits and
+    // the rows the card cap reads — neither added to nor taken off owed-now.
+    findSupersededPendingForRange(householdId, from, to).then(notCountedIdsOf),
   ]);
   const categoriesById = new Map<string, { name: string; debtId: string | null; kind: string }>();
   const debtCategoryIds = new Set<string>();

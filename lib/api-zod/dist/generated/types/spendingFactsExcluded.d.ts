@@ -16,5 +16,7 @@ export type SpendingFactsExcluded = {
     reimbursable: number;
     /** Pending outflows a posted row replaced when the sync never linked them (pairPendingWithPosted, PR4c). The charge counts once, on its posted row; this is the pending half left out. No row is deleted or re-tagged. */
     replacedPending: number;
+    /** (F6 round 3) Outflows on expired holds - rows still pending more than 7 days after their date that no posted row replaced - and their reversals. They count nowhere (owner's decision 2026-10-15). Worked out on read; no row is deleted or re-tagged. */
+    expiredHolds: number;
 };
 //# sourceMappingURL=spendingFactsExcluded.d.ts.map

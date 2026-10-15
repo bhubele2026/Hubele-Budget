@@ -532,6 +532,9 @@ export function cardOwedNowCents(
 ): number {
   let owed = Math.round(read.balanceCents);
   // A refund (cents < 0) reads by the credit rule (round 6); a purchase by the day rule.
+  // (F6 round 3) An expired hold and its reversal are not in `rows` at all: the
+  // card's rows drop them upstream (`readCardPeriods`), so they are neither
+  // added nor subtracted here.
   for (const r of rows) if (r.cents < 0 ? creditOutsideCardBalanceRead(r, read) : outsideCardBalanceRead(r, read)) owed += Math.round(r.cents);
   for (const c of credits) if (creditOutsideCardBalanceRead(c, read)) owed -= Math.round(c.cents);
   owed -= Math.max(0, Math.round(inFlightCents));

@@ -172,7 +172,8 @@ export function ledgerRowLabels(
       title: "Dated after today. Not in the totals, and no balance yet.",
     });
   }
-  if (row.stalePending) {
+  // (F6 round 3) An expired hold's own label says it all (the shared row's "Expired hold · not counted").
+  if (row.stalePending && row.balanceReason !== "expired") {
     out.push({
       key: "stale-pending",
       label: "Pending 14+ days",
@@ -186,7 +187,9 @@ export function ledgerRowLabels(
       title: "The bank balance already includes this row, though it is dated after that balance was read.",
     });
   }
-  if (!row.countsInBalance) {
+  // (F6 round 3) An expired hold says so on the row itself (the shared row's
+  // "Expired hold · not counted"), so it takes no second "Not counted" here.
+  if (!row.countsInBalance && row.balanceReason !== "expired") {
     const why =
       row.balanceReason === "superseded"
         ? "Replaced by its posted row."

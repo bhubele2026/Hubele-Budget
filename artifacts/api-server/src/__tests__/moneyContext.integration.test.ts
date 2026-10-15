@@ -281,7 +281,7 @@ describe("loadMoneyContext — pending pairs, and a match carried across them (r
   });
 
   it("pre-read pairs are used exactly as handed in (the spine's shape)", async () => {
-    const pre = { replacedIds: new Set(["pre-read"]), replacedBy: new Map() };
+    const pre = { replacedIds: new Set(["pre-read"]), replacedBy: new Map(), expiredIds: new Set<string>() };
     const ctx = await loadMoneyContext(TEST_HOUSEHOLD_ID, OCT, { supersede: pre });
     expect(ctx.supersede).toBe(pre);
     // No pair handed in, so nothing to carry.

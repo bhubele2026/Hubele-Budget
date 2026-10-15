@@ -59,6 +59,16 @@ describe("next primitives", () => {
     expect(window.location.pathname).toBe("/next/accounts/1");
     window.history.replaceState(null, "", "/");
   });
+  it.each(["table", "list"] as const)("TxnTable (%s): (F6 round 4) an expired hold's status says so in place of Pending", (layout) => {
+    render(<TxnTable layout={layout} rows={[
+      { id: "x", date: "2026-10-02", description: "PICKUP HOLD", amount: -52, identity: chase, pending: true, expiredHold: true },
+      { id: "y", date: "2026-10-12", description: "CORNER CAFE", amount: -12, identity: chase, pending: true },
+    ]} />);
+    const rows = screen.getAllByTestId("txn-row");
+    expect(rows[0]!.textContent).toContain("Expired hold · not counted");
+    expect(rows[0]!.textContent).not.toContain("Pending");
+    expect(rows[1]!.textContent).toContain("Pending");
+  });
   it.each(["table", "list"] as const)("TxnTable (%s): (WP7) a row with no href says why in its note; a row that opens never shows one", (layout) => {
     window.history.replaceState(null, "", "/");
     render(<TxnTable layout={layout} rows={[

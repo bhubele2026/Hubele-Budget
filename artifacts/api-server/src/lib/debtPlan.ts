@@ -34,6 +34,7 @@ import type { CashSignal } from "./cashSignal";
 import { AVALANCHE_EXTRA_EVENT_ITEM_ID } from "./debtMinSchedule";
 import { withPendingPayments } from "./debtPending";
 import { depositoryAccountIds } from "./debtPaymentConfirm";
+import { findExpiredHoldsAmong } from "./supersededPending";
 import { householdTodayISO } from "./householdClock";
 
 /**
@@ -184,8 +185,8 @@ export async function loadConfirmedPayments(
 
   const ids = [...via.keys()];
   if (ids.length === 0) return [];
-  const rows = await db
-    .select({ id: t.id, occurredOn: t.occurredOn, amount: t.amount })
+  const rowsRead = await db
+    .select({ id: t.id, occurredOn: t.occurredOn, amount: t.amount, pending: t.pending, plaidAccountId: t.plaidAccountId })
     .from(t)
     .where(
       and(
@@ -196,6 +197,11 @@ export async function loadConfirmedPayments(
         lte(t.occurredOn, toISO),
       ),
     );
+  // ⭐ (F6 round 4) A payment still pending more than 7 days after its date,
+  // never replaced, is an expired hold: it counts nowhere — no payment made,
+  // whether a tag, an answer or a claim names it (owner's rule, 2026-10-15).
+  const expired = await findExpiredHoldsAmong(householdId, rowsRead);
+  const rows = rowsRead.filter((r) => !expired.has(r.id));
   return rows
     .map((r) => ({
       txnId: r.id,

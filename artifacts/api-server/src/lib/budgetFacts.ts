@@ -13,8 +13,9 @@
 // inventing a new convention). Amex charges are POSITIVE (spend), bank
 // outflows are NEGATIVE (spend); income categories use the inflow side.
 
-import { and, eq, gte, lt } from "drizzle-orm";
+import { and, eq, gte, lt, notInArray } from "drizzle-orm";
 import { householdTodayISO } from "./householdClock";
+import { expiredHoldsRuleOn, findSupersededPendingForRange } from "./supersededPending";
 import { sql } from "drizzle-orm";
 import {
   db,
@@ -206,6 +207,23 @@ interface JudgedLine {
   status: LineStatus;
 }
 
+/**
+ * ⭐ (F6 round 4, finding 1) The rows no actual here may count: expired holds
+ * and their reversals — pending more than 7 days after their date, never
+ * replaced — the same answer the Budget page (`aggregateBudgetMonth`) and
+ * Spending leave out (`findSupersededPendingForRange`, whole-ledger exact for
+ * the range). As a SQL condition for both sums (actuals and the burndown).
+ * Only the expired ones: the raw sums here never left out a replaced pending
+ * row, and with the rule off (`EXPIRED_HOLDS_RULE=off`) they read exactly as
+ * before — no query.
+ */
+async function loadNotCountedWhere(householdId: string, from: string, to: string, todayIso: string) {
+  if (!expiredHoldsRuleOn()) return undefined;
+  const { expiredIds } = await findSupersededPendingForRange(householdId, from, to, db, { today: todayIso });
+  return expiredIds.size > 0 ? notInArray(transactionsTable.id, [...expiredIds]) : undefined;
+}
+type NotCountedWhere = Awaited<ReturnType<typeof loadNotCountedWhere>>;
+
 // Load + classify + judge every active, non-excluded budget line for one
 // month. Returns the judged lines plus the amex-aware per-category actuals
 // (so the caller can derive flex burndown without re-querying).
@@ -214,6 +232,7 @@ async function loadMonth(
   monthStart: string,
   todayIso: string,
   categoriesById: Map<string, CategoryMeta>,
+  notCounted: NotCountedWhere,
 ): Promise<{ bounds: MonthBounds; lines: JudgedLine[] }> {
   const bounds = monthBounds(monthStart, todayIso);
 
@@ -251,6 +270,8 @@ async function loadMonth(
         gte(transactionsTable.occurredOn, monthStart),
         lt(transactionsTable.occurredOn, bounds.nextMonthStart),
         eq(transactionsTable.isTransfer, false),
+        // (F6 round 4) An expired hold counts in no actual.
+        notCounted,
       ),
     )
     .groupBy(transactionsTable.categoryId);
@@ -346,12 +367,28 @@ export async function buildBudgetFacts(
     });
   }
 
+  // --- Streak months (trailing monthsBack months, oldest -> newest) --------
+  const monthKeysIso: string[] = [];
+  for (let i = monthsBack - 1; i >= 0; i -= 1) {
+    monthKeysIso.push(monthStartMinus(monthStart, i));
+  }
+
+  // (F6 round 4) Expired holds, read once for every month this builds: from the
+  // earliest streak month to the requested month's last day.
+  const notCounted = await loadNotCountedWhere(
+    householdId,
+    monthKeysIso[0] ?? monthStart,
+    monthBounds(monthStart, todayIso).monthEnd,
+    todayIso,
+  );
+
   // --- Requested month ---------------------------------------------------
   const { bounds, lines } = await loadMonth(
     householdId,
     monthStart,
     todayIso,
     categoriesById,
+    notCounted,
   );
 
   const income = sectionFor(lines, "income");
@@ -425,6 +462,8 @@ export async function buildBudgetFacts(
           gte(transactionsTable.occurredOn, monthStart),
           lt(transactionsTable.occurredOn, bounds.nextMonthStart),
           eq(transactionsTable.isTransfer, false),
+          // (F6 round 4) The burndown reads the same rows as the actuals.
+          notCounted,
         ),
       )
       .groupBy(transactionsTable.occurredOn, transactionsTable.categoryId);
@@ -469,10 +508,6 @@ export async function buildBudgetFacts(
   };
 
   // --- Streak board (trailing monthsBack months, oldest -> newest) -------
-  const monthKeysIso: string[] = [];
-  for (let i = monthsBack - 1; i >= 0; i -= 1) {
-    monthKeysIso.push(monthStartMinus(monthStart, i));
-  }
   const monthKeys = monthKeysIso.map((m) => m.slice(0, 7));
 
   // status per (monthKey -> categoryId). Reuse the requested-month load for
@@ -484,7 +519,7 @@ export async function buildBudgetFacts(
       monthLines = lines;
     } else {
       monthLines = (
-        await loadMonth(householdId, mIso, todayIso, categoriesById)
+        await loadMonth(householdId, mIso, todayIso, categoriesById, notCounted)
       ).lines;
     }
     const byCat = new Map<string, JudgedLine>();

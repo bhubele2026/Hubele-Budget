@@ -60,7 +60,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { resolveLedgerAccounts } from "./bankLedger";
-import { findSupersededPendingForRange, type SupersededPending } from "./supersededPending";
+import { countsNowhere, findSupersededPendingForRange, type SupersededPending } from "./supersededPending";
 import { carriedPfcEvidence, effectiveFiling, uncategorizedCategoryIds, type FilingContext } from "./pendingFiling";
 import { discoverAmexCards, type AmexCardCadence } from "./amexCardCadence";
 import { loadCardAccountIds } from "./cardAccounts";
@@ -81,8 +81,11 @@ export interface MoneyContextSettings {
   weeklyAllowanceOverrides: Record<string, string | number>;
 }
 
-/** The superseded-pending answer the context carries: which rows were replaced, and by what. */
-export type MoneyContextSupersede = Pick<SupersededPending, "replacedIds" | "replacedBy">;
+/**
+ * The superseded-pending answer the context carries: which rows were replaced,
+ * and by what; (F6 round 3) and which are expired holds (they count nowhere).
+ */
+export type MoneyContextSupersede = Pick<SupersededPending, "replacedIds" | "replacedBy" | "expiredIds">;
 
 export interface MoneyContext extends MovementContext {
   range: MoneyContextRange;
@@ -329,7 +332,8 @@ export interface LoadMovementRowsOptions {
  * (PR-B1; moved from the PR-H test helper `__tests__/_helpers/classifierSpend.ts`,
  * unchanged) The range's rows as `classifyMovement` must see them, prepared
  * exactly as `buildSpendingFacts` prepares its own: every row of the household
- * dated in `[start, end]`, replaced pending rows left out, each posted row in
+ * dated in `[start, end]`, replaced pending rows (F6 round 3: and expired
+ * holds, with their reversals) left out, each posted row in
  * effective-filing form (the filing its replaced pending row carried, where the
  * posted row has none of its own).
  */
@@ -373,7 +377,8 @@ export async function loadMovementRows(
     );
   const rows: MovementRowRead[] = [];
   for (const row of txns) {
-    if (money.supersede.replacedIds.has(row.id)) continue;
+    // A replaced pending row, and (F6 round 3) an expired hold or its reversal, count nowhere.
+    if (countsNowhere(money.supersede, row.id)) continue;
     const replaced = money.supersede.replacedBy.get(row.id);
     const filed = effectiveFiling(row, replaced, money.filingCtx);
     rows.push({ ...filed, carriedPfc: carriedPfcEvidence(row, replaced) });

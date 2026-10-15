@@ -1,5 +1,6 @@
 import { bankLineStatusOf, inForecast, type BankLineStatus as CoreBankLineStatus } from "@workspace/avalanche-core";
 import type { CashEvent } from "./forecast";
+import { isCounted } from "./countedRows";
 
 export type Transaction = {
   id: string;
@@ -14,6 +15,8 @@ export type Transaction = {
    *  still matchable to a planned payment — never swept into "not planned"
    *  by a bulk action. */
   isTransfer?: boolean;
+  /** (F6 round 4) The server's answer (`GET /forecast`): an expired hold counts nowhere. */
+  expiredHold?: boolean | null;
 };
 
 /** True if a transaction belongs to a bank/checking-style account.
@@ -42,15 +45,19 @@ export function isBankTxn(
  *  before `todayISO`), or it is a future row flagged for the forecast. The
  *  server's curve and review badge apply the same rule. Kept here so the page
  *  wiring and tests share a single source of truth — a regression in either
- *  side surfaces immediately. */
+ *  side surfaces immediately.
+ *  ⭐ (F6 round 4, finding 4) …and it counts (`isCounted`): an expired hold
+ *  — still pending more than 7 days after its date, never replaced, or its
+ *  reversal — never asks for an answer and never moves the running balance,
+ *  as the review badge and the curve leave it out. */
 export function filterForecastTxns<
   T extends Pick<
     Transaction,
-    "forecastFlag" | "source" | "plaidAccountId" | "occurredOn"
+    "forecastFlag" | "source" | "plaidAccountId" | "occurredOn" | "expiredHold"
   >,
 >(txns: T[], checkingPlaidAccountIds: Set<string>, todayISO: string): T[] {
   return txns.filter(
-    (t) => inForecast(t, todayISO) && isBankTxn(t, checkingPlaidAccountIds),
+    (t) => inForecast(t, todayISO) && isBankTxn(t, checkingPlaidAccountIds) && isCounted(t),
   );
 }
 

@@ -28,7 +28,7 @@ function row(id: string, occurredOn: string, amount: number, extra: Partial<Cash
   };
 }
 const classify = (rows: CashRow[], anchor: CashAnchor | null = ANCHOR, account: string | null = CHASE) =>
-  classifyCashRows(rows, { anchor, accountExternalId: account, todayISO: TODAY });
+  classifyCashRows(rows, { anchor, accountExternalId: account, todayISO: TODAY, expiredHolds: true });
 const byId = (r: ReturnType<typeof classify>) => Object.fromEntries(r.rows.map((o) => [o.id, o]));
 
 describe("isBankRow", () => {
@@ -241,5 +241,91 @@ describe("classifyCashRows — a confirmed payment claim (PR-D)", () => {
   it("a confirmed claim the snapshot already holds stays held (adds 0 either way)", () => {
     const r = classify([claim({ claimConfirmed: true, occurredOn: "2026-04-28" })]);
     expect(byId(r).claim!.reason).toBe("held");
+  });
+});
+
+// ⭐ (F6 round 3) THE CASH RULE'S STEP 3b: an expired hold and its reversal add 0 —
+// except a reversal whose hold the anchor holds (`available` held the hold: the
+// reversal is the money coming back). Today 05-14: rows dated before 05-07 are
+// more than 7 days old. Synthetic rows.
+describe("classifyCashRows — expired holds (F6 round 3)", () => {
+  const p = (id: string, on: string, amount: number, extra: Partial<CashRow> = {}) => row(id, on, amount, { pending: true, ...extra });
+
+  it("an unpaired expired hold dated after the snapshot day adds 0 (reason expired); 7 days old still counts", () => {
+    const r = byId(classify([p("old", "2026-05-06", -30), p("edge", "2026-05-07", -20)]));
+    expect(r.old).toMatchObject({ reason: "expired", counts: false, contribution: 0 });
+    expect(r.edge).toMatchObject({ reason: "counted", contribution: -20 });
+  });
+
+  it("a hold and its younger reversal, both after the snapshot: both add 0 (before the rule: −50 + 50, the same cash)", () => {
+    const rows = [p("h", "2026-05-04", -50), p("v", "2026-05-10", 50, { description: "Restaurant Transaction" })];
+    const r = classify(rows);
+    expect(byId(r).h!.reason).toBe("expired");
+    expect(byId(r).v!.reason).toBe("expired");
+    expect(r.throughToday).toEqual({ rowCount: 0, net: 0 });
+    const before = classifyCashRows(rows, { anchor: ANCHOR, accountExternalId: CHASE, todayISO: TODAY, expiredHolds: false });
+    expect(before.throughToday).toEqual({ rowCount: 2, net: 0 });
+  });
+
+  it("⭐ the snapshot held the hold (dated before its day): the reversal still counts — the money coming back", () => {
+    // The hold is 14 days old and held; its reversal (7 days old) is young.
+    const r = byId(classify([p("h", "2026-04-30", -50), p("v", "2026-05-07", 50)]));
+    expect(r.h).toMatchObject({ reason: "held", contribution: 0 });
+    expect(r.v).toMatchObject({ reason: "counted", contribution: 50 });
+  });
+
+  it("no anchor (the register): the pair adds 0", () => {
+    const r = byId(classify([p("h", "2026-04-30", -50), p("v", "2026-05-07", 50)], null));
+    expect([r.h!.reason, r.v!.reason]).toEqual(["expired", "expired"]);
+  });
+
+  it("a pending row its posted row replaced stays superseded (never expired); another account's row stays not_bank", () => {
+    const rows = [
+      p("pend", "2026-05-03", -40, { description: "CORNER BISTRO" }),
+      row("post", "2026-05-04", -48, { createdAt: noon("2026-05-05") }),
+      p("twin", "2026-05-03", -10, { plaidAccountId: "other" }),
+    ];
+    const r = byId(classify(rows));
+    expect(r.pend!.reason).toBe("superseded");
+    expect(r.twin!.reason).toBe("not_bank");
+  });
+
+  it("kill switch (expiredHolds: false): every row reads as before the rule", () => {
+    const rows = [p("old", "2026-05-06", -30), p("h", "2026-05-04", -50), p("v", "2026-05-10", 50)];
+    const off = classifyCashRows(rows, { anchor: ANCHOR, accountExternalId: CHASE, todayISO: TODAY, expiredHolds: false });
+    expect(off.rows.map((o) => o.reason)).toEqual(["counted", "counted", "counted"]);
+    expect(off.throughToday).toEqual({ rowCount: 3, net: -30 });
+    expect(off.rows.every((o) => o.reversalOf === null)).toBe(true);
+  });
+
+  it("(F6 round 4) a reversal names its hold (`reversalOf`), counted or not; other rows name none", () => {
+    const counted = byId(classify([p("h", "2026-04-30", -50), p("v", "2026-05-07", 50)]));
+    expect(counted.v).toMatchObject({ reason: "counted", reversalOf: "h" });
+    expect(counted.h!.reversalOf).toBeNull();
+    const expired = byId(classify([p("h", "2026-05-04", -50), p("v", "2026-05-10", 50)]));
+    expect(expired.v).toMatchObject({ reason: "expired", reversalOf: "h" });
+  });
+
+  it("⭐ (F6 round 4) a reversal 31 days after its hold, the hold BEFORE the rows passed in (`priorRows`): held, so the reversal counts", () => {
+    // Snapshot read 05-01; today 05-14; the ledger reads from 04-24 (anchor day − 7).
+    // A car-rental hold 04-10 (held by the snapshot), its reversal 05-05 (9 days old, 25 days after it).
+    const hold = p("h", "2026-04-10", -80, { description: "CAR RENTAL HOLD" });
+    const rev = p("v", "2026-05-05", 80, { description: "Car Rental Transaction" });
+    // Without the prior rows the reversal reads as an orphan expired credit: 0.
+    expect(byId(classify([rev])).v).toMatchObject({ reason: "expired", contribution: 0, reversalOf: null });
+    // With them it pairs with its held hold and counts — the money coming back.
+    const r = classifyCashRows([rev], { anchor: ANCHOR, accountExternalId: CHASE, todayISO: TODAY, expiredHolds: true, priorRows: [hold] });
+    expect(r.rows).toHaveLength(1);
+    expect(byId(r).v).toMatchObject({ reason: "counted", contribution: 80, reversalOf: "h" });
+    expect(r.throughToday).toEqual({ rowCount: 1, net: 80 });
+    // A prior pending row its posted twin replaced is no hold: the credit stays an orphan.
+    const replaced = [hold, row("posted", "2026-04-12", -80, { description: "CAR RENTAL HOLD", createdAt: noon("2026-04-13") })];
+    const r2 = classifyCashRows([rev], { anchor: ANCHOR, accountExternalId: CHASE, todayISO: TODAY, expiredHolds: true, priorRows: replaced });
+    expect(byId(r2).v).toMatchObject({ reason: "expired", reversalOf: null });
+    // Prior rows on another account are not read; with the rule off they change nothing.
+    const other = classifyCashRows([rev], { anchor: ANCHOR, accountExternalId: CHASE, todayISO: TODAY, expiredHolds: true, priorRows: [{ ...hold, plaidAccountId: "other" }] });
+    expect(byId(other).v!.reason).toBe("expired");
+    const off = classifyCashRows([rev], { anchor: ANCHOR, accountExternalId: CHASE, todayISO: TODAY, expiredHolds: false, priorRows: [hold] });
+    expect(byId(off).v).toMatchObject({ reason: "counted", contribution: 80, reversalOf: null });
   });
 });

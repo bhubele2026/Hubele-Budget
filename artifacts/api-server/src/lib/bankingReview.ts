@@ -464,7 +464,16 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
   ]);
 
   // ── The rows the register counts in the range (a replaced pending row is out).
-  const counted = rows.filter((r) => register.byId.get(r.id)?.countsInBalance ?? true);
+  // ⭐ (F6 round 4) …less an expired hold the register still counts because the
+  // snapshot held it, and its reversal (`expiredPair`, net 0), or any row the
+  // readers call expired: it moves the balance, but it is no spending and never
+  // asks for review. It is reconciled on its own line below (`expiredCounted`).
+  const isExpiredHere = (id: string): boolean =>
+    register.byId.get(id)?.expiredPair === true || money2.supersede.expiredIds.has(id);
+  const countedAll = rows.filter((r) => register.byId.get(r.id)?.countsInBalance ?? true);
+  const expiredCounted = countedAll.filter((r) => isExpiredHere(r.id));
+  const counted = countedAll.filter((r) => !isExpiredHere(r.id));
+  const expiredCountedCents = expiredCounted.reduce((sum, r) => sum + toCents(r.amount), 0);
   const replacedOf = (id: string): string | null => register.byId.get(id)?.replacedPendingId ?? null;
   const answerIds = new Set<string>();
   for (const r of counted) {
@@ -780,8 +789,11 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     },
     reconciliation: {
       rowsPlaced: placed.length,
-      rowsUnexplained: totals.count - placed.length - totals.notCounted.superseded - totals.notCounted.other,
-      unexplained: money(placedNet - toCents(totals.net)),
+      // (F6 round 4) A counted expired pair is explained: the balance moves by it
+      // (net 0 when both halves are in range), no review asks about it.
+      rowsUnexplained:
+        totals.count - placed.length - expiredCounted.length - totals.notCounted.superseded - totals.notCounted.other,
+      unexplained: money(placedNet + expiredCountedCents - toCents(totals.net)),
     },
     reviewInbox: { unresolvedInRange, badgeCount, badgeScope: BADGE_SCOPE },
     balanceTie: tieApplies

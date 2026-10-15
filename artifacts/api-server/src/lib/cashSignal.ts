@@ -4,6 +4,7 @@ import { buildForecastLedger, type ForecastLedger } from "./forecastLedger";
 import type { HookPayoff, PlanOverride } from "./everydayHooks";
 import type { SnapshotAccountResolution } from "./resolveSnapshotAccount";
 import { householdTodayISO } from "./householdClock";
+import { expiredHoldsRuleOn } from "./supersededPending";
 import { deepFreeze, ledgerFreezeEnabled, ledgerSharingEnabled, shareInFlight } from "./ledgerShare";
 
 type Cadence =
@@ -428,7 +429,8 @@ export function cashSignalShareKey(
   opts: { horizonDays?: number; fromDate?: string },
   todayISO: string = householdTodayISO(),
 ): string {
-  return JSON.stringify([householdId, ownerUserId, String(opts.horizonDays), String(opts.fromDate), todayISO]);
+  // (F6 round 3) The expired-hold rule's kill switch changes the result too.
+  return JSON.stringify([householdId, ownerUserId, String(opts.horizonDays), String(opts.fromDate), todayISO, expiredHoldsRuleOn()]);
 }
 
 /**

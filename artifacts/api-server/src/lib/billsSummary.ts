@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { expandItem, fmtISO, isPastOneTime, parseISO } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
+import { findExpiredHoldsAmong } from "./supersededPending";
 import { loadInFullDebtIds } from "./cardPayoffMode";
 import {
   buildDebtMinSchedule,
@@ -289,6 +290,9 @@ export async function buildBillsSummary(
       .select({
         id: transactionsTable.id,
         amount: transactionsTable.amount,
+        pending: transactionsTable.pending,
+        plaidAccountId: transactionsTable.plaidAccountId,
+        occurredOn: transactionsTable.occurredOn,
       })
       .from(transactionsTable)
       .where(
@@ -297,7 +301,12 @@ export async function buildBillsSummary(
           inArray(transactionsTable.id, txnIds),
         ),
       );
+    // ⭐ (F6 round 4, decision on finding 9) An answer whose row is an expired
+    // hold names no row: it pays nothing toward "$X paid" (the forecast drags
+    // the bill again — `forecastLedger`'s `resolutionsLive`).
+    const expired = await findExpiredHoldsAmong(householdId, txns);
     for (const t of txns) {
+      if (expired.has(t.id)) continue;
       txnAmountById.set(t.id, Math.abs(Number(t.amount) || 0));
     }
   }

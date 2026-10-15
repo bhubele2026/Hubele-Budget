@@ -79,6 +79,7 @@ import { PageGrid, StatTile } from "@/components/next";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import { invalidateForecastFamily } from "@/lib/invalidateForecast";
+import { actualMonthFlow } from "@/lib/billsActual";
 
 type Frequency =
   | "weekly"
@@ -607,17 +608,8 @@ export default function BillsPage() {
     const monthStart = currentMonth;
     const next = new Date(y, m + 1, 1);
     const monthEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
-    let income = 0;
-    let spend = 0;
-    for (const t of allTxns ?? []) {
-      if (t.occurredOn < monthStart || t.occurredOn >= monthEnd) continue;
-      if (t.isTransfer) continue;
-      const a = Number(t.amount);
-      if (!Number.isFinite(a)) continue;
-      if (a > 0) income += a;
-      else spend += -a;
-    }
-    return { income, spend, net: income - spend };
+    // (F6 round 4, finding 6) The loop lives in `actualMonthFlow`; an expired hold adds nothing.
+    return actualMonthFlow(allTxns ?? [], monthStart, monthEnd);
   }, [allTxns, currentMonth]);
 
   const allDebtMinRows = summary?.debtMins ?? [];

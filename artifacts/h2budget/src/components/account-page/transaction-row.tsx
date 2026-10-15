@@ -8,6 +8,7 @@ import { RowDateControls } from "@/components/row-date-controls";
 import { cn } from "@/lib/utils";
 import type { AccountAccentName } from "@/lib/accountIdentity";
 import { LEDGER_GRID } from "./ledger-grid";
+import { ExpiredHoldLabel } from "@/components/expired-hold-label";
 // Note: amount/balance formatting is supplied by the page via `amountNode`.
 
 /**
@@ -69,6 +70,9 @@ export type AccountTransactionRowProps = {
   /** (F4) Offers "Split by category…" in the merchant popover. */
   onSplit?: () => void;
 };
+
+/** (F6 round 3) The expired-hold label, re-exported from its own module (F6 round 4). */
+export { ExpiredHoldLabel };
 
 const ACCENT_DOT: Record<AccountAccentName, string> = {
   checking: "bg-acct-checking",
@@ -143,6 +147,7 @@ export function AccountTransactionRow({
           <MerchantRenamePopover tx={tx} onSplit={onSplit} />
         </span>
         {metaNode}
+        {tx.expiredHold ? <ExpiredHoldLabel id={tx.id} /> : null}
       </div>
       {/* Card / source */}
       <div className="flex min-w-0 shrink-0 items-center gap-1.5" title={cardLabel || undefined}>

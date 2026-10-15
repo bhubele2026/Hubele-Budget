@@ -9,7 +9,8 @@ import {
   avalancheSettingsTable,
 } from "@workspace/db";
 import { resolveSnapshotAccount, type SnapshotAccountResolution } from "./resolveSnapshotAccount";
-import { ledgerActualRowsWhere, toCashRow } from "./ledgerCashRows";
+import { ledgerActualRowsWhere, readReversalHoldRows, toCashRow } from "./ledgerCashRows";
+import { expiredHoldsRuleOn, findExpiredHoldsAmong } from "./supersededPending";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
 import { remapOrphanResolutions, type ResolutionSchedule } from "./resolutionRemap";
@@ -808,6 +809,8 @@ export async function buildForecastLedger(
             amount: transactionsTable.amount,
             description: transactionsTable.description,
             occurredOn: transactionsTable.occurredOn,
+            // (F6 round 4) An answer naming an expired hold names no row (below).
+            pending: transactionsTable.pending,
           })
           .from(transactionsTable)
           .where(
@@ -840,10 +843,29 @@ export async function buildForecastLedger(
   //   - a repeated plaid transaction id → 0 (defensive only: the id is unique).
   // Rows that count are summed into `bankToday` and become actuals in the order
   // the query returned them, as before the move.
-  const cash = classifyCashRows(actualRowsAll.map(toCashRow), {
-    anchor: snapshotISO && snapshotAt ? { at: snapshotAt, day: snapshotISO } : null,
+  //   - ⭐ (F6 round 3) an expired hold — pending more than 7 days after its
+  //     date, never replaced — and its reversal → 0, unless the snapshot held
+  //     the hold (then its reversal is the money coming back and counts). Kill
+  //     switch: `EXPIRED_HOLDS_RULE=off`.
+  //     (F6 round 4) A reversal comes up to 31 days after its hold: the holds
+  //     before the read's lower edge are read too when one can matter
+  //     (`readReversalHoldRows`; usually no query).
+  const actualCashRows = actualRowsAll.map(toCashRow);
+  const expiredRuleOn = expiredHoldsRuleOn();
+  const cashAnchor = snapshotISO && snapshotAt ? { at: snapshotAt, day: snapshotISO } : null;
+  const cash = classifyCashRows(actualCashRows, {
+    anchor: cashAnchor,
     accountExternalId: configuredCheckingExternalId,
     todayISO,
+    expiredHolds: expiredRuleOn,
+    priorRows: await readReversalHoldRows({
+      householdId,
+      anchorDay: cashAnchor?.day ?? null,
+      accountExternalId: configuredCheckingExternalId,
+      todayISO,
+      rows: actualCashRows,
+      ruleOn: expiredRuleOn,
+    }),
   });
   for (const r of cash.rows) {
     if (!r.counts) continue;
@@ -852,6 +874,27 @@ export async function buildForecastLedger(
       actuals.push({ kind: "actual", date: r.occurredOn, amount: r.contribution, matched: false, txnId: r.id });
     }
   }
+
+  // ⭐ (F6 round 4, finding 9) AN ANSWER ON AN EXPIRED HOLD NAMES NO ROW. A
+  // "matched" or "partial" answer whose row is an expired hold or its reversal
+  // (`findExpiredHoldsAmong`: still pending more than 7 days after its date and
+  // never replaced — a payment that failed, or that posted under another row) is
+  // read as if it had not been given: it settles no plan key, its row pays no
+  // Weekly Spend week (`hookMatchedRows`, `matchedTxnByKey`) and no partial
+  // (`partialTxnByKey`), and it lends no payee name (`confirmedRowsByItem`). The
+  // occurrence drags again, and a posted twin or a card credit pays it once
+  // through the evidence path — the hold counts nowhere, the forecast included
+  // (owner's rule, 2026-10-15). Before it, such an answer paid its week with
+  // money that never left, or a second time beside the posted payment. Kill
+  // switch: `EXPIRED_HOLDS_RULE=off` (no row is then expired: every answer reads
+  // as before). Usually no query: only an answer naming a pending row reads.
+  const expiredAnswerRows = await findExpiredHoldsAmong(householdId, matchedTxns, db, { today: todayISO });
+  const resolutionsLive =
+    expiredAnswerRows.size === 0
+      ? resolutionsAll
+      : resolutionsAll.filter(
+          (r) => !((r.status === "matched" || r.status === "partial") && r.matchedTxnId && expiredAnswerRows.has(r.matchedTxnId)),
+        );
 
   const matchedTxnBankSet = new Set<string>();
   const resolvedTxnAmount = new Map<string, number>();
@@ -876,7 +919,7 @@ export async function buildForecastLedger(
   // someone else). No extra query: the read above already loads every resolved row.
   const confirmedRowsByItem = new Map<string, ConfirmedRow[]>();
   {
-    const confirmed = resolutionsAll
+    const confirmed = resolutionsLive
       .filter((r) => (r.status === "matched" || r.status === "partial") && r.recurringItemId && r.matchedTxnId)
       .sort((a, b) => ((a.occurrenceDate ?? "") < (b.occurrenceDate ?? "") ? 1 : (a.occurrenceDate ?? "") > (b.occurrenceDate ?? "") ? -1 : 0));
     for (const r of confirmed) {
@@ -904,7 +947,7 @@ export async function buildForecastLedger(
   // accounted for elsewhere). Until that mark, a past-dated pending plan
   // continues to weigh on the projection.
   const missedPlanKeys = new Set<string>();
-  for (const r of resolutionsAll) {
+  for (const r of resolutionsLive) {
     if (r.status === "matched") {
       // (#687) Plan-key suppression: account-agnostic.
       if (r.recurringItemId && r.occurrenceDate) {
@@ -956,7 +999,7 @@ export async function buildForecastLedger(
   const closingStatusByKey = new Map<string, string>();
   // (F5 round 2) The row a "matched" answer names, by key.
   const matchedTxnByKey = new Map<string, string>();
-  for (const r of resolutionsAll) {
+  for (const r of resolutionsLive) {
     if (CLOSING_STATUSES.has(r.status) && r.recurringItemId && r.occurrenceDate) {
       closingKeys.add(`${r.recurringItemId}|${r.occurrenceDate}`);
       closingStatusByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, r.status);
@@ -998,7 +1041,7 @@ export async function buildForecastLedger(
   const notMatchPairs = new Set<string>();
   const partialTxnByKey = new Map<string, string>();
   const claimedTxnIds = new Set<string>();
-  for (const r of resolutionsAll) {
+  for (const r of resolutionsLive) {
     if (r.status === "not_match") {
       if (r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
         notMatchPairs.add(`${r.recurringItemId}|${r.occurrenceDate}#${r.matchedTxnId}`);
@@ -1203,6 +1246,8 @@ export async function buildForecastLedger(
       anchor: null,
       accountExternalId: configuredCheckingExternalId,
       todayISO,
+      // (F6 round 3) An expired hold is no payment evidence and no match candidate.
+      expiredHolds: expiredHoldsRuleOn(),
     });
     const matchRows: MatchRow[] = [];
     const listingRows: MatchRow[] = [];
@@ -1482,7 +1527,7 @@ export async function buildForecastLedger(
   const planOccurrences: LedgerPlanOccurrence[] = [];
   const pairByPlanKey = new Map(matches.map((m) => [m.planKey, m] as const));
   const answerByKey = new Map<string, { status: string; txnId: string | null }>();
-  for (const r of resolutionsAll) {
+  for (const r of resolutionsLive) {
     if (CLOSING_STATUSES.has(r.status) && r.recurringItemId && r.occurrenceDate) {
       answerByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, { status: r.status, txnId: r.matchedTxnId ?? null });
     }

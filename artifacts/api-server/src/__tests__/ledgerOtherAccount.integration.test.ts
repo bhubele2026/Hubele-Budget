@@ -165,7 +165,8 @@ const H_ROWS: Spec[] = [
   { key: "b7", account: "B", source: "plaid", day: "2026-05-25", amount: "-45.00", description: "UTILITY PI", createdAt: createdAtStartOfHouseholdDay(TODAY) },
 ];
 /** The rows the cash rule counts 0 on B's ledger (picked as B). */
-const B_NOT_COUNTED = new Set(["bt1", "bt2", "b4"]);
+// (F6 round 3) b8 is still pending a month after its date: an expired hold, counted nowhere.
+const B_NOT_COUNTED = new Set(["bt1", "bt2", "b4", "b8"]);
 /** The rows the cash rule counts 0 on A's ledger. */
 const A_NOT_COUNTED = new Set(["at1"]);
 const A_SCOPE = (s: Spec) =>
@@ -451,7 +452,8 @@ describe("another Chase checking account (B)", () => {
     }
     expect(row("b4")).toMatchObject({ countsInBalance: false, balanceReason: "superseded" });
     expect(row("b5")).toMatchObject({ countsInBalance: true, balanceReason: "counted", replacedPendingId: rowOf.get("b4")!.id });
-    expect(row("b8")).toMatchObject({ countsInBalance: true, balanceReason: "counted", stalePending: true });
+    // ⭐ (F6 round 3) Before the owner's rule it counted (stalePending was a label only).
+    expect(row("b8")).toMatchObject({ countsInBalance: false, balanceReason: "expired", stalePending: true, expiredHold: true });
     expect(row("b7")).toMatchObject({ countsInBalance: true, afterToday: true });
     for (const r of rows) {
       const key = [...rowOf.values()].find((s) => s.id === r.id)!.key;
@@ -461,8 +463,9 @@ describe("another Chase checking account (B)", () => {
     }
 
     const totals = totalsOf(H_ROWS.filter(B_SCOPE), B_NOT_COUNTED);
-    // The same figures by hand: in 1,000.00; out 212.34 + 9.99 + 30.00 + 7.89 + 45.00.
-    expect(totals).toEqual({ count: 9, moneyIn: "1000.00", moneyOut: "305.22", net: "694.78" });
+    // The same figures by hand: in 1,000.00; out 212.34 + 30.00 + 7.89 + 45.00.
+    // (F6 round 3) The expired 9.99 hold is out (before: out 305.22, net 694.78).
+    expect(totals).toEqual({ count: 9, moneyIn: "1000.00", moneyOut: "295.23", net: "704.77" });
     for (const p of pages) {
       expect(p.totals).toEqual(totals);
       expect(p.matchingCount).toBe(9);
