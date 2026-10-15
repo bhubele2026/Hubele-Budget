@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useState, type ReactNode, type Ref, type RefObject } from "react";
 import { Panel } from "@/components/next";
 import type { AccountAccentName } from "@/lib/accountIdentity";
 import { BucketLegend } from "@/components/bucket-legend";
@@ -32,6 +32,8 @@ export function LedgerPanel({
   pane,
   paneRef,
   children,
+  legend = true,
+  titleRef,
   "data-testid": testId = "ledger-panel",
 }: {
   title: string;
@@ -43,11 +45,16 @@ export function LedgerPanel({
   /** Measured by the page (`usePaneHeight`) for `--page-sticky-top`. */
   paneRef: RefObject<HTMLDivElement | null>;
   children: ReactNode;
+  /** (P1) The bucket legend over the rows; off where the rows show no marks (Amex Review mode). */
+  legend?: boolean;
+  /** (P1) Lets the page move keyboard focus to the ledger's heading (a filter that opens rows here). */
+  titleRef?: Ref<HTMLHeadingElement>;
   "data-testid"?: string;
 }) {
   return (
     <Panel
       title={title}
+      titleRef={titleRef}
       sub={sub}
       accent={accent}
       actions={actions}
@@ -63,7 +70,7 @@ export function LedgerPanel({
         {pane}
       </div>
       <div data-testid="ledger-body" className="pb-2">
-        <BucketLegend className="border-b border-brand-line px-4 py-1.5" />
+        {legend ? <BucketLegend className="border-b border-brand-line px-4 py-1.5" /> : null}
         {children}
       </div>
     </Panel>

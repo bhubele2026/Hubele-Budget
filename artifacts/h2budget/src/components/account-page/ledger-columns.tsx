@@ -22,11 +22,17 @@ export function LedgerColumns({
   amountLabel = "Amount · Bal",
   actionsLabel = "",
   gridClass = LEDGER_GRID,
+  cardLabel = "Card",
+  bucketsLabel = "Buckets",
 }: {
   /** Chase and Amex both stack a running balance under the amount. */
   amountLabel?: string;
   actionsLabel?: string;
   gridClass?: string;
+  /** (P1) null: the rows have no Card column (one card's page). */
+  cardLabel?: string | null;
+  /** (P1) The Amex Review mode heads the column "Spending" (words, not marks). */
+  bucketsLabel?: string;
 }) {
   const th =
     "text-micro font-semibold uppercase tracking-wide text-neutral-600";
@@ -42,9 +48,9 @@ export function LedgerColumns({
       {/* Selection checkbox column — a heading over a checkbox is noise. */}
       <span />
       <span className={th}>Merchant</span>
-      <span className={th}>Card</span>
+      {cardLabel === null ? null : <span className={th}>{cardLabel}</span>}
       <span className={th}>Category</span>
-      <span className={th}>Buckets</span>
+      <span className={th}>{bucketsLabel}</span>
       <span className={cn(th, "text-right")}>{amountLabel}</span>
       <span className={cn(th, "text-right")}>{actionsLabel}</span>
     </div>

@@ -34,10 +34,13 @@ export interface MerchantRenamePopoverTx {
 export function MerchantRenamePopover({
   tx,
   onSplit,
+  triggerLabel,
 }: {
   tx: MerchantRenamePopoverTx;
   /** (F4) When given, the popover also offers "Split by category…" for the row. */
   onSplit?: () => void;
+  /** (P1) A text trigger ("Rename merchant…") in place of the pencil: a row's details, where words fit. */
+  triggerLabel?: string;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -121,15 +124,25 @@ export function MerchantRenamePopover({
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-muted-foreground shrink-0"
-          aria-label="Rename merchant"
-          data-testid={`rename-merchant-${tx.id}`}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
+        {triggerLabel ? (
+          <button
+            type="button"
+            className="press inline-flex min-h-8 items-center rounded-control px-1 text-label font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+            data-testid={`rename-merchant-${tx.id}`}
+          >
+            {triggerLabel}
+          </button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground shrink-0"
+            aria-label="Rename merchant"
+            data-testid={`rename-merchant-${tx.id}`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent
         align="start"

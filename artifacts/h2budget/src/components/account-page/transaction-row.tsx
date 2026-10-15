@@ -77,6 +77,24 @@ export type AccountTransactionRowProps = {
   gridClass?: string;
   /** (F4) Offers "Split by category…" in the merchant popover. */
   onSplit?: () => void;
+  // ── (P1) Opt-in slots for the Amex ledger. Every one defaults to the row
+  // above, so a page that passes none (Chase) renders exactly as before.
+  /** Replaces the category picker cell's control (a quieter trigger). */
+  categoryNode?: React.ReactNode;
+  /** Replaces the bucket marks cell (spending in words, or the marks themselves). */
+  bucketsNode?: React.ReactNode;
+  /** false: no Card cell at all (one card's page names its card once, in the header). */
+  showCard?: boolean;
+  /** The card label wraps instead of truncating (a household name, never cut). */
+  cardWrap?: boolean;
+  /** No rename pencil beside the merchant (the page offers it in the row's details). */
+  hideRename?: boolean;
+  /** Replaces the state chip and the expired-hold label with the page's own status line. */
+  statusNode?: React.ReactNode;
+  /** A full-width region under the row (inline details), inside the row's box. */
+  belowNode?: React.ReactNode;
+  /** Narrow ledger: the wrapped line starts under the merchant and the amount sits at its end. */
+  wrapIndent?: boolean;
 };
 
 /** (F6 round 3) The expired-hold label, re-exported from its own module (F6 round 4). */
@@ -118,6 +136,14 @@ export function AccountTransactionRow({
   cardAccent,
   gridClass = LEDGER_GRID,
   onSplit,
+  categoryNode,
+  bucketsNode,
+  showCard = true,
+  cardWrap = false,
+  hideRename = false,
+  statusNode,
+  belowNode,
+  wrapIndent = false,
 }: AccountTransactionRowProps) {
   const merchant = tx.displayName || tx.description;
   return (
@@ -161,58 +187,86 @@ export function AccountTransactionRow({
           >
             {merchant}
           </span>
-          <MerchantRenamePopover tx={tx} onSplit={onSplit} />
+          {hideRename ? null : <MerchantRenamePopover tx={tx} onSplit={onSplit} />}
         </span>
-        {stateLabel ? (
-          <span className="chip gray shrink-0" data-testid={`chip-state-${tx.id}`}>
-            {stateLabel}
-          </span>
-        ) : null}
-        {metaNode}
-        {tx.expiredHold ? <ExpiredHoldLabel id={tx.id} /> : null}
+        {statusNode !== undefined ? (
+          statusNode
+        ) : (
+          <>
+            {stateLabel ? (
+              <span className="chip gray shrink-0" data-testid={`chip-state-${tx.id}`}>
+                {stateLabel}
+              </span>
+            ) : null}
+            {metaNode}
+            {tx.expiredHold ? <ExpiredHoldLabel id={tx.id} /> : null}
+          </>
+        )}
+        {statusNode !== undefined ? metaNode : null}
       </div>
       {/* Card / source */}
-      <div className="flex min-w-0 shrink-0 items-center gap-1.5" title={cardLabel || undefined}>
-        {cardAccent && cardLabel ? (
-          <span aria-hidden className={cn("size-2 shrink-0 rounded-full", ACCENT_DOT[cardAccent])} />
-        ) : null}
-        <span
-          className="truncate text-micro text-neutral-500"
-          data-testid={`text-card-${tx.id}`}
+      {showCard ? (
+        <div
+          className={cn("flex min-w-0 shrink-0 items-center gap-1.5", wrapIndent && "ml-7 @6xl:ml-0")}
+          title={cardLabel || undefined}
         >
-          {cardLabel || "—"}
-        </span>
-      </div>
+          {cardAccent && cardLabel ? (
+            <span aria-hidden className={cn("size-2 shrink-0 rounded-full", ACCENT_DOT[cardAccent])} />
+          ) : null}
+          <span
+            className={cn(cardWrap ? "min-w-0 [overflow-wrap:anywhere]" : "truncate", "text-micro text-neutral-500")}
+            data-testid={`text-card-${tx.id}`}
+          >
+            {cardLabel || "—"}
+          </span>
+        </div>
+      ) : null}
       {/* Wraps: a row label ("After today", "Not counted") goes under the
           picker rather than over the bucket column. */}
-      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-1.5">
-        <CategoryPicker
-          value={tx.categoryId ?? null}
-          categories={categories}
-          description={tx.description}
-          onChange={onCategoryChange}
-          // Fills the 12rem category column on a wide ledger.
-          triggerClassName="@6xl:w-full"
-        />
+      <div
+        className={cn(
+          "flex min-w-0 shrink-0 flex-wrap items-center gap-1.5",
+          wrapIndent && !showCard && "ml-7 @6xl:ml-0",
+        )}
+      >
+        {categoryNode !== undefined ? (
+          categoryNode
+        ) : (
+          <CategoryPicker
+            value={tx.categoryId ?? null}
+            categories={categories}
+            description={tx.description}
+            onChange={onCategoryChange}
+            // Fills the 12rem category column on a wide ledger.
+            triggerClassName="@6xl:w-full"
+          />
+        )}
         {chipsNode}
       </div>
       {/* (#607) Bucket bubbles are hidden on transfer rows. */}
-      <div className="shrink-0">
-        {!tx.isTransfer && (
-          <BucketBubbles
-            flags={{
-              weekly: tx.weeklyAllowance,
-              monthly: tx.monthlyAllowance,
-              unplanned: tx.unplannedAllowance,
-              reimbursable: tx.reimbursable,
-            }}
-            onToggle={onBucketToggle}
-          />
-        )}
+      <div className="min-w-0 shrink-0">
+        {bucketsNode !== undefined
+          ? bucketsNode
+          : !tx.isTransfer && (
+              <BucketBubbles
+                flags={{
+                  weekly: tx.weeklyAllowance,
+                  monthly: tx.monthlyAllowance,
+                  unplanned: tx.unplannedAllowance,
+                  reimbursable: tx.reimbursable,
+                }}
+                onToggle={onBucketToggle}
+              />
+            )}
       </div>
       {/* `tdNum`: money is mono, tabular and right-aligned so a column of it
           lines up and never reflows as it updates. */}
-      <div className="shrink-0 whitespace-nowrap text-right font-mono text-label tabular-nums @6xl:justify-self-end">
+      <div
+        className={cn(
+          "shrink-0 whitespace-nowrap text-right font-mono text-label tabular-nums @6xl:justify-self-end",
+          wrapIndent && "ml-auto @6xl:ml-0",
+        )}
+      >
         {amountNode}
       </div>
       <div className="shrink-0 flex gap-0.5 items-center @6xl:justify-self-end">
@@ -228,6 +282,7 @@ export function AccountTransactionRow({
           disabled={disabled}
         />
       </div>
+      {belowNode ? <div className="min-w-0 basis-full @6xl:col-span-full">{belowNode}</div> : null}
     </div>
   );
 }
