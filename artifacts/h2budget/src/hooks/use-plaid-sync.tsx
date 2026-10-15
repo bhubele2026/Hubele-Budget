@@ -5,10 +5,10 @@ import {
   useSyncPlaidTransactions,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
-  getGetForecastQueryKey,
-  getGetForecastCashSignalQueryKey,
   getGetForecastBankBalanceExplainQueryKey,
 } from "@workspace/api-client-react";
+import { invalidateForecastFamily } from "@/lib/invalidateForecast";
+import { BANKING_REVIEW_KEY } from "@/lib/mutationInvalidation";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import {
@@ -223,17 +223,21 @@ export function usePlaidSync() {
               // "Added 0" plus a balance that has been quietly wrong for days.
               // Naming both sides is what makes it actionable: the user is the
               // only one who can look at the bank and say which row is missing.
+              // (T2) It says what is known — the bank's figure, what H2 expected, the
+              // gap — and where the difference is kept. No guess at the cause
+              // ("counted twice"): H2 cannot know it, and the owner may know it is wrong.
               const drifted = items.find((r) => r.balanceDrift);
               if (drifted?.balanceDrift) {
                 const d = drifted.balanceDrift;
                 const money = (v: string) => formatCurrency(v);
-                const shortfall = Number(d.unexplained) > 0;
+                const bankHigher = Number(d.unexplained) > 0;
+                const bank = drifted.institutionName ?? "The bank";
                 toast({
-                  title: `${drifted.institutionName ?? "Your bank"} doesn't match our records`,
-                  description: `${drifted.institutionName ?? "The bank"} says ${money(d.bank)}; our transactions add up to ${money(d.ledger)} — ${money(String(Math.abs(Number(d.unexplained))))} ${
-                    shortfall
-                      ? "we can't account for. A deposit or credit is probably missing from the ledger."
-                      : "more than the bank shows. A charge is probably counted twice, or was reversed."
+                  title: "Difference needs review",
+                  description: `${bank} reads ${money(d.bank)}. From its earlier reading plus the rows since, H2 expected ${money(d.ledger)} — ${money(String(Math.abs(Number(d.unexplained))))} H2 can't account for. ${
+                    bankHigher
+                      ? "A deposit the bank holds may not have reached H2's rows yet — review it under Banking → Balance check."
+                      : "H2 now starts from the bank's figure; the difference is kept under Banking → Balance check."
                   }`,
                 });
               }
@@ -361,16 +365,15 @@ export function usePlaidSync() {
               qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
               if (totals.added + totals.modified + totals.removed > 0) {
                 qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-                // New/changed transactions move the forecast + cash
-                // projection, so refresh those too. This is what lets us
-                // cache the forecast bundle between syncs (App.tsx) instead
-                // of refetching it on every page mount — the data is still
-                // correct because a sync that changes anything invalidates it.
-                qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
-                qc.invalidateQueries({
-                  queryKey: getGetForecastCashSignalQueryKey(),
-                });
               }
+              // ⭐ (T1) EVERY Sync, rows or not: a manual Sync can re-read the bank
+              // balance with no row changing (the owner's "pages say $0, the
+              // Forecast card says $432" — the 5-minute bundle kept the old
+              // reading). The whole forecast family (bundle, cash signal, "Why
+              // this number?") and the banking review (its balance and check).
+              // This is what lets the bundle stay cached between syncs (App.tsx).
+              invalidateForecastFamily(qc);
+              void qc.invalidateQueries({ queryKey: BANKING_REVIEW_KEY });
               // (#483) Refresh the Amex ending-balance tile after every
               // Plaid sync so the "Refresh from Plaid" button on the Amex
               // page picks up the freshly-fetched per-account balances

@@ -28,10 +28,12 @@ const UNRELATED = ["/api/debts"];
 // (PR14) The Chase list's pages and the balances behind its charts.
 const LEDGER_PAGES = getGetTransactionsLedgerInfiniteQueryKey({ from: "2026-09-06", to: "2026-09-11", limit: 50 });
 const LEDGER_BALANCES = getGetTransactionsBalancesQueryKey({ dates: "2026-09-05,2026-09-11" });
+// (T1) The banking review, as `getGetBankingReviewQueryKey(params)` builds it (literal: the features module stays off the entry path).
+const REVIEW = ["/api/banking/review", { from: "2026-10-01", to: "2026-10-15", rowsPerBucket: 10 }];
 
 function seeded() {
   const qc = new QueryClient();
-  for (const key of [SPINE, EXPLAIN, REPORTS, UNRELATED, LEDGER_PAGES, LEDGER_BALANCES]) {
+  for (const key of [SPINE, EXPLAIN, REPORTS, UNRELATED, LEDGER_PAGES, LEDGER_BALANCES, REVIEW]) {
     qc.setQueryData(key, { seeded: true });
   }
   return qc;
@@ -64,6 +66,12 @@ describe("invalidateAfterWrite", () => {
     invalidateAfterWrite(qc);
     expect(invalidated(qc, LEDGER_PAGES)).toBe(true);
     expect(invalidated(qc, LEDGER_BALANCES)).toBe(true);
+  });
+
+  it("(T1) marks the banking review stale: its balance and check are the spine's", () => {
+    const qc = seeded();
+    invalidateAfterWrite(qc);
+    expect(invalidated(qc, REVIEW)).toBe(true);
   });
 
   it("leaves unrelated queries alone", () => {

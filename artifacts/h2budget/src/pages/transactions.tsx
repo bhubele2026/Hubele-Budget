@@ -87,7 +87,8 @@ import {
 } from "@workspace/api-client-react/ledger";
 import { useSpine } from "@/hooks/useSpine";
 import { useNearViewport } from "@/hooks/useNearViewport";
-import { FreshnessLine } from "@/components/data-state";
+import { FreshnessLine, moneyFace } from "@/components/data-state";
+import { useOlderSnapshot } from "@/lib/dataAsOf";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { ToastAction } from "@/components/ui/toast";
@@ -734,6 +735,8 @@ export default function TransactionsPage({
   });
   // (Final W2) Another account's answer, kept while this one loads, is not this account's.
   const ledgerBalances = scoped(balancesQ, () => true).data;
+  // (T1) Balances built on an older bank reading than the newest seen are asked again once (self-heal).
+  useOlderSnapshot(balancesQ);
   const balanceByDate = useMemo(() => {
     const m = new Map<string, number>();
     for (const b of ledgerBalances?.balances ?? []) {
@@ -1644,16 +1647,17 @@ export default function TransactionsPage({
         if (data?.code === "no_balance") {
           toast({
             title: `${acctLabel} doesn't have a refreshable balance`,
+            // (T1) No typed balance any more: the bank's reading is the only checking balance. Relinking is the fix.
             description:
-              "Plaid didn't return a current balance for this account (often the case with brokerage or sub-accounts). Set the balance manually on the Forecast page, or relink the bank.",
+              "The bank didn't return a current balance for this account (often the case with brokerage or sub-accounts). Relink the bank in Settings.",
             variant: "destructive",
             action: (
               <ToastAction
-                altText="Set bank balance manually"
-                data-testid="action-refresh-bank-set-manual"
-                onClick={() => navigate("/forecast")}
+                altText="Open Settings"
+                data-testid="action-refresh-bank-open-settings"
+                onClick={() => navigate("/settings")}
               >
-                Set manually
+                Open Settings
               </ToastAction>
             ),
           });
@@ -3132,7 +3136,7 @@ export default function TransactionsPage({
                                   className="font-mono text-micro tabular-nums text-neutral-400"
                                   data-testid={`text-running-balance-${tx.id}`}
                                 >
-                                  bal {formatCurrency(Number(tx.runningBalance))}
+                                  bal {moneyFace(tx.runningBalance)}
                                 </span>
                               )}
                             </div>
