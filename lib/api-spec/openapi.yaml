@@ -2978,6 +2978,31 @@ paths:
             checking or savings account), rowsPerBucket, bucket, kind (without
             bucket=unmatched), cursor or limit, or a NUL byte in any value
 
+  /banking/check-explain:
+    get:
+      operationId: getBankingCheckExplain
+      tags: [banking, features]
+      summary: Review difference — the last balance check, explained (read-only)
+      description: >-
+        (T2) The forecast checking account's last balance check (the record a
+        manual Sync stored) and what H2 holds about it: the previous reading, the
+        bank's figure and what H2 expected; the bank rows the check counted
+        between the two readings; pending deposits its rules left out and
+        deposits they added; rows H2 recorded itself (no Plaid account: counted
+        in H2's balance, left out of the check); rows that arrived after the
+        check; today's balance and the reading under it; and a verdict —
+        late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded
+        itself add up to the difference), unknown, or null when there is no
+        difference to explain. `check` is GET /banking/review's balanceCheck for
+        the same account. Each row list holds at most 200 rows. No Plaid call,
+        no write: nothing here clears or changes the check.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankingCheckExplain" }
+
   # ── (F2) Proposed fixes — evidence-backed corrections, never applied here ──
   /review/proposals:
     get:
@@ -4499,6 +4524,19 @@ components:
             quiet for 48 hours, with no balance re-read and no successful sync. manual_old for a typed-in
             balance older than 7 days. Null when not stale.
 
+    DataAsOf:
+      type: object
+      description: >-
+        (T1) Which bank reading an answer is built on (docs/contracts/checking-balance.md).
+        snapshotAt is the bank reading every balance in the response rolls forward from
+        (forecast_settings.bank_snapshot_at; null with no reading) — one moment across
+        /spine, /forecast, /forecast/cash-signal, /banking/review, the ledger and
+        "Why this number?". computedAt is when the response was computed. The web shows an
+        answer older than the newest reading it has seen as "Earlier reading", never as current.
+      required: [snapshotAt, computedAt]
+      properties:
+        snapshotAt: { type: ["string", "null"] }
+        computedAt: { type: string }
     BankBalanceExplain:
       type: object
       description: >-
@@ -4507,6 +4545,7 @@ components:
       required: [asOf, displayed, freshness, snapshot, account, nextSync, items, accounts, ledger]
       properties:
         asOf: { type: string }
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
         displayed:
           type: object
           required: [bankToday]
@@ -4609,6 +4648,7 @@ components:
          bankConfidence]
       properties:
         asOf: { type: string, description: ISO timestamp the snapshot was read }
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
         bank:
           type: object
           required: [balance, asOfDate, source, lastContactAt, lastFailureAt, stale, staleReason, snapshot, sinceSnapshot, account]
@@ -5374,6 +5414,7 @@ components:
         [account, period, balance, freshness, cashFlow, planComparison, planned, notInPlan, asPlanned,
          reconciliation, reviewInbox, balanceTie, balanceCheck, household, page]
       properties:
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
         account: { $ref: "#/components/schemas/BankingReviewAccount" }
         period: { $ref: "#/components/schemas/BankingReviewPeriod" }
         balance: { $ref: "#/components/schemas/BankingReviewBalance" }
@@ -5432,6 +5473,12 @@ components:
       properties:
         today: { type: ["string", "null"], description: The spine's bank balance }
         asOf: { type: ["string", "null"], description: When the bank snapshot was read }
+        reading:
+          type: ["string", "null"]
+          description: >-
+            (T1) The bank's own reading that `today` rolls forward from, read at `asOf`
+            (= spine.bank.snapshot.balance), from this response's ledger scope. Null when
+            `today` is null. Shown as "Bank's last reading", never as the balance today.
         start: { type: ["string", "null"], description: End of the day before `from` }
         end: { type: ["string", "null"], description: End of `to` (= GET /transactions/ledger balanceEnd) }
         unavailableReason: { type: ["string", "null"], enum: [no_snapshot, not_snapshot_account, null] }
@@ -5773,7 +5820,8 @@ components:
         balance_unavailable: the bank gave no balance). stale (first reason
         wins): anchor_changed (a newer anchor or a typed balance replaced the
         one the check read) · rows_since (rows dated on or before the check's
-        day arrived after it) · age (over 7 days old); a not-checked outcome is
+        day arrived after it; not on resolved_since, where those rows are the
+        explanation — T2) · age (over 7 days old); a not-checked outcome is
         stale by age only. Kept apart from reviewInbox and the freshness
         (synced) fields. Money is a two-decimal string.
       required: [status, reason, stale, staleReason, checkedAt, bank, h2, difference, direction, lastDrift]
@@ -5835,6 +5883,126 @@ components:
         direction:
           type: ["string", "null"]
           enum: [bank_higher, bank_lower, null]
+
+    BankingCheckExplainRow:
+      type: object
+      required: [id, date, description, amount, pending, source]
+      properties:
+        id: { type: string }
+        date: { type: string, description: YYYY-MM-DD }
+        description: { type: ["string", "null"] }
+        amount: { type: string, description: The row's own signed amount (negative is money out) }
+        pending: { type: boolean }
+        source: { type: ["string", "null"] }
+
+    BankingCheckExplainReading:
+      type: object
+      required: [balance, at, field]
+      properties:
+        balance: { type: string }
+        at: { type: string }
+        field: { type: ["string", "null"], enum: [available, current, null] }
+
+    BankingCheckExplainRecord:
+      type: object
+      description: The stored check, as the Sync wrote it (two-decimal strings).
+      required: [checkedAt, status, reason, prevAnchor, bank, anchor, predicted, unexplained, fieldChanged]
+      properties:
+        checkedAt: { type: string }
+        status: { type: string, enum: [ties, drift, not_checked] }
+        reason: { type: ["string", "null"], enum: [anchor_too_old, balance_unavailable, null] }
+        prevAnchor:
+          description: The previous reading the check rolled forward
+          oneOf:
+            - $ref: "#/components/schemas/BankingCheckExplainReading"
+            - type: "null"
+        bank:
+          description: The bank's figure the check compared
+          oneOf:
+            - $ref: "#/components/schemas/BankingCheckExplainReading"
+            - type: "null"
+        anchor:
+          description: The reading H2 started from after the check
+          oneOf:
+            - $ref: "#/components/schemas/BankingCheckExplainReading"
+            - type: "null"
+        predicted: { type: ["string", "null"], description: What H2 expected (previous reading + the counted rows) }
+        unexplained: { type: ["string", "null"], description: bank − H2 expected (signed) }
+        fieldChanged: { type: boolean }
+
+    BankingCheckExplain:
+      type: object
+      required: [dataAsOf, account, check, record, counted, excluded, added, manualRows, rowsSince, today, verdict]
+      properties:
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
+        account:
+          type: object
+          required: [externalId, institution, name, mask]
+          properties:
+            externalId: { type: ["string", "null"] }
+            institution: { type: ["string", "null"] }
+            name: { type: ["string", "null"] }
+            mask: { type: ["string", "null"] }
+        check: { $ref: "#/components/schemas/BankingReviewBalanceCheck" }
+        record:
+          description: Null when this account was never checked
+          oneOf:
+            - $ref: "#/components/schemas/BankingCheckExplainRecord"
+            - type: "null"
+        counted:
+          type: object
+          description: >-
+            The bank rows the check counted between the previous reading and the
+            check (rows that arrived later are in rowsSince). `net` is what they
+            added; `addsUp` says whether previous reading + net + added = what H2
+            expected (null when not listed). `listed` is false when the record
+            could not be recomputed.
+          required: [listed, rowCount, net, addsUp, rows]
+          properties:
+            listed: { type: boolean }
+            rowCount: { type: integer }
+            net: { type: string }
+            addsUp: { type: ["boolean", "null"] }
+            rows: { type: array, items: { $ref: "#/components/schemas/BankingCheckExplainRow" } }
+        excluded:
+          type: object
+          description: Pending deposits the bank's figure did not hold, left out (null amount when not recorded)
+          required: [amount, rows]
+          properties:
+            amount: { type: ["string", "null"] }
+            rows: { type: array, items: { $ref: "#/components/schemas/BankingCheckExplainRow" } }
+        added:
+          type: object
+          description: Deposits that posted since the previous reading, added (null amount when not recorded)
+          required: [amount, rows]
+          properties:
+            amount: { type: ["string", "null"] }
+            rows: { type: array, items: { $ref: "#/components/schemas/BankingCheckExplainRow" } }
+        manualRows:
+          type: object
+          description: Rows H2 recorded itself, dated after the previous reading through the check's day — counted in H2's balance, not in the check
+          required: [amount, rows]
+          properties:
+            amount: { type: ["string", "null"] }
+            rows: { type: array, items: { $ref: "#/components/schemas/BankingCheckExplainRow" } }
+        rowsSince:
+          type: object
+          description: Rows dated on or before the check's day that reached H2 after it
+          required: [count, rows]
+          properties:
+            count: { type: integer }
+            rows: { type: array, items: { $ref: "#/components/schemas/BankingCheckExplainRow" } }
+        today:
+          type: object
+          required: [h2Balance, bankReading, bankAsOf, sameMoment]
+          properties:
+            h2Balance: { type: ["string", "null"], description: The balance today (= spine.bank.balance) }
+            bankReading: { type: ["string", "null"], description: The bank reading it rolls forward from }
+            bankAsOf: { type: ["string", "null"] }
+            sameMoment: { type: boolean, description: The check's bank reading is the reading H2 starts from now }
+        verdict:
+          type: ["string", "null"]
+          enum: [late_rows_tie, manual_rows_match, unknown, null]
 
     BankingReviewHousehold:
       type: object
@@ -6525,6 +6693,7 @@ components:
           $ref: "#/components/schemas/LedgerAnchor"
         account:
           $ref: "#/components/schemas/LedgerAccountScope"
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
     TransactionBalances:
       type: object
       required: [balances, balanceUnavailableReason, anchor, account]
@@ -6540,6 +6709,7 @@ components:
         balanceUnavailableReason:
           type: ["string", "null"]
           description: As on LedgerPage.
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
         anchor:
           $ref: "#/components/schemas/LedgerAnchor"
         account:
@@ -8572,6 +8742,10 @@ components:
         maxSafeExtra: { type: string }
         snapshotAt: { type: ["string", "null"] }
         snapshotSource: { type: ["string", "null"] }
+        dataAsOf:
+          description: (T1) Set by GET /forecast/cash-signal — the bank reading this projection starts from, and when it was computed.
+          allOf:
+            - $ref: "#/components/schemas/DataAsOf"
         account: { $ref: "#/components/schemas/CashSignalAccount" }
         horizonDays: { type: integer }
         fromDate: { type: string }
@@ -9434,6 +9608,7 @@ components:
       type: object
       required: [events, transactions, resolutions, closedMonths, settings, fromDate, toDate, plaidCheckingAccounts]
       properties:
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
         fromDate: { type: string }
         toDate: { type: string }
         events:

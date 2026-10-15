@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { DataAsOf } from "./dataAsOf";
 import type { LedgerAccountScope } from "./ledgerAccountScope";
 import type { LedgerAnchor } from "./ledgerAnchor";
 import type { LedgerReviewCounts } from "./ledgerReviewCounts";
@@ -52,5 +53,6 @@ export interface LedgerPage {
     balanceUnavailableReason: string | null;
     anchor: LedgerAnchor;
     account: LedgerAccountScope;
+    dataAsOf?: DataAsOf;
 }
 //# sourceMappingURL=ledgerPage.d.ts.map

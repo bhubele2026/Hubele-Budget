@@ -2098,6 +2098,15 @@ export const GetTransactionsLedgerResponse = zod.object({
         "The Plaid account ids on the ledger (the resolved account and its\nmask twins). Manual rows are on the ledger as well.\n",
       ),
   }),
+  dataAsOf: zod
+    .object({
+      snapshotAt: zod.string().nullable(),
+      computedAt: zod.string(),
+    })
+    .optional()
+    .describe(
+      '(T1) Which bank reading an answer is built on (docs\/contracts\/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across \/spine, \/forecast, \/forecast\/cash-signal, \/banking\/review, the ledger and \"Why this number?\". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as \"Earlier reading\", never as current.',
+    ),
 });
 
 /**
@@ -2136,6 +2145,15 @@ export const GetTransactionsBalancesResponse = zod.object({
     .string()
     .nullable()
     .describe("As on LedgerPage."),
+  dataAsOf: zod
+    .object({
+      snapshotAt: zod.string().nullable(),
+      computedAt: zod.string(),
+    })
+    .optional()
+    .describe(
+      '(T1) Which bank reading an answer is built on (docs\/contracts\/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across \/spine, \/forecast, \/forecast\/cash-signal, \/banking\/review, the ledger and \"Why this number?\". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as \"Earlier reading\", never as current.',
+    ),
   anchor: zod.object({
     today: zod
       .string()
@@ -4391,6 +4409,15 @@ export const GetForecastQueryParams = zod.object({
 });
 
 export const GetForecastResponse = zod.object({
+  dataAsOf: zod
+    .object({
+      snapshotAt: zod.string().nullable(),
+      computedAt: zod.string(),
+    })
+    .optional()
+    .describe(
+      '(T1) Which bank reading an answer is built on (docs\/contracts\/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across \/spine, \/forecast, \/forecast\/cash-signal, \/banking\/review, the ledger and \"Why this number?\". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as \"Earlier reading\", never as current.',
+    ),
   fromDate: zod.string(),
   toDate: zod.string(),
   events: zod.array(
@@ -4579,6 +4606,18 @@ export const GetForecastResponse = zod.object({
         maxSafeExtra: zod.string(),
         snapshotAt: zod.string().nullish(),
         snapshotSource: zod.string().nullish(),
+        dataAsOf: zod
+          .object({
+            snapshotAt: zod.string().nullable(),
+            computedAt: zod.string(),
+          })
+          .describe(
+            '(T1) Which bank reading an answer is built on (docs\/contracts\/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across \/spine, \/forecast, \/forecast\/cash-signal, \/banking\/review, the ledger and \"Why this number?\". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as \"Earlier reading\", never as current.',
+          )
+          .optional()
+          .describe(
+            "(T1) Set by GET \/forecast\/cash-signal — the bank reading this projection starts from, and when it was computed.",
+          ),
         account: zod
           .object({
             rowId: zod
@@ -5067,6 +5106,18 @@ export const GetForecastCashSignalResponse = zod.object({
   maxSafeExtra: zod.string(),
   snapshotAt: zod.string().nullish(),
   snapshotSource: zod.string().nullish(),
+  dataAsOf: zod
+    .object({
+      snapshotAt: zod.string().nullable(),
+      computedAt: zod.string(),
+    })
+    .describe(
+      '(T1) Which bank reading an answer is built on (docs\/contracts\/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across \/spine, \/forecast, \/forecast\/cash-signal, \/banking\/review, the ledger and \"Why this number?\". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as \"Earlier reading\", never as current.',
+    )
+    .optional()
+    .describe(
+      "(T1) Set by GET \/forecast\/cash-signal — the bank reading this projection starts from, and when it was computed.",
+    ),
   account: zod
     .object({
       rowId: zod
@@ -5397,6 +5448,15 @@ export const GetForecastCashSignalResponse = zod.object({
 export const GetForecastBankBalanceExplainResponse = zod
   .object({
     asOf: zod.string(),
+    dataAsOf: zod
+      .object({
+        snapshotAt: zod.string().nullable(),
+        computedAt: zod.string(),
+      })
+      .optional()
+      .describe(
+        '(T1) Which bank reading an answer is built on (docs\/contracts\/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across \/spine, \/forecast, \/forecast\/cash-signal, \/banking\/review, the ledger and \"Why this number?\". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as \"Earlier reading\", never as current.',
+      ),
     displayed: zod.object({
       bankToday: zod
         .string()
@@ -8249,6 +8309,15 @@ export const getSpineResponseBankConfidencePendingCountMin = 0;
 
 export const GetSpineResponse = zod.object({
   asOf: zod.string().describe("ISO timestamp the snapshot was read"),
+  dataAsOf: zod
+    .object({
+      snapshotAt: zod.string().nullable(),
+      computedAt: zod.string(),
+    })
+    .optional()
+    .describe(
+      '(T1) Which bank reading an answer is built on (docs\/contracts\/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across \/spine, \/forecast, \/forecast\/cash-signal, \/banking\/review, the ledger and \"Why this number?\". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as \"Earlier reading\", never as current.',
+    ),
   bank: zod.object({
     balance: zod
       .string()
@@ -10404,6 +10473,15 @@ export const getBankingReviewResponseCashFlowPendingCountMin = 0;
 
 export const GetBankingReviewResponse = zod
   .object({
+    dataAsOf: zod
+      .object({
+        snapshotAt: zod.string().nullable(),
+        computedAt: zod.string(),
+      })
+      .optional()
+      .describe(
+        '(T1) Which bank reading an answer is built on (docs\/contracts\/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across \/spine, \/forecast, \/forecast\/cash-signal, \/banking\/review, the ledger and \"Why this number?\". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as \"Earlier reading\", never as current.',
+      ),
     account: zod.object({
       id: zod
         .string()
@@ -10437,6 +10515,12 @@ export const GetBankingReviewResponse = zod
           .string()
           .nullable()
           .describe("When the bank snapshot was read"),
+        reading: zod
+          .string()
+          .nullish()
+          .describe(
+            "(T1) The bank's own reading that `today` rolls forward from, read at `asOf` (= spine.bank.snapshot.balance), from this response's ledger scope. Null when `today` is null. Shown as \"Bank's last reading\", never as the balance today.",
+          ),
         start: zod.string().nullable().describe("End of the day before `from`"),
         end: zod
           .string()
@@ -12084,7 +12168,7 @@ export const GetBankingReviewResponse = zod
           ),
       })
       .describe(
-        "(F3) The last manual Sync's check of the bank's own balance against H2's (the previous anchor rolled forward through the ledger), for this account. status: matches · off_by · resolved_since (it was off, and recomputed now from the same anchor over the same days the late rows explain it — one query, no Plaid call) · not_checked with reason (never · not_forecast_account · anchor_too_old: the anchor was over 45 days old · balance_unavailable: the bank gave no balance). stale (first reason wins): anchor_changed (a newer anchor or a typed balance replaced the one the check read) · rows_since (rows dated on or before the check's day arrived after it) · age (over 7 days old); a not-checked outcome is stale by age only. Kept apart from reviewInbox and the freshness (synced) fields. Money is a two-decimal string.",
+        "(F3) The last manual Sync's check of the bank's own balance against H2's (the previous anchor rolled forward through the ledger), for this account. status: matches · off_by · resolved_since (it was off, and recomputed now from the same anchor over the same days the late rows explain it — one query, no Plaid call) · not_checked with reason (never · not_forecast_account · anchor_too_old: the anchor was over 45 days old · balance_unavailable: the bank gave no balance). stale (first reason wins): anchor_changed (a newer anchor or a typed balance replaced the one the check read) · rows_since (rows dated on or before the check's day arrived after it; not on resolved_since, where those rows are the explanation — T2) · age (over 7 days old); a not-checked outcome is stale by age only. Kept apart from reviewInbox and the freshness (synced) fields. Money is a two-decimal string.",
       ),
     household: zod
       .union([
@@ -12294,6 +12378,312 @@ export const GetBankingReviewResponse = zod
   .describe(
     '(S4) One bank account\'s period: balance, cash in and out, the plan occurrences due in it, and every counted row placed exactly once — in one of the five \"not in the plan\" buckets or as planned. Money is a two-decimal string, signed (negative is money out) unless named in \/ out. See GET \/banking\/review for the rules.',
   );
+
+/**
+ * (T2) The forecast checking account's last balance check (the record a manual Sync stored) and what H2 holds about it: the previous reading, the bank's figure and what H2 expected; the bank rows the check counted between the two readings; pending deposits its rules left out and deposits they added; rows H2 recorded itself (no Plaid account: counted in H2's balance, left out of the check); rows that arrived after the check; today's balance and the reading under it; and a verdict — late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded itself add up to the difference), unknown, or null when there is no difference to explain. `check` is GET /banking/review's balanceCheck for the same account. Each row list holds at most 200 rows. No Plaid call, no write: nothing here clears or changes the check.
+ * @summary Review difference — the last balance check, explained (read-only)
+ */
+export const GetBankingCheckExplainResponse = zod.object({
+  dataAsOf: zod
+    .object({
+      snapshotAt: zod.string().nullable(),
+      computedAt: zod.string(),
+    })
+    .describe(
+      '(T1) Which bank reading an answer is built on (docs\/contracts\/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across \/spine, \/forecast, \/forecast\/cash-signal, \/banking\/review, the ledger and \"Why this number?\". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as \"Earlier reading\", never as current.',
+    ),
+  account: zod.object({
+    externalId: zod.string().nullable(),
+    institution: zod.string().nullable(),
+    name: zod.string().nullable(),
+    mask: zod.string().nullable(),
+  }),
+  check: zod
+    .object({
+      status: zod.enum(["matches", "off_by", "resolved_since", "not_checked"]),
+      reason: zod
+        .union([
+          zod.literal("never"),
+          zod.literal("not_forecast_account"),
+          zod.literal("anchor_too_old"),
+          zod.literal("balance_unavailable"),
+          zod.literal(null),
+        ])
+        .nullable()
+        .describe("Why not checked; null otherwise"),
+      stale: zod.boolean(),
+      staleReason: zod
+        .union([
+          zod.literal("age"),
+          zod.literal("anchor_changed"),
+          zod.literal("rows_since"),
+          zod.literal(null),
+        ])
+        .nullable(),
+      checkedAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "When the check read the rows (ISO); null when never checked",
+        ),
+      bank: zod
+        .union([
+          zod.object({
+            balance: zod.string(),
+            at: zod.string().describe("When the bank balance was read (ISO)"),
+            field: zod.enum(["available", "current"]),
+          }),
+          zod.null(),
+        ])
+        .describe(
+          "The bank's figure the check compared: like with like, in the previous anchor's field when the bank gave it (available holds pending charges, not pending deposits; current is posted only). Null when none was read.",
+        ),
+      h2: zod
+        .union([
+          zod.object({
+            balance: zod.string(),
+          }),
+          zod.null(),
+        ])
+        .describe(
+          "H2's figure at the check (previous anchor + the ledger's rows through the check's day); null when not compared",
+        ),
+      difference: zod
+        .string()
+        .nullable()
+        .describe(
+          '|bank − H2| at the check (\"0.00\" when it matched); null when not compared',
+        ),
+      direction: zod
+        .union([
+          zod.literal("bank_higher"),
+          zod.literal("bank_lower"),
+          zod.literal(null),
+        ])
+        .nullable()
+        .describe(
+          "Which side was higher at the check; null when they matched or were not compared",
+        ),
+      lastDrift: zod
+        .union([
+          zod.object({
+            checkedAt: zod.string(),
+            difference: zod.string().describe("|bank − H2| at that check"),
+            direction: zod
+              .union([
+                zod.literal("bank_higher"),
+                zod.literal("bank_lower"),
+                zod.literal(null),
+              ])
+              .nullable(),
+          }),
+          zod.null(),
+        ])
+        .describe(
+          "The last EARLIER check that was off (a later Sync re-anchors, so it is kept); null when none",
+        ),
+    })
+    .describe(
+      "(F3) The last manual Sync's check of the bank's own balance against H2's (the previous anchor rolled forward through the ledger), for this account. status: matches · off_by · resolved_since (it was off, and recomputed now from the same anchor over the same days the late rows explain it — one query, no Plaid call) · not_checked with reason (never · not_forecast_account · anchor_too_old: the anchor was over 45 days old · balance_unavailable: the bank gave no balance). stale (first reason wins): anchor_changed (a newer anchor or a typed balance replaced the one the check read) · rows_since (rows dated on or before the check's day arrived after it; not on resolved_since, where those rows are the explanation — T2) · age (over 7 days old); a not-checked outcome is stale by age only. Kept apart from reviewInbox and the freshness (synced) fields. Money is a two-decimal string.",
+    ),
+  record: zod
+    .union([
+      zod
+        .object({
+          checkedAt: zod.string(),
+          status: zod.enum(["ties", "drift", "not_checked"]),
+          reason: zod
+            .union([
+              zod.literal("anchor_too_old"),
+              zod.literal("balance_unavailable"),
+              zod.literal(null),
+            ])
+            .nullable(),
+          prevAnchor: zod
+            .union([
+              zod.object({
+                balance: zod.string(),
+                at: zod.string(),
+                field: zod
+                  .union([
+                    zod.literal("available"),
+                    zod.literal("current"),
+                    zod.literal(null),
+                  ])
+                  .nullable(),
+              }),
+              zod.null(),
+            ])
+            .describe("The previous reading the check rolled forward"),
+          bank: zod
+            .union([
+              zod.object({
+                balance: zod.string(),
+                at: zod.string(),
+                field: zod
+                  .union([
+                    zod.literal("available"),
+                    zod.literal("current"),
+                    zod.literal(null),
+                  ])
+                  .nullable(),
+              }),
+              zod.null(),
+            ])
+            .describe("The bank's figure the check compared"),
+          anchor: zod
+            .union([
+              zod.object({
+                balance: zod.string(),
+                at: zod.string(),
+                field: zod
+                  .union([
+                    zod.literal("available"),
+                    zod.literal("current"),
+                    zod.literal(null),
+                  ])
+                  .nullable(),
+              }),
+              zod.null(),
+            ])
+            .describe("The reading H2 started from after the check"),
+          predicted: zod
+            .string()
+            .nullable()
+            .describe("What H2 expected (previous reading + the counted rows)"),
+          unexplained: zod
+            .string()
+            .nullable()
+            .describe("bank − H2 expected (signed)"),
+          fieldChanged: zod.boolean(),
+        })
+        .describe(
+          "The stored check, as the Sync wrote it (two-decimal strings).",
+        ),
+      zod.null(),
+    ])
+    .describe("Null when this account was never checked"),
+  counted: zod
+    .object({
+      listed: zod.boolean(),
+      rowCount: zod.number(),
+      net: zod.string(),
+      addsUp: zod.boolean().nullable(),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string().describe("YYYY-MM-DD"),
+          description: zod.string().nullable(),
+          amount: zod
+            .string()
+            .describe("The row's own signed amount (negative is money out)"),
+          pending: zod.boolean(),
+          source: zod.string().nullable(),
+        }),
+      ),
+    })
+    .describe(
+      "The bank rows the check counted between the previous reading and the check (rows that arrived later are in rowsSince). `net` is what they added; `addsUp` says whether previous reading + net + added = what H2 expected (null when not listed). `listed` is false when the record could not be recomputed.",
+    ),
+  excluded: zod
+    .object({
+      amount: zod.string().nullable(),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string().describe("YYYY-MM-DD"),
+          description: zod.string().nullable(),
+          amount: zod
+            .string()
+            .describe("The row's own signed amount (negative is money out)"),
+          pending: zod.boolean(),
+          source: zod.string().nullable(),
+        }),
+      ),
+    })
+    .describe(
+      "Pending deposits the bank's figure did not hold, left out (null amount when not recorded)",
+    ),
+  added: zod
+    .object({
+      amount: zod.string().nullable(),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string().describe("YYYY-MM-DD"),
+          description: zod.string().nullable(),
+          amount: zod
+            .string()
+            .describe("The row's own signed amount (negative is money out)"),
+          pending: zod.boolean(),
+          source: zod.string().nullable(),
+        }),
+      ),
+    })
+    .describe(
+      "Deposits that posted since the previous reading, added (null amount when not recorded)",
+    ),
+  manualRows: zod
+    .object({
+      amount: zod.string().nullable(),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string().describe("YYYY-MM-DD"),
+          description: zod.string().nullable(),
+          amount: zod
+            .string()
+            .describe("The row's own signed amount (negative is money out)"),
+          pending: zod.boolean(),
+          source: zod.string().nullable(),
+        }),
+      ),
+    })
+    .describe(
+      "Rows H2 recorded itself, dated after the previous reading through the check's day — counted in H2's balance, not in the check",
+    ),
+  rowsSince: zod
+    .object({
+      count: zod.number(),
+      rows: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string().describe("YYYY-MM-DD"),
+          description: zod.string().nullable(),
+          amount: zod
+            .string()
+            .describe("The row's own signed amount (negative is money out)"),
+          pending: zod.boolean(),
+          source: zod.string().nullable(),
+        }),
+      ),
+    })
+    .describe(
+      "Rows dated on or before the check's day that reached H2 after it",
+    ),
+  today: zod.object({
+    h2Balance: zod
+      .string()
+      .nullable()
+      .describe("The balance today (= spine.bank.balance)"),
+    bankReading: zod
+      .string()
+      .nullable()
+      .describe("The bank reading it rolls forward from"),
+    bankAsOf: zod.string().nullable(),
+    sameMoment: zod
+      .boolean()
+      .describe("The check's bank reading is the reading H2 starts from now"),
+  }),
+  verdict: zod
+    .union([
+      zod.literal("late_rows_tie"),
+      zod.literal("manual_rows_match"),
+      zod.literal("unknown"),
+      zod.literal(null),
+    ])
+    .nullable(),
+});
 
 /**
  * (F2) Read-only proposals for the household owner to apply himself with an existing app action (Review "mark matched" — POST /forecast/resolutions; Categories "change" — PATCH /transactions/{id}). Each stands on evidence the rows carry, never a merchant name alone and never a blanket rule. loan_payment: Plaid LOAN_PAYMENTS (not a card) rows nobody filed as a payment; rows on one account paying the same amount (within max($1, 1%)) are one series, proposed as the payment of exactly one active bill (a distinctive word of its name or its category's name in a description, and within max($25, 25%) of its amount) or debt (its name, and at least its minimum). transfer: TRANSFER_OUT_SAVINGS / ACCOUNT_TRANSFER rows counted as spending under an expense category (no person-to-person rail). bill_match: an unfiled row the forecast only suggests for a bill. income_category: a credit under an expense category, Plaid primary INCOME, pairing with exactly one active income plan (name and amount). A row is in one proposal at most. Largest first, at most 50; at most 20 rows listed per item. Household America/Chicago dates. A member gets 403 owner_only.

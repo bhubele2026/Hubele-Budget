@@ -1,0 +1,1 @@
+{"version":3,"file":"bankingCheckExplainManualRows.d.ts","sourceRoot":"","sources":["../../../src/generated/types/bankingCheckExplainManualRows.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,sBAAsB,EAAE,MAAM,0BAA0B,CAAC;AAEvE;;GAEG;AACH,MAAM,MAAM,6BAA6B,GAAG;IAC1C,gBAAgB;IAChB,MAAM,EAAE,MAAM,GAAG,IAAI,CAAC;IACtB,IAAI,EAAE,sBAAsB,EAAE,CAAC;CAChC,CAAC"}

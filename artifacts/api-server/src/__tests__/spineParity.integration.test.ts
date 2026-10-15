@@ -81,6 +81,8 @@ import debtPlanRouter from "../routes/debtPlan";
 import budgetRouter from "../routes/budget";
 // (Q1) `/banking/review` owns `bankConfidence.check` and `.pendingCount`.
 import bankingRouter from "../routes/banking";
+// (T1) The Chase ledger and its balances carry the same reading (`dataAsOf`).
+import transactionsLedgerRouter from "../routes/transactionsLedger";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import { householdTodayDate } from "../lib/householdClock";
@@ -107,6 +109,7 @@ app.use(moneyRouter);
 app.use(debtPlanRouter);
 app.use(budgetRouter);
 app.use(bankingRouter);
+app.use(transactionsLedgerRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -1465,6 +1468,35 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
             .reduce((a, b) => Math.max(a, b))
         : Date.parse(spine.bank.snapshot!.at);
     expect(Date.parse(spine.bankConfidence.fetchedAt!)).toBe(heard);
+  });
+
+  it("⭐ (T1) one bank reading under every balance: dataAsOf.snapshotAt is the same moment on every surface", async () => {
+    type AsOf = { dataAsOf: { snapshotAt: string | null; computedAt: string } };
+    const spine = await get<Spine & AsOf>("/spine");
+    const forecast = await get<AsOf & { cashSignal: { snapshotAt: string | null } }>("/forecast");
+    const signal = await get<AsOf & { snapshotAt: string | null }>("/forecast/cash-signal?horizonDays=90");
+    const review = await get<AsOf & { balance: { asOf: string | null; today: string | null; reading: string | null } }>(
+      `/banking/review?from=${addDaysISO(TODAY_ISO, -6)}&to=${TODAY_ISO}`,
+    );
+    const balances = await get<AsOf & { anchor: { snapshotAt: string | null } }>(`/transactions/balances?dates=${TODAY_ISO}`);
+    const ledger = await get<AsOf>(`/transactions/ledger?from=${addDaysISO(TODAY_ISO, -6)}&to=${TODAY_ISO}&limit=5`);
+    const explain = await get<AsOf>("/forecast/bank-balance-explain");
+
+    const at = spine.dataAsOf.snapshotAt;
+    expect(at).not.toBeNull();
+    expect(at).toBe(spine.bank.asOfDate);
+    for (const other of [forecast, signal, review, balances, ledger, explain]) expect(other.dataAsOf.snapshotAt).toBe(at);
+    expect(forecast.cashSignal.snapshotAt).toBe(at);
+    expect(signal.snapshotAt).toBe(at);
+    expect(review.balance.asOf).toBe(at);
+    expect(balances.anchor.snapshotAt).toBe(at);
+    // computedAt is the response's own clock.
+    for (const r of [spine, forecast, signal, review, balances, ledger, explain]) {
+      expect(Number.isNaN(Date.parse(r.dataAsOf.computedAt))).toBe(false);
+    }
+    // (T1) The review's "Bank's last reading" is the spine's snapshot, beside the same balance today.
+    expect(review.balance.today).toBe(spine.bank.balance);
+    expect(review.balance.reading).toBe(spine.bank.snapshot!.balance);
   });
 
   it("is one snapshot: asOf is present and every field is populated together", async () => {

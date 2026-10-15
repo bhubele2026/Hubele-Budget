@@ -53,6 +53,7 @@ import type {
   BadgeCount,
   BankBalanceExplain,
   BankSnapshot,
+  BankingCheckExplain,
   BankingReview,
   BehaviorFacts,
   BillsSummary,
@@ -11904,6 +11905,83 @@ export function useGetBankingReview<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetBankingReviewQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * (T2) The forecast checking account's last balance check (the record a manual Sync stored) and what H2 holds about it: the previous reading, the bank's figure and what H2 expected; the bank rows the check counted between the two readings; pending deposits its rules left out and deposits they added; rows H2 recorded itself (no Plaid account: counted in H2's balance, left out of the check); rows that arrived after the check; today's balance and the reading under it; and a verdict — late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded itself add up to the difference), unknown, or null when there is no difference to explain. `check` is GET /banking/review's balanceCheck for the same account. Each row list holds at most 200 rows. No Plaid call, no write: nothing here clears or changes the check.
+ * @summary Review difference — the last balance check, explained (read-only)
+ */
+export const getGetBankingCheckExplainUrl = () => {
+  return `/api/banking/check-explain`;
+};
+
+export const getBankingCheckExplain = async (
+  options?: RequestInit,
+): Promise<BankingCheckExplain> => {
+  return customFetch<BankingCheckExplain>(getGetBankingCheckExplainUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBankingCheckExplainQueryKey = () => {
+  return [`/api/banking/check-explain`] as const;
+};
+
+export const getGetBankingCheckExplainQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBankingCheckExplain>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingCheckExplain>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBankingCheckExplainQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBankingCheckExplain>>
+  > = ({ signal }) => getBankingCheckExplain({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingCheckExplain>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBankingCheckExplainQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBankingCheckExplain>>
+>;
+export type GetBankingCheckExplainQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Review difference — the last balance check, explained (read-only)
+ */
+
+export function useGetBankingCheckExplain<
+  TData = Awaited<ReturnType<typeof getBankingCheckExplain>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingCheckExplain>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBankingCheckExplainQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

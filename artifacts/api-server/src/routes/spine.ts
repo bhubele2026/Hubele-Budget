@@ -21,6 +21,7 @@ import { withPendingPayments } from "../lib/debtPending";
 import { computeBankFreshness } from "../lib/bankFreshness";
 import { computeDebtHeadline } from "../lib/debtPlan";
 import { readBankConfidence } from "../lib/bankConfidence";
+import { dataAsOfOf } from "../lib/dataAsOf";
 
 const router: IRouter = Router();
 
@@ -171,6 +172,10 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
 
   res.json({
     asOf: new Date().toISOString(),
+    // ⭐ (T1) The bank reading every figure here rolls forward from, and when this
+    // answer was computed (`docs/contracts/checking-balance.md`). Its snapshotAt is
+    // bank.asOfDate, /forecast's, the review's and the ledger's (spineParity).
+    dataAsOf: dataAsOfOf(signal.snapshotAt),
     bank: {
       balance: signal.bankToday,
       asOfDate: signal.snapshotAt,

@@ -22,6 +22,11 @@ export interface BankingReviewBalance {
    */
   asOf: string | null;
   /**
+   * (T1) The bank's own reading that `today` rolls forward from, read at `asOf` (= spine.bank.snapshot.balance), from this response's ledger scope. Null when `today` is null. Shown as "Bank's last reading", never as the balance today.
+   * @nullable
+   */
+  reading?: string | null;
+  /**
    * End of the day before `from`
    * @nullable
    */

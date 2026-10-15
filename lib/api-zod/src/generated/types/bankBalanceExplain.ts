@@ -13,12 +13,14 @@ import type { BankBalanceExplainLedger } from "./bankBalanceExplainLedger";
 import type { BankBalanceExplainNextSync } from "./bankBalanceExplainNextSync";
 import type { BankBalanceExplainSnapshot } from "./bankBalanceExplainSnapshot";
 import type { BankFreshness } from "./bankFreshness";
+import type { DataAsOf } from "./dataAsOf";
 
 /**
  * Why the bank balance reads what it reads: the anchor, the account behind it, whether the next Sync re-reads it, what the ledger adds on top, and whether the balance is stale.
  */
 export interface BankBalanceExplain {
   asOf: string;
+  dataAsOf?: DataAsOf;
   displayed: BankBalanceExplainDisplayed;
   freshness: BankFreshness;
   snapshot: BankBalanceExplainSnapshot;

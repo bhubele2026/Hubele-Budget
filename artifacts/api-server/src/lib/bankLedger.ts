@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { dataAsOfOf, type DataAsOf } from "./dataAsOf";
 import {
   db,
   budgetCategoriesTable,
@@ -849,6 +850,8 @@ export type LedgerPage = {
   balanceUnavailableReason: BalanceUnavailableReason | null;
   anchor: LedgerAnchor;
   account: { via: string; plaidAccountIds: string[] };
+  /** (T1) The bank reading the balances roll forward from, and when this page was computed. */
+  dataAsOf: DataAsOf;
 };
 
 /**
@@ -1046,6 +1049,8 @@ export async function readLedgerPage(
     balanceUnavailableReason: balanceUnavailableReason(scope),
     anchor: scope.anchor,
     account: { via: scope.via, plaidAccountIds: scope.plaidAccountIds },
+    // (T1) The bank reading this page's balances roll forward from.
+    dataAsOf: dataAsOfOf(scope.anchor.snapshotAt),
   };
 }
 

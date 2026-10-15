@@ -3156,6 +3156,16 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         via: string;
         plaidAccountIds: string[];
     }>;
+    dataAsOf: zod.ZodOptional<zod.ZodObject<{
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        computedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }>>;
 }, "strip", zod.ZodTypeAny, {
     limit: number;
     account: {
@@ -3239,6 +3249,10 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         snapshotAt: string | null;
         snapshotDay: string | null;
     };
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
 }, {
     limit: number;
     account: {
@@ -3322,6 +3336,10 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         snapshotAt: string | null;
         snapshotDay: string | null;
     };
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
 }>;
 /**
  * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
@@ -3356,6 +3374,16 @@ export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
         balance: string | null;
     }>, "many">;
     balanceUnavailableReason: zod.ZodNullable<zod.ZodString>;
+    dataAsOf: zod.ZodOptional<zod.ZodObject<{
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        computedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }>>;
     anchor: zod.ZodObject<{
         today: zod.ZodString;
         todayBalance: zod.ZodNullable<zod.ZodString>;
@@ -3402,6 +3430,10 @@ export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
         date: string;
         balance: string | null;
     }[];
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
 }, {
     account: {
         via: string;
@@ -3419,6 +3451,10 @@ export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
         date: string;
         balance: string | null;
     }[];
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
 }>;
 /**
  * @summary (PR13) Mark every ledger row matching a filter reviewed (or not) in
@@ -7764,6 +7800,16 @@ export declare const GetForecastQueryParams: zod.ZodObject<{
     fromMonth?: string | undefined;
 }>;
 export declare const GetForecastResponse: zod.ZodObject<{
+    dataAsOf: zod.ZodOptional<zod.ZodObject<{
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        computedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }>>;
     fromDate: zod.ZodString;
     toDate: zod.ZodString;
     events: zod.ZodArray<zod.ZodObject<{
@@ -7994,6 +8040,16 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: zod.ZodString;
         snapshotAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         snapshotSource: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        dataAsOf: zod.ZodOptional<zod.ZodObject<{
+            snapshotAt: zod.ZodNullable<zod.ZodString>;
+            computedAt: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            snapshotAt: string | null;
+            computedAt: string;
+        }, {
+            snapshotAt: string | null;
+            computedAt: string;
+        }>>;
         account: zod.ZodObject<{
             rowId: zod.ZodNullable<zod.ZodString>;
             externalId: zod.ZodNullable<zod.ZodString>;
@@ -8329,6 +8385,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestDate: string | null;
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
+        dataAsOf?: {
+            snapshotAt: string | null;
+            computedAt: string;
+        } | undefined;
         matches?: {
             difference: string;
             txnAmount: string;
@@ -8449,6 +8509,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestDate: string | null;
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
+        dataAsOf?: {
+            snapshotAt: string | null;
+            computedAt: string;
+        } | undefined;
         matches?: {
             difference: string;
             txnAmount: string;
@@ -8704,6 +8768,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
     }[];
     today?: string | undefined;
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
     bankSnapshot?: {
         at: string;
         source: "plaid" | "manual";
@@ -8728,6 +8796,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestDate: string | null;
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
+        dataAsOf?: {
+            snapshotAt: string | null;
+            computedAt: string;
+        } | undefined;
         matches?: {
             difference: string;
             txnAmount: string;
@@ -8930,6 +9002,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
     }[];
     today?: string | undefined;
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
     bankSnapshot?: {
         at: string;
         source: "plaid" | "manual";
@@ -8954,6 +9030,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestDate: string | null;
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
+        dataAsOf?: {
+            snapshotAt: string | null;
+            computedAt: string;
+        } | undefined;
         matches?: {
             difference: string;
             txnAmount: string;
@@ -9290,6 +9370,16 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     maxSafeExtra: zod.ZodString;
     snapshotAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     snapshotSource: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    dataAsOf: zod.ZodOptional<zod.ZodObject<{
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        computedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }>>;
     account: zod.ZodObject<{
         rowId: zod.ZodNullable<zod.ZodString>;
         externalId: zod.ZodNullable<zod.ZodString>;
@@ -9625,6 +9715,10 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     lowestDate: string | null;
     maxSafeExtra: string;
     snapshotAt?: string | null | undefined;
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
     matches?: {
         difference: string;
         txnAmount: string;
@@ -9745,6 +9839,10 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     lowestDate: string | null;
     maxSafeExtra: string;
     snapshotAt?: string | null | undefined;
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
     matches?: {
         difference: string;
         txnAmount: string;
@@ -9855,6 +9953,16 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
  */
 export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
     asOf: zod.ZodString;
+    dataAsOf: zod.ZodOptional<zod.ZodObject<{
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        computedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }>>;
     displayed: zod.ZodObject<{
         bankToday: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
@@ -10097,6 +10205,10 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
             pending: boolean;
         }[];
     };
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
 }, {
     account: {
         name: string | null;
@@ -10159,6 +10271,10 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
             pending: boolean;
         }[];
     };
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
 }>;
 /**
  * Returns a deterministic schedule of avalanche extra payments
@@ -17159,8 +17275,8 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         }>;
     }, "strip", zod.ZodTypeAny, {
         version: number;
-        asOf: string;
         computedAt: string;
+        asOf: string;
         metrics: {
             newChargesMtd: number;
             totalDebtEffective: number | null;
@@ -17182,8 +17298,8 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         };
     }, {
         version: number;
-        asOf: string;
         computedAt: string;
+        asOf: string;
         metrics: {
             newChargesMtd: number;
             totalDebtEffective: number | null;
@@ -17273,8 +17389,8 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         }>;
     }, "strip", zod.ZodTypeAny, {
         version: number;
-        asOf: string;
         computedAt: string;
+        asOf: string;
         metrics: {
             newChargesMtd: number;
             totalDebtEffective: number | null;
@@ -17296,8 +17412,8 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         };
     }, {
         version: number;
-        asOf: string;
         computedAt: string;
+        asOf: string;
         metrics: {
             newChargesMtd: number;
             totalDebtEffective: number | null;
@@ -17323,8 +17439,8 @@ export declare const GetMetricsResponse: zod.ZodObject<{
     to: string;
     rows: {
         version: number;
-        asOf: string;
         computedAt: string;
+        asOf: string;
         metrics: {
             newChargesMtd: number;
             totalDebtEffective: number | null;
@@ -17347,8 +17463,8 @@ export declare const GetMetricsResponse: zod.ZodObject<{
     }[];
     latest: {
         version: number;
-        asOf: string;
         computedAt: string;
+        asOf: string;
         metrics: {
             newChargesMtd: number;
             totalDebtEffective: number | null;
@@ -17374,8 +17490,8 @@ export declare const GetMetricsResponse: zod.ZodObject<{
     to: string;
     rows: {
         version: number;
-        asOf: string;
         computedAt: string;
+        asOf: string;
         metrics: {
             newChargesMtd: number;
             totalDebtEffective: number | null;
@@ -17398,8 +17514,8 @@ export declare const GetMetricsResponse: zod.ZodObject<{
     }[];
     latest: {
         version: number;
-        asOf: string;
         computedAt: string;
+        asOf: string;
         metrics: {
             newChargesMtd: number;
             totalDebtEffective: number | null;
@@ -17455,6 +17571,16 @@ export declare const RecomputeMetricsResponse: zod.ZodObject<{
 export declare const getSpineResponseBankConfidencePendingCountMin = 0;
 export declare const GetSpineResponse: zod.ZodObject<{
     asOf: zod.ZodString;
+    dataAsOf: zod.ZodOptional<zod.ZodObject<{
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        computedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }>>;
     bank: zod.ZodObject<{
         balance: zod.ZodNullable<zod.ZodString>;
         asOfDate: zod.ZodNullable<zod.ZodString>;
@@ -17875,6 +18001,10 @@ export declare const GetSpineResponse: zod.ZodObject<{
         };
         pendingCount: number;
     };
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
 }, {
     asOf: string;
     debt: {
@@ -17972,6 +18102,10 @@ export declare const GetSpineResponse: zod.ZodObject<{
         };
         pendingCount: number;
     };
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
 }>;
 /**
  * computePosition (avalanche-core) over one read of the household: the forecast curve computeCashSignal builds (the spine's own horizon of 90 days), the current Sunday–Saturday week classified by classifyMovement, the weekly cap from allowance_plans and the bank's freshness. The spine's `position` is the same call; an integration test asserts they agree to the cent. Never carries credit, a limit, a debt balance or an amount owed.
@@ -21619,6 +21753,16 @@ export declare const GetBankingReviewQueryParams: zod.ZodObject<{
 }>;
 export declare const getBankingReviewResponseCashFlowPendingCountMin = 0;
 export declare const GetBankingReviewResponse: zod.ZodObject<{
+    dataAsOf: zod.ZodOptional<zod.ZodObject<{
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        computedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }>>;
     account: zod.ZodObject<{
         id: zod.ZodNullable<zod.ZodString>;
         institution: zod.ZodNullable<zod.ZodString>;
@@ -21660,6 +21804,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
     balance: zod.ZodObject<{
         today: zod.ZodNullable<zod.ZodString>;
         asOf: zod.ZodNullable<zod.ZodString>;
+        reading: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         start: zod.ZodNullable<zod.ZodString>;
         end: zod.ZodNullable<zod.ZodString>;
         unavailableReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"no_snapshot">, zod.ZodLiteral<"not_snapshot_account">, zod.ZodLiteral<null>]>>;
@@ -21669,12 +21814,14 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         start: string | null;
         end: string | null;
         unavailableReason: "no_snapshot" | "not_snapshot_account" | null;
+        reading?: string | null | undefined;
     }, {
         today: string | null;
         asOf: string | null;
         start: string | null;
         end: string | null;
         unavailableReason: "no_snapshot" | "not_snapshot_account" | null;
+        reading?: string | null | undefined;
     }>;
     freshness: zod.ZodUnion<[zod.ZodObject<{
         source: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"plaid">, zod.ZodLiteral<"manual">, zod.ZodLiteral<null>]>>;
@@ -27343,6 +27490,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         start: string | null;
         end: string | null;
         unavailableReason: "no_snapshot" | "not_snapshot_account" | null;
+        reading?: string | null | undefined;
     };
     planned: {
         expected: string | null;
@@ -28134,6 +28282,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         nextCursor: string | null;
         bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
     } | null;
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
 }, {
     account: {
         id: string | null;
@@ -28149,6 +28301,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         start: string | null;
         end: string | null;
         unavailableReason: "no_snapshot" | "not_snapshot_account" | null;
+        reading?: string | null | undefined;
     };
     planned: {
         expected: string | null;
@@ -28940,6 +29093,710 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         nextCursor: string | null;
         bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
     } | null;
+    dataAsOf?: {
+        snapshotAt: string | null;
+        computedAt: string;
+    } | undefined;
+}>;
+/**
+ * (T2) The forecast checking account's last balance check (the record a manual Sync stored) and what H2 holds about it: the previous reading, the bank's figure and what H2 expected; the bank rows the check counted between the two readings; pending deposits its rules left out and deposits they added; rows H2 recorded itself (no Plaid account: counted in H2's balance, left out of the check); rows that arrived after the check; today's balance and the reading under it; and a verdict — late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded itself add up to the difference), unknown, or null when there is no difference to explain. `check` is GET /banking/review's balanceCheck for the same account. Each row list holds at most 200 rows. No Plaid call, no write: nothing here clears or changes the check.
+ * @summary Review difference — the last balance check, explained (read-only)
+ */
+export declare const GetBankingCheckExplainResponse: zod.ZodObject<{
+    dataAsOf: zod.ZodObject<{
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        computedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }, {
+        snapshotAt: string | null;
+        computedAt: string;
+    }>;
+    account: zod.ZodObject<{
+        externalId: zod.ZodNullable<zod.ZodString>;
+        institution: zod.ZodNullable<zod.ZodString>;
+        name: zod.ZodNullable<zod.ZodString>;
+        mask: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        name: string | null;
+        mask: string | null;
+        externalId: string | null;
+        institution: string | null;
+    }, {
+        name: string | null;
+        mask: string | null;
+        externalId: string | null;
+        institution: string | null;
+    }>;
+    check: zod.ZodObject<{
+        status: zod.ZodEnum<["matches", "off_by", "resolved_since", "not_checked"]>;
+        reason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"never">, zod.ZodLiteral<"not_forecast_account">, zod.ZodLiteral<"anchor_too_old">, zod.ZodLiteral<"balance_unavailable">, zod.ZodLiteral<null>]>>;
+        stale: zod.ZodBoolean;
+        staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"age">, zod.ZodLiteral<"anchor_changed">, zod.ZodLiteral<"rows_since">, zod.ZodLiteral<null>]>>;
+        checkedAt: zod.ZodNullable<zod.ZodString>;
+        bank: zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            field: zod.ZodEnum<["available", "current"]>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            balance: string;
+            field: "available" | "current";
+        }, {
+            at: string;
+            balance: string;
+            field: "available" | "current";
+        }>, zod.ZodNull]>;
+        h2: zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            balance: string;
+        }, {
+            balance: string;
+        }>, zod.ZodNull]>;
+        difference: zod.ZodNullable<zod.ZodString>;
+        direction: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"bank_higher">, zod.ZodLiteral<"bank_lower">, zod.ZodLiteral<null>]>>;
+        lastDrift: zod.ZodUnion<[zod.ZodObject<{
+            checkedAt: zod.ZodString;
+            difference: zod.ZodString;
+            direction: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"bank_higher">, zod.ZodLiteral<"bank_lower">, zod.ZodLiteral<null>]>>;
+        }, "strip", zod.ZodTypeAny, {
+            difference: string;
+            checkedAt: string;
+            direction: "bank_higher" | "bank_lower" | null;
+        }, {
+            difference: string;
+            checkedAt: string;
+            direction: "bank_higher" | "bank_lower" | null;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        status: "matches" | "off_by" | "resolved_since" | "not_checked";
+        difference: string | null;
+        stale: boolean;
+        staleReason: "age" | "anchor_changed" | "rows_since" | null;
+        reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+        checkedAt: string | null;
+        bank: {
+            at: string;
+            balance: string;
+            field: "available" | "current";
+        } | null;
+        direction: "bank_higher" | "bank_lower" | null;
+        h2: {
+            balance: string;
+        } | null;
+        lastDrift: {
+            difference: string;
+            checkedAt: string;
+            direction: "bank_higher" | "bank_lower" | null;
+        } | null;
+    }, {
+        status: "matches" | "off_by" | "resolved_since" | "not_checked";
+        difference: string | null;
+        stale: boolean;
+        staleReason: "age" | "anchor_changed" | "rows_since" | null;
+        reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+        checkedAt: string | null;
+        bank: {
+            at: string;
+            balance: string;
+            field: "available" | "current";
+        } | null;
+        direction: "bank_higher" | "bank_lower" | null;
+        h2: {
+            balance: string;
+        } | null;
+        lastDrift: {
+            difference: string;
+            checkedAt: string;
+            direction: "bank_higher" | "bank_lower" | null;
+        } | null;
+    }>;
+    record: zod.ZodUnion<[zod.ZodObject<{
+        checkedAt: zod.ZodString;
+        status: zod.ZodEnum<["ties", "drift", "not_checked"]>;
+        reason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"anchor_too_old">, zod.ZodLiteral<"balance_unavailable">, zod.ZodLiteral<null>]>>;
+        prevAnchor: zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            field: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"available">, zod.ZodLiteral<"current">, zod.ZodLiteral<null>]>>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        }, {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        }>, zod.ZodNull]>;
+        bank: zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            field: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"available">, zod.ZodLiteral<"current">, zod.ZodLiteral<null>]>>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        }, {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        }>, zod.ZodNull]>;
+        anchor: zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            field: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"available">, zod.ZodLiteral<"current">, zod.ZodLiteral<null>]>>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        }, {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        }>, zod.ZodNull]>;
+        predicted: zod.ZodNullable<zod.ZodString>;
+        unexplained: zod.ZodNullable<zod.ZodString>;
+        fieldChanged: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        status: "not_checked" | "ties" | "drift";
+        anchor: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        unexplained: string | null;
+        reason: "anchor_too_old" | "balance_unavailable" | null;
+        checkedAt: string;
+        bank: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        prevAnchor: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        predicted: string | null;
+        fieldChanged: boolean;
+    }, {
+        status: "not_checked" | "ties" | "drift";
+        anchor: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        unexplained: string | null;
+        reason: "anchor_too_old" | "balance_unavailable" | null;
+        checkedAt: string;
+        bank: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        prevAnchor: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        predicted: string | null;
+        fieldChanged: boolean;
+    }>, zod.ZodNull]>;
+    counted: zod.ZodObject<{
+        listed: zod.ZodBoolean;
+        rowCount: zod.ZodNumber;
+        net: zod.ZodString;
+        addsUp: zod.ZodNullable<zod.ZodBoolean>;
+        rows: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            date: zod.ZodString;
+            description: zod.ZodNullable<zod.ZodString>;
+            amount: zod.ZodString;
+            pending: zod.ZodBoolean;
+            source: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+        net: string;
+        rowCount: number;
+        listed: boolean;
+        addsUp: boolean | null;
+    }, {
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+        net: string;
+        rowCount: number;
+        listed: boolean;
+        addsUp: boolean | null;
+    }>;
+    excluded: zod.ZodObject<{
+        amount: zod.ZodNullable<zod.ZodString>;
+        rows: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            date: zod.ZodString;
+            description: zod.ZodNullable<zod.ZodString>;
+            amount: zod.ZodString;
+            pending: zod.ZodBoolean;
+            source: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    }, {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    }>;
+    added: zod.ZodObject<{
+        amount: zod.ZodNullable<zod.ZodString>;
+        rows: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            date: zod.ZodString;
+            description: zod.ZodNullable<zod.ZodString>;
+            amount: zod.ZodString;
+            pending: zod.ZodBoolean;
+            source: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    }, {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    }>;
+    manualRows: zod.ZodObject<{
+        amount: zod.ZodNullable<zod.ZodString>;
+        rows: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            date: zod.ZodString;
+            description: zod.ZodNullable<zod.ZodString>;
+            amount: zod.ZodString;
+            pending: zod.ZodBoolean;
+            source: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    }, {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    }>;
+    rowsSince: zod.ZodObject<{
+        count: zod.ZodNumber;
+        rows: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            date: zod.ZodString;
+            description: zod.ZodNullable<zod.ZodString>;
+            amount: zod.ZodString;
+            pending: zod.ZodBoolean;
+            source: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }, {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        count: number;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    }, {
+        count: number;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    }>;
+    today: zod.ZodObject<{
+        h2Balance: zod.ZodNullable<zod.ZodString>;
+        bankReading: zod.ZodNullable<zod.ZodString>;
+        bankAsOf: zod.ZodNullable<zod.ZodString>;
+        sameMoment: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        bankAsOf: string | null;
+        h2Balance: string | null;
+        bankReading: string | null;
+        sameMoment: boolean;
+    }, {
+        bankAsOf: string | null;
+        h2Balance: string | null;
+        bankReading: string | null;
+        sameMoment: boolean;
+    }>;
+    verdict: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"late_rows_tie">, zod.ZodLiteral<"manual_rows_match">, zod.ZodLiteral<"unknown">, zod.ZodLiteral<null>]>>;
+}, "strip", zod.ZodTypeAny, {
+    account: {
+        name: string | null;
+        mask: string | null;
+        externalId: string | null;
+        institution: string | null;
+    };
+    today: {
+        bankAsOf: string | null;
+        h2Balance: string | null;
+        bankReading: string | null;
+        sameMoment: boolean;
+    };
+    dataAsOf: {
+        snapshotAt: string | null;
+        computedAt: string;
+    };
+    excluded: {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
+    added: {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
+    check: {
+        status: "matches" | "off_by" | "resolved_since" | "not_checked";
+        difference: string | null;
+        stale: boolean;
+        staleReason: "age" | "anchor_changed" | "rows_since" | null;
+        reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+        checkedAt: string | null;
+        bank: {
+            at: string;
+            balance: string;
+            field: "available" | "current";
+        } | null;
+        direction: "bank_higher" | "bank_lower" | null;
+        h2: {
+            balance: string;
+        } | null;
+        lastDrift: {
+            difference: string;
+            checkedAt: string;
+            direction: "bank_higher" | "bank_lower" | null;
+        } | null;
+    };
+    verdict: "unknown" | "late_rows_tie" | "manual_rows_match" | null;
+    record: {
+        status: "not_checked" | "ties" | "drift";
+        anchor: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        unexplained: string | null;
+        reason: "anchor_too_old" | "balance_unavailable" | null;
+        checkedAt: string;
+        bank: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        prevAnchor: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        predicted: string | null;
+        fieldChanged: boolean;
+    } | null;
+    counted: {
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+        net: string;
+        rowCount: number;
+        listed: boolean;
+        addsUp: boolean | null;
+    };
+    manualRows: {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
+    rowsSince: {
+        count: number;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
+}, {
+    account: {
+        name: string | null;
+        mask: string | null;
+        externalId: string | null;
+        institution: string | null;
+    };
+    today: {
+        bankAsOf: string | null;
+        h2Balance: string | null;
+        bankReading: string | null;
+        sameMoment: boolean;
+    };
+    dataAsOf: {
+        snapshotAt: string | null;
+        computedAt: string;
+    };
+    excluded: {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
+    added: {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
+    check: {
+        status: "matches" | "off_by" | "resolved_since" | "not_checked";
+        difference: string | null;
+        stale: boolean;
+        staleReason: "age" | "anchor_changed" | "rows_since" | null;
+        reason: "never" | "not_forecast_account" | "anchor_too_old" | "balance_unavailable" | null;
+        checkedAt: string | null;
+        bank: {
+            at: string;
+            balance: string;
+            field: "available" | "current";
+        } | null;
+        direction: "bank_higher" | "bank_lower" | null;
+        h2: {
+            balance: string;
+        } | null;
+        lastDrift: {
+            difference: string;
+            checkedAt: string;
+            direction: "bank_higher" | "bank_lower" | null;
+        } | null;
+    };
+    verdict: "unknown" | "late_rows_tie" | "manual_rows_match" | null;
+    record: {
+        status: "not_checked" | "ties" | "drift";
+        anchor: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        unexplained: string | null;
+        reason: "anchor_too_old" | "balance_unavailable" | null;
+        checkedAt: string;
+        bank: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        prevAnchor: {
+            at: string;
+            balance: string;
+            field: "available" | "current" | null;
+        } | null;
+        predicted: string | null;
+        fieldChanged: boolean;
+    } | null;
+    counted: {
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+        net: string;
+        rowCount: number;
+        listed: boolean;
+        addsUp: boolean | null;
+    };
+    manualRows: {
+        amount: string | null;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
+    rowsSince: {
+        count: number;
+        rows: {
+            date: string;
+            id: string;
+            source: string | null;
+            description: string | null;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
 }>;
 /**
  * (F2) Read-only proposals for the household owner to apply himself with an existing app action (Review "mark matched" — POST /forecast/resolutions; Categories "change" — PATCH /transactions/{id}). Each stands on evidence the rows carry, never a merchant name alone and never a blanket rule. loan_payment: Plaid LOAN_PAYMENTS (not a card) rows nobody filed as a payment; rows on one account paying the same amount (within max($1, 1%)) are one series, proposed as the payment of exactly one active bill (a distinctive word of its name or its category's name in a description, and within max($25, 25%) of its amount) or debt (its name, and at least its minimum). transfer: TRANSFER_OUT_SAVINGS / ACCOUNT_TRANSFER rows counted as spending under an expense category (no person-to-person rail). bill_match: an unfiled row the forecast only suggests for a bill. income_category: a credit under an expense category, Plaid primary INCOME, pairing with exactly one active income plan (name and amount). A row is in one proposal at most. Largest first, at most 50; at most 20 rows listed per item. Household America/Chicago dates. A member gets 403 owner_only.

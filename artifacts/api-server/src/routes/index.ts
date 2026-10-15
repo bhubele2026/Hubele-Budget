@@ -22,6 +22,7 @@ import amexRouter from "./amex";
 import reportsRouter from "./reports";
 import spineRouter from "./spine";
 import bankBalanceExplainRouter from "./bankBalanceExplain";
+import bankingCheckExplainRouter from "./bankingCheckExplain";
 import opsRouter from "./ops";
 import moneyRouter from "./money";
 import agentRouter from "./agent";
@@ -65,6 +66,8 @@ router.use(membersRouter);
 router.use(amexRouter);
 router.use(reportsRouter);
 router.use(bankBalanceExplainRouter);
+// (T2) "Review difference": the last balance check, explained. Read-only.
+router.use(bankingCheckExplainRouter);
 router.use(spineRouter);
 router.use(opsRouter);
 router.use(moneyRouter);

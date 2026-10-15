@@ -603,6 +603,14 @@ export interface BankFreshness {
      */
     staleReason: BankFreshnessStaleReason;
 }
+/**
+ * (T1) Which bank reading an answer is built on (docs/contracts/checking-balance.md). snapshotAt is the bank reading every balance in the response rolls forward from (forecast_settings.bank_snapshot_at; null with no reading) — one moment across /spine, /forecast, /forecast/cash-signal, /banking/review, the ledger and "Why this number?". computedAt is when the response was computed. The web shows an answer older than the newest reading it has seen as "Earlier reading", never as current.
+ */
+export interface DataAsOf {
+    /** @nullable */
+    snapshotAt: string | null;
+    computedAt: string;
+}
 export type BankBalanceExplainDisplayed = {
     /**
      * computeCashSignal().bankToday — what every screen shows. (WP10)
@@ -703,6 +711,7 @@ export type BankBalanceExplainLedger = {
  */
 export interface BankBalanceExplain {
     asOf: string;
+    dataAsOf?: DataAsOf;
     displayed: BankBalanceExplainDisplayed;
     freshness: BankFreshness;
     snapshot: BankBalanceExplainSnapshot;
@@ -1084,6 +1093,7 @@ export interface SpineBankConfidence {
 export interface Spine {
     /** ISO timestamp the snapshot was read */
     asOf: string;
+    dataAsOf?: DataAsOf;
     bank: SpineBank;
     /** buildSpendingFacts(monthStart..today).householdSpend.total */
     spentMonth: number;
@@ -1827,6 +1837,11 @@ export interface BankingReviewBalance {
      */
     asOf: string | null;
     /**
+     * (T1) The bank's own reading that `today` rolls forward from, read at `asOf` (= spine.bank.snapshot.balance), from this response's ledger scope. Null when `today` is null. Shown as "Bank's last reading", never as the balance today.
+     * @nullable
+     */
+    reading?: string | null;
+    /**
      * End of the day before `from`
      * @nullable
      */
@@ -2392,7 +2407,7 @@ export interface BankingReviewBalanceCheckDrift {
     direction: BankingReviewBalanceCheckDriftDirection;
 }
 /**
- * (F3) The last manual Sync's check of the bank's own balance against H2's (the previous anchor rolled forward through the ledger), for this account. status: matches · off_by · resolved_since (it was off, and recomputed now from the same anchor over the same days the late rows explain it — one query, no Plaid call) · not_checked with reason (never · not_forecast_account · anchor_too_old: the anchor was over 45 days old · balance_unavailable: the bank gave no balance). stale (first reason wins): anchor_changed (a newer anchor or a typed balance replaced the one the check read) · rows_since (rows dated on or before the check's day arrived after it) · age (over 7 days old); a not-checked outcome is stale by age only. Kept apart from reviewInbox and the freshness (synced) fields. Money is a two-decimal string.
+ * (F3) The last manual Sync's check of the bank's own balance against H2's (the previous anchor rolled forward through the ledger), for this account. status: matches · off_by · resolved_since (it was off, and recomputed now from the same anchor over the same days the late rows explain it — one query, no Plaid call) · not_checked with reason (never · not_forecast_account · anchor_too_old: the anchor was over 45 days old · balance_unavailable: the bank gave no balance). stale (first reason wins): anchor_changed (a newer anchor or a typed balance replaced the one the check read) · rows_since (rows dated on or before the check's day arrived after it; not on resolved_since, where those rows are the explanation — T2) · age (over 7 days old); a not-checked outcome is stale by age only. Kept apart from reviewInbox and the freshness (synced) fields. Money is a two-decimal string.
  */
 export interface BankingReviewBalanceCheck {
     status: BankingReviewBalanceCheckStatus;
@@ -2478,6 +2493,7 @@ export interface BankingReviewPage {
  * (S4) One bank account's period: balance, cash in and out, the plan occurrences due in it, and every counted row placed exactly once — in one of the five "not in the plan" buckets or as planned. Money is a two-decimal string, signed (negative is money out) unless named in / out. See GET /banking/review for the rules.
  */
 export interface BankingReview {
+    dataAsOf?: DataAsOf;
     account: BankingReviewAccount;
     period: BankingReviewPeriod;
     balance: BankingReviewBalance;
@@ -2497,6 +2513,169 @@ export interface BankingReview {
     household: BankingReviewHousehold | null;
     /** With `bucket`, one page of that bucket's rows; null otherwise */
     page: BankingReviewPage | null;
+}
+export interface BankingCheckExplainRow {
+    id: string;
+    /** YYYY-MM-DD */
+    date: string;
+    /** @nullable */
+    description: string | null;
+    /** The row's own signed amount (negative is money out) */
+    amount: string;
+    pending: boolean;
+    /** @nullable */
+    source: string | null;
+}
+/**
+ * @nullable
+ */
+export type BankingCheckExplainReadingField = (typeof BankingCheckExplainReadingField)[keyof typeof BankingCheckExplainReadingField] | null;
+export declare const BankingCheckExplainReadingField: {
+    readonly available: "available";
+    readonly current: "current";
+};
+export interface BankingCheckExplainReading {
+    balance: string;
+    at: string;
+    /** @nullable */
+    field: BankingCheckExplainReadingField;
+}
+export type BankingCheckExplainRecordStatus = (typeof BankingCheckExplainRecordStatus)[keyof typeof BankingCheckExplainRecordStatus];
+export declare const BankingCheckExplainRecordStatus: {
+    readonly ties: "ties";
+    readonly drift: "drift";
+    readonly not_checked: "not_checked";
+};
+/**
+ * @nullable
+ */
+export type BankingCheckExplainRecordReason = (typeof BankingCheckExplainRecordReason)[keyof typeof BankingCheckExplainRecordReason] | null;
+export declare const BankingCheckExplainRecordReason: {
+    readonly anchor_too_old: "anchor_too_old";
+    readonly balance_unavailable: "balance_unavailable";
+};
+/**
+ * The stored check, as the Sync wrote it (two-decimal strings).
+ */
+export interface BankingCheckExplainRecord {
+    checkedAt: string;
+    status: BankingCheckExplainRecordStatus;
+    /** @nullable */
+    reason: BankingCheckExplainRecordReason;
+    /** The previous reading the check rolled forward */
+    prevAnchor: BankingCheckExplainReading | null;
+    /** The bank's figure the check compared */
+    bank: BankingCheckExplainReading | null;
+    /** The reading H2 started from after the check */
+    anchor: BankingCheckExplainReading | null;
+    /**
+     * What H2 expected (previous reading + the counted rows)
+     * @nullable
+     */
+    predicted: string | null;
+    /**
+     * bank − H2 expected (signed)
+     * @nullable
+     */
+    unexplained: string | null;
+    fieldChanged: boolean;
+}
+export type BankingCheckExplainAccount = {
+    /** @nullable */
+    externalId: string | null;
+    /** @nullable */
+    institution: string | null;
+    /** @nullable */
+    name: string | null;
+    /** @nullable */
+    mask: string | null;
+};
+/**
+ * The bank rows the check counted between the previous reading and the check (rows that arrived later are in rowsSince). `net` is what they added; `addsUp` says whether previous reading + net + added = what H2 expected (null when not listed). `listed` is false when the record could not be recomputed.
+ */
+export type BankingCheckExplainCounted = {
+    listed: boolean;
+    rowCount: number;
+    net: string;
+    /** @nullable */
+    addsUp: boolean | null;
+    rows: BankingCheckExplainRow[];
+};
+/**
+ * Pending deposits the bank's figure did not hold, left out (null amount when not recorded)
+ */
+export type BankingCheckExplainExcluded = {
+    /** @nullable */
+    amount: string | null;
+    rows: BankingCheckExplainRow[];
+};
+/**
+ * Deposits that posted since the previous reading, added (null amount when not recorded)
+ */
+export type BankingCheckExplainAdded = {
+    /** @nullable */
+    amount: string | null;
+    rows: BankingCheckExplainRow[];
+};
+/**
+ * Rows H2 recorded itself, dated after the previous reading through the check's day — counted in H2's balance, not in the check
+ */
+export type BankingCheckExplainManualRows = {
+    /** @nullable */
+    amount: string | null;
+    rows: BankingCheckExplainRow[];
+};
+/**
+ * Rows dated on or before the check's day that reached H2 after it
+ */
+export type BankingCheckExplainRowsSince = {
+    count: number;
+    rows: BankingCheckExplainRow[];
+};
+export type BankingCheckExplainToday = {
+    /**
+     * The balance today (= spine.bank.balance)
+     * @nullable
+     */
+    h2Balance: string | null;
+    /**
+     * The bank reading it rolls forward from
+     * @nullable
+     */
+    bankReading: string | null;
+    /** @nullable */
+    bankAsOf: string | null;
+    /** The check's bank reading is the reading H2 starts from now */
+    sameMoment: boolean;
+};
+/**
+ * @nullable
+ */
+export type BankingCheckExplainVerdict = (typeof BankingCheckExplainVerdict)[keyof typeof BankingCheckExplainVerdict] | null;
+export declare const BankingCheckExplainVerdict: {
+    readonly late_rows_tie: "late_rows_tie";
+    readonly manual_rows_match: "manual_rows_match";
+    readonly unknown: "unknown";
+};
+export interface BankingCheckExplain {
+    dataAsOf: DataAsOf;
+    account: BankingCheckExplainAccount;
+    check: BankingReviewBalanceCheck;
+    /** Null when this account was never checked */
+    record: BankingCheckExplainRecord | null;
+    /** The bank rows the check counted between the previous reading and the check (rows that arrived later are in rowsSince). `net` is what they added; `addsUp` says whether previous reading + net + added = what H2 expected (null when not listed). `listed` is false when the record could not be recomputed. */
+    counted: BankingCheckExplainCounted;
+    /** Pending deposits the bank's figure did not hold, left out (null amount when not recorded) */
+    excluded: BankingCheckExplainExcluded;
+    /** Deposits that posted since the previous reading, added (null amount when not recorded) */
+    added: BankingCheckExplainAdded;
+    /** Rows H2 recorded itself, dated after the previous reading through the check's day — counted in H2's balance, not in the check */
+    manualRows: BankingCheckExplainManualRows;
+    /** Rows dated on or before the check's day that reached H2 after it */
+    rowsSince: BankingCheckExplainRowsSince;
+    today: BankingCheckExplainToday;
+    /** @nullable */
+    verdict: BankingCheckExplainVerdict;
 }
 export interface WaysBackAdjustment {
     /** The Sunday of the week it lowers */
@@ -3163,6 +3342,7 @@ export interface LedgerPage {
     balanceUnavailableReason: string | null;
     anchor: LedgerAnchor;
     account: LedgerAccountScope;
+    dataAsOf?: DataAsOf;
 }
 export type TransactionBalancesBalancesItem = {
     date: string;
@@ -3176,6 +3356,7 @@ export interface TransactionBalances {
      * @nullable
      */
     balanceUnavailableReason: string | null;
+    dataAsOf?: DataAsOf;
     anchor: LedgerAnchor;
     account: LedgerAccountScope;
 }
@@ -5482,6 +5663,8 @@ export interface CashSignal {
     snapshotAt?: string | null;
     /** @nullable */
     snapshotSource?: string | null;
+    /** (T1) Set by GET /forecast/cash-signal — the bank reading this projection starts from, and when it was computed. */
+    dataAsOf?: DataAsOf;
     account: CashSignalAccount;
     horizonDays?: number;
     fromDate?: string;
@@ -6033,6 +6216,7 @@ export type ForecastBundleAccountSnapshots = {
     [key: string]: AccountSnapshot;
 };
 export interface ForecastBundle {
+    dataAsOf?: DataAsOf;
     fromDate: string;
     toDate: string;
     events: ForecastEvent[];
