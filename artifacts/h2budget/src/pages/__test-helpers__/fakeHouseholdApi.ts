@@ -218,7 +218,12 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
       stale: false,
       staleReason: null,
       snapshot: { ...chk!.reading },
-      sinceSnapshot: { net: "0.00", count: 0, through: opts.today },
+      // What rolled on top of the reading (the fake's one stand-in row when today differs from it).
+      sinceSnapshot: {
+        net: (Number(todayBal) - Number(chk!.reading.balance)).toFixed(2),
+        count: todayBal === chk!.reading.balance ? 0 : 1,
+        through: opts.today,
+      },
       account: signalAccount,
     },
     spentMonth: 0,
