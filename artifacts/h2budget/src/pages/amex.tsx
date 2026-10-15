@@ -2333,7 +2333,7 @@ export default function AmexPage({
                   </span>
                 ) : headIdentity ? null : headUnknown ? (
                   <span
-                    className="inline-block h-[1.625rem] w-32 animate-pulse rounded-control bg-platinum-2"
+                    className="inline-block h-[1.625rem] w-32 rounded-control bg-platinum-2 motion-safe:animate-pulse"
                     aria-hidden
                     data-testid="amex-head-card-loading"
                   />

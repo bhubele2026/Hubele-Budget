@@ -58,7 +58,7 @@ function countWord(n: number) {
 }
 
 function Figure({
-  testId, label, amount, sub, active, onClick,
+  testId, label, amount, sub, active, onClick, extra,
 }: {
   testId: string;
   label: string;
@@ -66,12 +66,15 @@ function Figure({
   sub?: ReactNode;
   active?: boolean;
   onClick?: () => void;
+  /** A link under a figure that is not itself a button (Owed's "Balance history"). */
+  extra?: ReactNode;
 }) {
   const body = (
     <>
       <span className={FIG_LABEL}>{label}</span>
       <span className="font-mono text-kpi font-semibold tabular-nums text-brand-navy">{moneyFace(amount)}</span>
       {sub ? <span className="text-micro text-neutral-600">{sub}</span> : null}
+      {!onClick && extra ? extra : null}
     </>
   );
   if (!onClick) {
@@ -186,19 +189,24 @@ export function AmexSummaryPanel({
         <div className="space-y-4" ref={bodyRef}>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             {/* Owed is a figure, not a filter; one card's links to its balance history. */}
-            <div className="flex min-w-0 flex-col gap-1">
-              <Figure testId="amex-fig-owed" label="Owed" amount={summary.owed.current} sub={owedSub} />
-              {onOwedHistory && !allCards ? (
-                <button
-                  type="button"
-                  className="press self-start px-1 text-micro font-semibold text-brand-navy underline"
-                  onClick={onOwedHistory}
-                  data-testid="amex-owed-history-link"
-                >
-                  Balance history
-                </button>
-              ) : null}
-            </div>
+            <Figure
+              testId="amex-fig-owed"
+              label="Owed"
+              amount={summary.owed.current}
+              sub={owedSub}
+              extra={
+                onOwedHistory && !allCards ? (
+                  <button
+                    type="button"
+                    className="press mt-0.5 self-start text-micro font-semibold text-brand-navy underline"
+                    onClick={onOwedHistory}
+                    data-testid="amex-owed-history-link"
+                  >
+                    Balance history
+                  </button>
+                ) : null
+              }
+            />
             <Figure
               testId="amex-fig-purchases"
               label="Purchases"

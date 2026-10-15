@@ -84,6 +84,10 @@ describe("AmexRowDetails — every action, each through its handler", () => {
     expect(within(region).getByTestId("rename-merchant-t1").textContent).toBe("Rename merchant…");
     fireEvent.click(within(region).getByTestId("split-category-t1"));
     expect(h.onSplit).toHaveBeenCalledTimes(1);
+    cleanup();
+    // The bank's words only when they say something else than the name (case and spacing aside).
+    const same = details(tx({ displayName: "Market Fresh 442", description: "MARKET  FRESH 442" }));
+    expect(same.region.textContent).not.toContain("Bank:");
   });
 
   it("category: its name and where it came from — never 'Manual'", () => {

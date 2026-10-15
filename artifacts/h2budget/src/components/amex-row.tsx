@@ -138,7 +138,7 @@ export function AmexLedgerRow({
           // Review: a quiet trigger (the name, a hairline on hover) — still one click.
           triggerClassName={cn(
             "@6xl:w-full",
-            review && "w-auto max-w-52 border-transparent bg-transparent px-2 shadow-none hover:border-brand-line",
+            review && "w-auto max-w-52 bg-transparent px-2 ring-transparent hover:bg-white hover:ring-brand-line",
           )}
         />
       }
@@ -178,7 +178,7 @@ export function AmexLedgerRow({
             detailsOpen && "bg-platinum-2 text-brand-navy",
           )}
         >
-          <ChevronDown className={cn("size-4 transition-transform", detailsOpen && "rotate-180")} aria-hidden />
+          <ChevronDown className={cn("size-4 motion-safe:transition-transform", detailsOpen && "rotate-180")} aria-hidden />
         </button>
       }
       belowNode={detailsOpen ? details : null}
@@ -187,6 +187,9 @@ export function AmexLedgerRow({
 }
 
 const SECTION = "min-w-0 space-y-1";
+const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+/** A renamed merchant whose bank words differ (beyond case and spacing). */
+const differs = (name: string | null | undefined, bank: string) => !!name && norm(name) !== norm(bank);
 const LABEL = "text-micro font-semibold text-neutral-600";
 const ACTION =
   "press inline-flex min-h-8 items-center rounded-control px-2 text-label font-semibold text-brand-navy ring-1 ring-brand-line hover:bg-platinum-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:opacity-50";
@@ -252,9 +255,9 @@ export function AmexRowDetails({
     >
       <section className={SECTION} aria-label="Merchant">
         <div className={LABEL}>Merchant</div>
-        <p className="text-body text-brand-ink [overflow-wrap:anywhere]">{merchant}</p>
-        {t.displayName && t.displayName !== t.description ? (
-          <p className="text-micro text-neutral-600 [overflow-wrap:anywhere]">Bank: {t.description}</p>
+        {/* The row shows the name; the bank's own words only when they say something else. */}
+        {differs(t.displayName, t.description) ? (
+          <p className="text-label text-neutral-600 [overflow-wrap:anywhere]">Bank: {t.description}</p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <MerchantRenamePopover tx={t} triggerLabel="Rename merchant…" />

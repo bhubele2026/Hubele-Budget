@@ -127,7 +127,7 @@ export function MerchantRenamePopover({
         {triggerLabel ? (
           <button
             type="button"
-            className="press inline-flex min-h-8 items-center rounded-control px-1 text-label font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+            className="press inline-flex min-h-8 items-center rounded-control px-2 text-label font-semibold text-brand-navy ring-1 ring-brand-line hover:bg-platinum-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
             data-testid={`rename-merchant-${tx.id}`}
           >
             {triggerLabel}

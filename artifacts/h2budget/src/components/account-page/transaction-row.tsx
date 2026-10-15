@@ -93,7 +93,11 @@ export type AccountTransactionRowProps = {
   statusNode?: React.ReactNode;
   /** A full-width region under the row (inline details), inside the row's box. */
   belowNode?: React.ReactNode;
-  /** Narrow ledger: the wrapped line starts under the merchant and the amount sits at its end. */
+  /**
+   * Narrow ledger in two lines: the merchant, the amount and the row's actions on
+   * the first; the card, category and spending on the second, under the merchant.
+   * (Flex `order`, narrow only: the wide grid keeps its columns.)
+   */
   wrapIndent?: boolean;
 };
 
@@ -179,7 +183,12 @@ export function AccountTransactionRow({
           Narrow ledger: the merchant owns the line beside the checkbox (its
           basis is the rest of the row), so a long name never leaves the
           checkbox alone on a line. The grid ignores the basis. */}
-      <div className="flex min-w-0 grow basis-[calc(100%-2rem)] flex-wrap items-center gap-x-2 gap-y-0.5">
+      <div
+        className={cn(
+          "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5",
+          wrapIndent ? "flex-1 basis-0" : "grow basis-[calc(100%-2rem)]",
+        )}
+      >
         <span className="inline-flex min-w-0 max-w-full items-center gap-1" data-testid={`merchant-${tx.id}`}>
           <span
             className="min-w-0 truncate font-medium text-neutral-700"
@@ -207,7 +216,7 @@ export function AccountTransactionRow({
       {/* Card / source */}
       {showCard ? (
         <div
-          className={cn("flex min-w-0 shrink-0 items-center gap-1.5", wrapIndent && "ml-7 @6xl:ml-0")}
+          className={cn("flex min-w-0 shrink-0 items-center gap-1.5", wrapIndent && "order-3 ml-7 @6xl:order-none @6xl:ml-0")}
           title={cardLabel || undefined}
         >
           {cardAccent && cardLabel ? (
@@ -226,6 +235,7 @@ export function AccountTransactionRow({
       <div
         className={cn(
           "flex min-w-0 shrink-0 flex-wrap items-center gap-1.5",
+          wrapIndent && "order-3 @6xl:order-none",
           wrapIndent && !showCard && "ml-7 @6xl:ml-0",
         )}
       >
@@ -244,7 +254,7 @@ export function AccountTransactionRow({
         {chipsNode}
       </div>
       {/* (#607) Bucket bubbles are hidden on transfer rows. */}
-      <div className="min-w-0 shrink-0">
+      <div className={cn("min-w-0 shrink-0", wrapIndent && "order-3 @6xl:order-none")}>
         {bucketsNode !== undefined
           ? bucketsNode
           : !tx.isTransfer && (
@@ -264,12 +274,12 @@ export function AccountTransactionRow({
       <div
         className={cn(
           "shrink-0 whitespace-nowrap text-right font-mono text-label tabular-nums @6xl:justify-self-end",
-          wrapIndent && "ml-auto @6xl:ml-0",
+          wrapIndent && "order-1 @6xl:order-none",
         )}
       >
         {amountNode}
       </div>
-      <div className="shrink-0 flex gap-0.5 items-center @6xl:justify-self-end">
+      <div className={cn("shrink-0 flex gap-0.5 items-center @6xl:justify-self-end", wrapIndent && "order-1 @6xl:order-none")}>
         {actionsNode}
         {/* Pending rows are restamped by Plaid on the next sync, so the date
             moves are left out there to avoid a fix that silently reverts. */}
@@ -282,7 +292,11 @@ export function AccountTransactionRow({
           disabled={disabled}
         />
       </div>
-      {belowNode ? <div className="min-w-0 basis-full @6xl:col-span-full">{belowNode}</div> : null}
+      {/* Narrow two-line layout: the line break before the card / category / spending line. */}
+      {wrapIndent ? <div aria-hidden className="order-2 h-0 basis-full @6xl:hidden" /> : null}
+      {belowNode ? (
+        <div className={cn("min-w-0 basis-full @6xl:col-span-full", wrapIndent && "order-4 @6xl:order-none")}>{belowNode}</div>
+      ) : null}
     </div>
   );
 }

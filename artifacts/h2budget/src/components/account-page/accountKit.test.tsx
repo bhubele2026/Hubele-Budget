@@ -289,6 +289,10 @@ describe("AccountTransactionRow", () => {
     expect(below.className).toContain("basis-full");
     expect(below.className).toContain("@6xl:col-span-full");
     expect(screen.getByTestId("row-tx-t1").contains(below)).toBe(true);
+    // Narrow two-line layout: merchant + amount first, a break, then the rest; the wide grid ignores it.
+    const brk = screen.getByTestId("row-tx-t1").querySelector('[aria-hidden="true"].basis-full')!;
+    expect(brk.className).toContain("@6xl:hidden");
+    expect(brk.className).toContain("order-2");
   });
 
   it("(P1) a household card name wraps instead of being cut", () => {
