@@ -4700,6 +4700,30 @@ export const GetForecastResponse = zod.object({
             }),
           )
           .optional(),
+        dayItems: zod
+          .array(
+            zod
+              .object({
+                date: zod.string(),
+                kind: zod.enum(["income", "expense", "bank_row"]),
+                amount: zod.string(),
+                label: zod.string().optional(),
+                itemId: zod.string().optional(),
+                occurrenceKey: zod.string().optional(),
+                occurrenceDate: zod.string().optional(),
+                originalDate: zod.string().optional(),
+                assumption: zod.string().nullish(),
+                txnId: zod.string().optional(),
+                matched: zod.boolean().optional(),
+              })
+              .describe(
+                "(T3) One item the cash-signal walk applied. `kind` follows the walk's\nsign rule: a positive plan is `income`, any other plan `expense`, a\ncounted checking row `bank_row`. Amounts are signed. Plans carry\n`label`, `itemId`, `occurrenceKey`, `occurrenceDate`, `originalDate`\nand `assumption` (as on `events`); bank rows carry `txnId` and\n`matched`.\n",
+              ),
+          )
+          .optional()
+          .describe(
+            "(T3) Every item the walk applied inside the window: planned\nincome, planned expenses (the same occurrences as `events`) and the\nchecking rows counted after the bank reading, in a stable order (by\nday, then income, expenses, bank rows, each by its label and\namount). A\nread-only projection of the walk — for every day\n`daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`\nbefore the first day); Σ positive amounts = `projectedIncome`;\nΣ the rest, negated = `projectedExpenses`.\n",
+          ),
         hookAmountIgnored: zod
           .array(
             zod.object({
@@ -5200,6 +5224,30 @@ export const GetForecastCashSignalResponse = zod.object({
       }),
     )
     .optional(),
+  dayItems: zod
+    .array(
+      zod
+        .object({
+          date: zod.string(),
+          kind: zod.enum(["income", "expense", "bank_row"]),
+          amount: zod.string(),
+          label: zod.string().optional(),
+          itemId: zod.string().optional(),
+          occurrenceKey: zod.string().optional(),
+          occurrenceDate: zod.string().optional(),
+          originalDate: zod.string().optional(),
+          assumption: zod.string().nullish(),
+          txnId: zod.string().optional(),
+          matched: zod.boolean().optional(),
+        })
+        .describe(
+          "(T3) One item the cash-signal walk applied. `kind` follows the walk's\nsign rule: a positive plan is `income`, any other plan `expense`, a\ncounted checking row `bank_row`. Amounts are signed. Plans carry\n`label`, `itemId`, `occurrenceKey`, `occurrenceDate`, `originalDate`\nand `assumption` (as on `events`); bank rows carry `txnId` and\n`matched`.\n",
+        ),
+    )
+    .optional()
+    .describe(
+      "(T3) Every item the walk applied inside the window: planned\nincome, planned expenses (the same occurrences as `events`) and the\nchecking rows counted after the bank reading, in a stable order (by\nday, then income, expenses, bank rows, each by its label and\namount). A\nread-only projection of the walk — for every day\n`daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`\nbefore the first day); Σ positive amounts = `projectedIncome`;\nΣ the rest, negated = `projectedExpenses`.\n",
+    ),
   hookAmountIgnored: zod
     .array(
       zod.object({

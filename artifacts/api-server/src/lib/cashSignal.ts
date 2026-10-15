@@ -1,6 +1,6 @@
 import { recurringItemsTable } from "@workspace/db";
 import { rollForwardBalance, walkLedger } from "@workspace/avalanche-core";
-import { buildForecastLedger, type ForecastLedger } from "./forecastLedger";
+import { buildForecastLedger, type ForecastLedger, type LedgerItem } from "./forecastLedger";
 import type { HookPayoff, PlanOverride } from "./everydayHooks";
 import type { CorrectionOverlay } from "./correctionOverlay";
 import type { SnapshotAccountResolution } from "./resolveSnapshotAccount";
@@ -265,6 +265,23 @@ export type CashSignal = {
     /** (PR6) The date resolutions are keyed on (before any reschedule). */
     occurrenceDate: string;
   }>;
+  /**
+   * ⭐ (T3) EVERY ITEM THE WALK APPLIED inside the window: planned income,
+   * planned expenses (the same occurrences as `events`, plus any zero-amount
+   * plan) and the bank rows counted after the reading. A read-only projection
+   * of `walkLedger`'s own `onApply` calls — nothing is added, rounded or
+   * recomputed — in a STABLE order: by day, then income, expenses, bank rows,
+   * each by its label / amount (the walk applies a day's items together, so no balance
+   * depends on the order inside a day, and the database's row order — which a
+   * write can change — never reorders the response). For every day
+   * `daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance` before
+   * the first day), Σ of the positive amounts is `projectedIncome` and Σ of
+   * the rest, negated, is `projectedExpenses`. `kind` follows the walk's own
+   * sign rule: a positive plan is `income`, any other plan `expense`, a bank
+   * row `bank_row` (signed). The Forecast day panel reads it so a day's
+   * opening + in − out = close.
+   */
+  dayItems?: CashSignalDayItem[];
   /** (PR6) Expenses overdue by more than 14 days: off the curve, never dropped silently. */
   overdueOutsideForecast?: CashSignalListedPlan[];
   /** (PR6) Income due before today that has not arrived (`income_not_arrived`): off the curve. */
@@ -320,6 +337,30 @@ export type CashSignal = {
     remainderAmount?: string;
   }>;
 };
+
+/** (T3) One item the walk applied (see `CashSignal.dayItems`). Amounts are signed like the ledger. */
+export type CashSignalDayItem =
+  | {
+      date: string;
+      kind: "income" | "expense";
+      amount: string;
+      label: string;
+      itemId: string;
+      /** `<itemId>|<occurrenceDate>` — the resolution key, as on `events`. */
+      occurrenceKey: string;
+      occurrenceDate: string;
+      originalDate: string;
+      assumption: string | null;
+    }
+  | {
+      date: string;
+      kind: "bank_row";
+      amount: string;
+      /** `transactions.id` of the counted checking row. */
+      txnId: string;
+      /** A `matched` resolution points at this row. */
+      matched: boolean;
+    };
 
 export type CashSignalListedPlan = {
   planKey: string;
@@ -513,10 +554,14 @@ async function buildCashSignalDetailed(
   let projectedIncome = 0;
   let projectedExpenses = 0;
   let acceptedImpact = 0;
+  // ⭐ (T3) The items the walk applied — `dayItems` is only this list, mapped
+  // and put in a stable order. Collecting it changes nothing the walk computes.
+  const applied: LedgerItem[] = [];
   const walk = walkLedger(items, startingBalance, fromISO, toISO, (it) => {
     if (it.amount > 0) projectedIncome += it.amount;
     else projectedExpenses += -it.amount;
     if (it.kind === "actual" && it.matched) acceptedImpact += it.amount;
+    applied.push(it);
   });
   const { daily, lowest, lowestDate } = walk;
   const endingBalance = walk.endingBalance;
@@ -596,6 +641,7 @@ async function buildCashSignalDetailed(
         ...(remainder !== undefined ? { remainderAmount: r2(remainder) } : {}),
       };
     }),
+    dayItems: applied.map(dayItemOf).sort(byDayThenKey),
     overdueOutsideForecast: ledger.overdueOutsideForecast.map(listedPlan),
     incomeNotArrived: ledger.incomeNotArrived.map(listedPlan),
     overdueAssumedPaid: ledger.overdueAssumedPaid.map((p) => ({
@@ -732,6 +778,50 @@ export function bankBalanceParts(ledger: ForecastLedger): {
       }
     : null;
   return { snapshot, sinceSnapshot };
+}
+
+/** (T3) One applied ledger item as `CashSignal.dayItems` serves it: the walk's sign rule, `r2` amounts. */
+function dayItemOf(it: LedgerItem): CashSignalDayItem {
+  if (it.kind === "actual") {
+    return { date: it.date, kind: "bank_row", amount: r2(it.amount), txnId: it.txnId, matched: it.matched };
+  }
+  return {
+    date: it.date,
+    kind: it.amount > 0 ? "income" : "expense",
+    amount: r2(it.amount),
+    label: it.label,
+    itemId: it.itemId,
+    occurrenceKey: `${it.itemId}|${it.occurrenceDate}`,
+    occurrenceDate: it.occurrenceDate,
+    originalDate: it.originalDate,
+    assumption: it.assumption ?? null,
+  };
+}
+
+const DAY_ITEM_RANK: Record<CashSignalDayItem["kind"], number> = { income: 0, expense: 1, bank_row: 2 };
+const cmpText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * (T3) A total order on what the item IS — day, kind, then its own words and
+ * amount; the row / item id only breaks a tie between two otherwise identical
+ * items — so the response never depends on the database's row order.
+ */
+function byDayThenKey(a: CashSignalDayItem, b: CashSignalDayItem): number {
+  if (a.date !== b.date) return cmpText(a.date, b.date);
+  const rank = DAY_ITEM_RANK[a.kind] - DAY_ITEM_RANK[b.kind];
+  if (rank !== 0) return rank;
+  if (a.kind === "bank_row" && b.kind === "bank_row") {
+    return Number(a.amount) - Number(b.amount) || Number(a.matched) - Number(b.matched) || cmpText(a.txnId, b.txnId);
+  }
+  if (a.kind !== "bank_row" && b.kind !== "bank_row") {
+    return (
+      cmpText(a.label, b.label) ||
+      cmpText(a.occurrenceDate, b.occurrenceDate) ||
+      Number(a.amount) - Number(b.amount) ||
+      cmpText(a.itemId, b.itemId)
+    );
+  }
+  return 0;
 }
 
 function listedPlan(p: import("./forecastLedger").LedgerListedPlan): CashSignalListedPlan {

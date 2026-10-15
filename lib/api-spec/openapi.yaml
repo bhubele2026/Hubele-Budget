@@ -8809,6 +8809,19 @@ components:
               occurrenceDate:
                 type: string
                 description: (PR6) The occurrence's own date (before any reschedule), which resolutions are keyed on.
+        dayItems:
+          type: array
+          description: |
+            (T3) Every item the walk applied inside the window: planned
+            income, planned expenses (the same occurrences as `events`) and the
+            checking rows counted after the bank reading, in a stable order (by
+            day, then income, expenses, bank rows, each by its label and
+            amount). A
+            read-only projection of the walk — for every day
+            `daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`
+            before the first day); Σ positive amounts = `projectedIncome`;
+            Σ the rest, negated = `projectedExpenses`.
+          items: { $ref: "#/components/schemas/CashSignalDayItem" }
         hookAmountIgnored:
           type: array
           description: |
@@ -9014,6 +9027,28 @@ components:
         txnAmount: { type: string, description: Signed like the row. }
         confidence: { type: string, description: '"high", "medium" or "low" (the pair''s), "card_payment", "debt_tag" (a row the user tagged to the debt), or "card_ledger" (F5: a payment the debt''s own card received).' }
         unpaidRemainder: { type: string, description: Signed; "0.00" when the row covered it (within $1). On the curve only while at most 14 days overdue. }
+    CashSignalDayItem:
+      type: object
+      description: |
+        (T3) One item the cash-signal walk applied. `kind` follows the walk's
+        sign rule: a positive plan is `income`, any other plan `expense`, a
+        counted checking row `bank_row`. Amounts are signed. Plans carry
+        `label`, `itemId`, `occurrenceKey`, `occurrenceDate`, `originalDate`
+        and `assumption` (as on `events`); bank rows carry `txnId` and
+        `matched`.
+      required: [date, kind, amount]
+      properties:
+        date: { type: string }
+        kind: { type: string, enum: [income, expense, bank_row] }
+        amount: { type: string }
+        label: { type: string }
+        itemId: { type: string }
+        occurrenceKey: { type: string }
+        occurrenceDate: { type: string }
+        originalDate: { type: string }
+        assumption: { type: ["string", "null"] }
+        txnId: { type: string }
+        matched: { type: boolean }
     CashSignalListedPlan:
       type: object
       description: (PR6) An unresolved plan occurrence kept off the forecast curve.

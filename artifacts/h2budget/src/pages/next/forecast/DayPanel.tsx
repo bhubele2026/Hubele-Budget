@@ -1,21 +1,23 @@
-import { moneyFace } from "@/components/data-state";
 import { useMemo } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   daySummary,
   MARKER_LABEL,
+  type BankDayRow,
   type KindedEvent,
 } from "@/lib/forecastEventKinds";
 import { buildDraggingPlans, tooltipPlanLine } from "@/lib/forecastPastDue";
 import { MARKER } from "@/lib/chartTokens";
 import type { ForecastNextCtx } from "./types";
 
+const NO_BANK: BankDayRow[] = [];
+
 const money = (n: number | null) => (n == null || !Number.isFinite(n) ? "—" : formatCurrency(n));
 
 function Row({ label, value, tone, testid }: { label: string; value: string; tone?: "bad"; testid?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1">
-      <dt className="text-micro text-neutral-500">{label}</dt>
+      <dt className="text-micro text-neutral-600">{label}</dt>
       <dd
         data-testid={testid}
         className={`font-mono text-label tabular-nums ${tone === "bad" ? "text-bad" : "text-brand-navy"}`}
@@ -26,39 +28,48 @@ function Row({ label, value, tone, testid }: { label: string; value: string; ton
   );
 }
 
-/** The selected day: where it opened, what came in and went out by kind, where
- *  it closes, what the number assumes, and each event with its existing
- *  actions. Every figure is read off the same series and events as the chart. */
+/** The selected day: where it opened, what came in and went out by kind (the
+ *  counted bank rows included), where it closes, and each item with its
+ *  existing actions. ⭐ (T3) Every figure is read off the same series and the
+ *  cash signal's `dayItems` (the items the walk applied), so
+ *  opening + in − out = close; the first day opens on the curve's own start. */
 export function DayPanel({
   ctx,
   kinded,
+  bank = NO_BANK,
   selectedDate,
   onClear,
   onOpenRegister,
 }: {
   ctx: ForecastNextCtx;
   kinded: KindedEvent[];
+  /** (T3) Counted checking rows (`dayItems` kind `bank_row`). */
+  bank?: BankDayRow[];
   selectedDate: string | null;
   onClear: () => void;
   /** Make the register visible, then run `then` once it is on screen. */
   onOpenRegister: (then: () => void) => void;
 }) {
+  const start = ctx.proj?.startingBalance != null ? Number(ctx.proj.startingBalance) : null;
   const sum = useMemo(
-    () => (selectedDate ? daySummary(selectedDate, ctx.dailySeries, kinded) : null),
-    [selectedDate, ctx.dailySeries, kinded],
+    () => (selectedDate ? daySummary(selectedDate, ctx.dailySeries, kinded, { bank, startingBalance: start }) : null),
+    [selectedDate, ctx.dailySeries, kinded, bank, start],
   );
   const dragging = useMemo(() => buildDraggingPlans(ctx.proj?.events ?? []), [ctx.proj?.events]);
 
   if (!selectedDate || !sum) {
     return (
-      <p className="text-body text-neutral-500" data-testid="day-panel-empty">
-        Pick a day on the chart: click or tap it, or use the left and right arrow keys. Escape clears it.
+      <p className="text-body text-neutral-600" data-testid="day-panel-empty">
+        Pick a day on the chart.
       </p>
     );
   }
-  const bufferText = Number.isFinite(ctx.cashBufferNum) ? formatCurrency(ctx.cashBufferNum) : "—";
+  const bufferText = Number.isFinite(ctx.cashBufferNum) ? formatCurrency(ctx.cashBufferNum).replace(/\.00$/, "") : null;
+  // (T2) Rust only below zero; under the buffer at or above $0 is a quiet note.
+  const belowZero = sum.close != null && sum.close < 0;
   const underBuffer =
-    sum.close != null && Number.isFinite(ctx.cashBufferNum) && sum.close < ctx.cashBufferNum;
+    !belowZero && sum.close != null && Number.isFinite(ctx.cashBufferNum) && sum.close < ctx.cashBufferNum;
+  const hasBank = sum.bankRows.length > 0;
   return (
     <div data-testid="day-panel" className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -68,7 +79,7 @@ export function DayPanel({
         <button
           type="button"
           onClick={onClear}
-          className="press rounded-control px-2 py-1 text-micro font-semibold text-neutral-500 ring-1 ring-brand-line hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+          className="press rounded-control px-2 py-1 text-micro font-semibold text-neutral-600 ring-1 ring-brand-line hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
           data-testid="day-panel-clear"
         >
           Clear
@@ -76,25 +87,30 @@ export function DayPanel({
       </div>
       {!sum.inWindow && (
         <p className="rounded-control bg-neutral-50 px-3 py-2 text-micro text-neutral-600" data-testid="day-outside-window">
-          This day is outside this window. It stays selected; widen the horizon or move the look-back to see it again.
+          Outside this window. Widen the horizon to see it.
         </p>
       )}
       <dl className="divide-y divide-brand-line/70">
         <Row label="Opening balance" value={money(sum.opening)} testid="day-opening" />
         <Row label="Money in" value={money(sum.income)} testid="day-income" />
+        {/* (T3) Counted bank rows: a line per side only when that side moved (the sum still ties). */}
+        {sum.bankIn !== 0 && <Row label="Bank activity in" value={money(sum.bankIn)} testid="day-bank-in" />}
         <Row label="Bills" value={money(sum.outflows.bill)} testid="day-out-bill" />
         <Row label="Card payments" value={money(sum.outflows.card)} testid="day-out-card" />
         <Row label="Debt payments" value={money(sum.outflows.debt)} testid="day-out-debt" />
-        <Row label="Projected close" value={money(sum.close)} tone={underBuffer ? "bad" : undefined} testid="day-close" />
+        {sum.bankOut !== 0 && <Row label="Bank activity out" value={money(sum.bankOut)} testid="day-bank-out" />}
+        <Row label="Projected close" value={money(sum.close)} tone={belowZero ? "bad" : undefined} testid="day-close" />
       </dl>
-      {underBuffer && (
-        <p className="text-micro text-bad">This day closes under your cash buffer of {bufferText}.</p>
-      )}
+      {belowZero ? (
+        <p className="text-micro text-bad" data-testid="day-below-zero">Below zero this day.</p>
+      ) : underBuffer && bufferText ? (
+        <p className="text-micro text-neutral-600" data-testid="day-under-buffer">Under the {bufferText} buffer.</p>
+      ) : null}
 
       <div>
-        <h3 className="text-micro font-semibold uppercase tracking-wide text-neutral-500">Events</h3>
-        {sum.events.length === 0 ? (
-          <p className="mt-1 text-micro text-neutral-500">Nothing is scheduled on this day.</p>
+        <h3 className="text-micro font-semibold uppercase tracking-wide text-neutral-600">Events</h3>
+        {sum.events.length === 0 && !hasBank ? (
+          <p className="mt-1 text-micro text-neutral-600">Nothing on this day.</p>
         ) : (
           <ul className="mt-1 divide-y divide-brand-line/70" data-testid="day-events">
             {sum.events.map((ev, i) => {
@@ -123,7 +139,7 @@ export function DayPanel({
                       {formatCurrency(ev.amount)}
                     </span>
                   </div>
-                  <div className="mt-0.5 text-micro text-neutral-500">
+                  <div className="mt-0.5 text-micro text-neutral-600">
                     {MARKER_LABEL[ev.kind]}
                     {ev.dragged && ev.originalDate ? ` · past due since ${formatDate(ev.originalDate)}` : " · scheduled"}
                     {locked ? " · partly paid" : ""}
@@ -134,9 +150,10 @@ export function DayPanel({
                         type="button"
                         className="press rounded-control px-2 py-1 text-micro font-semibold text-brand-navy ring-1 ring-brand-line hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
                         onClick={() => onOpenRegister(() => ctx.jumpToPlan(ev.itemId!, selectedDate))}
+                        aria-label={`Open ${ev.label} in the register`}
                         data-testid={`day-jump-${ev.itemId}`}
                       >
-                        Match, move or part-pay in register
+                        Open in register
                       </button>
                     )}
                     {canMissed && (
@@ -177,23 +194,21 @@ export function DayPanel({
                 </li>
               );
             })}
+            {sum.bankRows.map((b) => (
+              <li key={`bank-${b.txnId}`} className="py-2" data-testid={`day-bank-${b.txnId}`}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-body text-neutral-700">{b.label}</span>
+                  <span className={`font-mono text-label tabular-nums ${b.amount < 0 ? "text-bad" : "text-brand-navy"}`}>
+                    {formatCurrency(b.amount)}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-micro text-neutral-600">
+                  Bank activity{b.matched ? " · matched" : ""}
+                </div>
+              </li>
+            ))}
           </ul>
         )}
-      </div>
-
-      <div className="rounded-control bg-neutral-50 px-3 py-2 text-micro text-neutral-600" data-testid="day-assumptions">
-        <div className="font-semibold text-neutral-700">What this day assumes</div>
-        <ul className="mt-1 list-inside list-disc space-y-0.5">
-          <li>Cash buffer {bufferText}.</li>
-          {/* (T1) The curve's own start (cashSignal.startingBalance) — the hero's "before" figure; a dash, never $0, when unknown. */}
-          <li data-testid="day-starts-from">
-            Starts from checking before {formatDate(ctx.fromDate)}: {moneyFace(ctx.proj?.startingBalance)}.
-          </li>
-          <li>
-            {sum.scheduledCount} scheduled from your plans
-            {sum.carriedForwardCount > 0 ? `, ${sum.carriedForwardCount} past-due carried forward onto this day` : ""}.
-          </li>
-        </ul>
       </div>
     </div>
   );

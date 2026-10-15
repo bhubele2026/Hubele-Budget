@@ -8,6 +8,7 @@
 import type { CashSignalAccount } from "./cashSignalAccount";
 import type { CashSignalAssumedPaidPlan } from "./cashSignalAssumedPaidPlan";
 import type { CashSignalDailyItem } from "./cashSignalDailyItem";
+import type { CashSignalDayItem } from "./cashSignalDayItem";
 import type { CashSignalEventsItem } from "./cashSignalEventsItem";
 import type { CashSignalHookAmountIgnoredItem } from "./cashSignalHookAmountIgnoredItem";
 import type { CashSignalHookReservesItem } from "./cashSignalHookReservesItem";
@@ -51,6 +52,17 @@ then, and `status` is `no_data`.
   acceptedImpact?: string;
   daily?: CashSignalDailyItem[];
   events?: CashSignalEventsItem[];
+  /** (T3) Every item the walk applied inside the window: planned
+income, planned expenses (the same occurrences as `events`) and the
+checking rows counted after the bank reading, in a stable order (by
+day, then income, expenses, bank rows, each by its label and
+amount). A
+read-only projection of the walk — for every day
+`daily[d-1] + Σ dayItems[d].amount = daily[d]` (`startingBalance`
+before the first day); Σ positive amounts = `projectedIncome`;
+Σ the rest, negated = `projectedExpenses`.
+ */
+  dayItems?: CashSignalDayItem[];
   /** (PR-B2, decision 7) The everyday hooks in force: the Weekly / Monthly
 Spend items whose occurrences the forecast replaces with the card
 payoff (the period's card charges plus what is left of the

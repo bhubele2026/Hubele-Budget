@@ -385,10 +385,15 @@ describe("Forecast — probably paid (PR5b)", () => {
     expect(screen.queryByTestId("probably-paid-t-other")).toBeNull();
   });
 
-  it("\"Forecast\" end leaves only off-curve plans out, as the curve does", () => {
+  // ⭐ (T3) One calculation on screen: the browser's month-end "Projected end" (and the review header's
+  // "Forecast $X · Bank $Y") are gone — the hero, KPIs and "How much will we have?" read the cash signal.
+  // computeBankReconcile keeps its arithmetic for the counts, "Inbox cleared" and the month-close record
+  // (forecastReconcile.test pins "only off-curve plans out", the case this test used to read on screen).
+  it("shows no browser \"Projected end\" or \"Forecast $X · Bank $Y\": the figures are the cash signal's", () => {
     renderPage();
-    // $1,000 today − Netflix $50 − Rent $500 (kept on the curve). Water is off.
-    expect(screen.getByTestId("planned-projected-end").textContent).toContain("$450.00");
+    expect(screen.queryByTestId("planned-projected-end")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Projected end/);
+    expect(document.body.textContent).not.toMatch(/Forecast \$[\d,.]+ · Bank/);
   });
 
   it("says in words whether the forecast still counts a suggested plan", () => {

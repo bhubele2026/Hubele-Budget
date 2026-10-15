@@ -712,8 +712,13 @@ describe("coming up", () => {
   const signal = {
     account: cashAcct,
     hookAmountIgnored: [{ itemId: "r6", cadence: "weekly", storedAmount: "450.00" }],
+    // (T3) The server's real shape: `events` are planned expenses only; income (and the
+    // counted bank rows) are in `dayItems`, which is where the payday footnote reads.
+    dayItems: [
+      { date: "2026-10-09", kind: "income", label: "Paycheck", amount: "2000.00", itemId: "r1" },
+      { date: "2026-10-09", kind: "bank_row", amount: "-12.00", txnId: "t1", matched: false },
+    ],
     events: [
-      { date: "2026-10-09", label: "Paycheck", amount: "2000.00", itemId: "r1" },
       { date: "2026-10-10", label: "Rent", amount: "-1200.00", itemId: "r2", occurrenceDate: "2026-10-10" },
       { date: "2026-10-10", label: "Weekly Spend", amount: "-612.40", itemId: "r6", occurrenceDate: "2026-10-10" },
       { date: "2026-10-12", label: "Visa payment", amount: "-150.00", itemId: "r3" },

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { ForecastNextCtx } from "./next/forecast/types";
 import {
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -32,9 +33,13 @@ import {
   getGetBillsSummaryQueryKey,
   getGetDashboardQueryKey,
   type RecurringItemInput,
+  type CashSignalAssumedPaidPlan,
 } from "@workspace/api-client-react";
 import { Link, Redirect } from "wouter";
 import { hashTabRedirect } from "./forecast/hashTab";
+import { DAY_CODEC, horizonForDay, monthEnd } from "./forecast/dayParam";
+import { ListedPlans } from "./forecast/ListedPlans";
+import { useUrlState } from "@/hooks/useUrlState";
 import { AvalancheScheduleCard } from "@/components/avalanche-schedule-card";
 import {
   card as kitCard,
@@ -112,7 +117,6 @@ import type { CashEvent } from "@/lib/forecast";
 import {
   buildDraggingPlans,
   buildEventsByDate,
-  draggingPlanLine,
   type DraggingPlanRow,
 } from "@/lib/forecastPastDue";
 import { computeBankReconcile, EMPTY_RECONCILE } from "@/lib/forecastReconcile";
@@ -256,7 +260,7 @@ export default function ForecastPage({
 } = {}) {
   // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
   // charges — banks sync only on the manual Sync button now.
-  const [horizonDays, setHorizonDays] = useState<number>(() => {
+  const storedHorizon = (): number => {
     try {
       const v = sessionStorage.getItem(FORECAST_HORIZON_KEY);
       const n = v ? Number(v) : NaN;
@@ -266,7 +270,18 @@ export default function ForecastPage({
     } catch {
       return 30;
     }
+  };
+  // ⭐ (T3) A deep link `?day=<date>` ("Review shortfall") opens on a horizon
+  // wide enough to hold that day — never narrower than the one already chosen.
+  // The widened horizon is the link's, not a choice: it is not saved, so the
+  // next plain visit opens on the saved one.
+  const [horizonDays, setHorizonDays] = useState<number>(() => {
+    const stored = storedHorizon();
+    const day =
+      typeof window === "undefined" ? null : DAY_CODEC.read(new URLSearchParams(window.location.search).get("day"));
+    return horizonForDay(day, householdToday(), HORIZON_OPTS.map((h) => h.days), stored);
   });
+  const horizonFromDayLink = useRef(horizonDays !== storedHorizon());
   // (#650 follow-up) Default the chart to start at TODAY so the
   // projected line keeps moving forward as the calendar advances —
   // pre-today bills (which have either already posted or are stale
@@ -343,6 +358,7 @@ export default function ForecastPage({
     }
   }, [fromDatePicked]);
   useEffect(() => {
+    if (horizonFromDayLink.current) return;
     try {
       sessionStorage.setItem(FORECAST_HORIZON_KEY, String(horizonDays));
     } catch {
@@ -655,7 +671,17 @@ export default function ForecastPage({
   // (C13) The selected day of the default layout, held here — above the
   // register and the chart — so a refetch or a horizon change never drops it
   // (`/next/forecast` holds its own, above this page).
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // ⭐ (T3) `?day=` is the selected day's address (deep links land on it). The
+  // address follows the selection a beat later, so a desktop hover that walks
+  // the chart writes it once, not on every resting point.
+  const [dayParam, setDayParam] = useUrlState<string | null>("day", DAY_CODEC, null, { url: !renderNext });
+  const [selectedDate, setSelectedDate] = useState<string | null>(dayParam);
+  useEffect(() => setSelectedDate(dayParam), [dayParam]);
+  useEffect(() => {
+    if (renderNext) return;
+    const t = setTimeout(() => setDayParam(selectedDate), 250);
+    return () => clearTimeout(t);
+  }, [selectedDate, setDayParam, renderNext]);
   // (#517) On short or narrow viewports, pinning would eat most of the screen
   // and leave no room to scroll the planned list, so we fall back to the
   // existing non-pinned behavior there.
@@ -1039,6 +1065,19 @@ export default function ForecastPage({
       (p) => p.itemId === itemId && p.date === writeDate && p.status === "partial",
     );
   };
+
+  // ⭐ (T3) The bundle's own rows by id: the day panel names a counted bank row
+  // with its description, and "Not this" on a pair carries the row's date.
+  const bundleTxnById = useMemo(
+    () =>
+      new Map(
+        ((data?.transactions ?? []) as Array<{ id: string; description?: string | null; occurredOn?: string | null }>).map(
+          (t) => [t.id, t],
+        ),
+      ),
+    [data?.transactions],
+  );
+  const bankLabel = useCallback((id: string) => bundleTxnById.get(id)?.description ?? null, [bundleTxnById]);
 
   // (WP8) Each everyday-hook occurrence's card payoff (or the bank row that
   // paid it), for the register's words. Display only: the register's amounts
@@ -2108,7 +2147,10 @@ export default function ForecastPage({
             <button
               key={h.label}
               type="button"
-              onClick={() => setHorizonDays(h.days)}
+              onClick={() => {
+                horizonFromDayLink.current = false;
+                setHorizonDays(h.days);
+              }}
               className={`press inline-flex items-center rounded-control px-2.5 py-1 text-micro font-semibold tracking-wide ${
                 active
                   ? "bg-brand-navy text-white"
@@ -2201,156 +2243,64 @@ export default function ForecastPage({
       </div>
   );
 
+  // ⭐ (T3) "Not this" on a plan the forecast counts as paid by a bank row: the
+  // same answer as the register's suggestion strip (`not_match`, Undo toast),
+  // so the plan goes back on the curve. The pair's row date comes from the
+  // bundle's own rows when listed there, else the plan's own key date.
+  const onNotThisAssumedPaid = (p: CashSignalAssumedPaidPlan) => {
+    const row = bundleTxnById.get(p.txnId);
+    // The server's own pair (difference, day gap) when it lists one; nothing is recomputed here.
+    const pair = (proj?.matches ?? []).find((m) => m.planKey === p.planKey && m.txnId === p.txnId);
+    answerSuggestion(
+      {
+        kind: "plan",
+        date: p.dueDate,
+        itemId: p.itemId,
+        label: p.label,
+        amount: Number(p.planAmount),
+        status: "pending_plan",
+        originalDate: p.occurrenceDate,
+        probablyPaid: {
+          txnId: p.txnId,
+          planDate: p.occurrenceDate,
+          txnAmount: Number(p.txnAmount),
+          difference: pair ? Number(pair.difference) : 0,
+          dayDelta: pair?.dayDelta ?? 0,
+          confidence: p.confidence,
+          ambiguous: false,
+          offCurve: false,
+          txnDate: row?.occurredOn ?? p.occurrenceDate,
+          txnDescription: row?.description ?? null,
+        },
+      },
+      "not_match",
+    );
+  };
+
+  // ⭐ (T3) Every list the cash signal returns, on screen: Unpaid items (carried
+  // past-due rows, then "Paid by a bank row", then "Older than 14 days · off the
+  // curve") and Income not arrived. The page's own handlers, so each answer
+  // keeps its Undo toast. (`ListedPlans.tsx`)
   const draggingCard = (
-<>
-      {draggingPlans.length > 0 && draggingTargetDate && (
-        <section className={kitCard} data-testid="card-dragging-plans-summary">
-          <div className={cardHead}>
-            <h2 className="text-title font-semibold text-brand-navy">Past due</h2>
-            <span className="chip bad">
-              {draggingPlans.length} on {formatDate(draggingTargetDate)}
-            </span>
-            <Help>
-              {`These occurrences were due earlier and have not been matched, missed or skipped, so the projection carries them forward onto ${formatDate(draggingTargetDate)} until you resolve them. That is why the next day dips.`}
-            </Help>
-            <span
-              className="ml-auto font-mono text-label tabular-nums text-bad"
-              data-testid="dragging-plans-total"
-            >
-              {formatCurrency(draggingTotal)}
-            </span>
-          </div>
-          <div>
-            <ul data-testid="dragging-plans-list">
-              {draggingPlans.map((row) => {
-                // (PR6) `originalDate` on this line is the occurrence key, so
-                // Mark missed and "Mark matched to…" act on a moved bill too.
-                const planLine: PlanLine = draggingPlanLine(row);
-                // (PR5b) Partly paid, by any date the event may carry for it;
-                // (PR6) the occurrence key included.
-                const partlyPaid =
-                  partialPlanKeys.has(`${row.itemId}|${row.occurrenceDate}`) ||
-                  partialPlanKeys.has(`${row.itemId}|${row.originalDate}`) ||
-                  partialPlanKeys.has(`${row.itemId}|${row.effectiveDate}`);
-                return (
-                  <li
-                    key={`${row.itemId}|${row.originalDate}`}
-                    data-testid={`dragging-plan-${row.itemId}-${row.originalDate}`}
-                    className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0"
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        jumpToPlan(row.itemId, row.originalDate)
-                      }
-                      className="press -mx-1 flex min-w-0 flex-1 items-center justify-between gap-3 rounded-control px-1 py-1 text-left outline-none hover:bg-neutral-50 focus-visible:ring-2 focus-visible:ring-brand-navy/40"
-                      title={`Jump to ${row.label} in the planned-items register`}
-                      data-testid={`dragging-plan-jump-${row.itemId}-${row.originalDate}`}
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-body font-medium text-neutral-700">
-                          {row.label}
-                        </div>
-                        <div className="text-micro text-neutral-400">
-                          Due {formatDate(row.originalDate)}
-                        </div>
-                      </div>
-                      <span className="font-mono text-label tabular-nums text-bad">
-                        {formatCurrency(row.amount)}
-                      </span>
-                    </button>
-                    {partlyPaid ? (
-                      // (PR5b) The remainder of a partial: resolved in Review
-                      // (Undo the partial there). Missed / Skip / Match here
-                      // would replace the partial and un-pay its row.
-                      <span
-                        className="chip warn"
-                        data-testid={`dragging-plan-partial-${row.itemId}-${row.originalDate}`}
-                      >
-                        Partly paid
-                      </span>
-                    ) : (
-                    <div
-                      className="flex items-center gap-1.5 flex-wrap"
-                      data-testid={`dragging-plan-actions-${row.itemId}-${row.originalDate}`}
-                    >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        disabled={upsertResolution.isPending}
-                        onClick={() => onMarkMissed(planLine)}
-                        data-testid={`dragging-plan-mark-missed-${row.itemId}-${row.originalDate}`}
-                        title="Mark this past-due plan as missed"
-                      >
-                        Mark missed
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        disabled={upsertResolution.isPending}
-                        onClick={() => onSkipDraggingPlan(row)}
-                        data-testid={`dragging-plan-skip-${row.itemId}-${row.originalDate}`}
-                        title="Skip this occurrence — it won't drag the projection"
-                      >
-                        Skip
-                      </Button>
-                      <Select
-                        onValueChange={(v) => {
-                          const card = bankInbox.find(
-                            (c) => c.bank.txn.id === v,
-                          );
-                          if (card)
-                            matchInboxToPlan(card.bank.txn.id, planLine);
-                        }}
-                        disabled={
-                          upsertResolution.isPending || bankInbox.length === 0
-                        }
-                      >
-                        <SelectTrigger
-                          className="h-7 w-[170px] text-xs"
-                          data-testid={`dragging-plan-match-trigger-${row.itemId}-${row.originalDate}`}
-                          title={
-                            bankInbox.length === 0
-                              ? "No pending bank transactions to match"
-                              : "Match this plan to a pending bank transaction"
-                          }
-                        >
-                          <SelectValue placeholder="Mark matched to…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {bankInbox.length === 0 && (
-                            <div className="px-2 py-1 text-micro text-neutral-400">
-                              No pending bank txns
-                            </div>
-                          )}
-                          {bankInbox.map((c) => (
-                            <SelectItem
-                              key={c.bank.txn.id}
-                              value={c.bank.txn.id}
-                              data-testid={`dragging-plan-match-option-${row.itemId}-${row.originalDate}-${c.bank.txn.id}`}
-                            >
-                              {c.bank.txn.description} ·{" "}
-                              {formatDate(c.bank.date)} ·{" "}
-                              {formatCurrency(c.bank.amount)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-          <Foot>
-            Resolving a row here removes it from the projection for that day.
-          </Foot>
-        </section>
-      )}
-</>
+    <ListedPlans
+      carried={draggingPlans}
+      carriedTo={draggingTargetDate}
+      carriedTotal={draggingTotal}
+      assumedPaid={proj?.overdueAssumedPaid ?? []}
+      older={proj?.overdueOutsideForecast ?? []}
+      incomeNotArrived={proj?.incomeNotArrived ?? []}
+      partialKeys={partialPlanKeys}
+      busy={upsertResolution.isPending}
+      bankOptions={bankInbox.map((c) => ({
+        id: c.bank.txn.id,
+        label: `${c.bank.txn.description} · ${formatDate(c.bank.date)} · ${formatCurrency(c.bank.amount)}`,
+      }))}
+      onJump={jumpToPlan}
+      onMarkMissed={onMarkMissed}
+      onSkip={onSkipDraggingPlan}
+      onMatch={matchInboxToPlan}
+      onNotThis={onNotThisAssumedPaid}
+    />
   );
 
   const bankGrid = (
@@ -2364,9 +2314,6 @@ export default function ForecastPage({
             <h2 className="text-title font-semibold text-brand-navy">
               Checking today
             </h2>
-            <Help>
-              The bank's last reading plus every counted row since; it refreshes when you Sync, Refresh or link the account.
-            </Help>
             {data.bankSnapshot && data.bankSnapshot.source === "plaid" && (
               <button
                 type="button"
@@ -2460,6 +2407,7 @@ export default function ForecastPage({
       <Label className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
         Month
       </Label>
+      <Help>Lists this month's rows. The curve follows the horizon.</Help>
       {monthSwitchPending && (
         <RefreshCw
           className="h-3 w-3 animate-spin text-neutral-400"
@@ -2539,14 +2487,9 @@ export default function ForecastPage({
               <span className="text-body font-medium text-neutral-700">
                 Review is empty
               </span>
-              <Help>
-                A Chase transaction sent to Forecast lands here straight away —
-                sending it IS putting it in Review. Nothing is waiting, so
-                either nothing is flagged or everything is matched.
-              </Help>
             </span>
             <Link
-              href="/transactions"
+              href={proj?.account?.rowId ? `/transactions?account=${encodeURIComponent(proj.account.rowId)}` : "/transactions"}
               data-testid="link-open-chase"
               className={btnLink}
             >
@@ -2564,13 +2507,10 @@ export default function ForecastPage({
                 className="h-4 w-4 flex-none text-neutral-400"
                 aria-hidden="true"
               />
-              <span className="chip info">{bankInbox.length} waiting</span>
-              <span className="truncate text-body text-neutral-600">
-                Match Chase activity to planned items
-              </span>
+              <span className="chip info" data-testid="review-waiting-count">{bankInbox.length} to match</span>
             </span>
             <Link
-              href="/review"
+              href={`/review?month=${encodeURIComponent(monthFilter)}`}
               data-testid="link-go-to-review"
               className={btnLink}
             >
@@ -2602,12 +2542,9 @@ export default function ForecastPage({
                   {bankReconcile.unplanned} unplanned
                 </span>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
-                  {bankReconcile.hasBank && !bankReconcile.isPriorMonth && (
-                    <span className="font-mono text-micro tabular-nums text-neutral-500">
-                      Forecast {formatCurrency(bankReconcile.forecastEnd)} · Bank{" "}
-                      {formatCurrency(bankReconcile.bankEnd)}
-                    </span>
-                  )}
+                  {/* (T3) No browser "Forecast $X · Bank $Y" here: the hero, KPIs and date card are the one
+                      calculation (the cash signal). computeBankReconcile still feeds the counts above, the
+                      "Inbox cleared" badge and the month-close record. */}
                   {bankReconcile.isPriorMonth && (
                     <span className="chip gray">Prior period</span>
                   )}
@@ -2678,10 +2615,7 @@ export default function ForecastPage({
                         {returnedUnflaggedIds.length}
                       </span>
                       <Help>
-                        Posted rows count toward cash even with the forecast
-                        flag off, so they return to review. Mark the ones that
-                        were not planned payments. Transfers and card payments
-                        stay listed to be matched.
+                        Posted rows count toward cash even with the forecast flag off; mark the ones that were not planned.
                       </Help>
                     </span>
                     <button
@@ -3061,18 +2995,8 @@ export default function ForecastPage({
                   Planned items
                 </h2>
                 <Help>
-                  Every bill and income occurrence scheduled inside the visible
-                  window. A row leaves this register once you match, miss, skip
-                  or move it.
+                  Every bill and income in the window; a row leaves once you match, miss, skip or move it.
                 </Help>
-                {bankReconcile.hasBank && !bankReconcile.isPriorMonth && (
-                  <span
-                    className="ml-auto font-mono text-micro tabular-nums text-neutral-500"
-                    data-testid="planned-projected-end"
-                  >
-                    Projected end {formatCurrency(bankReconcile.forecastEnd)}
-                  </span>
-                )}
               </div>
               <div>
                 {planRows.length === 0 ? (
@@ -3115,9 +3039,7 @@ export default function ForecastPage({
                     </h2>
                     <span className="chip bad">{missed.length}</span>
                     <Help>
-                      Occurrences you marked as not happening. They no longer
-                      affect the projection; undo puts one back in the register.
-                      A card week stays owed: its purchases remain on the forecast.
+                      Marked as not happening, so off the projection; a card week stays owed.
                     </Help>
                     <span
                       className={`ml-auto font-mono text-label tabular-nums ${
@@ -3219,10 +3141,7 @@ export default function ForecastPage({
                       Moved · {monthFilter}
                     </h2>
                     <span className="chip info">{moved.length}</span>
-                    <Help>
-                      Occurrences you pushed to another day. The projection
-                      counts them on the new date, not the original one.
-                    </Help>
+                    <Help>Counted on the new date, not the original one.</Help>
                     <span
                       className={`ml-auto font-mono text-label tabular-nums ${
                         movedTotal < 0 ? "text-bad" : "text-brand-navy"
@@ -3343,11 +3262,7 @@ export default function ForecastPage({
                   <span className="chip gray" data-testid="review-bucket-count">
                     {bucket.length}
                   </span>
-                  <Help>
-                    Everything triaged in this month — matched, missed, moved
-                    and unplanned. The total is the net effect on the month, so
-                    it does not tie to any single register above.
-                  </Help>
+                  <Help>Everything triaged this month; the total is the month's net effect.</Help>
                   <span
                     className={`ml-auto font-mono text-label tabular-nums ${
                       bucketTotal < 0 ? "text-bad" : "text-brand-navy"
@@ -3777,13 +3692,21 @@ export default function ForecastPage({
         bankAccountName,
         bankAccountMask,
         debtLinks,
+        bankLabel,
+        listCounts: {
+          unpaid: draggingPlans.length,
+          incomeNotArrived: proj?.incomeNotArrived?.length ?? 0,
+          olderUnpaid: proj?.overdueOutsideForecast?.length ?? 0,
+        },
         inboxCount,
         fromDate: proj?.fromDate ?? forecastFromDate,
         lookbackOpen,
         highlightedPlanKey,
         reconciledNow,
         dateBalance: (
-          <ForecastDateBalance signal={cashProjection} state={dataState(cashProjectionQuery)} />
+          // (T3) "How much will we have?" opens on the month picker's last day when the curve has it — the
+          // month-end, read off the curve (no browser "Projected end").
+          <ForecastDateBalance signal={cashProjection} state={dataState(cashProjectionQuery)} defaultDate={monthEnd(monthFilter)} />
         ),
       })}
       {dialogsBlock}
