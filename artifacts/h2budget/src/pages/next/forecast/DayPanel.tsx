@@ -93,11 +93,12 @@ export function DayPanel({
       <dl className="divide-y divide-brand-line/70">
         <Row label="Opening balance" value={money(sum.opening)} testid="day-opening" />
         <Row label="Money in" value={money(sum.income)} testid="day-income" />
-        {hasBank && <Row label="Bank activity in" value={money(sum.bankIn)} testid="day-bank-in" />}
+        {/* (T3) Counted bank rows: a line per side only when that side moved (the sum still ties). */}
+        {sum.bankIn !== 0 && <Row label="Bank activity in" value={money(sum.bankIn)} testid="day-bank-in" />}
         <Row label="Bills" value={money(sum.outflows.bill)} testid="day-out-bill" />
         <Row label="Card payments" value={money(sum.outflows.card)} testid="day-out-card" />
         <Row label="Debt payments" value={money(sum.outflows.debt)} testid="day-out-debt" />
-        {hasBank && <Row label="Bank activity out" value={money(sum.bankOut)} testid="day-bank-out" />}
+        {sum.bankOut !== 0 && <Row label="Bank activity out" value={money(sum.bankOut)} testid="day-bank-out" />}
         <Row label="Projected close" value={money(sum.close)} tone={belowZero ? "bad" : undefined} testid="day-close" />
       </dl>
       {belowZero ? (

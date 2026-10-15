@@ -445,6 +445,8 @@ describe("T3 — the Forecast screen tells one story from the cash signal", () =
     expect(screen.getByTestId("day-opening").textContent).toBe("$1,000.00");
     expect(screen.getByTestId("day-bank-out").textContent).toBe("-$25.00");
     expect(screen.getByTestId("day-bank-t-coffee").textContent).toContain("Bank activity");
+    // Only the side that moved gets a line.
+    expect(screen.queryByTestId("day-bank-in")).toBeNull();
     // 06-15: the carried rent and the matched refund.
     fireEvent.click(screen.getByTestId("tap-2026-06-15"));
     expect(screen.getByTestId("day-bank-in").textContent).toBe("$50.50");
