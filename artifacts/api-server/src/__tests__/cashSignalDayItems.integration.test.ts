@@ -14,6 +14,8 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
 import {
   db,
@@ -234,5 +236,30 @@ describe("cash signal dayItems — the walk, read back", () => {
     const first = sig.dayItems!.find((i) => i.kind === "expense" && i.label === "Mid-month bill");
     expect(first).toMatchObject({ date: "2026-05-20", assumption: "pre_window_on_first_day" });
     expect(sig.dayItems!.filter((i) => i.kind === "income").map((i) => i.date)).toEqual(["2026-05-22", "2026-06-05"]);
+  });
+});
+
+/**
+ * (T3) The horizons the web asks for are the ones the route allows: the cash
+ * signal answers 400 to any other (the dashboard once offered 180). Read from
+ * the sources themselves, so a change on either side fails here.
+ */
+describe("horizon whitelist mirror", () => {
+  const src = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+  const numbers = (text: string) => (text.match(/\d+/g) ?? []).map(Number);
+
+  it("the route's whitelist is this suite's, and every web horizon is in it", () => {
+    const route = src("../routes/forecast.ts").match(/ALLOWED_HORIZON_DAYS = new Set\(\[([^\]]+)\]\)/);
+    expect(route).not.toBeNull();
+    const allowed = numbers(route![1]!);
+    expect(allowed).toEqual([...HORIZONS]);
+
+    const dash = src("../../../h2budget/src/pages/next/dashboard/ForecastPanel.tsx").match(/export const HORIZONS = \[([^\]]+)\]/);
+    expect(dash).not.toBeNull();
+    const page = src("../../../h2budget/src/pages/forecast.tsx").match(/const HORIZON_OPTS: HorizonOpt\[\] = \[([\s\S]*?)\n\];/);
+    expect(page).not.toBeNull();
+    const pageDays = [...page![1]!.matchAll(/days: (\d+)/g)].map((m) => Number(m[1]));
+    expect(pageDays.length).toBeGreaterThan(0);
+    for (const h of [...numbers(dash![1]!), ...pageDays]) expect(allowed, `web horizon ${h}`).toContain(h);
   });
 });

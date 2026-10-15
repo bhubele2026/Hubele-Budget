@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import { formatDate } from "@/lib/utils";
 
 /**
  * (Owner decision 16, PR-K round 2 M1) ONE CACHE ENTRY FOR ONE DAY'S BALANCE.
@@ -323,7 +322,8 @@ describe("Forecast page — its cash-signal request shares the one cache key (de
     expect(lastParams()).toStrictEqual({ horizonDays: 90 });
   });
 
-  it("'Bank before' names the day its figure was computed for (the response's fromDate), not the browser's own day", () => {
+  // (T3) The hero's footnotes became "How this adds up"; its first line still names the response's own day.
+  it("'Starting balance' names the day its figure was computed for (the response's fromDate), not the browser's own day", () => {
     calls.signal = {
       bankToday: "1000.00",
       lowestProjected: "900.00",
@@ -354,7 +354,8 @@ describe("Forecast page — its cash-signal request shares the one cache key (de
       overdueAssumedPaid: [],
     };
     renderPage();
-    expect(document.body.textContent).toContain(`Bank before ${formatDate("2026-05-14")}`);
+    expect(screen.getByTestId("adds-up-start").textContent).toContain("Starting balance · May 14");
+    expect(screen.getByTestId("adds-up-start").textContent).toContain("$1,000.00");
   });
 });
 

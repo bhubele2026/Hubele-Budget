@@ -8,16 +8,28 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { householdToday } from "@/lib/householdDay";
 import { asOfWords } from "@/lib/checkingWords";
 import { moneyFace } from "@/components/data-state";
-import { groupMarkers, kindEvents, stepDate, type KindedEvent } from "@/lib/forecastEventKinds";
+import { groupMarkers, kindDayItems, kindEvents, stepDate, type BankDayRow, type KindedEvent } from "@/lib/forecastEventKinds";
 import { ProjectedBalanceChart } from "../../forecast/ProjectedBalanceChart";
 import { ChartLegend } from "./ChartLegend";
 import type { ForecastNextCtx } from "./types";
 
+const NO_BANK: BankDayRow[] = [];
+
 /** Kinded events + markers, derived once from the same events the register and
- *  the tooltip read. */
+ *  the tooltip read. ⭐ (T3) With `dayItems` (every item the walk applied) the
+ *  model holds the paydays and the counted bank rows too, so a day's items
+ *  explain its close; an older answer without it falls back to `events`. */
 export function useChartModel(ctx: ForecastNextCtx) {
   const events = ctx.proj?.events;
-  const kinded = useMemo(() => kindEvents(events ?? [], ctx.debtLinks), [events, ctx.debtLinks]);
+  const dayItems = ctx.proj?.dayItems;
+  const { bankLabel } = ctx;
+  const { kinded, bank } = useMemo(
+    () =>
+      dayItems
+        ? kindDayItems(dayItems, ctx.debtLinks, bankLabel)
+        : { kinded: kindEvents(events ?? [], ctx.debtLinks), bank: NO_BANK },
+    [dayItems, events, ctx.debtLinks, bankLabel],
+  );
   const markers = useMemo(() => {
     const byDate = new Map(ctx.dailySeries.map((d) => [d.rawDate, d.balance]));
     return groupMarkers(kinded, byDate);
@@ -32,7 +44,7 @@ export function useChartModel(ctx: ForecastNextCtx) {
     }
     return m;
   }, [kinded]);
-  return { kinded, markers, incomeByDate };
+  return { kinded, bank, markers, incomeByDate };
 }
 
 export function ChartPanel({
@@ -94,7 +106,7 @@ export function ChartPanel({
   return (
     <Panel
       title={`Projected cash — ${label}`}
-      sub={startLabel ? `${ctx.horizonDays} days · ${startLabel}` : `${ctx.horizonDays} days`}
+      sub={startLabel ? `${startLabel} · ${ctx.horizonDays} days` : `${ctx.horizonDays} days`}
       span={12}
       data-testid="card-projected-balance-chart"
       actions={

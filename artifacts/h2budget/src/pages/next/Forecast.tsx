@@ -1,6 +1,8 @@
 import { useState } from "react";
 import ForecastPage from "../forecast";
 import { ForecastBody, type RegisterTab } from "../forecast/ForecastBody";
+import { DAY_CODEC } from "../forecast/dayParam";
+import { useUrlState } from "@/hooks/useUrlState";
 
 /**
  * `/next/forecast` — the same screen as `/forecast` and `/review` (C13: one
@@ -10,8 +12,8 @@ import { ForecastBody, type RegisterTab } from "../forecast/ForecastBody";
 export default function NextForecastPage() {
   const [tab, setTab] = useState<RegisterTab>("register");
   // Keyed by DATE and held out here, above the data page, so a refetch or a
-  // horizon change never drops it.
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // horizon change never drops it. (T3) `?day=` is its address, as on /forecast.
+  const [selectedDate, setSelectedDate] = useUrlState<string | null>("day", DAY_CODEC, null);
   return (
     <div data-testid="page-next-forecast">
       <ForecastPage

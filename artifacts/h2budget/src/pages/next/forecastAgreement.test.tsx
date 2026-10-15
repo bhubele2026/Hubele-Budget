@@ -113,6 +113,44 @@ const SIGNAL = {
     { date: "2026-06-20", label: "Paycheck", amount: "2000", itemId: "pay" },
   ],
 };
+/**
+ * ⭐ (T3) A signal whose figures tie the way the server's do (the walk): start
+ * 1,000.00; 06-10 a −25.00 bank row → 975.00; 06-15 Rent −800.00 (carried from
+ * 06-10) and a +50.50 matched bank row → 225.50; 06-20 Paycheck +2,000.00 →
+ * 2,225.50. In 2,050.50 · out 825.00 · end 2,225.50. Plus the three lists the
+ * server returns beside the curve.
+ */
+const SIGNAL_T3 = {
+  status: "not_yet", startingBalance: "1000.00", endingBalance: "2225.50", endingDate: "2026-06-20", toDate: "2026-06-20",
+  fromDate: "2026-06-10", acceptedImpact: "50.50", projectedIncome: "2050.50", projectedExpenses: "825.00",
+  lowestProjected: "225.50", lowestDate: "2026-06-15", cashBuffer: "500.00", horizonDays: 30, bankToday: "1000.00",
+  snapshotAt: "2026-06-10T12:00:00.000Z",
+  account: { rowId: "acct-row-1", externalId: "ext-1", name: "Test Checking", mask: "0000", subtype: "checking", via: "pointer" },
+  daily: [
+    { date: "2026-06-10", balance: "975.00" },
+    { date: "2026-06-15", balance: "225.50" },
+    { date: "2026-06-20", balance: "2225.50" },
+  ],
+  events: [
+    { date: "2026-06-15", label: "Rent", amount: "-800.00", itemId: "rent", originalDate: "2026-06-10", occurrenceDate: "2026-06-10", occurrenceKey: "rent|2026-06-10", assumption: "overdue_assumed_unpaid" },
+  ],
+  dayItems: [
+    { date: "2026-06-10", kind: "bank_row", amount: "-25.00", txnId: "t-coffee", matched: false },
+    { date: "2026-06-15", kind: "expense", amount: "-800.00", label: "Rent", itemId: "rent", originalDate: "2026-06-10", occurrenceDate: "2026-06-10", occurrenceKey: "rent|2026-06-10", assumption: "overdue_assumed_unpaid" },
+    { date: "2026-06-15", kind: "bank_row", amount: "50.50", txnId: "t-refund", matched: true },
+    { date: "2026-06-20", kind: "income", amount: "2000.00", label: "Paycheck", itemId: "pay", originalDate: "2026-06-20", occurrenceDate: "2026-06-20", occurrenceKey: "pay|2026-06-20", assumption: null },
+  ],
+  matches: [],
+  overdueAssumedPaid: [
+    { planKey: "water|2026-06-05", itemId: "water", occurrenceDate: "2026-06-05", dueDate: "2026-06-05", label: "Water", daysOverdue: 5, planAmount: "-60.00", txnId: "t-water", txnAmount: "-60.00", confidence: "high", unpaidRemainder: "0.00" },
+  ],
+  overdueOutsideForecast: [
+    { planKey: "gym|2026-05-01", itemId: "gym", occurrenceDate: "2026-05-01", dueDate: "2026-05-01", amount: "-40.00", label: "Gym", daysOverdue: 40 },
+  ],
+  incomeNotArrived: [
+    { planKey: "bonus|2026-06-01", itemId: "bonus", occurrenceDate: "2026-06-01", dueDate: "2026-06-01", amount: "300.00", label: "Bonus", daysOverdue: 9 },
+  ],
+};
 let cashSignal: unknown = SIGNAL;
 vi.mock("@workspace/api-client-react", () => {
   const noopMutation = () => ({ mutate: () => {}, mutateAsync: async () => undefined, isPending: false });
@@ -136,6 +174,8 @@ vi.mock("@/hooks/useSpine", () => ({
   useSpine: () => ({ data: undefined, isLoading: false, isFetching: false, state: "cold", error: null, updatedAt: null, refetch: () => {} }),
 }));
 
+import { waitFor } from "@testing-library/react";
+import { householdToday } from "@/lib/householdDay";
 import ForecastPage from "../forecast";
 import NextForecastPage from "./Forecast";
 import { ForecastBody } from "../forecast/ForecastBody";
@@ -153,6 +193,8 @@ beforeEach(() => {
   cashSignal = SIGNAL;
   chartRows = [];
   try { sessionStorage.clear(); } catch { /* no-op */ }
+  // (T3) The selected day is URL state (`?day=`): each test starts on a clean address.
+  window.history.replaceState(null, "", "/");
 });
 
 describe("/next/forecast agrees with the classic page", () => {
@@ -321,5 +363,161 @@ describe("/forecast and /review are the one forecast screen (C13)", () => {
     expect(screen.getByTestId("tab-plan").getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe("register-tab-plan");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Forecast");
+  });
+});
+
+// ⭐ (T3) ONE CALCULATION, EXPLICIT PERIODS, THE LISTS ON SCREEN, AN HONEST DAY.
+describe("T3 — the Forecast screen tells one story from the cash signal", () => {
+  const cents = (t: string | null | undefined) => {
+    const m = (t ?? "").match(/-?\$[\d,]+\.\d{2}/);
+    return m ? Math.round(Number(m[0].replace(/[$,]/g, "")) * 100) : NaN;
+  };
+  beforeEach(() => {
+    cashSignal = SIGNAL_T3;
+  });
+
+  it("'How this adds up': start + in − out = end, every figure the signal's; the end = the hero = the KPI = the chart's last point", () => {
+    mount(<ForecastPage mode="overall" />);
+    const box = screen.getByTestId("hero-adds-up");
+    expect(box.tagName).toBe("DETAILS");
+    expect(within(box).getByText("How this adds up").tagName).toBe("SUMMARY");
+    expect(screen.getByTestId("adds-up-start").textContent).toBe("Starting balance · Jun 10$1,000.00");
+    expect(screen.getByTestId("adds-up-in").textContent).toBe("+ Money in$2,050.50");
+    expect(screen.getByTestId("adds-up-out").textContent).toBe("− Money out$825.00");
+    expect(screen.getByTestId("adds-up-end").textContent).toBe("= Ending Jun 20$2,225.50");
+    const end = cents(screen.getByTestId("adds-up-end").textContent);
+    expect(cents(screen.getByTestId("adds-up-start").textContent) + cents(screen.getByTestId("adds-up-in").textContent) - cents(screen.getByTestId("adds-up-out").textContent)).toBe(end);
+    expect(cents(screen.getByTestId("hero-forecast-balance").textContent)).toBe(end);
+    expect(cents(screen.getByTestId("kpi-ending-balance").textContent)).toBe(end);
+    expect(Math.round(Number(chartRows.at(-1)!.balance) * 100)).toBe(end);
+    // The old footnotes and the head's methodology are gone.
+    expect(screen.queryByTestId("hero-footnotes")).toBeNull();
+    expect(screen.queryByTestId("filters-note")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Bank before|What filters do|Plans are matched to bank activity/);
+  });
+
+  it("the '=' line hides itself if the four figures ever stopped agreeing (a guard that should never fire)", () => {
+    cashSignal = { ...SIGNAL_T3, endingBalance: "2225.51" };
+    mount(<ForecastPage mode="overall" />);
+    expect(screen.getByTestId("adds-up-start")).toBeTruthy();
+    expect(screen.queryByTestId("adds-up-end")).toBeNull();
+  });
+
+  it("no second calculation on screen: no 'Projected end', no 'Forecast $X · Bank $Y' (Forecast and Review)", () => {
+    for (const mode of ["overall", "review"] as const) {
+      const v = mount(<ForecastPage mode={mode} />);
+      expect(document.body.textContent).not.toMatch(/Projected end/);
+      expect(document.body.textContent).not.toMatch(/Forecast \$[\d,.]+ · Bank/);
+      expect(screen.queryByTestId("planned-projected-end")).toBeNull();
+      v.unmount();
+    }
+  });
+
+  it("the low point is the plotted minimum, on its date; 'Review shortfall'/'See <day>' selects that day", () => {
+    mount(<ForecastPage mode="overall" />);
+    const min = Math.min(...chartRows.map((r) => Number(r.balance)));
+    expect(cents(screen.getByTestId("kpi-lowest-point").textContent)).toBe(Math.round(min * 100));
+    expect(chartRows.find((r) => Number(r.balance) === min)!.rawDate).toBe(SIGNAL_T3.lowestDate);
+    const see = screen.getByTestId("kpi-lowest-see-day");
+    expect(see.textContent).toBe("See Jun 15");
+    fireEvent.click(see);
+    expect(screen.getByTestId("day-panel-date").textContent).toContain("Jun 15");
+    // Below zero, the same action reads "Review shortfall".
+    cleanup();
+    cashSignal = { ...SIGNAL_T3, lowestProjected: "-5.00" };
+    mount(<ForecastPage mode="overall" />);
+    expect(screen.getByTestId("kpi-lowest-see-day").textContent).toBe("Review shortfall");
+  });
+
+  it("the day panel adds up: opening + money in − money out (bank activity included) = close, on every day", () => {
+    mount(<ForecastPage mode="overall" />);
+    const ids = ["day-income", "day-bank-in", "day-out-bill", "day-out-card", "day-out-debt", "day-bank-out"];
+    for (const day of ["2026-06-10", "2026-06-15", "2026-06-20"]) {
+      fireEvent.click(screen.getByTestId(`tap-${day}`));
+      const moved = ids.reduce((sum, id) => {
+        const el = screen.queryByTestId(id);
+        return sum + (el ? cents(el.textContent) : 0);
+      }, 0);
+      expect(cents(screen.getByTestId("day-opening").textContent) + moved, day).toBe(cents(screen.getByTestId("day-close").textContent));
+    }
+    // Day one opens on the curve's own start, and its bank row is listed.
+    fireEvent.click(screen.getByTestId("tap-2026-06-10"));
+    expect(screen.getByTestId("day-opening").textContent).toBe("$1,000.00");
+    expect(screen.getByTestId("day-bank-out").textContent).toBe("-$25.00");
+    expect(screen.getByTestId("day-bank-t-coffee").textContent).toContain("Bank activity");
+    // 06-15: the carried rent and the matched refund.
+    fireEvent.click(screen.getByTestId("tap-2026-06-15"));
+    expect(screen.getByTestId("day-bank-in").textContent).toBe("$50.50");
+    expect(screen.getByTestId("day-bank-t-refund").textContent).toContain("matched");
+    expect(screen.getByTestId("day-jump-rent").textContent).toBe("Open in register");
+    // 06-20: the payday is a Payday (it never was before: `events` carries expenses only).
+    fireEvent.click(screen.getByTestId("tap-2026-06-20"));
+    expect(screen.getByTestId("day-income").textContent).toBe("$2,000.00");
+    expect(screen.getByTestId("day-event-pay").textContent).toContain("Payday");
+    // No "What this day assumes" box.
+    expect(screen.queryByTestId("day-assumptions")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/What this day assumes/);
+  });
+
+  it("the three server lists are on screen, counted in 'How this adds up'", () => {
+    mount(<ForecastPage mode="overall" />);
+    const unpaid = screen.getByTestId("card-dragging-plans-summary");
+    expect(within(unpaid).getByRole("heading", { level: 2 }).textContent).toBe("Unpaid items");
+    expect(screen.getByTestId("dragging-plans-chip").textContent).toBe("1 · carried to Jun 15");
+    expect(screen.queryByText("Past due")).toBeNull();
+    expect(within(unpaid).getByTestId("assumed-paid-words-water-2026-06-05").textContent).toBe("Due Jun 5 · paid $60.00");
+    expect(within(unpaid).getByTestId("assumed-paid-not-this-water-2026-06-05").textContent).toBe("Not this");
+    expect(within(screen.getByTestId("older-unpaid-group")).getByText("Older than 14 days · off the curve")).toBeTruthy();
+    expect(screen.getByTestId("older-plan-mark-missed-gym-2026-05-01")).toBeTruthy();
+    const income = screen.getByTestId("card-income-not-arrived");
+    expect(within(income).getByTestId("income-plan-mark-missed-bonus-2026-06-01").textContent).toBe("Didn't arrive");
+    const lines = screen.getByTestId("adds-up-lists");
+    expect(within(lines).getByTestId("adds-up-list-unpaid").textContent).toBe("Unpaid items1");
+    expect(within(lines).getByTestId("adds-up-list-incomeNotArrived").textContent).toBe("Income not arrived1");
+    expect(within(lines).getByTestId("adds-up-list-olderUnpaid").textContent).toBe("Older than 14 days · off the curve1");
+    // A count line opens its list (focus moves to it).
+    fireEvent.click(within(lines).getByTestId("adds-up-list-incomeNotArrived"));
+    expect(document.activeElement).toBe(income);
+  });
+
+  it("?day= is the selected day's address: a deep link lands on it, and the address follows a pick", async () => {
+    window.history.replaceState(null, "", "/forecast?day=2026-06-15");
+    mount(<ForecastPage mode="overall" />);
+    expect(screen.getByTestId("day-panel-date").textContent).toContain("Jun 15");
+    expect(screen.getByTestId("day-close").textContent).toBe("$225.50");
+    fireEvent.click(screen.getByTestId("tap-2026-06-20"));
+    await waitFor(() => expect(window.location.search).toBe("?day=2026-06-20"));
+    fireEvent.keyDown(screen.getByTestId("chart-surface"), { key: "Escape" });
+    await waitFor(() => expect(window.location.search).toBe(""));
+  });
+
+  it("?day= beyond the saved horizon opens a horizon wide enough for it, without saving that horizon", () => {
+    const [y, m, d] = householdToday().split("-").map(Number);
+    const day = new Date(Date.UTC(y!, m! - 1, d! + 60)).toISOString().slice(0, 10);
+    window.history.replaceState(null, "", `/forecast?day=${day}`);
+    mount(<ForecastPage mode="overall" />);
+    expect(screen.getByTestId("horizon-90").getAttribute("aria-pressed")).toBe("true");
+    expect(sessionStorage.getItem("h2budget:forecastHorizonDays")).not.toBe("90");
+    // A horizon the person picks is saved as before.
+    fireEvent.click(screen.getByTestId("horizon-120"));
+    expect(sessionStorage.getItem("h2budget:forecastHorizonDays")).toBe("120");
+  });
+
+  it("shading never shows without its legend; the chart panel names its start and length", () => {
+    mount(<ForecastPage mode="overall" />);
+    const panel = screen.getByTestId("card-projected-balance-chart");
+    const shades = [...document.querySelectorAll('[data-testid^="risk-"]')];
+    expect(shades.length).toBeGreaterThan(0);
+    for (const sh of shades) expect(panel.contains(sh)).toBe(true);
+    expect(within(panel).getByTestId("chart-legend")).toBeTruthy();
+    expect(panel.textContent).toMatch(/Starting at \$1,000\.00 · as of Jun 10 · 30 days/);
+  });
+
+  it("words: the empty day panel is one short line; the review links carry the account and the month", () => {
+    mount(<ForecastPage mode="overall" />);
+    expect(screen.getByTestId("day-panel-empty").textContent).toBe("Pick a day on the chart.");
+    cleanup();
+    mount(<ForecastPage mode="review" />);
+    expect(screen.getByTestId("link-open-chase").getAttribute("href")).toBe("/transactions?account=acct-row-1");
   });
 });

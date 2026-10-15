@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  classifyEvent, kindEvents, groupMarkers, runsBelow, daySummary, stepDate,
+  classifyEvent, kindEvents, kindDayItems, groupMarkers, runsBelow, daySummary, stepDate,
 } from "./forecastEventKinds";
 
 const links = new Map([["car", "debt1"]]);
@@ -36,6 +36,55 @@ describe("forecastEventKinds", () => {
     expect(d).toMatchObject({ opening: 1000, close: 400, income: 50, inWindow: true, carriedForwardCount: 1, scheduledCount: 1 });
     expect(d.outflows.bill).toBe(-600);
     expect(daySummary("zz", s, k)).toMatchObject({ inWindow: false, close: null, opening: null });
+  });
+
+  // ⭐ (T3) dayItems: every item the walk applied — paydays and counted bank rows included.
+  it("kinds dayItems: income is a payday, a bank row is bank activity (labelled from the bundle), a zero plan moves nothing", () => {
+    const { kinded, bank } = kindDayItems(
+      [
+        { date: "d1", kind: "income", amount: "2000.00", label: "Paycheck", itemId: "p", occurrenceDate: "d1", originalDate: "d1" },
+        { date: "d1", kind: "expense", amount: "-50.00", label: "Car loan", itemId: "car", occurrenceDate: "d0", originalDate: "d0" },
+        { date: "d1", kind: "expense", amount: "0.00", label: "Nothing", itemId: "z" },
+        { date: "d1", kind: "bank_row", amount: "-12.34", txnId: "t1", matched: true },
+        { date: "d1", kind: "bank_row", amount: "40.00", txnId: "t2", matched: false },
+      ],
+      links,
+      (id) => (id === "t1" ? "Corner shop" : null),
+    );
+    expect(kinded.map((e) => [e.label, e.kind, e.amount, e.dragged, e.occurrenceDate])).toEqual([
+      ["Paycheck", "payday", 2000, false, "d1"],
+      ["Car loan", "debt", -50, true, "d0"],
+    ]);
+    expect(bank).toEqual([
+      { date: "d1", amount: -12.34, label: "Corner shop", txnId: "t1", matched: true },
+      { date: "d1", amount: 40, label: "Bank activity", txnId: "t2", matched: false },
+    ]);
+  });
+
+  it("a day opens on the previous close (the curve's start on day one) and opening + in − out = close", () => {
+    // start 1000 → d1: +2000 pay, −600 rent, −12.34 shop, +40 refund = 2427.66 → d2: −27.66 = 2400
+    const s = [{ rawDate: "d1", balance: 2427.66 }, { rawDate: "d2", balance: 2400 }];
+    const { kinded, bank } = kindDayItems(
+      [
+        { date: "d1", kind: "income", amount: "2000.00", label: "Pay", itemId: "p" },
+        { date: "d1", kind: "expense", amount: "-600.00", label: "Rent", itemId: "r" },
+        { date: "d1", kind: "bank_row", amount: "-12.34", txnId: "t1" },
+        { date: "d1", kind: "bank_row", amount: "40.00", txnId: "t2" },
+        { date: "d2", kind: "bank_row", amount: "-27.66", txnId: "t3" },
+      ],
+      links,
+    );
+    const cents = (n: number | null) => Math.round((n ?? NaN) * 100);
+    for (const date of ["d1", "d2"]) {
+      const d = daySummary(date, s, kinded, { bank, startingBalance: 1000 });
+      const moved = d.income + d.bankIn + d.outflows.bill + d.outflows.card + d.outflows.debt + d.bankOut;
+      expect(cents(d.opening) + cents(moved)).toBe(cents(d.close));
+    }
+    const d1 = daySummary("d1", s, kinded, { bank, startingBalance: 1000 });
+    expect(d1).toMatchObject({ opening: 1000, income: 2000, bankIn: 40, bankOut: -12.34, close: 2427.66 });
+    expect(d1.bankRows.map((b) => b.txnId)).toEqual(["t1", "t2"]);
+    // Without a start, day one still opens on "—" (null), as before.
+    expect(daySummary("d1", s, kinded).opening).toBeNull();
   });
 
   it("steps days and clamps at the ends", () => {

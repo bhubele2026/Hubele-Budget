@@ -1,34 +1,44 @@
 import { useState } from "react";
 import type { CashSignal } from "@workspace/api-client-react";
 import type { DataState } from "@/lib/queryState";
-import { card, cardHead, input, Stat, Foot } from "@/ui";
+import { card, cardHead, input, Stat } from "@/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 /** Date lookup uses the server curve; it never builds a second projection. */
 export function ForecastDateBalance({
   signal,
   state,
+  defaultDate = null,
 }: {
   signal: CashSignal | undefined;
   /** The projection query's state. Without one, a missing signal reads as still loading. */
   state?: DataState;
+  /**
+   * ⭐ (T3) The day to show before one is picked — the Forecast page passes its
+   * month picker's last day ("At the end of Oct 31"). Used only when the curve
+   * has that day: a lookup, never a second calculation. Otherwise the curve's
+   * last day, as before.
+   */
+  defaultDate?: string | null;
 }) {
   const [chosenDate, setChosenDate] = useState("");
   const daily = signal?.status === "no_data" ? [] : (signal?.daily ?? []);
   const first = daily[0]?.date;
   const last = daily.at(-1)?.date;
-  const date = chosenDate || last || "";
+  const preset = defaultDate && daily.some((d) => d.date === defaultDate) ? defaultDate : null;
+  const date = chosenDate || preset || last || "";
   const point = daily.find((d) => d.date === date);
   const amount = point ? Number(point.balance) : NaN;
 
-  // With no curve, say why. A setup instruction is only true when there is no
-  // bank balance yet; while the forecast loads or after it failed, it is wrong.
+  // With no curve, say why. The bank's reading is the only checking balance
+  // (owner, 10/15): with none yet, linking a bank is the fix. While the
+  // forecast loads or after it failed, that would be wrong.
   const emptyHint = !signal
     ? state === "failed"
       ? "Couldn't load the forecast"
       : "Loading the forecast…"
     : signal.status === "no_data"
-      ? "Set a bank balance and load the forecast"
+      ? "No bank balance yet · Link a bank"
       : "No forecast days to show";
 
   return (
@@ -54,14 +64,11 @@ export function ForecastDateBalance({
         </div>
       </div>
       <div className="p-4">
+        {/* (T2/T3) Rust only below zero; a day under the buffer stays calm. */}
         <Stat
           label="Expected checking balance"
           value={Number.isFinite(amount) ? formatCurrency(amount) : "—"}
-          tone={
-            Number.isFinite(amount) && amount < Number(signal?.cashBuffer ?? 0)
-              ? "bad"
-              : "navy"
-          }
+          tone={Number.isFinite(amount) && amount < 0 ? "bad" : "navy"}
           hint={
             point
               ? `At the end of ${formatDate(point.date)}`
@@ -71,10 +78,6 @@ export function ForecastDateBalance({
           }
         />
       </div>
-      <Foot>
-        Based on recorded bank activity, scheduled bills, income, and debt
-        payments. Additional unplanned purchases will reduce this balance.
-      </Foot>
     </section>
   );
 }

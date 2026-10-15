@@ -40,6 +40,10 @@ export type ForecastNextCtx = {
   bankAccountName: string;
   bankAccountMask: string | null;
   debtLinks: ReadonlyMap<string, string>;
+  /** (T3) A counted checking row's own description (the forecast bundle's rows), for the day panel. */
+  bankLabel?: (txnId: string) => string | null;
+  /** (T3) How many rows each Month & bank list holds (the "How this adds up" links); 0 hides a line. */
+  listCounts?: { unpaid: number; incomeNotArrived: number; olderUnpaid: number };
   inboxCount: number;
   fromDate: string;
   lookbackOpen: boolean;
