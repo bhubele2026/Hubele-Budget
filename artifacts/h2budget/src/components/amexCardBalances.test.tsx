@@ -47,7 +47,7 @@ describe("(Q3) AmexCardBalances", () => {
     render(
       <AmexCardBalances
         summary={summary("all", [
-          paid({ ...card("a", "Platinum", "1002", "1649.35"), purchases: { amount: "120.40", count: 3 } }, "in_full_weekly", "default_debt_inactive"),
+          paid({ ...card("a", "Platinum", "1002", "1532.15"), purchases: { amount: "120.40", count: 3 } }, "in_full_weekly", "default_debt_inactive"),
           paid(card("b", "Blue Cash", "2003", "300.00"), "debt_plan", "default_debt_active"),
           paid(card("c", "Gold", "3004", "10.00"), "unset", "needs_choice"),
           card("d", "Other", "4005", "1.00"),

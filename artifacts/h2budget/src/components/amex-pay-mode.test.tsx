@@ -118,7 +118,7 @@ describe("one label set, from paidAs (Q6b)", () => {
     expect(paySourceWords(card(paid("unset", "needs_choice")))).toBe("H2 can't tell: this card's entry on the debt plan has no APR or minimum payment.");
   });
   it("(P1) 'Default: its debt is paid off' is gone: a closed debt-plan entry never reads as a card paid off", () => {
-    const platinumLike = card({ ...paid("in_full_weekly", "default_debt_inactive"), owed: "1649.35" });
+    const platinumLike = card({ ...paid("in_full_weekly", "default_debt_inactive"), owed: "1532.15" });
     mount(<CardPayModes cards={[platinumLike]} />);
     const block = screen.getByTestId("amex-paymodes").textContent!;
     expect(block).not.toMatch(/paid off/i);

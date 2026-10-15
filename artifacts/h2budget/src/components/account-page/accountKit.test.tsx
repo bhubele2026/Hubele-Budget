@@ -296,9 +296,9 @@ describe("AccountTransactionRow", () => {
   });
 
   it("(P1) a household card name wraps instead of being cut", () => {
-    row({ cardLabel: "Platinum Card® ••2007", cardWrap: true });
+    row({ cardLabel: "Platinum Card® ••1001", cardWrap: true });
     expect(screen.getByTestId("text-card-t1").className).not.toContain("truncate");
-    expect(screen.getByTestId("text-card-t1").textContent).toBe("Platinum Card® ••2007");
+    expect(screen.getByTestId("text-card-t1").textContent).toBe("Platinum Card® ••1001");
   });
 
   it("a row with no label shows a dash and no dot (the Amex default grid)", () => {

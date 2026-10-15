@@ -639,7 +639,7 @@ describe("Amex page — the top summary and the journey fixes (Q6b → P1)", () 
       scope: {
         ...CARD_SCOPE,
         mask: "1005",
-        cards: [scopeCard("ext-plat", "Platinum", "1005", "1649.35", { paidAs: { effectiveMode: "in_full_weekly", source: "default_debt_inactive" }, payDown: { available: false, reason: "debt_not_active" } })],
+        cards: [scopeCard("ext-plat", "Platinum", "1005", "1532.15", { paidAs: { effectiveMode: "in_full_weekly", source: "default_debt_inactive" }, payDown: { available: false, reason: "debt_not_active" } })],
       },
     });
     render(tree());
