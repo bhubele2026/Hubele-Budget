@@ -159,7 +159,9 @@ describe("Why this number? — the server's lines", () => {
     expect(screen.getByTestId("bank-why-displayed").textContent).toBe("$1,960.00");
     const snap = screen.getByTestId("bank-why-snapshot").textContent ?? "";
     expect(snap).toContain("$2,000.00");
-    expect(snap).toContain("Plaid · Checking · ••1111");
+    // (T1) Named as the bank's reading (or a typed balance), with the account it was read from.
+    expect(snap).toContain("Bank's last reading");
+    expect(snap).toContain("(Checking · ••1111)");
     const since = screen.getByTestId("bank-why-since").textContent ?? "";
     expect(since).toContain("2 rows since then");
     expect(since).toContain("-$40.00");

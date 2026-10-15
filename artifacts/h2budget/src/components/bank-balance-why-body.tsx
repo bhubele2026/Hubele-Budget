@@ -19,10 +19,10 @@ export interface ExplainQuery extends QueryLike {
   refetch: () => unknown;
 }
 
-export default function BankBalanceWhyBody({ query }: { query: ExplainQuery }) {
+export default function BankBalanceWhyBody({ query, onReviewDifference }: { query: ExplainQuery; onReviewDifference?: () => void }) {
   const state = dataState(query);
   const explain = query.data;
-  if (state === "loaded" && explain) return <Explanation explain={explain} />;
+  if (state === "loaded" && explain) return <Explanation explain={explain} onReviewDifference={onReviewDifference} />;
   if (state === "refresh-failed" && explain) {
     return (
       <div className="space-y-2">
@@ -33,7 +33,7 @@ export default function BankBalanceWhyBody({ query }: { query: ExplainQuery }) {
           refreshing={query.isFetching ?? false}
           data-testid="bank-why-refresh-banner"
         />
-        <Explanation explain={explain} />
+        <Explanation explain={explain} onReviewDifference={onReviewDifference} />
       </div>
     );
   }
@@ -51,7 +51,7 @@ export default function BankBalanceWhyBody({ query }: { query: ExplainQuery }) {
   return <p className="text-micro text-neutral-500">Loading…</p>;
 }
 
-function Explanation({ explain }: { explain: BankBalanceExplain }) {
+function Explanation({ explain, onReviewDifference }: { explain: BankBalanceExplain; onReviewDifference?: () => void }) {
   const { snapshot, ledger, nextSync, freshness, displayed } = explain;
   const since = ledger.sinceAnchor;
   const cents = (v: string | number) => Math.round(Number(v) * 100);
@@ -63,19 +63,15 @@ function Explanation({ explain }: { explain: BankBalanceExplain }) {
     snapshot.balance == null || displayed.bankToday == null
       ? null
       : cents(snapshot.balance) + (since ? cents(since.net) : 0) === cents(displayed.bankToday);
-  const where = [
-    snapshot.source === "plaid" ? "Plaid" : snapshot.source === "manual" ? "Manual" : null,
-    snapshot.name,
-    snapshot.mask ? `••${snapshot.mask}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  // (T1) The account it was read from; the reading's own name says where it came from.
+  const where = [snapshot.name, snapshot.mask ? `••${snapshot.mask}` : null].filter(Boolean).join(" · ");
+  const readingName = snapshot.source === "manual" ? "Typed balance (not from the bank)" : "Bank's last reading";
   const net = since ? Number(since.net) : 0;
 
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-2">
-        <div className="text-label font-semibold text-brand-navy">Bank balance</div>
+        <div className="text-label font-semibold text-brand-navy">Checking today</div>
         <div
           className="font-mono text-label font-semibold tabular-nums text-brand-navy"
           data-testid="bank-why-displayed"
@@ -86,15 +82,15 @@ function Explanation({ explain }: { explain: BankBalanceExplain }) {
 
       {snapshot.balance == null ? (
         <p className="text-micro text-neutral-500" data-testid="bank-why-no-snapshot">
-          No bank balance is set, so the forecast runs off the starting balance.
+          No bank reading yet, so the forecast runs off the starting balance.
         </p>
       ) : (
         <>
           <dl className="space-y-1 text-micro text-neutral-500">
             <div className="flex justify-between gap-2" data-testid="bank-why-snapshot">
               <dt>
-                {/* The server's household day for the snapshot, not a UTC slice. */}
-                Snapshot{ledger.anchorDay ? `, ${formatDate(ledger.anchorDay)}` : ""}
+                {/* The server's household day for the reading, not a UTC slice. */}
+                {readingName}{ledger.anchorDay ? `, ${formatDate(ledger.anchorDay)}` : ""}
                 {where ? ` (${where})` : ""}
               </dt>
               <dd className="font-mono tabular-nums text-neutral-700">
@@ -136,6 +132,12 @@ function Explanation({ explain }: { explain: BankBalanceExplain }) {
               ? "The next Sync asks the bank for this balance."
               : `The next Sync won't ask the bank for it: ${nextSync.whyNot ?? "no reason given"}.`}
           </p>
+          {/* (T2) The last check is off: this explains today's balance; the check has its own investigation. */}
+          {onReviewDifference ? (
+            <button type="button" className={btnLink} onClick={onReviewDifference} data-testid="bank-why-review-difference">
+              Review difference
+            </button>
+          ) : null}
         </>
       )}
     </div>

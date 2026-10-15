@@ -24,6 +24,9 @@ const h = vi.hoisted(() => ({
   owner: true as boolean,
   /** (Q5 fix) The spine's bank confidence (the account-wide pending count, the bank's figure today). */
   spine: undefined as unknown,
+  /** (T2) GET /banking/check-explain's answer, and how often it was asked (only while the dialog is open). */
+  explain: undefined as unknown,
+  explainCalls: 0,
 }));
 
 function withFirstPages(r: Record<string, unknown>, pages: Record<string, unknown>) {
@@ -57,6 +60,11 @@ vi.mock("@workspace/api-client-react/features", async (orig) => ({
     h.proposalCalls += 1;
     return { data: h.proposals, isError: false, refetch: vi.fn() };
   },
+  useGetBankingCheckExplain: (opts?: { query?: { enabled?: boolean } }) => {
+    if (opts?.query?.enabled === false) return { data: undefined, isError: false, isFetching: false, refetch: vi.fn() };
+    h.explainCalls += 1;
+    return { data: h.explain, isError: false, isFetching: false, refetch: vi.fn() };
+  },
   useGetBankingReview: (params: Record<string, unknown>, opts?: { query?: { enabled?: boolean } }) => {
     if (opts?.query?.enabled === false) return { data: undefined, isError: false, isLoading: false, refetch: vi.fn() };
     h.calls.push(params);
@@ -78,6 +86,7 @@ vi.mock("@/hooks/useSpine", () => ({ useSpine: () => ({ data: h.spine, state: h.
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => <button data-testid="own-sync">Sync</button> }));
 
 import BankingReviewPage from "./command-center";
+import { ownerExplain } from "./__test-helpers__/checkExplainFixture";
 
 const TODAY = new Date("2026-10-14T17:00:00Z"); // Wed 12:00 Central
 
@@ -133,7 +142,7 @@ const check = (o: Record<string, unknown>) => ({
 const review = (o: Record<string, unknown> = {}) => ({
   account: { id: "acct-chk", institution: "Chase", name: "Total Checking", mask: "4321", isForecastAccount: true, lastSyncedAt: "2026-10-14T16:00:00.000Z" },
   period: { from: "2026-10-01", to: "2026-10-14", today: "2026-10-14", timezone: "America/Chicago" },
-  balance: { today: "3205.81", asOf: "2026-10-14T13:00:00.000Z", start: "3000.00", end: "3205.81", unavailableReason: null },
+  balance: { today: "3205.81", asOf: "2026-10-14T13:00:00.000Z", reading: "3170.00", start: "3000.00", end: "3205.81", unavailableReason: null },
   freshness: { source: "plaid", fetchedAt: "2026-10-14T16:00:00.000Z", lastContactAt: "2026-10-14T16:00:00.000Z", lastFailureAt: null, stale: false, staleReason: null },
   cashFlow: { moneyIn: "2425.00", moneyOut: "2219.19", net: "205.81", count: 23, pendingNet: "-6.50", pendingCount: 1, supersededExcluded: 1, otherExcluded: 0 },
   planComparison: { available: true, reason: null, comparedFrom: "2026-08-16", plansFrom: "2026-09-01", through: "2026-10-14" },
@@ -202,6 +211,8 @@ beforeEach(() => {
   h.proposals = undefined;
   h.proposalCalls = 0;
   h.owner = true;
+  h.explain = undefined;
+  h.explainCalls = 0;
   h.spine = { bankConfidence: { fetchedAt: "2026-10-14T16:00:00.000Z", bankBalance: "3205.81", bankAsOf: "2026-10-14T13:00:00.000Z", h2Balance: "3205.81", pendingCount: 1, check: {} } };
 });
 afterEach(() => {
@@ -292,7 +303,7 @@ describe("Banking review — header and summary", () => {
   it("Balance check and the to-review count are separate things, each with its own scope", () => {
     mount();
     expect(within(screen.getByTestId("br-tie-cell")).getByText("Balance check")).toBeTruthy();
-    expect(text("br-tie")).toBe("Not checked yet — Sync to check");
+    expect(text("br-tie")).toBe("Not checked");
     // One name everywhere (the dashboard tile and the top bar say "review"). The count is THIS account and range, not the badge's.
     expect(text("br-inbox")).toBe("15 to review");
     expect(text("br-inbox-scope")).toBe("This account · Oct 1 – Oct 14");
@@ -654,45 +665,77 @@ describe("Banking review — states", () => {
   });
 });
 
-describe("(F4, Q5) Balance check — honest states, said as one chip", () => {
+describe("(F4, Q5, T2) Balance check — one state machine: one chip, one line, one action", () => {
   const NOW = "2026-10-14T15:00:00.000Z";
-  const state = (o: Record<string, unknown>) => {
-    h.review = review({ balanceCheck: check({ checkedAt: NOW, ...o }) });
+  const state = (o: Record<string, unknown>, r: Record<string, unknown> = {}) => {
+    h.review = review({ balanceCheck: check({ checkedAt: NOW, ...o }), ...r });
     mount();
   };
 
-  it("matches: 'Matches bank' (green), Bank $X · H2 $Y, never greyed", () => {
+  it("matches: 'Balances match' (green), checked when and the two figures it compared, no action", () => {
     state({ status: "matches", reason: null, difference: "0.00", bank: { balance: "2985.00", at: NOW, field: "available" }, h2: { balance: "2985.00" } });
-    expect(text("br-tie")).toBe("Matches bank");
+    expect(text("br-tie")).toBe("Balances match");
     expect(screen.getByTestId("br-tie").className).toContain("ok");
-    expect(text("br-check-compared")).toBe("At the check (Oct 14): bank $2,985.00 · H2 $2,985.00");
-    expect(screen.queryByTestId("br-check-when")).toBeNull();
-    expect(screen.queryByTestId("br-investigate")).toBeNull();
+    expect(text("br-check-line")).toBe("Checked 2 h ago · bank $2,985.00 = H2 $2,985.00");
+    expect(screen.queryByTestId("br-check-sync")).toBeNull();
+    expect(screen.queryByTestId("br-review-difference")).toBeNull();
   });
 
-  it("off by: the amount and which way in the chip; Bank vs H2; Investigate with the register", () => {
+  it("off by: 'Difference needs review' in rust, the check's own moment, Review difference with the register", () => {
     state({ status: "off_by", reason: null, difference: "62.50", direction: "bank_lower", bank: { balance: "2985.00", at: NOW, field: "available" }, h2: { balance: "3047.50" } });
-    expect(text("br-tie")).toBe("Off by $62.50 — bank lower");
+    expect(text("br-tie")).toBe("Difference needs review");
     expect(screen.getByTestId("br-tie").className).toContain("bad");
-    // (Q5 fix) H2's figure AT THE CHECK is named by its moment: H2's balance today is the summary cell's, and the bank's today is its own line.
-    expect(text("br-check-compared")).toBe("At the check (Oct 14): bank $2,985.00 · H2 $3,047.50");
-    expect(text("br-bank-today")).toBe("Bank $3,205.81");
-    expect(screen.getByTestId("br-investigate").textContent).toBe("Investigate");
+    expect(text("br-check-line")).toBe("At the last check (Oct 14) the bank was $62.50 lower than H2 expected.");
+    // Today's figures are not one reading here: no "agree" line.
+    expect(screen.queryByTestId("br-check-agree")).toBeNull();
+    // (T1) The bank's own reading under the balance is THIS response's, named as a reading, never "Bank $X".
+    expect(text("br-bank-today")).toBe("Bank's last reading $3,170.00 · Oct 14, 8:00 AM");
+    expect(screen.getByTestId("br-review-difference").textContent).toBe("Review difference");
     expect(screen.getByTestId("br-check-register").getAttribute("href")).toBe("/transactions?account=acct-chk&month=2026-10-01");
+  });
+
+  it("⭐ the owner's case: H2 and the bank agree today, the check stays — and Review difference explains it, read-only", async () => {
+    const at = "2026-10-14T12:02:00.000Z";
+    h.explain = ownerExplain({ check: { ...ownerExplain().check, checkedAt: at, bank: { balance: "0.00", at, field: "available" } } });
+    state(
+      { status: "off_by", reason: null, checkedAt: at, difference: "432.00", direction: "bank_lower", bank: { balance: "0.00", at, field: "available" }, h2: { balance: "432.00" } },
+      { balance: { today: "0.00", asOf: at, reading: "0.00", start: "0.00", end: "0.00", unavailableReason: null } },
+    );
+    expect(text("br-balance")).toBe("$0.00");
+    expect(text("br-balance-asof")).toBe("as of Oct 14");
+    expect(text("br-bank-today")).toBe("Bank's last reading $0.00 · Oct 14, 7:02 AM");
+    expect(text("br-tie")).toBe("Difference needs review");
+    expect(text("br-check-agree")).toBe("Today H2 $0.00 and the bank $0.00 agree.");
+    expect(text("br-check-line")).toBe("At the last check (Oct 14) the bank was $432.00 lower than H2 expected.");
+    // A real $0.00 balance is plain, never rust.
+    expect(screen.getByTestId("br-balance").className).not.toMatch(/bad/);
+    // Nothing is asked until the investigation opens.
+    expect(h.explainCalls).toBe(0);
+    fireEvent.click(screen.getByTestId("br-review-difference"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const body = await screen.findByTestId("check-explain-verdict");
+    expect(h.explainCalls).toBeGreaterThan(0);
+    expect(body.textContent).toContain("H2 can't find what explains this $432.00.");
+    expect(screen.getByTestId("check-explain-previous").textContent).toContain("$432.00");
+    expect(screen.getByTestId("check-explain-manual").textContent).toContain("none");
   });
 
   it("bank higher reads the other way", () => {
     state({ status: "off_by", reason: null, difference: "10.00", direction: "bank_higher" });
-    expect(text("br-tie")).toBe("Off by $10.00 — bank higher");
+    expect(text("br-check-line")).toBe("At the last check (Oct 14) the bank was $10.00 higher than H2 expected.");
   });
 
-  it("resolved since: says so, and what it was", () => {
-    state({ status: "resolved_since", reason: null, difference: "2000.00", direction: "bank_higher", lastDrift: { checkedAt: NOW, difference: "2000.00", direction: "bank_higher" } });
+  it("resolved since: green, the check's own difference (not the history), and the history beside it", () => {
+    state({ status: "resolved_since", reason: null, difference: "2000.00", direction: "bank_higher", lastDrift: { checkedAt: "2026-10-02T15:00:00.000Z", difference: "75.00", direction: "bank_lower" } });
     expect(text("br-tie")).toBe("Resolved since");
-    expect(text("br-check-was")).toContain("It was off by $2,000.00");
+    expect(screen.getByTestId("br-tie").className).toContain("ok");
+    expect(text("br-check-line")).toBe("Was off by $2,000.00 at the Oct 14 check; rows that arrived later explain it.");
+    expect(text("br-check-history")).toBe("Earlier: off by $75.00 on Oct 2");
   });
 
-  it("stale: a grey 'Checked 9 days ago', never green and never the alarm", () => {
+  it("out of date: a grey 'Check is out of date', why, and Sync to check — never green, never the alarm", () => {
     h.review = review({ balanceCheck: check({ status: "matches", reason: null, stale: true, staleReason: "age", checkedAt: "2026-10-05T12:00:00.000Z", difference: "0.00" }) });
     mount();
     expect(screen.getByTestId("br-check").getAttribute("data-stale")).toBe("true");
@@ -700,27 +743,44 @@ describe("(F4, Q5) Balance check — honest states, said as one chip", () => {
     expect(screen.getByTestId("br-check").className).not.toContain("opacity");
     expect(screen.getByTestId("br-tie").className).toContain("gray");
     expect(screen.getByTestId("br-tie").className).not.toContain("ok");
-    expect(text("br-tie")).toBe("Checked 9 days ago");
-    expect(text("br-check-when")).toBe("Sync to recheck");
+    expect(text("br-tie")).toBe("Check is out of date");
+    expect(text("br-check-line")).toBe("Last checked 9 days ago.");
+    expect(text("br-check-sync")).toBe("Sync to check");
   });
 
-  it("an old check that was off keeps the fact, greyed: 'Checked 9 days ago · was off by $X'", () => {
+  it("an out-of-date check that was off keeps the fact, greyed", () => {
     h.review = review({ balanceCheck: check({ status: "off_by", reason: null, stale: true, staleReason: "age", checkedAt: "2026-10-05T12:00:00.000Z", difference: "62.50", direction: "bank_lower" }) });
     mount();
-    expect(text("br-tie")).toBe("Checked 9 days ago · was off by $62.50");
+    expect(text("br-tie")).toBe("Check is out of date");
+    expect(text("br-check-line")).toBe("Last checked 9 days ago. It was off by $62.50 then.");
     expect(screen.getByTestId("br-tie").className).toContain("gray");
-    expect(screen.queryByTestId("br-investigate")).toBeNull();
+    expect(screen.queryByTestId("br-review-difference")).toBeNull();
+  });
+
+  it("(H4) a typed balance replaced the anchor: said as typed, and the reading under the balance says so too", () => {
+    state(
+      { status: "matches", reason: null, stale: true, staleReason: "anchor_changed", checkedAt: "2026-10-13T15:00:00.000Z", difference: "0.00" },
+      {
+        freshness: { source: "manual", fetchedAt: "2026-10-14T13:00:00.000Z", lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null },
+        balance: { today: "0.00", asOf: "2026-10-14T13:00:00.000Z", reading: "0.00", start: "0.00", end: "0.00", unavailableReason: null },
+      },
+    );
+    expect(text("br-tie")).toBe("Check is out of date");
+    expect(text("br-check-line")).toBe("A balance was typed in since the last check (Oct 13).");
+    expect(text("br-bank-today")).toBe("Typed balance $0.00 (not from the bank) · Oct 14");
   });
 
   it.each([
-    ["never", "Sync to check"],
-    ["not_forecast_account", "planned account only"],
-    ["anchor_too_old", "last balance too old"],
-    ["balance_unavailable", "bank gave no balance"],
-  ])("not checked yet (%s) gives the reason in a few words, grey", (reason, words) => {
+    ["never", null],
+    ["not_forecast_account", "H2 checks the planned account only."],
+    ["anchor_too_old", "The last balance was too old to compare."],
+    ["balance_unavailable", "The bank gave no balance."],
+  ])("not checked (%s): grey, its reason in a few words", (reason, line) => {
     state({ status: "not_checked", reason, checkedAt: reason === "never" ? null : NOW });
-    expect(text("br-tie")).toBe(`Not checked yet — ${words}`);
+    expect(text("br-tie")).toBe("Not checked");
     expect(screen.getByTestId("br-tie").className).toContain("gray");
+    if (line) expect(text("br-check-line")).toBe(line);
+    else expect(screen.queryByTestId("br-check-line")).toBeNull();
   });
 
   it("a clear review count does not turn a missing check green", () => {

@@ -96,6 +96,8 @@ export type FakeLedgerOptions = {
   holdBalances?: (query: URLSearchParams) => Promise<void> | undefined;
   /** (Final confirm N1) The ledger page's `account.plaidAccountIds` for an `account=` value (null = the default account). */
   accountScopeIds?: (accountParam: string | null) => string[];
+  /** (T1) The bank reading the balances roll forward from: the anchor names it, and `dataAsOf` is sent. */
+  snapshot?: { balance: string; at: string };
 };
 
 export type FakeCall = {
@@ -167,10 +169,12 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
   const anchor = () => ({
     today,
     todayBalance: opts.balanceToday ?? null,
-    snapshotBalance: null,
-    snapshotAt: null,
-    snapshotDay: null,
+    snapshotBalance: opts.snapshot?.balance ?? null,
+    snapshotAt: opts.snapshot?.at ?? null,
+    snapshotDay: opts.snapshot ? opts.snapshot.at.slice(0, 10) : null,
   });
+  // (T1) The reading every balance here rolls from (only when the test names one).
+  const asOf = () => (opts.snapshot ? { dataAsOf: { snapshotAt: opts.snapshot.at, computedAt: `${today}T12:00:00.000Z` } } : {});
   const accountFor = (accountParam: string | null) => ({ via: "pointer", plaidAccountIds: opts.accountScopeIds?.(accountParam) ?? ([] as string[]) });
 
   const handler = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -236,6 +240,7 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
             : null,
         anchor: other ? { ...anchor(), todayBalance: null } : anchor(),
         account: accountFor(accountParam),
+        ...asOf(),
       });
     }
 
@@ -256,6 +261,7 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
               : null,
         anchor: anchor(),
         account: accountFor(q.get("account")),
+        ...asOf(),
       });
     }
 

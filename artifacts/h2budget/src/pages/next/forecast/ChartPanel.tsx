@@ -1,10 +1,13 @@
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { Maximize2 } from "lucide-react";
 import { Panel } from "@/components/next";
-import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
+import { SyncButton } from "@/components/sync-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { householdToday } from "@/lib/householdDay";
+import { asOfWords } from "@/lib/checkingWords";
+import { moneyFace } from "@/components/data-state";
 import { groupMarkers, kindEvents, stepDate, type KindedEvent } from "@/lib/forecastEventKinds";
 import { ProjectedBalanceChart } from "../../forecast/ProjectedBalanceChart";
 import { ChartLegend } from "./ChartLegend";
@@ -50,6 +53,10 @@ export function ChartPanel({
   const [sheetOpen, setSheetOpen] = useState(false);
   const label = `${ctx.bankAccountName}${ctx.bankAccountMask ? ` ••${ctx.bankAccountMask}` : ""}`;
   const noCurve = ctx.dailySeries.length === 0 || ctx.proj?.status === "no_data";
+  // ⭐ (T1) Where the curve starts: the cash signal's own starting balance, as of the bank reading it rolls from.
+  const startAsOf = asOfWords(ctx.proj?.snapshotAt);
+  const startLabel =
+    !noCurve && ctx.proj?.startingBalance != null ? `Starting at ${moneyFace(ctx.proj.startingBalance)}${startAsOf ? ` · ${startAsOf}` : ""}` : null;
 
   const chart = (
     <ProjectedBalanceChart
@@ -70,6 +77,7 @@ export function ChartPanel({
       onSelectDate={onSelectDate}
       hoverSelects
       horizonKey={ctx.horizonDays}
+      startLabel={startLabel}
     />
   );
 
@@ -86,7 +94,7 @@ export function ChartPanel({
   return (
     <Panel
       title={`Projected cash — ${label}`}
-      sub={`${ctx.horizonDays} days. Solid up to today, dashed after.`}
+      sub={startLabel ? `${ctx.horizonDays} days · ${startLabel}` : `${ctx.horizonDays} days`}
       span={12}
       data-testid="card-projected-balance-chart"
       actions={
@@ -110,10 +118,15 @@ export function ChartPanel({
           className="flex h-[360px] w-full flex-col items-center justify-center gap-3 px-4 text-center lg:h-[460px]"
           data-testid="empty-projected-balance"
         >
-          <p className="text-body text-neutral-500">Set a bank snapshot or add planned items to draw the curve.</p>
-          <Button size="sm" onClick={ctx.openSnapshot} data-testid="button-empty-set-bank-snapshot">
-            Set bank snapshot
-          </Button>
+          {/* (T1) The bank's reading is the only checking balance: Sync reads it; no typed balance here. */}
+          <p className="text-body text-neutral-500">Sync to read the bank balance, or add planned items to draw the curve.</p>
+          {ctx.hasCheckingLink ? (
+            <SyncButton asKit compact />
+          ) : (
+            <Link href="/settings" className="press text-label font-semibold text-brand-navy underline" data-testid="button-empty-link-bank">
+              Link a bank
+            </Link>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

@@ -27,10 +27,16 @@ export type ForecastNextCtx = {
   jumpToPlan: (itemId: string, date: string) => void;
   onMarkMissed: (row: PlanLine) => void;
   onSkipDraggingPlan: (row: DraggingPlanRow) => void;
-  openSnapshot: () => void;
   openSettings: () => void;
   cashProjectionLoading: boolean;
-  bankBalance: string | number;
+  /** ⭐ (T1) Checking today (`cashSignal.bankToday`); null with no bank reading — a dash, never $0. */
+  bankBalance: string | null;
+  /** (T1) The bank reading it rolls forward from (`cashSignal.snapshotAt`). */
+  bankReadAt: string | null;
+  /** (T1) "Earlier reading (Oct 14) — updating…" while the bundle is older than the newest reading seen. */
+  bankOlder?: string | null;
+  /** (T1) A checking account is linked (the empty chart offers Sync, else "Link a bank"). */
+  hasCheckingLink?: boolean;
   bankAccountName: string;
   bankAccountMask: string | null;
   debtLinks: ReadonlyMap<string, string>;

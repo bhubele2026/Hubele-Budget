@@ -72,21 +72,24 @@ export function isSpineAccount(
 export const entriesWord = (n: number): string => `${n} ${n === 1 ? "entry" : "entries"}`;
 
 /**
- * "Includes 2 entries since the Oct 5 snapshot": why the balance is not the
+ * "Includes 2 entries since the Oct 5 reading": why the balance is not the
  * bank's figure. Null when nothing was added on top (or there is no snapshot).
  */
 export function sinceSnapshotWords(v: BankBalanceView): string | null {
   const n = v.since?.count ?? 0;
-  return v.snapshot && n > 0 ? `Includes ${entriesWord(n)} since the ${shortDate(v.snapshot.day)} snapshot` : null;
+  return v.snapshot && n > 0 ? `Includes ${entriesWord(n)} since the ${shortDate(v.snapshot.day)} reading` : null;
 }
 
 /**
- * "Snapshot $3,458.98 · Oct 2 · +20 entries": the bank's own figure, dated, for
- * a screen that shows it beside the balance today. Null with no snapshot.
+ * "Bank's last reading $3,458.98 · Oct 2 · +20 entries since": the bank's own
+ * figure, dated, for a screen that shows it beside the balance today (T1: never
+ * "Snapshot", and a typed balance says so — "Typed balance $X (not from the
+ * bank) · Oct 2"). Null with no snapshot.
  */
 export function snapshotWords(v: BankBalanceView): string | null {
   const s = v.snapshot;
   if (!s) return null;
   const n = v.since?.count ?? 0;
-  return `Snapshot ${formatCurrency(s.balance)} · ${shortDate(s.day)}${n > 0 ? ` · +${entriesWord(n)}` : ""}`;
+  const head = s.source === "manual" ? `Typed balance ${formatCurrency(s.balance)} (not from the bank)` : `Bank's last reading ${formatCurrency(s.balance)}`;
+  return `${head} · ${shortDate(s.day)}${n > 0 ? ` · +${entriesWord(n)} since` : ""}`;
 }

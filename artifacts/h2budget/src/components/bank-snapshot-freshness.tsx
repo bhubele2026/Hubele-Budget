@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatRelativeTime } from "@/lib/utils";
 
-// Tiny "Last auto-updated 12 minutes ago" / "Set manually 3 hours ago"
+// Tiny "Last auto-updated 12 minutes ago" / "Typed balance (not from the bank) · 3 hours ago"
 // label shared by the Forecast, Dashboard, and Transactions pages so
 // users see the same freshness signal everywhere the bank snapshot is
 // surfaced (Tasks #285, #333). Lives here as a standalone component so
@@ -26,7 +26,8 @@ export function BankSnapshotFreshness({
     const id = setInterval(() => setTick((n) => n + 1), 60 * 1000);
     return () => clearInterval(id);
   }, [now]);
-  const prefix = source === "plaid" ? "Last auto-updated " : "Set manually ";
+  // (T1) A typed balance is said as typed — never as the bank's reading.
+  const prefix = source === "plaid" ? "Last auto-updated " : "Typed balance (not from the bank) · ";
   return (
     <div data-testid="text-bank-snapshot-freshness">
       {prefix}

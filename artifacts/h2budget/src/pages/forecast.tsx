@@ -80,7 +80,9 @@ import { useSpine } from "@/hooks/useSpine";
 import { ToastAction } from "@/components/ui/toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
-import { FreshnessLine } from "@/components/data-state";
+import { FreshnessLine, moneyFace } from "@/components/data-state";
+import { useOlderSnapshot } from "@/lib/dataAsOf";
+import { readingLine } from "@/lib/checkingWords";
 import { dataState, scoped } from "@/lib/queryState";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { householdDayOfAt, householdToday } from "@/lib/householdDay";
@@ -407,6 +409,9 @@ export default function ForecastPage({
 
   const forecastQuery = useGetForecast({ days: deferredHorizonDays, ...(reviewFromMonth ? { fromMonth: reviewFromMonth } : {}) });
   const { data, isLoading, isError: forecastError, refetch: refetchForecast } = forecastQuery;
+  // ⭐ (T1) The bundle is cached 5 minutes: an answer built on an older bank reading than the newest seen
+  // (a Sync elsewhere re-read the bank) is labelled "Earlier reading … — updating…" and asked again once.
+  const forecastOlder = useOlderSnapshot(forecastQuery);
   // (Final W3) An older month asks for a longer window. While the previous window is held for it, the picked month's
   // rows are not in it: say "Loading", never "Review is empty · 0 pending".
   const monthWindowPending =
@@ -434,6 +439,8 @@ export default function ForecastPage({
   );
   const { data: cashProjection, isLoading: cashProjectionLoading, isError: projectionError, refetch: refetchProjection } =
     cashProjectionQuery;
+  // (T1) The projection heals the same way (its `dataAsOf` names the reading it starts from).
+  useOlderSnapshot(cashProjectionQuery);
   // (Q5) `keepPreviousData` keeps the last horizon's curve on screen while the new one loads. That is
   // fine only if it SAYS so: a 30-day curve under a "90 days" tab is another scope's number.
   const projScope = scoped(cashProjectionQuery, (c) => c.horizonDays == null || c.horizonDays === deferredHorizonDays);
@@ -572,8 +579,8 @@ export default function ForecastPage({
   const [draftDays, setDraftDays] = useState("90");
   const [draftBalance, setDraftBalance] = useState("0");
   const [draftBuffer, setDraftBuffer] = useState("500");
-  const [snapshotOpen, setSnapshotOpen] = useState(false);
-  const [draftSnapshot, setDraftSnapshot] = useState("");
+  // (T1) No "Set manually" here any more: the bank's reading is the only checking balance (owner, 10/15).
+  // POST /forecast/bank-snapshot {balance} and the stored data are kept; the page no longer offers it.
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   // (#456) First-time hint above the bank inbox explaining the
   // drag-to-match gesture. Persisted dismissal in localStorage so it never
@@ -1869,22 +1876,6 @@ export default function ForecastPage({
     );
   };
 
-  const openSnapshot = () => {
-    setDraftSnapshot(String(data?.bankSnapshot?.balance ?? ""));
-    setSnapshotOpen(true);
-  };
-  const saveSnapshot = () => {
-    setBankSnapshot.mutate(
-      { data: { balance: draftSnapshot } },
-      {
-        onSuccess: () => {
-          invalidate();
-          toast({ title: "Bank snapshot saved" });
-          setSnapshotOpen(false);
-        },
-      },
-    );
-  };
   // Task #546 — share the same account-aware "doesn't have a refreshable
   // balance" toast that the Chase / Transactions page uses (Task #385) so
   // users hitting Plaid-no-balance from the Forecast refresh or
@@ -1908,20 +1899,12 @@ export default function ForecastPage({
           .join(" ")
       : "this account";
     if (data?.code === "no_balance") {
+      // (T1) No "Set manually": the bank's reading is the only checking balance. Relinking is the fix.
       toast({
         title: `${acctLabel} doesn't have a refreshable balance`,
         description:
-          "Plaid didn't return a current balance for this account (often the case with brokerage or sub-accounts). Set the balance manually below, or relink the bank.",
+          "The bank didn't return a current balance for this account (often the case with brokerage or sub-accounts). Relink the bank in Settings, or link another checking account.",
         variant: "destructive",
-        action: (
-          <ToastAction
-            altText="Set bank balance manually"
-            data-testid="action-forecast-refresh-bank-set-manual"
-            onClick={openSnapshot}
-          >
-            Set manually
-          </ToastAction>
-        ),
       });
       return true;
     }
@@ -2373,15 +2356,16 @@ export default function ForecastPage({
   const bankGrid = (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <section className={kitCard} data-testid="card-bank-snapshot">
+          {/* ⭐ (T1) CHECKING TODAY — the one balance every surface shows (cashSignal.bankToday: the bank's
+              reading rolled forward through the counted rows, from THIS bundle, one moment), with the
+              bank's own reading as evidence under it. Never the raw reading under a "today" title. */}
           <div className={cardHead}>
             <Landmark className="h-4 w-4 text-neutral-400" aria-hidden="true" />
             <h2 className="text-title font-semibold text-brand-navy">
-              Bank balance
+              Checking today
             </h2>
             <Help>
-              The anchor the whole projection is rolled forward from. A Plaid
-              snapshot refreshes on sync; a manual one holds until you change
-              it.
+              The bank's last reading plus every counted row since; it refreshes when you Sync, Refresh or link the account.
             </Help>
             {data.bankSnapshot && data.bankSnapshot.source === "plaid" && (
               <button
@@ -2400,52 +2384,46 @@ export default function ForecastPage({
           </div>
           <div className="space-y-2 px-4 py-3">
             <div
-              className="font-mono text-title font-semibold tabular-nums text-brand-navy"
+              className={`font-mono text-title font-semibold tabular-nums ${forecastOlder.older ? "text-neutral-500" : "text-brand-navy"}`}
               data-testid="text-bank-balance"
             >
-              {data.bankSnapshot
-                ? formatCurrency(data.bankSnapshot.balance)
-                : formatCurrency(data.settings.startingBalance)}
+              {/* No reading: a dash, never the starting balance dressed as a bank balance. */}
+              {moneyFace(data.cashSignal?.bankToday)}
             </div>
             <div
-              className="text-micro text-neutral-400"
+              className="space-y-0.5 text-micro text-neutral-500"
               data-testid="text-bank-snapshot-meta"
             >
-              {data.bankSnapshot ? (
+              {forecastOlder.older ? (
+                <div data-testid="text-bank-older">{forecastOlder.words}</div>
+              ) : data.bankSnapshot ? (
                 <>
-                  {data.bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
-                  {bankAccountName}
-                  {bankAccountMask ? ` ••${bankAccountMask}` : ""} ·{" "}
-                  {formatDate(householdDayOfAt(data.bankSnapshot.at))}
-                  {/* The server's verdict when the spine describes this same
-                      snapshot. Until it answers, or if the two ever disagree on
-                      which snapshot is current, the plain timestamp label. */}
+                  {/* The server's verdict when the spine describes this same reading; until it answers, or if
+                      the two ever disagree on which reading is current, the plain timestamp label. */}
                   {spineData?.bank?.source &&
                   spineData.bank.asOfDate &&
                   Date.parse(spineData.bank.asOfDate) === Date.parse(data.bankSnapshot.at) ? (
-                    <div>
-                      <FreshnessLine bank={spineData.bank} fetchedAt={spineData.bankConfidence?.fetchedAt} />
-                    </div>
+                    <FreshnessLine bank={spineData.bank} fetchedAt={spineData.bankConfidence?.fetchedAt} />
                   ) : (
                     <BankSnapshotFreshness
                       source={data.bankSnapshot.source}
                       at={data.bankSnapshot.at}
                     />
                   )}
+                  <div data-testid="text-bank-reading">
+                    {readingLine(
+                      { balance: data.bankSnapshot.balance, at: data.bankSnapshot.at, source: data.bankSnapshot.source },
+                      `${bankAccountName}${bankAccountMask ? ` ••${bankAccountMask}` : ""}`,
+                    )}
+                  </div>
                 </>
               ) : (
-                <>No snapshot — using starting balance</>
+                <div data-testid="text-bank-no-reading">
+                  No bank reading yet — the curve starts from your starting balance {formatCurrency(data.settings.startingBalance)}
+                </div>
               )}
             </div>
             <div className="flex flex-wrap gap-2 pt-1">
-              <button
-                type="button"
-                className={btnLink}
-                onClick={openSnapshot}
-                data-testid="button-set-bank-snapshot"
-              >
-                Set manually
-              </button>
               {data.plaidCheckingAccounts.length > 0 && (
                 <Select onValueChange={onLinkChecking}>
                   <SelectTrigger className="h-7 w-44 text-micro" aria-label="Link a checking account">
@@ -2461,6 +2439,9 @@ export default function ForecastPage({
                   </SelectContent>
                 </Select>
               )}
+              {!data.bankSnapshot && data.plaidCheckingAccounts.length === 0 ? (
+                <Link href="/settings" className={btnLink} data-testid="link-bank-settings">Link a bank</Link>
+              ) : null}
             </div>
           </div>
         </section>
@@ -3505,39 +3486,6 @@ export default function ForecastPage({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={snapshotOpen} onOpenChange={setSnapshotOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Set bank balance manually</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="snap">Current checking balance</Label>
-              <Input
-                id="snap"
-                type="number"
-                step="0.01"
-                value={draftSnapshot}
-                onChange={(e) => setDraftSnapshot(e.target.value)}
-                data-testid="input-snapshot"
-              />
-              <p className="mt-1 text-micro text-neutral-400">
-                Anchors the running balance to today. Past items won't shift it.
-              </p>
-            </div>
-            <div className="flex justify-end pt-2">
-              <Button
-                onClick={saveSnapshot}
-                disabled={setBankSnapshot.isPending}
-                data-testid="button-save-snapshot"
-              >
-                Save snapshot
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <Dialog
         open={moveTarget !== null}
         onOpenChange={(o) => {
@@ -3818,10 +3766,14 @@ export default function ForecastPage({
         jumpToPlan,
         onMarkMissed,
         onSkipDraggingPlan,
-        openSnapshot,
         openSettings: () => openSettings(),
         cashProjectionLoading,
-        bankBalance: data.bankSnapshot ? data.bankSnapshot.balance : data.settings.startingBalance,
+        // ⭐ (T1) "Checking today": the cash signal's roll-forward from THIS bundle (null with no reading — a
+        // dash, never the starting balance), and the reading it is built on.
+        bankBalance: data.cashSignal?.bankToday ?? null,
+        bankReadAt: data.cashSignal?.snapshotAt ?? null,
+        bankOlder: forecastOlder.words,
+        hasCheckingLink: data.plaidCheckingAccounts.length > 0 || !!data.bankSnapshot?.accountId,
         bankAccountName,
         bankAccountMask,
         debtLinks,

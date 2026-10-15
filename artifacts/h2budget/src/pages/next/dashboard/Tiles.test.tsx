@@ -6,7 +6,7 @@ import { memoryLocation } from "wouter/memory-location";
 
 const h = vi.hoisted(() => ({
   Q: {} as Record<string, unknown>,
-  spine: { data: undefined as unknown, state: "loaded", refetch: () => {} },
+  spine: { data: undefined as unknown, state: "loaded", refetch: () => {} } as { data: unknown; state: string; refetch: () => void; olderWords?: string | null },
   prefetch: vi.fn(),
   settings: undefined as unknown,
 }));
@@ -123,27 +123,28 @@ describe("six tiles", () => {
     });
     // The words arrive in a lazy chunk: the tile keeps its place meanwhile.
     const check = () => screen.findByTestId("tile-banking-check");
-    it("matches: Matches bank (green), pending beside", async () => {
+    // (T2) The same chip words as Banking's Balance check.
+    it("matches: Balances match (green), pending beside", async () => {
       setup({ bankConfidence: conf({}, { pendingCount: 2 }) });
-      expect((await check()).textContent).toBe("Matches bank");
+      expect((await check()).textContent).toBe("Balances match");
       expect((await check()).getAttribute("data-tone")).toBe("ok");
       expect(screen.getByTestId("tile-banking-pending").textContent).toBe("2 pending");
     });
-    it("off by $X, which way: rust, never green", async () => {
+    it("off by: Difference needs review, rust, never green", async () => {
       setup({ bankConfidence: conf({ status: "off_by", difference: "62.50", direction: "bank_lower" }) });
-      expect((await check()).textContent).toBe("Off by $62.50 — bank lower");
+      expect((await check()).textContent).toBe("Difference needs review");
       expect((await check()).getAttribute("data-tone")).toBe("bad");
     });
-    it("not checked yet says why and is grey even though the review count is zero", async () => {
+    it("not checked is grey even though the review count is zero", async () => {
       setup({ reviewCount: 0, bankConfidence: conf({ status: "not_checked", reason: "never", checkedAt: null, difference: null }) });
-      expect((await check()).textContent).toBe("Not checked yet — Sync to check");
+      expect((await check()).textContent).toBe("Not checked");
       expect((await check()).getAttribute("data-tone")).toBe("grey");
       expect(screen.queryByTestId("tile-banking-pending")).toBeNull();
       expect(screen.getByTestId("tile-banking-status").textContent).toBe("Nothing to review");
     });
-    it("an old matching check is grey 'Checked 9 days ago'", async () => {
+    it("an old matching check is grey 'Check is out of date'", async () => {
       setup({ bankConfidence: conf({ stale: true, staleReason: "age", checkedAt: new Date(Date.now() - 9 * 86_400_000).toISOString() }) });
-      expect((await check()).textContent).toBe("Checked 9 days ago");
+      expect((await check()).textContent).toBe("Check is out of date");
       expect((await check()).getAttribute("data-tone")).toBe("grey");
     });
     it("no bank balance: no confidence row at all", () => {
@@ -154,11 +155,46 @@ describe("six tiles", () => {
   it("forecast and debt quote the spine", () => {
     setup();
     expect(screen.getByTestId("tile-forecast-low").textContent).toBe("$350.00");
-    expect(screen.getByTestId("tile-forecast-status").textContent).toBe("Below buffer");
+    // (T2) Under the buffer at or above $0 is quiet, never rust; only below zero is the alarm.
+    expect(screen.getByTestId("tile-forecast-status").textContent).toBe("Under the $500 buffer");
+    expect(screen.getByTestId("tile-forecast-status").getAttribute("data-tone")).toBe("neutral");
+    expect(screen.getByTestId("tile-forecast-link").getAttribute("href")).toBe("/forecast");
+    expect(screen.queryByTestId("tile-forecast-shortfall")).toBeNull();
     expect(screen.getByTestId("tile-forecast-next").textContent).toContain("Rent");
     expect(screen.getByTestId("tile-debt-pct").textContent).toBe("42%");
     expect(screen.getByTestId("tile-debt-mtd").textContent).toBe("$300.00");
     expect(screen.getByTestId("tile-debt").textContent).not.toMatch(/1,500|800/);
+  });
+  it("⭐ (T2) a projected NEGATIVE low point is the only rust: 'Below zero on <date>', and the tile opens that day", () => {
+    setup({ forecast: { lowPoint: "-42.10", lowPointDate: "2026-10-20", runwayDays: 5, cashBuffer: "500.00", status: "not_yet" } });
+    expect(screen.getByTestId("tile-forecast-status").textContent).toBe("Below zero on Oct 20");
+    expect(screen.getByTestId("tile-forecast-status").getAttribute("data-tone")).toBe("bad");
+    expect(screen.getByTestId("tile-forecast-shortfall").textContent).toBe("Review shortfall →");
+    expect(screen.getByTestId("tile-forecast-link").getAttribute("href")).toBe("/forecast?day=2026-10-20");
+    cleanup();
+    // Near the buffer is quiet; well above it is ok.
+    setup({ forecast: { lowPoint: "620.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "tight" } });
+    expect(screen.getByTestId("tile-forecast-status").textContent).toBe("Near buffer");
+    expect(screen.getByTestId("tile-forecast-status").getAttribute("data-tone")).toBe("neutral");
+  });
+  it("(T1, H1) a checking balance of exactly $0.00 is a real figure: plain, never rust, never a dash", () => {
+    setup({ bank: { ...bank, balance: "0.00", snapshot: { balance: "0.00", at: "2026-10-08T12:00:00Z", source: "plaid" } } });
+    expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$0.00");
+    expect(screen.getByTestId("tile-banking-balance").className).not.toContain("text-bad-ink");
+  });
+  it("(T1, H2) a spine older than the newest reading seen: the figure stays, grey words say it is an earlier reading — never 'current'", () => {
+    setup();
+    h.spine = { ...h.spine, olderWords: "Earlier reading (Oct 7) — updating…" };
+    cleanup();
+    render(<QueryClientProvider client={new QueryClient()}><Router hook={memoryLocation({ path: "/home" }).hook}><Tiles /></Router></QueryClientProvider>);
+    expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$4,200.50");
+    expect(screen.getByTestId("tile-banking-fresh").textContent).toBe("Earlier reading (Oct 7) — updating…");
+  });
+  it("(H12) a failed refresh keeps the figures; the low point says it is from an out-of-date balance (no new rust)", () => {
+    setup({ bank: { ...bank, stale: true, staleReason: "refresh_failed" } });
+    expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$4,200.50");
+    expect(screen.getByTestId("tile-forecast-low").textContent).toBe("$350.00");
+    expect(screen.getByTestId("tile-forecast-status").getAttribute("data-tone")).toBe("neutral");
   });
   it("loading draws skeletons and no $0", () => {
     h.spine.data = undefined;
