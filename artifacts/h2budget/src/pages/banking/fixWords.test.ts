@@ -43,8 +43,8 @@ describe("figureChanges", () => {
   it("Banking: buckets by their direction-aware titles, rows before → after, and what is left to review; the scope names the dates the dry run read", () => {
     const c = figureChanges(preview({ banking: [banking({ unmatched: [2, "0.00", "40.00"], timingDifference: [1, "0.00", "5.00"] }, { unmatched: [0, "0.00", "0.00"], timingDifference: [1, "0.00", "5.00"] }, [3, 1])] }), "2026-10-15");
     expect(c.map((x) => `${x.scope}|${x.label}|${x.before}→${x.after}`)).toEqual([
-      "Banking · Chase Checking ••4321 · Oct 1 – Oct 14|Not on the plan|2 rows→0 rows",
-      "Banking · Chase Checking ••4321 · Oct 1 – Oct 14|To review|3→1",
+      "Banking · Chase Checking ••4321 · Oct 1 – Oct 14|Unplanned activity|2 rows→0 rows",
+      "Banking · Chase Checking ••4321 · Oct 1 – Oct 14|Charges to match|3→1",
     ]);
   });
   it("a one-day range is said as one day", () => {

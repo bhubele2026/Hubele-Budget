@@ -1292,7 +1292,7 @@ export default function TransactionsPage({
         : r?.status === "partial"
           ? { attr: "partial", label: "Partly paid", icon: Check, tone: "ok" }
         : r?.status === "ignored_unforecasted" || r?.status === "unplanned"
-          ? { attr: "unplanned", label: "Marked not in plan", icon: Inbox, tone: "gray" }
+          ? { attr: "unplanned", label: "Marked unplanned", icon: Inbox, tone: "gray" }
           : { attr: "in-review-bucket", label: "In Review", icon: Inbox, tone: "info" };
     const StateIcon = state.icon;
     // What the "×" does. A future row leaves the forecast. A posted row still

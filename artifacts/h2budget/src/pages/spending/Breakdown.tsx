@@ -238,7 +238,7 @@ export function Breakdown({ data, open, onToggle, routeOf }: {
                         <span data-testid={`sp-nohistory-${token}`}>Not enough history</span>
                       )}
                       {c.aboveUsual != null && cents(c.aboveUsual) > 0 ? (
-                        <span className="chip warn" data-testid={`sp-above-${token}`}>above usual {formatCurrency(c.aboveUsual)}</span>
+                        <span className="chip warn" data-testid={`sp-above-${token}`}>Above usual {formatCurrency(c.aboveUsual)}</span>
                       ) : null}
                     </>
                   }

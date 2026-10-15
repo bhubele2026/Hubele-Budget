@@ -14,12 +14,49 @@ import { formatCurrency } from "@/lib/utils";
 /** (W3) The words on the Banking review. Short; the owner asked for fewer. */
 
 export const BUCKETS: Array<{ name: BankingReviewBucketName; title: string; line: string }> = [
-  { name: "unmatched", title: "Not on the plan", line: "Money in or out the plan did not list" },
-  { name: "amountDifference", title: "Received or paid a different amount", line: "On the plan, but not the planned amount" },
-  { name: "timingDifference", title: "On a different day", line: "On the plan, on another day" },
-  { name: "confirmedUnplanned", title: "Marked not in plan", line: "You marked these not in the plan" },
-  { name: "uncertain", title: "Not sure", line: "H2 can't tell yet" },
+  { name: "unmatched", title: "Unplanned activity", line: "Money in or out the plan did not list" },
+  { name: "amountDifference", title: "Amount differences", line: "On the plan, but a different amount" },
+  { name: "timingDifference", title: "Timing differences", line: "On the plan, but more than 3 days early or late" },
+  { name: "confirmedUnplanned", title: "Marked unplanned", line: "You marked these unplanned" },
+  { name: "uncertain", title: "Unclear", line: "H2 can't tell yet" },
 ];
+
+/** The pill's second line: "In $135.13 · Out $4,603.46", a zero side left out. Never a net. */
+export function inOutWords(t: { moneyIn: string; moneyOut: string }): string {
+  const parts: string[] = [];
+  if (!isZeroMoney(t.moneyIn)) parts.push(`In ${formatCurrency(t.moneyIn)}`);
+  if (!isZeroMoney(t.moneyOut)) parts.push(`Out ${formatCurrency(t.moneyOut)}`);
+  return parts.join(" · ");
+}
+
+/** A kind chip: "Spending 3 · Out $112.80" (the kind's own in and out, apart). */
+export function kindChipWords(kind: BankingReviewKind, t: { count: number; moneyIn: string; moneyOut: string }): string {
+  return [`${KIND_WORDS[kind]} ${t.count}`, inOutWords(t)].filter(Boolean).join(" · ");
+}
+
+/**
+ * The one line under the selected title, only when it says something the pill does not.
+ * Amount differences: the direction-aware lines; timing: the rule; unclear: the reason counts.
+ */
+export function bucketNote(name: BankingReviewBucketName, b: Pick<BankingReviewBucket, "varianceIn" | "varianceOut" | "byReason">): string | null {
+  switch (name) {
+    case "amountDifference": {
+      const sides = [sideWords("in", b.varianceIn), sideWords("out", b.varianceOut)].filter((x): x is string => !!x);
+      return sides.length ? sides.join(" · ") : "On the plan, but a different amount";
+    }
+    case "timingDifference":
+      return "On the plan, but more than 3 days early or late";
+    case "uncertain": {
+      const r = b.byReason;
+      const parts: string[] = [];
+      if (r && r.needs_review.count > 0) parts.push(`${r.needs_review.count} needs review`);
+      if (r && r.suggested_match.count > 0) parts.push(`${r.suggested_match.count} suggested ${r.suggested_match.count === 1 ? "match" : "matches"}`);
+      return parts.length ? parts.join(" · ") : null;
+    }
+    default:
+      return null;
+  }
+}
 
 /**
  * (Q5) One bucket in words for a screen reader (and the tooltip): the count,
@@ -150,12 +187,6 @@ export const dayWords = (iso: string) => `${DAY[Number(iso.slice(5, 7)) - 1]} ${
 /** A money string without its sign: "−108.60" → "$108.60". The sign is said in words next to it. */
 export const unsigned = (v: string): string => formatCurrency(String(v).replace(/^-/, ""));
 
-/** "−$108.60" / "+$12.00": a cash effect, signed. Display only. */
-export const signedCash = (v: string): string => {
-  const n = Number(v);
-  return n === 0 ? formatCurrency(0) : `${n < 0 ? "−" : "+"}${unsigned(v)}`;
-};
-
 /**
  * (F4) The variance in words, from the server's direction-aware kind: an income
  * is "less / more than expected", an expense is "over / under". Null when the
@@ -194,6 +225,11 @@ export function sideWords(side: "in" | "out", v: string | null | undefined): str
   return side === "in"
     ? `Income ${unsigned(v)} ${n < 0 ? "less" : "more"} than expected`
     : `Bills ${unsigned(v)} ${n < 0 ? "over" : "under"}`;
+}
+
+/** A pill's short side: "Income $87.87 less" / "Bills $12.00 over" (`sideWords` without " than expected"). */
+export function sideShort(side: "in" | "out", v: string | null | undefined): string | null {
+  return sideWords(side, v)?.replace(" than expected", "") ?? null;
 }
 
 export function daysWords(n: number): string {

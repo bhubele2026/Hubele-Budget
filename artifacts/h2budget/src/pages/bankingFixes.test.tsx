@@ -161,8 +161,8 @@ describe("Preview", () => {
     expect(lines).toContain("This week · Cautious total (includes unconfirmed)$319.76 → $279.76");
     expect(lines.join("|")).not.toContain("Counts toward plan");
     // The dry run reads this fix's own dates; the line says them, so 2 here is not read against the page's count.
-    expect(lines).toContain("Banking · Chase Total Checking ••4321 · Oct 1 – Oct 14 · Not on the plan2 rows → 0 rows");
-    expect(lines).toContain("Banking · Chase Total Checking ••4321 · Oct 1 – Oct 14 · To review2 → 0");
+    expect(lines).toContain("Banking · Chase Total Checking ••4321 · Oct 1 – Oct 14 · Unplanned activity2 rows → 0 rows");
+    expect(lines).toContain("Banking · Chase Total Checking ••4321 · Oct 1 – Oct 14 · Charges to match2 → 0");
     expect(within(dlg).getByTestId("fix-learns")).toBeTruthy();
     expect(within(dlg).queryByTestId("fix-limits")).toBeNull();
   });

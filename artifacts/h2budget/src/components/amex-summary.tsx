@@ -5,6 +5,7 @@ import { Panel } from "@/components/next/Panel";
 import { moneyFace } from "@/components/data-state";
 import { AmexOverLink } from "@/components/amex-over-link";
 import { cn } from "@/lib/utils";
+import { figLabel } from "@/ui";
 import { householdDayOfAt } from "@/lib/householdDay";
 import {
   amexPlanLine,
@@ -26,8 +27,6 @@ export { whyOverPath };
  * adds nothing. An unknown amount is "—", never $0.
  */
 
-/** The figure labels' type (label size, neutral-600): readable, not a micro-caps whisper. */
-const FIG_LABEL = "text-label text-neutral-600";
 const FIG_BASE =
   "press flex min-w-0 flex-col gap-0.5 rounded-card p-3 text-left ring-1 ring-brand-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
 const LINK = "font-semibold text-brand-navy underline";
@@ -71,7 +70,7 @@ function Figure({
 }) {
   const body = (
     <>
-      <span className={FIG_LABEL}>{label}</span>
+      <span className={figLabel}>{label}</span>
       <span className="font-mono text-kpi font-semibold tabular-nums text-brand-navy">{moneyFace(amount)}</span>
       {sub ? <span className="text-micro text-neutral-600">{sub}</span> : null}
       {!onClick && extra ? extra : null}

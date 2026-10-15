@@ -106,15 +106,15 @@ describe("six tiles", () => {
     fireEvent.click(link);
     expect(mem.history?.at(-1)).toBe("/forecast");
   });
-  it("banking: checking once with identity, and review count or up to date", () => {
+  it("banking: checking once with identity, and charges to match or nothing to match", () => {
     setup();
     expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$4,200.50");
     expect(screen.getByTestId("tile-banking-account").textContent).toBe("Total Checking ••5526");
-    expect(screen.getByTestId("tile-banking-status").textContent).toBe("3 to review");
+    expect(screen.getByTestId("tile-banking-status").textContent).toBe("3 charges to match");
     cleanup();
     setup({ reviewCount: 0 });
     // (Q5) "Up to date" read like a sync verdict; the chip now says what the count is.
-    expect(screen.getByTestId("tile-banking-status").textContent).toBe("Nothing to review");
+    expect(screen.getByTestId("tile-banking-status").textContent).toBe("Nothing to match");
   });
   describe("bank confidence (Q5): separate facts, green only for a matching check", () => {
     const conf = (check: Record<string, unknown>, o: Record<string, unknown> = {}) => ({
@@ -129,6 +129,13 @@ describe("six tiles", () => {
       expect((await check()).textContent).toBe("Balances match");
       expect((await check()).getAttribute("data-tone")).toBe("ok");
       expect(screen.getByTestId("tile-banking-pending").textContent).toBe("2 pending");
+      // Row A is data (updated + pending); the check is its own row, never merged with it.
+      expect(screen.getByTestId("tile-banking-fresh").textContent).toBe("fresh · 2 pending")  // FreshnessLine is mocked here; its own words are tested with it;
+      expect(screen.getByTestId("tile-banking-fresh").contains(screen.getByTestId("tile-banking-check"))).toBe(false);
+    });
+    it("pending shows at once from the spine, before the check's chunk arrives", () => {
+      setup({ bankConfidence: conf({}, { pendingCount: 2 }) });
+      expect(screen.getByTestId("tile-banking-fresh").textContent).toBe("fresh · 2 pending")  // FreshnessLine is mocked here; its own words are tested with it;
     });
     it("off by: Difference needs review, rust, never green", async () => {
       setup({ bankConfidence: conf({ status: "off_by", difference: "62.50", direction: "bank_lower" }) });
@@ -140,7 +147,7 @@ describe("six tiles", () => {
       expect((await check()).textContent).toBe("Not checked");
       expect((await check()).getAttribute("data-tone")).toBe("grey");
       expect(screen.queryByTestId("tile-banking-pending")).toBeNull();
-      expect(screen.getByTestId("tile-banking-status").textContent).toBe("Nothing to review");
+      expect(screen.getByTestId("tile-banking-status").textContent).toBe("Nothing to match");
     });
     it("an old matching check is grey 'Check is out of date'", async () => {
       setup({ bankConfidence: conf({ stale: true, staleReason: "age", checkedAt: new Date(Date.now() - 9 * 86_400_000).toISOString() }) });

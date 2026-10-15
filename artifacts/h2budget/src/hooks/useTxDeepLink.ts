@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { scrollBehavior } from "@/lib/reducedMotion";
 
 /**
  * (F8) `?tx=<id>` on a ledger page: once the rows are on screen, scroll the
@@ -115,7 +116,7 @@ export function useTxDeepLink({
       if (!el || handled.current) return false;
       handled.current = true;
       if (wait.current) clearTimeout(wait.current);
-      if (scroll) el.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      if (scroll) el.scrollIntoView?.({ behavior: scrollBehavior(), block: "center" });
       if (scrolledRef) scrolledRef.current = true;
       const params = new URLSearchParams(window.location.search);
       params.delete("tx");

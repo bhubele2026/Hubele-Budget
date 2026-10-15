@@ -274,7 +274,7 @@
      whole thing changes together — that is the point of having them.
      --dur-press stays short: the CLICK must answer instantly even when
      everything it sets in motion is deliberate. */
-  --anim-speed: 2.2;   /* the dashboard's speed knob — keep equal to SPEED in the chart kit */
+  --anim-speed: 1;   /* the dashboard's speed knob — keep equal to SPEED in the chart kit */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-enter: cubic-bezier(0.22, 0.61, 0.36, 1); /* gentle ease-out — arrivals */
   --ease-move: cubic-bezier(0.45, 0, 0.55, 1);     /* symmetric — anything travelling */
@@ -686,18 +686,18 @@
   .chip {
     display: inline-block;
     border-radius: 9999px;
-    padding: 2px 9px;
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    font-size: var(--text-micro);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
     white-space: nowrap;
   }
   .chip.ok { color: var(--color-ok); background: var(--color-ok-bg); }
   .chip.warn { color: var(--color-warn); background: var(--color-warn-bg); }
   .chip.bad { color: var(--color-bad-ink); background: var(--color-bad-bg); }
   .chip.info { color: var(--color-info); background: var(--color-info-bg); }
-  .chip.gray { color: #5d6674; background: #eef0f3; }
+  .chip.gray { color: var(--color-acct-other); background: var(--color-acct-other-bg); }
 
   /* Emphasis ring — a flat navy hairline, no blur halo. */
   .focus-glow {
@@ -865,7 +865,7 @@
   .area-draw {
     -webkit-mask-image: linear-gradient(to right, #000 var(--reveal), transparent calc(var(--reveal) + 7%));
     mask-image: linear-gradient(to right, #000 var(--reveal), transparent calc(var(--reveal) + 7%));
-    animation: areaFill calc(900ms * var(--anim-speed)) var(--ease-move) both;
+    animation: areaFill calc(600ms * var(--anim-speed)) var(--ease-move) both;
   }
   .sweep-in { animation: chartIn var(--dur-grand) var(--ease-enter) backwards; }
   .spark-fill-in { animation: chartIn var(--dur-grand) var(--ease-enter) backwards; }

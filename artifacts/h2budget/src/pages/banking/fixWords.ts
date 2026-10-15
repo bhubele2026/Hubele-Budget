@@ -61,7 +61,7 @@ function bankingChanges(scope: string, before: CorrectionBankingFigures, after: 
     out.push({ key: `bank-${b.name}`, scope, label: b.title, before: `${x.count} ${x.count === 1 ? "row" : "rows"}`, after: `${y.count} ${y.count === 1 ? "row" : "rows"}` });
   }
   if (before.unresolvedInRange !== after.unresolvedInRange) {
-    out.push({ key: "bank-inbox", scope, label: "To review", before: String(before.unresolvedInRange), after: String(after.unresolvedInRange) });
+    out.push({ key: "bank-inbox", scope, label: "Charges to match", before: String(before.unresolvedInRange), after: String(after.unresolvedInRange) });
   }
   return out;
 }

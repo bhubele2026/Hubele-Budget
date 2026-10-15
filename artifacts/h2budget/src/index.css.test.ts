@@ -74,12 +74,12 @@ describe("index.css — the reduced-motion switch actually reaches the dials", (
     expect(speedDecls).toHaveLength(2);
   });
 
-  it("sets the default dial to 2.2 at top level, outside every @layer", () => {
+  it("sets the default dial to 1 at top level, outside every @layer", () => {
     const base = speedDecls.find((d) => !inReduceMedia(d.stack))!;
     expect(base).toBeDefined();
     expect(base.stack).toEqual([":root"]);
     expect(isLayered(base.stack)).toBe(false);
-    expect(SRC).toMatch(/--anim-speed:\s*2\.2\s*;/);
+    expect(SRC).toMatch(/--anim-speed:\s*1\s*;/);
   });
 
   /**

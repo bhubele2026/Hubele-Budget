@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { warmHandlers } from "@/lib/warmRoutes";
 import { Link, useLocation } from "wouter";
+import { scrollBehavior } from "@/lib/reducedMotion";
 
 /**
  * The app's one navigation ribbon — the dashboard's tab geometry (flush
@@ -103,14 +104,14 @@ export function TabRibbon({
     const el = navRef.current?.querySelector(
       `[data-tabhref="${activeHref}"]`,
     ) as HTMLElement | null;
-    el?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+    el?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: scrollBehavior() });
     measure();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeHref]);
 
   const scrollBy = (dir: number) => {
     const n = navRef.current;
-    if (n) n.scrollBy({ left: dir * n.clientWidth * 0.66, behavior: "smooth" });
+    if (n) n.scrollBy({ left: dir * n.clientWidth * 0.66, behavior: scrollBehavior() });
   };
 
   /**

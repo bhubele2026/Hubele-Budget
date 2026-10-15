@@ -38,24 +38,31 @@ function BankingTile({ s, older }: { s: Spine | undefined; older?: string | null
     : null;
   const bal = Number(s.bank.balance);
   const n = s.reviewCount;
+  const pending = s.bankConfidence?.pendingCount ?? 0;
   const href = acct?.rowId ? `/banking?account=${encodeURIComponent(acct.rowId)}` : "/banking";
   return (
     <Tile
       testid="banking" title="Banking" href={href} accent="checking" index={1}
       sub={identity ? <span data-testid="tile-banking-account">{identity.label}{identity.mask4 ? ` ••${identity.mask4}` : ""}</span> : "Checking"}
-      status={{ word: n > 0 ? `${n} to review` : "Nothing to review", tone: n > 0 ? "bad" : "ok" }}
+      status={{ word: n === 1 ? "1 charge to match" : n > 0 ? `${n} charges to match` : "Nothing to match", tone: n > 0 ? "bad" : "ok" }}
     >
       <Fig
         label="Checking" big testid="tile-banking-balance"
         value={v.balance == null ? "—" : money(s.bank.balance)}
         tone={!older && Number.isFinite(bal) && bal < 0 ? "bad" : "neutral"}
       />
-      <div className="text-micro text-neutral-500" data-testid="tile-banking-fresh">
-        {v.balance == null ? "No bank balance yet." : older ?? <FreshnessLine bank={s.bank} fetchedAt={s.bankConfidence?.fetchedAt} />}
+      {/* Row A (data): when it was updated, and how many rows are pending. Row B (below): the check, apart. */}
+      <div className="flex flex-wrap items-baseline gap-x-1 text-label text-neutral-600" data-testid="tile-banking-fresh">
+        {v.balance == null ? "No bank balance yet." : (
+          <>
+            {older ?? <FreshnessLine bank={s.bank} fetchedAt={s.bankConfidence?.fetchedAt} />}
+            {pending > 0 && !older ? <><span aria-hidden>{" · "}</span><span data-testid="tile-banking-pending">{pending} pending</span></> : null}
+          </>
+        )}
       </div>
       {v.balance != null && s.bankConfidence ? (
         // (Q5) Separate facts, in a lazy chunk (the landing stays the same size): the check says "Matches bank" only when it did.
-        <Suspense fallback={<div className="h-5" aria-hidden />}><BankConfidence s={s} variant="tile" /></Suspense>
+        <Suspense fallback={<div className="h-5" aria-hidden />}><BankConfidence s={s} /></Suspense>
       ) : null}
     </Tile>
   );
