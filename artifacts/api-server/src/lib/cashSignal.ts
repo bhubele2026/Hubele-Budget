@@ -630,6 +630,12 @@ export interface CashSignalHookReserve {
   carriedTo: string | null;
   /** (F1) What is left of the period's allowance (the plan's, or the stored reserve's). */
   allowanceLeft: string;
+  /**
+   * (F5 round 2) Its own purchases the card's live balance shows already paid
+   * beyond the payments H2 sees — off the curve. Sent only when not zero, so
+   * own purchases = incurred + paid + cappedByBalance.
+   */
+  cappedByBalance?: string;
   /** (F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds. */
   cards: Array<{ accountId: string; name: string | null; mask: string | null; mode: "in_full" | "debt_plan" | null; amount: string }>;
 }
@@ -654,6 +660,7 @@ export function hookReservesOf(payoffs: ReadonlyMap<string, HookPayoff>): CashSi
       carriedFrom: p.carriedFrom.map((c) => ({ occurrenceDate: c.occurrenceDate, periodStart: c.periodStart, periodEnd: c.periodEnd, amount: dollars(c.cents) })),
       carriedTo: p.carriedTo,
       allowanceLeft: dollars(p.allowanceLeftCents),
+      ...(p.cappedCents > 0 ? { cappedByBalance: dollars(p.cappedCents) } : {}),
       cards: p.cards.map((c) => ({ accountId: c.accountId, name: c.name, mask: c.mask, mode: c.mode, amount: dollars(c.cents) })),
     }))
     .sort((a, b) => (a.occurrenceDate === b.occurrenceDate ? a.hook.localeCompare(b.hook) : a.occurrenceDate < b.occurrenceDate ? -1 : 1));

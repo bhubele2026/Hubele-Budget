@@ -5,6 +5,9 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * (F5 round 2) `carried`: an everyday hook week whose unpaid purchases moved to a later week (`carriedTo`)
+ */
 export type BankingReviewPlanFate = (typeof BankingReviewPlanFate)[keyof typeof BankingReviewPlanFate];
 export declare const BankingReviewPlanFate: {
     readonly matched: "matched";
@@ -18,5 +21,6 @@ export declare const BankingReviewPlanFate: {
     readonly income_not_arrived: "income_not_arrived";
     readonly outside_window: "outside_window";
     readonly not_due: "not_due";
+    readonly carried: "carried";
 };
 //# sourceMappingURL=bankingReviewPlanFate.d.ts.map

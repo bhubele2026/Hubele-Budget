@@ -249,11 +249,11 @@ describe("(PR-B2, decision 7) a hook occurrence is its card payoff", () => {
     expect(balanceOn(sig, "2026-10-08")).toBe("1880.00");
   });
 
-  it("T7b (round 2) an Amex payment covering MORE than owed (the statement in full) pays last week: off the curve, listed", async () => {
+  it("T7b (round 2) an Amex payment covering MORE than owed (the statement in full) pays last week: off the curve, listed — (F5 round 2) and its other $30 pays this week's 10/5 purchase made before it: Saturday holds 10 still owed + 210 left = 220 (before: 250, the $30 counted twice)", async () => {
     const paid = await txn({ on: "2026-10-06", amount: "-150.00", desc: "AMERICAN EXPRESS ACH PMT", account: CHASE, source: "plaid:chase" });
     const sig = await signal();
     expect(sig.bankToday).toBe("1850.00");
-    expect(hookEvents(sig)[0]).toEqual(["2026-10-10", "-250.00", "2026-10-10", null]);
+    expect(hookEvents(sig)[0]).toEqual(["2026-10-10", "-220.00", "2026-10-10", null]);
     expect(sig.overdueAssumedPaid?.find((p) => p.planKey === `${weeklySpendId}|2026-10-03`)).toMatchObject({
       txnId: paid,
       planAmount: "-120.00",
@@ -262,7 +262,7 @@ describe("(PR-B2, decision 7) a hook occurrence is its card payoff", () => {
     });
   });
 
-  it("T8 confirming last week's occurrence in Review takes it off the curve, as for any plan", async () => {
+  it("T8 (F5 round 2) confirming last week in Review with a $100 row pays $100 of its $120 of purchases: the other $20 stays owed and drags on Thu 10/8 (before F5: the answer erased the whole week)", async () => {
     const paid = await txn({ on: "2026-10-06", amount: "-100.00", desc: "AMEX EPAYMENT", account: CHASE, source: "plaid:chase" });
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
@@ -273,7 +273,10 @@ describe("(PR-B2, decision 7) a hook occurrence is its card payoff", () => {
       matchedTxnId: paid,
     });
     const sig = await signal();
-    expect(hookEvents(sig)[0]).toEqual(["2026-10-10", "-250.00", "2026-10-10", null]);
+    expect(hookEvents(sig).slice(0, 2)).toEqual([
+      ["2026-10-08", "-20.00", "2026-10-03", "overdue_remainder_assumed_unpaid"],
+      ["2026-10-10", "-250.00", "2026-10-10", null],
+    ]);
   });
 
   it("T9 (S2, one 'no plan' rule; F1) hooks, no allowance plan, a settings amount ($200): settings is NOT a plan — the open week keeps the stored $300 (40 charged + 260 left), a closed week owes its card purchases (before F1: the stored $300 for every closed week)", async () => {

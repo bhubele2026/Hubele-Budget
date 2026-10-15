@@ -32,6 +32,10 @@ const CHIP: Record<string, { label: string; tone: string }> = {
   matched: { label: "Matched", tone: "ok" },
   partial: { label: "Partly paid", tone: "warn" },
   missed: { label: "Missed", tone: "bad" },
+  /** (F5 round 2) A card week whose unpaid purchases moved to a later week: never "missed". */
+  carried: { label: "Carried", tone: "info" },
+  /** (F5 round 2) A card week answered "missed" whose purchases are still on the forecast. */
+  still_owed: { label: "Still owed", tone: "warn" },
   rescheduled: { label: "Rescheduled", tone: "info" },
   ignored_unforecasted: { label: "Unplanned", tone: "gray" },
   unplanned: { label: "Unplanned", tone: "gray" },

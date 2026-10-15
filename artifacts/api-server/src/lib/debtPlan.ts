@@ -108,8 +108,8 @@ export type ConfirmedPayment = {
  * ⭐ CONFIRMED = A BANK ROW SAYS SO. Each bank row once, from any of:
  *   - a `matched` / `partial` forecast resolution on a debt plan item
  *     (`debt:<id>`) or the Avalanche extra;
- *   - an overdue debt plan the forecast took as paid on `debt_tag` or
- *     `card_payment` evidence (`overdueAssumedPaid`);
+ *   - an overdue debt plan the forecast took as paid on `debt_tag`,
+ *     `card_payment` or (F5) `card_ledger` evidence (`overdueAssumedPaid`);
  *   - a Plaid row on a depository account tagged to a debt;
  *   - the bank row that confirmed a claim (`confirmed_by_txn_id`).
  * Dated in [from, to]. Money out only.
@@ -150,7 +150,9 @@ export async function loadConfirmedPayments(
 
   for (const p of signal.overdueAssumedPaid ?? []) {
     if (!isDebtPlanItem(p.itemId)) continue;
-    if (p.confidence !== "debt_tag" && p.confidence !== "card_payment") continue;
+    // (F5 round 2) `card_ledger`: a payment the debt's own card received — the
+    // strongest evidence there is. Rows are de-duplicated by transaction id below.
+    if (p.confidence !== "debt_tag" && p.confidence !== "card_payment" && p.confidence !== "card_ledger") continue;
     note(p.txnId, debtOfItem(p.itemId), "assumed_paid");
   }
 

@@ -2421,17 +2421,6 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
       }),
     );
     await pruneOrphanPlaidTransactionsForHousehold(req.householdId!);
-    const results = itemId
-      ? [
-          await syncPlaidItemSerialized(req.userId!, String(itemId), {
-            forceRefresh,
-            syncOrigin: "manual",
-          }),
-        ]
-      : await syncAllForUser(req.userId!, req.householdId!, {
-          forceRefresh,
-          syncOrigin: "manual",
-        });
     // (#651) The Amex page's "Refresh from Plaid" button calls this
     // endpoint expecting the live Plaid liability balance to update too
     // — but `syncPlaidItem` only walks /transactions/sync. Without a
@@ -2445,39 +2434,64 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
     // without the liabilities product enabled). Each call is best-
     // effort: a per-item failure must not 500 the sync response since
     // the transactions sync already succeeded.
-    // (#speed) Fetch liabilities for every synced item in PARALLEL — each is
-    // an independent best-effort per-item call; no need to serialize them.
-    await Promise.all(
-      results.map(async (r) => {
-        if (r.error) return;
-        if (!r.plaidItemRowId) return;
-        const [hasLiabilityAcct] = await db
-          .select({ id: plaidAccountsTable.id })
-          .from(plaidAccountsTable)
-          .where(
-            and(
-              eq(plaidAccountsTable.itemId, r.plaidItemRowId),
-              sql`(${plaidAccountsTable.type} in ('credit','loan') or ${plaidAccountsTable.liabilityKind} is not null)`,
-            ),
-          )
-          .limit(1);
-        if (!hasLiabilityAcct) return;
-        try {
-          await fetchLiabilitiesForItem(req.userId!, r.plaidItemRowId);
-          // (WP2) Put what was just cached onto the linked debts Plaid owns
-          // (`applyLiabilityToDebt`, as a debt's own Refresh): otherwise the
-          // fetch time moved (and with it the pending rule's as-of) while
-          // `debts.balance` stayed behind. (P3) This is the household's
-          // liabilities refresh: GET /debts no longer refreshes on read.
-          await applyCachedLiabilitiesToPlaidDebts(req.userId!, req.householdId!, r.plaidItemRowId);
-        } catch (liabErr) {
-          req.log.warn(
-            { err: liabErr, plaidItemRowId: r.plaidItemRowId },
-            "fetchLiabilitiesForItem after /plaid/sync failed — Ending Balance tile may stay stale until next refresh",
-          );
-        }
-      }),
-    );
+    const liabilitiesFetched = new Set<string>();
+    const fetchLiabilitiesAfterSync = async (r: Awaited<ReturnType<typeof syncPlaidItemSerialized>>): Promise<void> => {
+      if (r.error) return;
+      if (!r.plaidItemRowId) return;
+      if (liabilitiesFetched.has(r.plaidItemRowId)) return;
+      liabilitiesFetched.add(r.plaidItemRowId);
+      const [hasLiabilityAcct] = await db
+        .select({ id: plaidAccountsTable.id })
+        .from(plaidAccountsTable)
+        .where(
+          and(
+            eq(plaidAccountsTable.itemId, r.plaidItemRowId),
+            sql`(${plaidAccountsTable.type} in ('credit','loan') or ${plaidAccountsTable.liabilityKind} is not null)`,
+          ),
+        )
+        .limit(1);
+      if (!hasLiabilityAcct) return;
+      try {
+        // (F5 round 4) This item's transactions were just synced: the read may
+        // keep the card's pending rows with its balance (the cap reads by the
+        // instant). A sync still preparing its first batch is not current.
+        await fetchLiabilitiesForItem(req.userId!, r.plaidItemRowId, { afterTxnSync: r.stillPreparing !== true });
+        // (WP2) Put what was just cached onto the linked debts Plaid owns
+        // (`applyLiabilityToDebt`, as a debt's own Refresh): otherwise the
+        // fetch time moved (and with it the pending rule's as-of) while
+        // `debts.balance` stayed behind. (P3) This is the household's
+        // liabilities refresh: GET /debts no longer refreshes on read.
+        await applyCachedLiabilitiesToPlaidDebts(req.userId!, req.householdId!, r.plaidItemRowId);
+      } catch (liabErr) {
+        req.log.warn(
+          { err: liabErr, plaidItemRowId: r.plaidItemRowId },
+          "fetchLiabilitiesForItem after /plaid/sync failed — Ending Balance tile may stay stale until next refresh",
+        );
+      }
+    };
+    // ⭐ (F5 round 5) Syncing every item: each item's liabilities are read right
+    // after ITS OWN transactions sync (`onItemSynced`), never after the slowest
+    // item's poll — the card balance is compared with the rows H2 just took.
+    // Round 4 waited for every item (up to ~22 s while another bank polled),
+    // time in which Plaid's refresh could reach the balance and not H2's rows.
+    // This narrows that window; it does not close it (the refresh can still
+    // land after the item's own last poll).
+    const results = itemId
+      ? [
+          await syncPlaidItemSerialized(req.userId!, String(itemId), {
+            forceRefresh,
+            syncOrigin: "manual",
+          }),
+        ]
+      : await syncAllForUser(req.userId!, req.householdId!, {
+          forceRefresh,
+          syncOrigin: "manual",
+          onItemSynced: fetchLiabilitiesAfterSync,
+        });
+    // (#speed) Any synced item not read yet (one item; or a sync that did not
+    // report per item): fetch them in PARALLEL — each is an independent
+    // best-effort per-item call. Each item is read once.
+    await Promise.all(results.map(fetchLiabilitiesAfterSync));
     // (#662) Roll the per-item silent-drop count up into a top-level
     // total so the toast layer can eventually distinguish "0 added —
     // nothing new" from "0 added — N rows filtered by the first-sync

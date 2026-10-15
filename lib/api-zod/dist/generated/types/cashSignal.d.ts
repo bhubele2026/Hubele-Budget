@@ -77,6 +77,15 @@ export interface CashSignal {
   occurrence carried on: paid + allowanceLeft), so summed over the
   reserves every obligation counts once; the curve holds `amount −
   paid`. The F1 fields are always sent by an F1 server.
+  
+  ⭐ (F5 round 2) A missed / skipped / dismissed answer closes an
+  occurrence's reserve (`allowanceLeft` 0), never its purchases; a
+  matched answer's row pays its week first and the rest of the row
+  pays the other weeks. A payment dated before an occurrence pays the
+  purchases already made by then. A card's carried + current unpaid
+  never exceeds what the card's own live balance says it owes: the
+  excess is `cappedByBalance` (oldest first), off the curve, so
+  own purchases = incurred + paid + cappedByBalance.
    */
     hookReserves?: CashSignalHookReservesItem[];
     /** (PR6) Unresolved expenses due more than 14 days ago that no bank
@@ -96,9 +105,13 @@ export interface CashSignal {
   (`matches`-style; older occurrences pair for this list only), or,
   for a debt's minimum, a payment of at least the minimum that either
   names the card (`card_payment`) or is tagged to that debt
-  (`debt_tag`). Off the curve except `unpaidRemainder`, which drags while
-  the plan is at most 14 days overdue. Listed so an unrelated row
-  that hid an unpaid bill is never silent. Sorted by due date.
+  (`debt_tag`), or (F5) a payment the card's own ledger received in
+  the minimum's billing cycle or late while it was unpaid
+  (`card_ledger`; listed even when the household answered the
+  minimum missed or skipped). Off the curve except `unpaidRemainder`,
+  which drags while the plan is at most 14 days overdue. Listed so an
+  unrelated row that hid an unpaid bill is never silent. Sorted by due
+  date.
    */
     overdueAssumedPaid?: CashSignalAssumedPaidPlan[];
     /** (PR5) Plans a bank row probably paid, as suggestions for the user

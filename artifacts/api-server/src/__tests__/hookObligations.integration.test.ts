@@ -359,7 +359,7 @@ describe("payment evidence — the card's own ledger, debt tags and pending → 
     expect(events(sig)[0]).toBe("2026-10-15 Weekly Spend -290.00 (2026-10-10 overdue_assumed_unpaid)");
   });
 
-  it("a Review answer settles its week: 10/3 confirmed matched → its unpaid 50 is no longer carried (10/10 alone: 240)", async () => {
+  it("(F5) a missed answer on 10/3 closes its reserve, never its purchases: its unpaid 50 is still carried — 10/15 −290, as unanswered (F1: −160, the 130 of purchases erased)", async () => {
     const h = await household();
     const { forecastResolutionsTable } = await import("@workspace/db");
     await db.insert(forecastResolutionsTable).values({
@@ -370,7 +370,24 @@ describe("payment evidence — the card's own ledger, debt tags and pending → 
       status: "missed",
     });
     const sig = await signalOf(h);
-    // The 10/3 obligation is settled by the answer; the payment it would have used pays 10/10 instead (80 of 240).
+    expect(events(sig)[0]).toBe("2026-10-15 Weekly Spend -290.00 (2026-10-10 overdue_assumed_unpaid)");
+    expect(reserves(sig).slice(4, 6)).toEqual([
+      "2026-10-03 80.00 = incurred 50.00 + paid 80.00 + carried 0.00 + left 0.00 → 2026-10-10",
+      "2026-10-10 290.00 = incurred 240.00 + paid 0.00 + carried 50.00 + left 0.00",
+    ]);
+  });
+
+  it("a matched answer that names NO row still settles its week (nothing to allocate; a matched ROW pays its week first and the rest goes on — missedAnswers): 10/3 → its 130 is no longer owed and the payment it would have used pays 10/10 (80 of 240)", async () => {
+    const h = await household();
+    const { forecastResolutionsTable } = await import("@workspace/db");
+    await db.insert(forecastResolutionsTable).values({
+      userId: h.ownerUserId,
+      householdId: h.householdId,
+      recurringItemId: h.weeklySpendId,
+      occurrenceDate: "2026-10-03",
+      status: "matched",
+    });
+    const sig = await signalOf(h);
     expect(events(sig)[0]).toBe("2026-10-15 Weekly Spend -160.00 (2026-10-10 overdue_remainder_assumed_unpaid)");
   });
 });

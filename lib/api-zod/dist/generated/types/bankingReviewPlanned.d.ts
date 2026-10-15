@@ -31,7 +31,10 @@ export interface BankingReviewPlanned {
     txnId: string | null;
     /** @nullable */
     txnDate: string | null;
-    /** @nullable */
+    /**
+     * (F5 round 2) What the payment(s) paid toward this occurrence: an everyday hook week, the payments allocated to it; a minimum paid on the card's own ledger, the minimum. Otherwise the row's amount
+     * @nullable
+     */
     txnAmount: string | null;
     txnOnThisAccount: boolean;
     /**
@@ -56,6 +59,11 @@ export interface BankingReviewPlanned {
      * @nullable
      */
     hook: BankingReviewPlannedHook;
+    /**
+     * (F5 round 2) fate `carried`: the day its unpaid purchases land on the forecast, with the week that carries them; null otherwise
+     * @nullable
+     */
+    carriedTo: string | null;
     eventKind: BankingReviewPlanKind;
     direction: BankingReviewDirection;
     /**

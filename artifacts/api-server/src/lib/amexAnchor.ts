@@ -641,6 +641,23 @@ export interface CardPaymentCredit {
   accountId: string;
   occurredOn: string;
   cents: number;
+  /**
+   * (F5 round 3) Still pending, and when H2 stored it: the card balance cap
+   * reads a credit outside the balance by the same rule as a purchase (core
+   * `outsideCardBalanceRead`).
+   */
+  pending?: boolean;
+  createdAt?: string | null;
+}
+
+/** (F5 round 3) One purchase (+) or refund (−) on a card, as the obligations and the balance cap read it. */
+export interface CardRowEffect {
+  txnId: string;
+  on: string;
+  cents: number;
+  pending: boolean;
+  /** When H2 stored the row (ISO instant). */
+  createdAt: string | null;
 }
 
 export interface CardPeriodsRead {
@@ -648,6 +665,15 @@ export interface CardPeriodsRead {
   charges: Map<string, Map<string, number>>;
   /** Payment credits on any card dated in [creditsFrom, creditsTo] (pending → posted once, "not mine" out). */
   paymentCredits: CardPaymentCredit[];
+  /**
+   * (F5 round 2) Every purchase (+) and refund (−) on each card in the read, by
+   * `cardRowOwed` — the very rows `charges` sums — with its day and whether it
+   * is still pending; (round 3) its id and when H2 stored it. External account
+   * id → rows, oldest first.
+   */
+  rows?: Map<string, CardRowEffect[]>;
+  /** (F5 round 2) The first day the read covers (null: nothing was read). */
+  readFrom?: string | null;
 }
 
 /**
@@ -663,7 +689,7 @@ export async function readCardPeriods(
 ): Promise<CardPeriodsRead> {
   const charges = new Map<string, Map<string, number>>();
   const externalIds = roster.cardRows.map((c) => c.accountId).filter((v): v is string => !!v);
-  if (externalIds.length === 0 || (periods.length === 0 && !credits)) return { charges, paymentCredits: [] };
+  if (externalIds.length === 0 || (periods.length === 0 && !credits)) return { charges, paymentCredits: [], rows: new Map(), readFrom: null };
   const bounds = [...periods.flatMap((p) => [p.start, p.end]), ...(credits ? [credits.from, credits.to] : [])].sort();
   const from = bounds[0]!;
   const to = bounds[bounds.length - 1]!;
@@ -686,6 +712,8 @@ export async function readCardPeriods(
         isExternalCardPayment: transactionsTable.isExternalCardPayment,
         reimbursable: transactionsTable.reimbursable,
         pfcDetailed: transactionsTable.pfcDetailed,
+        pending: transactionsTable.pending,
+        createdAt: transactionsTable.createdAt,
       })
       .from(transactionsTable)
       .where(
@@ -707,21 +735,38 @@ export async function readCardPeriods(
   const rule = { ctx: { categoriesById, debtCategoryIds } as SpendContext, excludedTxnIds: roster.excludedTxnIds, replacedPendingIds, allCoverages: true };
 
   // Each row's effect once, by card.
-  type Effect = { on: string; kind: "charge" | "refund"; cents: number };
+  type Effect = { txnId: string; on: string; kind: "charge" | "refund"; cents: number; pending: boolean; createdAt: string | null };
   const byCard = new Map<string, Effect[]>(externalIds.map((id) => [id, []]));
   const paymentCredits: CardPaymentCredit[] = [];
+  const createdIso = (d: Date | string | null | undefined): string | null => (d == null ? null : new Date(d).toISOString());
   for (const t of txns) {
     if (!t.plaidAccountId || !byCard.has(t.plaidAccountId)) continue;
     const owed = cardRowOwed(t, rule);
     if (owed) {
-      byCard.get(t.plaidAccountId)!.push({ on: t.occurredOn, kind: owed.kind, cents: Math.round(owed.amount * 100) });
+      byCard.get(t.plaidAccountId)!.push({
+        txnId: t.id,
+        on: t.occurredOn,
+        kind: owed.kind,
+        cents: Math.round(owed.amount * 100),
+        pending: t.pending === true,
+        createdAt: createdIso(t.createdAt),
+      });
       continue;
     }
     if (!credits || t.occurredOn < credits.from || t.occurredOn > credits.to) continue;
     if (roster.excludedTxnIds.has(t.id) || replacedPendingIds.has(t.id)) continue;
     if (classifyCardCredit(t, rule.ctx, CARD_OWED) !== "payment") continue;
     const cents = Math.round(creditAmount(t) * 100);
-    if (cents > 0) paymentCredits.push({ txnId: t.id, accountId: t.plaidAccountId, occurredOn: t.occurredOn, cents });
+    if (cents > 0) {
+      paymentCredits.push({
+        txnId: t.id,
+        accountId: t.plaidAccountId,
+        occurredOn: t.occurredOn,
+        cents,
+        pending: t.pending === true,
+        createdAt: createdIso(t.createdAt),
+      });
+    }
   }
   for (const p of periods) {
     const perCard = new Map<string, number>();
@@ -739,5 +784,20 @@ export async function readCardPeriods(
     charges.set(`${p.cadence}|${p.start}`, perCard);
   }
   paymentCredits.sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : a.occurredOn > b.occurredOn ? 1 : a.txnId < b.txnId ? -1 : 1));
-  return { charges, paymentCredits };
+  const rows = new Map<string, CardRowEffect[]>();
+  for (const [accountId, effects] of byCard) {
+    rows.set(
+      accountId,
+      effects
+        .map((e) => ({
+          txnId: e.txnId,
+          on: e.on,
+          cents: e.kind === "charge" ? e.cents : -e.cents,
+          pending: e.pending,
+          createdAt: e.createdAt,
+        }))
+        .sort((a, b) => (a.on < b.on ? -1 : a.on > b.on ? 1 : 0)),
+    );
+  }
+  return { charges, paymentCredits, rows, readFrom: from };
 }

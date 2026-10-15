@@ -1780,6 +1780,9 @@ export interface BankingReviewPlanComparison {
      */
     through: string | null;
 }
+/**
+ * (F5 round 2) `carried`: an everyday hook week whose unpaid purchases moved to a later week (`carriedTo`)
+ */
 export type BankingReviewPlanFate = (typeof BankingReviewPlanFate)[keyof typeof BankingReviewPlanFate];
 export declare const BankingReviewPlanFate: {
     readonly matched: "matched";
@@ -1793,6 +1796,7 @@ export declare const BankingReviewPlanFate: {
     readonly income_not_arrived: "income_not_arrived";
     readonly outside_window: "outside_window";
     readonly not_due: "not_due";
+    readonly carried: "carried";
 };
 /**
  * An everyday hook (its card payoff)
@@ -1853,7 +1857,10 @@ export interface BankingReviewPlanned {
     txnId: string | null;
     /** @nullable */
     txnDate: string | null;
-    /** @nullable */
+    /**
+     * (F5 round 2) What the payment(s) paid toward this occurrence: an everyday hook week, the payments allocated to it; a minimum paid on the card's own ledger, the minimum. Otherwise the row's amount
+     * @nullable
+     */
     txnAmount: string | null;
     txnOnThisAccount: boolean;
     /**
@@ -1878,6 +1885,11 @@ export interface BankingReviewPlanned {
      * @nullable
      */
     hook: BankingReviewPlannedHook;
+    /**
+     * (F5 round 2) fate `carried`: the day its unpaid purchases land on the forecast, with the week that carries them; null otherwise
+     * @nullable
+     */
+    carriedTo: string | null;
     eventKind: BankingReviewPlanKind;
     direction: BankingReviewDirection;
     /**
@@ -5124,6 +5136,8 @@ export type CashSignalHookReservesItem = {
     carriedTo?: string | null;
     /** (F1) What is left of the period's allowance (the plan's, or the stored reserve's) */
     allowanceLeft?: string;
+    /** (F5 round 2) Its own purchases the card's balance shows already paid beyond the payments H2 sees (never on the curve). Sent only when not zero. */
+    cappedByBalance?: string;
     /** (F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds */
     cards?: HookReserveCard[];
 };
@@ -5188,7 +5202,7 @@ export interface CashSignalAssumedPaidPlan {
     txnId: string;
     /** Signed like the row. */
     txnAmount: string;
-    /** "high", "medium" or "low" (the pair's), "card_payment", or "debt_tag" (a row the user tagged to the debt). */
+    /** "high", "medium" or "low" (the pair's), "card_payment", "debt_tag" (a row the user tagged to the debt), or "card_ledger" (F5: a payment the debt's own card received). */
     confidence: string;
     /** Signed; "0.00" when the row covered it (within $1). On the curve only while at most 14 days overdue. */
     unpaidRemainder: string;
@@ -5256,6 +5270,15 @@ export interface CashSignal {
   occurrence carried on: paid + allowanceLeft), so summed over the
   reserves every obligation counts once; the curve holds `amount −
   paid`. The F1 fields are always sent by an F1 server.
+  
+  ⭐ (F5 round 2) A missed / skipped / dismissed answer closes an
+  occurrence's reserve (`allowanceLeft` 0), never its purchases; a
+  matched answer's row pays its week first and the rest of the row
+  pays the other weeks. A payment dated before an occurrence pays the
+  purchases already made by then. A card's carried + current unpaid
+  never exceeds what the card's own live balance says it owes: the
+  excess is `cappedByBalance` (oldest first), off the curve, so
+  own purchases = incurred + paid + cappedByBalance.
    */
     hookReserves?: CashSignalHookReservesItem[];
     /** (PR6) Unresolved expenses due more than 14 days ago that no bank
@@ -5275,9 +5298,13 @@ export interface CashSignal {
   (`matches`-style; older occurrences pair for this list only), or,
   for a debt's minimum, a payment of at least the minimum that either
   names the card (`card_payment`) or is tagged to that debt
-  (`debt_tag`). Off the curve except `unpaidRemainder`, which drags while
-  the plan is at most 14 days overdue. Listed so an unrelated row
-  that hid an unpaid bill is never silent. Sorted by due date.
+  (`debt_tag`), or (F5) a payment the card's own ledger received in
+  the minimum's billing cycle or late while it was unpaid
+  (`card_ledger`; listed even when the household answered the
+  minimum missed or skipped). Off the curve except `unpaidRemainder`,
+  which drags while the plan is at most 14 days overdue. Listed so an
+  unrelated row that hid an unpaid bill is never silent. Sorted by due
+  date.
    */
     overdueAssumedPaid?: CashSignalAssumedPaidPlan[];
     /** (PR5) Plans a bank row probably paid, as suggestions for the user

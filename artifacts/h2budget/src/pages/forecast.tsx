@@ -152,7 +152,7 @@ import {
   PlannedItemsList,
   type PlannedItem,
 } from "./forecast/PlannedItemsList";
-import { hookPayoffsOf } from "@/lib/forecastHooks";
+import { hookOwedStatus, hookPayoffWords, hookPayoffsOf } from "@/lib/forecastHooks";
 import { ForecastBody, TAB_OF_MODE, forecastTitle } from "./forecast/ForecastBody";
 import { statusBadge, isPlanRowMatchEligible } from "./forecast/statusBadge";
 
@@ -1007,6 +1007,15 @@ export default function ForecastPage({
     );
     return hookPayoffsOf(cashProjection, (id) => descriptionById.get(id) ?? null);
   }, [cashProjection, data?.transactions]);
+  // ⭐ (F5 round 2) The everyday hooks' items (Weekly / Monthly Spend). A plain
+  // click on one of their rows never marks it missed: a card week's purchases are
+  // owed whatever the answer, so only the explicit "Mark missed" button answers it.
+  const hookItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const r of cashProjection?.hookReserves ?? []) ids.add(r.recurringItemId);
+    for (const h of cashProjection?.hookAmountIgnored ?? []) ids.add(h.itemId);
+    return ids;
+  }, [cashProjection?.hookReserves, cashProjection?.hookAmountIgnored]);
 
   // Plan rows used as drop targets (active register, plan-only)
   const planRows: PlanLine[] = useMemo(() => {
@@ -1556,6 +1565,8 @@ export default function ForecastPage({
     // a stray row click must not mark it missed. A suggestion still counted
     // on the curve keeps the row click, like its Mark missed button.
     if (row.probablyPaid?.offCurve) return;
+    // (F5 round 2) An everyday hook row: the explicit button only.
+    if (hookItemIds.has(row.itemId)) return;
     onMarkMissed(row);
   };
 
@@ -3059,8 +3070,14 @@ export default function ForecastPage({
             </section>
 
             {(() => {
-              const missed = bucket.filter((b) => b.status === "missed");
-              if (missed.length === 0) return null;
+              // ⭐ (F5 round 2) A card week answered "missed" whose purchases are
+              // still owed is listed (its Undo stays) but never counted missed:
+              // it reads "Carried" or "Still owed", and its purchases are on the forecast.
+              const owedOf = (b: (typeof bucket)[number]) =>
+                b.recurringItemId && b.occurrenceDate ? hookOwedStatus(hookPayoffs.get(`${b.recurringItemId}|${b.occurrenceDate}`)) : null;
+              const listed = bucket.filter((b) => b.status === "missed");
+              if (listed.length === 0) return null;
+              const missed = listed.filter((b) => !owedOf(b));
               const missedTotal = missed.reduce((s, b) => s + b.amount, 0);
               return (
                 <section className={kitCard} data-testid="missed-bucket-panel">
@@ -3072,6 +3089,7 @@ export default function ForecastPage({
                     <Help>
                       Occurrences you marked as not happening. They no longer
                       affect the projection; undo puts one back in the register.
+                      A card week stays owed: its purchases remain on the forecast.
                     </Help>
                     <span
                       className={`ml-auto font-mono text-label tabular-nums ${
@@ -3086,14 +3104,17 @@ export default function ForecastPage({
                     className="max-h-[20rem] overflow-y-auto"
                     data-testid="missed-bucket-scroll"
                   >
-                    {missed.map((b) => (
+                    {listed.map((b) => {
+                      const owed = owedOf(b);
+                      const line = owed ? hookPayoffs.get(`${b.recurringItemId}|${b.occurrenceDate}`) : undefined;
+                      return (
                       <div
                         key={b.id}
                         className="flex items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0"
                         data-testid={`missed-row-${b.id}`}
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          {statusBadge(b.status)}
+                          {statusBadge(owed ?? b.status)}
                           <div className="min-w-0">
                             <div className="truncate text-body font-medium text-neutral-700">
                               {b.label || "—"}
@@ -3101,6 +3122,11 @@ export default function ForecastPage({
                             <div className="text-micro text-neutral-400">
                               {formatDate(b.date)}
                             </div>
+                            {line && (
+                              <div className="text-micro text-neutral-500" data-testid={`missed-owed-${b.id}`}>
+                                {hookPayoffWords(line)}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -3143,7 +3169,8 @@ export default function ForecastPage({
                           </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               );

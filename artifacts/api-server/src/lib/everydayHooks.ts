@@ -17,9 +17,20 @@
 //                   tagged to an in_full card's debt; the payment credits on an
 //                   in_full card's own ledger. A card credit and the checking row
 //                   that sent it are ONE payment (same cents, the checking row
-//                   from 5 days before to 2 days after the credit); a checking
-//                   row that a DEBT-PLAN card's ledger shows it paid is that
-//                   card's, never an in_full card's;
+//                   from 5 days before to — F5 round 2 — 5 days after the
+//                   credit, naming the issuer or tagged to the card's debt;
+//                   round 3: or tagged to ANOTHER debt whose own card claimed it
+//                   not — the card's ledger wins over the tag); a checking row
+//                   that a DEBT-PLAN card's ledger shows it paid is that card's,
+//                   never an in_full card's. (F5 round 2) A payment pays a period's
+//                   purchases made by its date (round 3: by the rows, a monthly
+//                   period too; nothing before the window's first occurrence); a
+//                   row a "matched" answer names pays its week first, the rest goes on;
+//     balance cap   (F5 round 2) a card's carried + current unpaid never exceeds
+//                   its live (Plaid) balance, rolled forward and less payments in
+//                   flight: the excess is cut oldest first (`cappedCents`); (round
+//                   3) which rows the balance held is decided by the instant —
+//                   pending now or at the read, or stored after it;
 //     carried       `hookOccurrenceAmounts`: earlier unpaid periods, moved into
 //                   the latest occurrence already due;
 //     allowanceLeft the plan in effect (`everydayPlanFromRows`, the week's
@@ -43,31 +54,41 @@
 //
 // ⚠️ READ-ONLY, like the ledger that calls it.
 
-import { eq } from "drizzle-orm";
-import { db, settingsTable } from "@workspace/db";
+import { and, eq, inArray } from "drizzle-orm";
+import { db, plaidAccountsTable, settingsTable } from "@workspace/db";
 import {
   allocateHookPayments,
+  capHookObligationsAtBalance,
+  cardOwedNowCents,
+  CARD_CREDIT_PAIR_BEFORE,
+  pairCardPaymentCredits,
   allowanceRowOf,
   allowanceSpentCents,
   everydayPlanFromRows,
   hookOccurrenceAmounts,
   hookPeriodOf,
   monthlyCapCents,
-  namesCardIssuer,
   nextHookOccurrence,
+  paymentNamesCardIssuer,
   payoffFor,
   payoffsPaidBy,
   readEverydayHooks,
   weeklyCapCents,
   type AllowancePlanRow,
+  type CardBalanceRead,
+  type CardBalanceRow,
   type DuePayoff,
   type EverydayHooks,
   type HookCadence,
   type HookObligation,
   type HookPaymentEvidence,
+  type CardLedgerCredit,
   type Payoff,
 } from "@workspace/avalanche-core";
-import type { CardPayoffMode } from "./cardPayoffMode";
+import type { CardPayoffMode, CardPayoffModeView } from "./cardPayoffMode";
+import type { CardPeriod, CardPeriodsRead } from "./amexAnchor";
+import type { AmexCardCadence } from "./amexCardCadence";
+import { addDaysISO, householdDayOf } from "./householdClock";
 
 export interface HookSettings {
   hooks: EverydayHooks;
@@ -157,6 +178,18 @@ export interface HookPayoff extends Payoff {
   curveCents: number;
   /** (F1) The payment that paid most of its own period (the evidence the forecast lists), or null. */
   evidence: { txnId: string; occurredOn: string; cents: number } | null;
+  /**
+   * ⭐ (F5 round 2) Every payment allocated to its own period and how much of
+   * it, oldest first: the banking review places each payment against what it
+   * actually paid. Card credits with no checking row carry the credit's id.
+   */
+  allocations: Array<{ txnId: string; occurredOn: string; cents: number }>;
+  /**
+   * (F5 round 2) Its own purchases the cards' balances show already paid
+   * beyond the payments H2 sees (`capHookObligationsAtBalance`), cents. Off the
+   * curve; `incurredCents` is net of it.
+   */
+  cappedCents: number;
   /** (F1) The in_full cards of its cadence, each with its own period's figure. */
   cards: HookPayoffCard[];
 }
@@ -170,6 +203,8 @@ export interface HookCheckingPayment {
   description: string | null;
   /** The debt the household tagged it to (a Plaid checking row only), or null. */
   debtId: string | null;
+  /** (F5 round 2) Still pending on checking. */
+  pending?: boolean;
 }
 
 /** (F1) Any counted checking outflow (used or not): the other half of a card's payment credit. */
@@ -177,6 +212,61 @@ export interface HookCheckingOutflow {
   txnId: string;
   occurredOn: string;
   cents: number;
+  /** (F5 round 2) It names the card issuer (round 5: `paymentNamesCardIssuer`, abbreviations too): the pairing's issuer-name guard. */
+  namesIssuer?: boolean;
+  /** (F5 round 2) The debt the household tagged it to, or null. */
+  debtId?: string | null;
+  /** (F5 round 2) Still pending on checking. */
+  pending?: boolean;
+}
+
+/** (F5 round 2) A row a Review "matched" answer tied to a hook occurrence. */
+export interface HookMatchedRow {
+  txnId: string;
+  occurredOn: string;
+  /** What the row paid, cents (> 0). */
+  cents: number;
+}
+
+/** (F5 round 2) The card credits of a read, with each card's linked debts (the pairing's tag rule). */
+export function cardLedgerCreditsOf(cards: Pick<HookCardsRead, "modes" | "cardRead">): CardLedgerCredit[] {
+  const debtsOf = new Map(cards.modes.map((m) => [m.accountId, m.linkedDebtIds] as const));
+  return cards.cardRead.paymentCredits.map((c) => ({ ...c, debtIds: debtsOf.get(c.accountId) ?? [] }));
+}
+
+/**
+ * (F5 round 5) The debts linked to a card whose own ledger H2 reads — every card
+ * of the roster, with credits in the window or not (the pairing's pass 2: a row
+ * tagged to one of them that its card did not receive went elsewhere).
+ */
+export function cardLedgerDebtIdsOf(cards: Pick<HookCardsRead, "modes">): Set<string> {
+  return new Set(cards.modes.flatMap((m) => m.linkedDebtIds));
+}
+
+/**
+ * (F5 round 3) Each card's rows that were pending when its balance was read
+ * (`plaid_accounts.liability_pending_txn_ids`, kept by the liability fetch).
+ * (Round 4) Read by the instant only when the read came right after a
+ * transactions sync of the card's item (`pendingAtRead`). (Round 6) Every
+ * fetch keeps its list, with `liability_pending_after_sync` saying which kind
+ * of read it was: a non-Sync read's list is `pendingAtOtherRead`, read for
+ * payment credits and refunds only. None kept: both null, the day decides.
+ */
+async function readPendingAtRead(
+  householdId: string,
+  accountIds: readonly string[],
+): Promise<Map<string, Pick<CardBalanceRead, "pendingAtRead" | "pendingAtOtherRead">>> {
+  const out = new Map<string, Pick<CardBalanceRead, "pendingAtRead" | "pendingAtOtherRead">>();
+  if (accountIds.length === 0) return out;
+  const rows = await db
+    .select({ accountId: plaidAccountsTable.accountId, ids: plaidAccountsTable.liabilityPendingTxnIds, afterSync: plaidAccountsTable.liabilityPendingAfterSync })
+    .from(plaidAccountsTable)
+    .where(and(eq(plaidAccountsTable.householdId, householdId), inArray(plaidAccountsTable.accountId, [...accountIds])));
+  for (const r of rows) {
+    const ids = Array.isArray(r.ids) ? new Set(r.ids.filter((x): x is string => typeof x === "string")) : null;
+    out.set(r.accountId, r.afterSync === true ? { pendingAtRead: ids, pendingAtOtherRead: null } : { pendingAtRead: null, pendingAtOtherRead: ids });
+  }
+  return out;
 }
 
 /** (F1) The plan a dry run asks about: written nowhere, read as if it were. */
@@ -205,9 +295,57 @@ export function planRowsWithOverride(rows: readonly AllowancePlanRow[], override
   ];
 }
 
-/** Days a checking row may sit before (−) or after (+) the card's payment credit and still be the same payment. */
-const CREDIT_PAIR_BEFORE = 5;
-const CREDIT_PAIR_AFTER = 2;
+/**
+ * (F5) The card periods a set of hook occurrences bills: one per distinct
+ * period that has started by today. The loader and the ledger's card read
+ * (`readHookCards`) ask for exactly these.
+ */
+export function hookCardPeriodsOf(occurrences: readonly HookOccurrence[], todayISO: string): CardPeriod[] {
+  const periods = new Map<string, CardPeriod>();
+  for (const o of occurrences) {
+    const p = hookPeriodOf(o.cadence, o.occurrenceDate);
+    if (p.start <= todayISO) periods.set(`${o.cadence}|${p.start}`, { cadence: o.cadence, ...p });
+  }
+  return [...periods.values()];
+}
+
+/** (F5) The Amex cards, how each is paid, and their per-period purchases and payment credits — read once. */
+export interface HookCardsRead {
+  roster: AmexCardCadence;
+  modes: CardPayoffModeView[];
+  cardRead: CardPeriodsRead;
+  /** The window the payment credits were read over (null: none). */
+  credits: { from: string; to: string } | null;
+}
+
+/**
+ * ⭐ (F5) THE CARDS, READ ONCE, BEFORE THE MATCHER. The obligations model's
+ * card read, moved out of `loadHookPayoffs` so the ledger can pair each card's
+ * payment credits with the checking rows that sent them (`pairCardPaymentCredits`)
+ * BEFORE the plan matcher and the debt-minimum rules run — they read that one
+ * pairing, and so does the loader. `credits` may reach back further than the
+ * hooks' own window: a debt minimum's billing cycle starts a month before it
+ * is due. Read-only.
+ */
+export async function readHookCards(args: {
+  householdId: string;
+  ownerUserId: string;
+  settings: HookSettings;
+  periods: readonly CardPeriod[];
+  credits: { from: string; to: string } | null;
+}): Promise<HookCardsRead> {
+  const [{ readCardPeriods }, { discoverAmexCards }, { loadCardPayoffModes }] = await Promise.all([
+    import("./amexAnchor"),
+    import("./amexCardCadence"),
+    import("./cardPayoffMode"),
+  ]);
+  const roster = await discoverAmexCards(args.householdId, args.ownerUserId, { preferences: args.settings.preferences });
+  const [modes, cardRead] = await Promise.all([
+    loadCardPayoffModes(args.householdId, args.ownerUserId, { preferences: args.settings.preferences, roster }),
+    readCardPeriods(args.householdId, roster, args.periods, args.credits),
+  ]);
+  return { roster, modes, cardRead, credits: args.credits };
+}
 
 /**
  * ⭐ Each occurrence's payoff, keyed like the ledger's plans.
@@ -223,30 +361,49 @@ export async function loadHookPayoffs(args: {
   tier2PairedTxnIds: ReadonlySet<string>;
   /** (F1) Occurrences due now (effective date on or before the drag cutoff). */
   dueKeys?: ReadonlySet<string>;
-  /** (F1) Occurrences answered matched / skipped / missed / dismissed. */
+  /**
+   * (F1) Occurrences a Review answer settled. (F5) Answered matched only: a
+   * missed / skipped / dismissed answer is `reserveClosedKeys`.
+   */
   settledKeys?: ReadonlySet<string>;
+  /**
+   * ⭐ (F5) Occurrences answered missed / skipped / dismissed. In the obligations
+   * model the answer closes the RESERVE (allowance left → 0); the purchases stay
+   * owed, are paid by evidence and carry (core `hookOccurrenceAmounts`). The
+   * pre-F1 model (kill switch) still reads them as settled.
+   */
+  reserveClosedKeys?: ReadonlySet<string>;
   /** (F1) Occurrences answered partial. */
   partialKeys?: ReadonlySet<string>;
+  /**
+   * ⭐ (F5 round 2) Occurrences answered "matched" WITH a row (obligations model):
+   * the answer closes the reserve (the key is in `reserveClosedKeys`, never
+   * `settledKeys`) and the row pays that occurrence FIRST — the rest of the row
+   * pays the other weeks, and purchases the row did not cover stay owed.
+   */
+  matchedRows?: ReadonlyMap<string, HookMatchedRow>;
   /** (F1) Checking rows no plan used (the payment candidates). */
   checkingPayments?: readonly HookCheckingPayment[];
   /** (F1) Every counted checking outflow in the window (to pair card credits with). */
   checkingOutflows?: readonly HookCheckingOutflow[];
   /** (F1) A dry run's plan. */
   planOverride?: PlanOverride | null;
+  /** (F5) The ledger's card read (`readHookCards`); read here when absent. */
+  cards?: HookCardsRead | null;
+  /** (F5) The ledger's one pairing of card credits with checking rows; computed here when absent. */
+  creditPairs?: ReturnType<typeof pairCardPaymentCredits> | null;
 }): Promise<Map<string, HookPayoff>> {
   const { householdId, ownerUserId, todayISO, settings, occurrences } = args;
   const out = new Map<string, HookPayoff>();
   if (occurrences.length === 0) return out;
   const obligationsModel = hookObligationsModelOn();
 
-  const [{ computeWeeklyPayoff, readCardPeriods }, { loadAllowancePlans, planRowsOf }, { loadAllowanceWindow }, { TRACKING_START }, { discoverAmexCards }, { loadCardPayoffModes }] =
+  const [{ computeWeeklyPayoff }, { loadAllowancePlans, planRowsOf }, { loadAllowanceWindow }, { TRACKING_START }] =
     await Promise.all([
       import("./amexAnchor"),
       import("./allowancePlans"),
       import("./moneyContext"),
       import("./spendingFacts"),
-      import("./amexCardCadence"),
-      import("./cardPayoffMode"),
     ]);
 
   // One entry per distinct period.
@@ -339,7 +496,8 @@ export async function loadHookPayoffs(args: {
     }
     const duePayoffs: DuePayoff[] = [];
     for (const o of occurrences) {
-      if (!args.dueKeys?.has(o.key) || args.settledKeys?.has(o.key) || args.partialKeys?.has(o.key)) continue;
+      // (F5) The pre-F1 model reads every closing answer as settling the occurrence, as before.
+      if (!args.dueKeys?.has(o.key) || args.settledKeys?.has(o.key) || args.reserveClosedKeys?.has(o.key) || args.partialKeys?.has(o.key)) continue;
       const dates = datesByItem.get(who(o).itemId) ?? [];
       const next = dates.find((d) => d > o.occurrenceDate) ?? nextHookOccurrence(o.cadence, o.occurrenceDate);
       duePayoffs.push({ key: o.key, occurrenceDate: o.occurrenceDate, nextOccurrenceDate: next, amountCents: sized.get(o.key)!.amountCents });
@@ -366,6 +524,8 @@ export async function loadHookPayoffs(args: {
         allowanceLeftCents: s.remainingCents,
         curveCents: hit ? 0 : s.amountCents,
         evidence: hit ? { txnId: hit.txnId, occurredOn: hit.occurredOn, cents: Math.round(-hit.amount * 100) } : null,
+        allocations: hit ? [{ txnId: hit.txnId, occurredOn: hit.occurredOn, cents: s.amountCents }] : [],
+        cappedCents: 0,
         cards: [],
       });
     }
@@ -373,14 +533,19 @@ export async function loadHookPayoffs(args: {
   }
 
   // ── "obligations" (F1).
-  const roster = await discoverAmexCards(householdId, ownerUserId, { preferences: settings.preferences });
   const sizedFrom = occurrences.reduce((m, o) => (o.occurrenceDate < m ? o.occurrenceDate : m), occurrences[0]!.occurrenceDate);
-  const startedPeriods = startedAll.map(([, p]) => p);
-  const [modes, cardRead] = await Promise.all([
-    loadCardPayoffModes(householdId, ownerUserId, { preferences: settings.preferences, roster }),
-    readCardPeriods(householdId, roster, startedPeriods, sizedFrom <= todayISO ? { from: sizedFrom, to: todayISO } : null),
+  const [cardsRead] = await Promise.all([
+    args.cards ??
+      readHookCards({
+        householdId,
+        ownerUserId,
+        settings,
+        periods: hookCardPeriodsOf(occurrences, todayISO),
+        credits: sizedFrom <= todayISO ? { from: sizedFrom, to: todayISO } : null,
+      }),
     spentRead,
   ]);
+  const { modes, cardRead } = cardsRead;
   const modeOf = new Map(modes.map((m) => [m.accountId, m] as const));
   const inFull = modes.filter((m) => m.effectiveMode === "in_full");
   const inFullIds = new Set(inFull.map((m) => m.accountId));
@@ -389,8 +554,19 @@ export async function loadHookPayoffs(args: {
   for (const m of inFull) for (const d of m.linkedDebtIds) cardOfDebt.set(d, m.accountId);
 
   // The obligations: each in_full card's own figure, per occurrence of its cadence.
+  // (F5 round 2) Every occurrence whose period has started — the open one too —
+  // with the period's rows by day: a payment pays a later period only for what was
+  // already bought by its date (core `allocateHookPayments`).
   const ownByKey = new Map<string, HookPayoffCard[]>();
   const obligations: HookObligation[] = [];
+  const cardRows = cardRead.rows ?? new Map<string, CardBalanceRow[]>();
+  // (F5 round 3) The earliest sized occurrence of each cadence: a payment dated
+  // before it paid the balance from before the window, never a purchase in it.
+  const firstOccurrence: Partial<Record<HookCadence, string>> = {};
+  for (const o of occurrences) {
+    const f = firstOccurrence[o.cadence];
+    if (f === undefined || o.occurrenceDate < f) firstOccurrence[o.cadence] = o.occurrenceDate;
+  }
   for (const o of occurrences) {
     const p = hookPeriodOf(o.cadence, o.occurrenceDate);
     const perCard = cardRead.charges.get(`${o.cadence}|${p.start}`);
@@ -399,30 +575,39 @@ export async function loadHookPayoffs(args: {
       if (m.cadence !== o.cadence) continue;
       const cents = perCard?.get(m.accountId) ?? 0;
       cards.push({ accountId: m.accountId, name: m.name, mask: m.mask, mode: m.mode, cents });
-      // Only an occurrence due and unanswered (nor partial) is paid by evidence.
-      if (cents > 0 && args.dueKeys?.has(o.key) && !args.settledKeys?.has(o.key) && !args.partialKeys?.has(o.key)) {
-        obligations.push({ key: o.key, cadence: o.cadence, occurrenceDate: o.occurrenceDate, accountId: m.accountId, cents });
+      // Not settled (a matched answer with no row) nor partial: paid by evidence.
+      // (F5) A missed / skipped answer does not settle it: its purchases stay owed.
+      if (cents > 0 && p.start <= todayISO && !args.settledKeys?.has(o.key) && !args.partialKeys?.has(o.key)) {
+        const rows = (cardRows.get(m.accountId) ?? []).filter((r) => r.on >= p.start && r.on <= p.end).map((r) => ({ on: r.on, cents: r.cents }));
+        obligations.push({ key: o.key, cadence: o.cadence, occurrenceDate: o.occurrenceDate, periodEnd: p.end, accountId: m.accountId, cents, rows });
       }
     }
     ownByKey.set(o.key, cards);
   }
 
-  // The payments. A card's payment credit and the checking row that sent it are one payment.
-  const outflows = [...(args.checkingOutflows ?? [])].sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : a.occurredOn > b.occurredOn ? 1 : a.txnId < b.txnId ? -1 : 1));
+  // The payments. A card's payment credit and the checking row that sent it are
+  // one payment — (F5) paired once (`pairCardPaymentCredits`, core), by the ledger
+  // before its matcher when it read the cards, else here.
   const available = new Map((args.checkingPayments ?? []).map((r) => [r.txnId, r] as const));
+  const matchedRows = args.matchedRows ?? new Map<string, HookMatchedRow>();
+  const matchedTxnIds = new Set([...matchedRows.values()].map((r) => r.txnId));
   const pairedOutflow = new Set<string>();
+  /** Checking rows that are a credit's other half: the card's balance already holds them. */
+  const creditBacked = new Set<string>();
+  const cardOfPairedRow = new Map<string, string>();
   const evidence: HookPaymentEvidence[] = [];
-  const dayGap = (a: string, b: string) => Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000);
-  for (const c of cardRead.paymentCredits) {
-    let best: HookCheckingOutflow | null = null;
-    for (const r of outflows) {
-      if (pairedOutflow.has(r.txnId) || r.cents !== c.cents) continue;
-      const gap = dayGap(r.occurredOn, c.occurredOn);
-      if (gap < -CREDIT_PAIR_BEFORE || gap > CREDIT_PAIR_AFTER) continue;
-      if (!best || Math.abs(gap) < Math.abs(dayGap(best.occurredOn, c.occurredOn))) best = r;
+  const pairs =
+    args.creditPairs ??
+    pairCardPaymentCredits(cardLedgerCreditsOf(cardsRead), args.checkingOutflows ?? [], { ledgerDebtIds: cardLedgerDebtIdsOf(cardsRead), todayISO });
+  for (const { credit: c, outflow: best } of pairs) {
+    if (best) {
+      pairedOutflow.add(best.txnId);
+      creditBacked.add(best.txnId);
+      cardOfPairedRow.set(best.txnId, c.accountId);
     }
-    if (best) pairedOutflow.add(best.txnId);
     if (!inFullIds.has(c.accountId)) continue; // a debt-plan card's payment: its checking row (paired above) is that card's.
+    // (F5 round 2) A credit a matched answer names itself is that answer's row (below).
+    if (matchedTxnIds.has(c.txnId) || (best && matchedTxnIds.has(best.txnId))) continue;
     if (!best) {
       evidence.push({ txnId: c.txnId, occurredOn: c.occurredOn, cents: c.cents, accountId: c.accountId });
     } else if (available.has(best.txnId)) {
@@ -439,9 +624,95 @@ export async function loadHookPayoffs(args: {
       if (card) evidence.push({ txnId: r.txnId, occurredOn: r.occurredOn, cents, accountId: card });
       continue;
     }
-    if (namesCardIssuer(r.description)) evidence.push({ txnId: r.txnId, occurredOn: r.occurredOn, cents, accountId: null });
+    // (F5 round 6) The pairing's name test, abbreviations too ("AMERICAN EXP CO"): a
+    // payment still on its way to its card pays its week and counts in flight for
+    // the cap (round 5's strict name left it paying nothing and held it over).
+    if (paymentNamesCardIssuer(r.description)) evidence.push({ txnId: r.txnId, occurredOn: r.occurredOn, cents, accountId: null });
   }
-  const allocations = allocateHookPayments(obligations, evidence);
+  // ⭐ (F5 round 2) A row a "matched" answer tied to a week pays that week first,
+  // and the rest of it pays the other weeks — never thrown away. Its card is the
+  // one whose ledger received it, when that card is paid in full.
+  for (const [key, r] of matchedRows) {
+    if (r.cents <= 0) continue;
+    const card = cardOfPairedRow.get(r.txnId);
+    evidence.push({ txnId: r.txnId, occurredOn: r.occurredOn, cents: r.cents, accountId: card && inFullIds.has(card) ? card : null, forKey: key });
+  }
+  const allocations = allocateHookPayments(obligations, evidence, { firstOccurrence });
+
+  // ⭐ (F5 round 2) A CARD NEVER OWES MORE THAN ITS BALANCE (the owner: "cautious
+  // but never over"). For each in_full card still owing here, the card's own
+  // balance — the Amex anchor's answer for the card (`resolveAmexAnchor`), used
+  // only when it is Plaid's live balance (`plaid`; a debt row's stored balance,
+  // an archived card's above all, can be stale) — rolled forward to now (core
+  // `cardOwedNowCents`): + purchases − refunds − payment credits OUTSIDE that
+  // balance, less the payments allocated here that the card has not received at
+  // all (a checking row with no card credit, pending or recent). (F5 round 3)
+  // "Outside" (core `outsideCardBalanceRead`), one rule for purchases and credits:
+  // pending now or dated after the read's day; and, (round 4) only when the read
+  // came right after a sync of the card's item (the liability fetch kept the
+  // pending ids), pending at the read or stored after it. (Round 5) A payment
+  // credit stored after any other read, dated within the in-flight window, is
+  // outside too (core `creditOutsideCardBalanceRead`): never over what the card
+  // owes — a payment made after a debt's Refresh no longer comes back once its
+  // card credit pairs. (Round 6) So is a refund, and — on such a read — a credit
+  // or refund H2 held as pending at it (every fetch keeps its pending list now).
+  // Unpaid above that is cut, oldest first (core `capHookObligationsAtBalance`). With no live
+  // balance, or one read before the rows here begin, nothing is cut.
+  const balanceCaps = new Map<string, number>();
+  {
+    const unpaidByCard = new Map<string, number>();
+    const paidByOblig = new Map<string, number>();
+    for (const a of allocations) paidByOblig.set(`${a.key}#${a.accountId}`, (paidByOblig.get(`${a.key}#${a.accountId}`) ?? 0) + a.cents);
+    for (const o of obligations) {
+      const left = o.cents - (paidByOblig.get(`${o.key}#${o.accountId}`) ?? 0);
+      if (left > 0) unpaidByCard.set(o.accountId, (unpaidByCard.get(o.accountId) ?? 0) + left);
+    }
+    const owing = [...unpaidByCard.keys()];
+    if (owing.length > 0) {
+      const [{ resolveAmexAnchor }, pendingAtRead] = await Promise.all([import("./amexAnchorRead"), readPendingAtRead(householdId, owing)]);
+      const anchors = await Promise.all(owing.map(async (accountId) => [accountId, await resolveAmexAnchor(householdId, ownerUserId, accountId)] as const));
+      const evidenceById = new Map(evidence.map((e) => [e.txnId, e] as const));
+      const creditIds = new Set(cardRead.paymentCredits.map((c) => c.txnId));
+      const pendingOutflow = new Set((args.checkingOutflows ?? []).filter((o) => o.pending === true).map((o) => o.txnId));
+      for (const [accountId, anchor] of anchors) {
+        if (anchor.source !== "plaid" || anchor.amexEndingBalance == null || !Number.isFinite(anchor.amexEndingBalance)) continue;
+        const asOfDay = householdDayOf(anchor.asOf);
+        if (!cardRead.readFrom || asOfDay < cardRead.readFrom) continue;
+        const inFlightFrom = addDaysISO(asOfDay, -CARD_CREDIT_PAIR_BEFORE);
+        let inFlight = 0;
+        for (const a of allocations) {
+          if (a.accountId !== accountId) continue;
+          const e = evidenceById.get(a.txnId);
+          // A card credit, or the checking half of one: the credit's own rule reads it.
+          if (!e || creditBacked.has(a.txnId) || creditIds.has(a.txnId)) continue;
+          const pending = available.get(a.txnId)?.pending === true || pendingOutflow.has(a.txnId);
+          if (pending || e.occurredOn >= inFlightFrom) inFlight += a.cents;
+        }
+        const credits: CardBalanceRow[] = cardRead.paymentCredits
+          .filter((c) => c.accountId === accountId)
+          .map((c) => ({ txnId: c.txnId, on: c.occurredOn, cents: c.cents, pending: c.pending === true, createdAt: c.createdAt ?? null }));
+        balanceCaps.set(
+          accountId,
+          cardOwedNowCents(
+            {
+              balanceCents: Math.round(anchor.amexEndingBalance * 100),
+              asOf: anchor.asOf,
+              asOfDay,
+              pendingAtRead: pendingAtRead.get(accountId)?.pendingAtRead ?? null,
+              pendingAtOtherRead: pendingAtRead.get(accountId)?.pendingAtOtherRead ?? null,
+            },
+            cardRows.get(accountId) ?? [],
+            credits,
+            inFlight,
+          ),
+        );
+      }
+    }
+  }
+  const capped = capHookObligationsAtBalance(obligations, allocations, balanceCaps);
+  const cappedByKey = new Map<string, number>();
+  for (const c of capped) cappedByKey.set(c.key, (cappedByKey.get(c.key) ?? 0) + c.cents);
+
   const paidByKey = new Map<string, number>();
   const bestRow = new Map<string, { txnId: string; occurredOn: string; cents: number }>();
   const evidenceById = new Map(evidence.map((e) => [e.txnId, e] as const));
@@ -476,8 +747,10 @@ export async function loadHookPayoffs(args: {
         spentCents: spent.get(id) ?? 0,
         ownCents: (ownByKey.get(o.key) ?? []).reduce((s, c) => s + c.cents, 0),
         paidCents: paidByKey.get(o.key) ?? 0,
+        cappedCents: cappedByKey.get(o.key) ?? 0,
         due: args.dueKeys?.has(o.key) ?? false,
         settled: args.settledKeys?.has(o.key) ?? false,
+        reserveClosed: args.reserveClosedKeys?.has(o.key) ?? false,
         partial: args.partialKeys?.has(o.key) ?? false,
       };
     }),
@@ -515,6 +788,10 @@ export async function loadHookPayoffs(args: {
       allowanceLeftCents: a.allowanceLeftCents,
       curveCents: a.curveCents,
       evidence: bestRow.get(o.key) ?? null,
+      allocations: [...(perKeyTxn.get(o.key) ?? new Map<string, number>())]
+        .map(([txnId, cents]) => ({ txnId, occurredOn: evidenceById.get(txnId)!.occurredOn, cents }))
+        .sort((x, y) => (x.occurredOn < y.occurredOn ? -1 : x.occurredOn > y.occurredOn ? 1 : x.txnId < y.txnId ? -1 : 1)),
+      cappedCents: a.cappedCents,
       cards: (ownByKey.get(o.key) ?? []).map((c) => ({ ...c, mode: modeOf.get(c.accountId)?.mode ?? null })),
     });
   }

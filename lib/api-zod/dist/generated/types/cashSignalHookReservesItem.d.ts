@@ -36,6 +36,8 @@ export type CashSignalHookReservesItem = {
     carriedTo?: string | null;
     /** (F1) What is left of the period's allowance (the plan's, or the stored reserve's) */
     allowanceLeft?: string;
+    /** (F5 round 2) Its own purchases the card's balance shows already paid beyond the payments H2 sees (never on the curve). Sent only when not zero. */
+    cappedByBalance?: string;
     /** (F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds */
     cards?: HookReserveCard[];
 };

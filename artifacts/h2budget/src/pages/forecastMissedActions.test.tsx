@@ -473,3 +473,81 @@ describe("Forecast — Missed bucket actions (#480)", () => {
     });
   });
 });
+
+// ⭐ (F5 round 2) A card week is owed whatever the household answered: its row
+// never reads "Missed" while its purchases are on the forecast, and a plain row
+// click on an everyday hook row never answers it (the explicit button only).
+describe("Forecast — everyday hook weeks are never 'missed' while owed (F5)", () => {
+  const reserve = (date: string, extra: Record<string, unknown>) => ({
+    hook: "weekly",
+    recurringItemId: "ws",
+    planKey: `ws|${date}`,
+    occurrenceDate: date,
+    label: "Weekly Spend",
+    basis: "stored_amount",
+    storedAmount: "300.00",
+    paid: "0.00",
+    carried: "0.00",
+    carriedFrom: [],
+    carriedTo: null,
+    cards: [],
+    ...extra,
+  });
+  const withHook = () => {
+    forecastData = {
+      ...FORECAST_BASE,
+      events: [
+        ...FORECAST_BASE.events,
+        { itemId: "ws", date: "2026-05-16", label: "Weekly Spend", amount: -300 },
+        { itemId: "ws", date: "2026-05-23", label: "Weekly Spend", amount: -300 },
+        { itemId: "ws", date: "2026-05-30", label: "Weekly Spend", amount: -300 },
+      ],
+      resolutions: [
+        ...FORECAST_BASE.resolutions,
+        { id: "res-ws-16", recurringItemId: "ws", occurrenceDate: "2026-05-16", status: "missed", matchedTxnId: null },
+        { id: "res-ws-23", recurringItemId: "ws", occurrenceDate: "2026-05-23", status: "missed", matchedTxnId: null },
+      ],
+    };
+    cashSignalData = {
+      hookReserves: [
+        reserve("2026-05-16", { amount: "0.00", incurred: "80.00", allowanceLeft: "0.00", carriedTo: "2026-05-23" }),
+        reserve("2026-05-23", { amount: "180.00", incurred: "100.00", carried: "80.00", allowanceLeft: "0.00" }),
+        reserve("2026-05-30", { amount: "300.00", incurred: "50.00", allowanceLeft: "250.00" }),
+      ],
+      events: [
+        { date: "2026-06-01", label: "Weekly Spend", amount: "-180.00", itemId: "ws", occurrenceKey: "ws|2026-05-23", originalDate: "2026-05-23", assumption: "overdue_assumed_unpaid" },
+        { date: "2026-05-30", label: "Weekly Spend", amount: "-300.00", itemId: "ws", occurrenceKey: "ws|2026-05-30" },
+      ],
+      overdueAssumedPaid: [],
+    };
+  };
+
+  it("a plain click on a pending Weekly Spend row marks nothing; the Mark missed button still answers it", () => {
+    withHook();
+    renderPage();
+    fireEvent.click(screen.getByTestId("plan-row-ws-2026-05-30"));
+    expect(upsertMutate).not.toHaveBeenCalled();
+    // Another plan's row click is unchanged.
+    fireEvent.click(screen.getByTestId("plan-row-rent-2026-05-30"));
+    expect(upsertMutate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("mark-missed-ws-2026-05-30"));
+    expect(upsertMutate).toHaveBeenCalledTimes(2);
+    expect(upsertMutate.mock.calls[1][0]).toMatchObject({ data: { status: "missed", recurringItemId: "ws", occurrenceDate: "2026-05-30" } });
+  });
+
+  it("the Missed bucket keeps the answered card weeks (Undo stays) but reads them 'Carried to Jun 1' / 'Still owed', and counts only the truly missed", () => {
+    withHook();
+    renderPage();
+    const carried = screen.getByTestId("missed-row-res-ws-16");
+    expect(carried.textContent).toContain("Carried");
+    expect(carried.textContent).not.toContain("Missed");
+    expect(screen.getByTestId("missed-owed-res-ws-16").textContent).toBe("card purchases carried to Jun 1");
+    const owed = screen.getByTestId("missed-row-res-ws-23");
+    expect(owed.textContent).toContain("Still owed");
+    expect(screen.getByTestId("missed-owed-res-ws-23").textContent).toBe("card purchases $180.00 still owed");
+    expect(screen.getByTestId("missed-undo-res-ws-16")).toBeTruthy();
+    // Only Gym is missed: its −$40.00, never the card weeks' stored $300s.
+    expect(screen.getByTestId("missed-bucket-total").textContent).toBe("-$40.00");
+    expect(screen.getByTestId("missed-row-res-gym-missed").textContent).toContain("Missed");
+  });
+});

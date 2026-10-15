@@ -4509,6 +4509,12 @@ export const GetForecastResponse = zod.object({
                 .describe(
                   "(F1) What is left of the period's allowance (the plan's, or the stored reserve's)",
                 ),
+              cappedByBalance: zod
+                .string()
+                .optional()
+                .describe(
+                  "(F5 round 2) Its own purchases the card's balance shows already paid beyond the payments H2 sees (never on the curve). Sent only when not zero.",
+                ),
               cards: zod
                 .array(
                   zod.object({
@@ -4537,7 +4543,7 @@ export const GetForecastResponse = zod.object({
           )
           .optional()
           .describe(
-            "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n\n⭐ (F1, owner's answers 2026-10-14) THE OBLIGATIONS MODEL. Each\noccurrence is `incurred + carried + allowanceLeft` on the curve:\n`incurred` = its own period's purchases − refunds on the cards paid\nIN FULL at its cadence (debt-linked or not; never a DEBT-PLAN card's —\nits minimum pays it) less the payments allocated to it (`paid`);\n`carried` = earlier periods' unpaid in_full purchases, moved into the\nlatest occurrence already due (`carriedFrom` \/ `carriedTo`);\n`allowanceLeft` = with a plan max(0, cap − spent) while open; with no\nplan the stored amount less the period's purchases, never below 0; 0\nonce closed. `amount` = incurred + paid + carried + allowanceLeft (an\noccurrence carried on: paid + allowanceLeft), so summed over the\nreserves every obligation counts once; the curve holds `amount −\npaid`. The F1 fields are always sent by an F1 server.\n",
+            "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n\n⭐ (F1, owner's answers 2026-10-14) THE OBLIGATIONS MODEL. Each\noccurrence is `incurred + carried + allowanceLeft` on the curve:\n`incurred` = its own period's purchases − refunds on the cards paid\nIN FULL at its cadence (debt-linked or not; never a DEBT-PLAN card's —\nits minimum pays it) less the payments allocated to it (`paid`);\n`carried` = earlier periods' unpaid in_full purchases, moved into the\nlatest occurrence already due (`carriedFrom` \/ `carriedTo`);\n`allowanceLeft` = with a plan max(0, cap − spent) while open; with no\nplan the stored amount less the period's purchases, never below 0; 0\nonce closed. `amount` = incurred + paid + carried + allowanceLeft (an\noccurrence carried on: paid + allowanceLeft), so summed over the\nreserves every obligation counts once; the curve holds `amount −\npaid`. The F1 fields are always sent by an F1 server.\n\n⭐ (F5 round 2) A missed \/ skipped \/ dismissed answer closes an\noccurrence's reserve (`allowanceLeft` 0), never its purchases; a\nmatched answer's row pays its week first and the rest of the row\npays the other weeks. A payment dated before an occurrence pays the\npurchases already made by then. A card's carried + current unpaid\nnever exceeds what the card's own live balance says it owes: the\nexcess is `cappedByBalance` (oldest first), off the curve, so\nown purchases = incurred + paid + cappedByBalance.\n",
           ),
         overdueOutsideForecast: zod
           .array(
@@ -4633,7 +4639,7 @@ export const GetForecastResponse = zod.object({
                 confidence: zod
                   .string()
                   .describe(
-                    '\"high\", \"medium\" or \"low\" (the pair\'s), \"card_payment\", or \"debt_tag\" (a row the user tagged to the debt).',
+                    '\"high\", \"medium\" or \"low\" (the pair\'s), \"card_payment\", \"debt_tag\" (a row the user tagged to the debt), or \"card_ledger\" (F5: a payment the debt\'s own card received).',
                   ),
                 unpaidRemainder: zod
                   .string()
@@ -4647,7 +4653,7 @@ export const GetForecastResponse = zod.object({
           )
           .optional()
           .describe(
-            "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or,\nfor a debt's minimum, a payment of at least the minimum that either\nnames the card (`card_payment`) or is tagged to that debt\n(`debt_tag`). Off the curve except `unpaidRemainder`, which drags while\nthe plan is at most 14 days overdue. Listed so an unrelated row\nthat hid an unpaid bill is never silent. Sorted by due date.\n",
+            "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or,\nfor a debt's minimum, a payment of at least the minimum that either\nnames the card (`card_payment`) or is tagged to that debt\n(`debt_tag`), or (F5) a payment the card's own ledger received in\nthe minimum's billing cycle or late while it was unpaid\n(`card_ledger`; listed even when the household answered the\nminimum missed or skipped). Off the curve except `unpaidRemainder`,\nwhich drags while the plan is at most 14 days overdue. Listed so an\nunrelated row that hid an unpaid bill is never silent. Sorted by due\ndate.\n",
           ),
         matches: zod
           .array(
@@ -4989,6 +4995,12 @@ export const GetForecastCashSignalResponse = zod.object({
           .describe(
             "(F1) What is left of the period's allowance (the plan's, or the stored reserve's)",
           ),
+        cappedByBalance: zod
+          .string()
+          .optional()
+          .describe(
+            "(F5 round 2) Its own purchases the card's balance shows already paid beyond the payments H2 sees (never on the curve). Sent only when not zero.",
+          ),
         cards: zod
           .array(
             zod.object({
@@ -5017,7 +5029,7 @@ export const GetForecastCashSignalResponse = zod.object({
     )
     .optional()
     .describe(
-      "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n\n⭐ (F1, owner's answers 2026-10-14) THE OBLIGATIONS MODEL. Each\noccurrence is `incurred + carried + allowanceLeft` on the curve:\n`incurred` = its own period's purchases − refunds on the cards paid\nIN FULL at its cadence (debt-linked or not; never a DEBT-PLAN card's —\nits minimum pays it) less the payments allocated to it (`paid`);\n`carried` = earlier periods' unpaid in_full purchases, moved into the\nlatest occurrence already due (`carriedFrom` \/ `carriedTo`);\n`allowanceLeft` = with a plan max(0, cap − spent) while open; with no\nplan the stored amount less the period's purchases, never below 0; 0\nonce closed. `amount` = incurred + paid + carried + allowanceLeft (an\noccurrence carried on: paid + allowanceLeft), so summed over the\nreserves every obligation counts once; the curve holds `amount −\npaid`. The F1 fields are always sent by an F1 server.\n",
+      "(S2) What each everyday-hook occurrence on the forecast reserves, and\nwhat it was sized from. `basis: plan` — the period has an allowance\nplan: the card's charges plus what is left of the plan while the\nperiod is open. `basis: stored_amount` — no plan is set for the\nperiod, so the item's own stored amount is kept (e.g. \"Weekly Spend\nreserve $380 · no weekly plan set\"); it is not a spending cap.\n`amount` is the occurrence's reserve before any review answer.\nPresent only when the household has a hook occurrence.\n\n⭐ (F1, owner's answers 2026-10-14) THE OBLIGATIONS MODEL. Each\noccurrence is `incurred + carried + allowanceLeft` on the curve:\n`incurred` = its own period's purchases − refunds on the cards paid\nIN FULL at its cadence (debt-linked or not; never a DEBT-PLAN card's —\nits minimum pays it) less the payments allocated to it (`paid`);\n`carried` = earlier periods' unpaid in_full purchases, moved into the\nlatest occurrence already due (`carriedFrom` \/ `carriedTo`);\n`allowanceLeft` = with a plan max(0, cap − spent) while open; with no\nplan the stored amount less the period's purchases, never below 0; 0\nonce closed. `amount` = incurred + paid + carried + allowanceLeft (an\noccurrence carried on: paid + allowanceLeft), so summed over the\nreserves every obligation counts once; the curve holds `amount −\npaid`. The F1 fields are always sent by an F1 server.\n\n⭐ (F5 round 2) A missed \/ skipped \/ dismissed answer closes an\noccurrence's reserve (`allowanceLeft` 0), never its purchases; a\nmatched answer's row pays its week first and the rest of the row\npays the other weeks. A payment dated before an occurrence pays the\npurchases already made by then. A card's carried + current unpaid\nnever exceeds what the card's own live balance says it owes: the\nexcess is `cappedByBalance` (oldest first), off the curve, so\nown purchases = incurred + paid + cappedByBalance.\n",
     ),
   overdueOutsideForecast: zod
     .array(
@@ -5111,7 +5123,7 @@ export const GetForecastCashSignalResponse = zod.object({
           confidence: zod
             .string()
             .describe(
-              '\"high\", \"medium\" or \"low\" (the pair\'s), \"card_payment\", or \"debt_tag\" (a row the user tagged to the debt).',
+              '\"high\", \"medium\" or \"low\" (the pair\'s), \"card_payment\", \"debt_tag\" (a row the user tagged to the debt), or \"card_ledger\" (F5: a payment the debt\'s own card received).',
             ),
           unpaidRemainder: zod
             .string()
@@ -5125,7 +5137,7 @@ export const GetForecastCashSignalResponse = zod.object({
     )
     .optional()
     .describe(
-      "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or,\nfor a debt's minimum, a payment of at least the minimum that either\nnames the card (`card_payment`) or is tagged to that debt\n(`debt_tag`). Off the curve except `unpaidRemainder`, which drags while\nthe plan is at most 14 days overdue. Listed so an unrelated row\nthat hid an unpaid bill is never silent. Sorted by due date.\n",
+      "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or,\nfor a debt's minimum, a payment of at least the minimum that either\nnames the card (`card_payment`) or is tagged to that debt\n(`debt_tag`), or (F5) a payment the card's own ledger received in\nthe minimum's billing cycle or late while it was unpaid\n(`card_ledger`; listed even when the household answered the\nminimum missed or skipped). Off the curve except `unpaidRemainder`,\nwhich drags while the plan is at most 14 days overdue. Listed so an\nunrelated row that hid an unpaid bill is never silent. Sorted by due\ndate.\n",
     ),
   matches: zod
     .array(
@@ -9713,25 +9725,35 @@ export const GetBankingReviewResponse = zod
             .describe(
               "Signed; an everyday hook's card payoff; null when not sized",
             ),
-          fate: zod.enum([
-            "matched",
-            "partial",
-            "skipped",
-            "missed",
-            "paid_on_evidence",
-            "suggested",
-            "on_curve",
-            "overdue_outside",
-            "income_not_arrived",
-            "outside_window",
-            "not_due",
-          ]),
+          fate: zod
+            .enum([
+              "matched",
+              "partial",
+              "skipped",
+              "missed",
+              "paid_on_evidence",
+              "suggested",
+              "on_curve",
+              "overdue_outside",
+              "income_not_arrived",
+              "outside_window",
+              "not_due",
+              "carried",
+            ])
+            .describe(
+              "(F5 round 2) `carried`: an everyday hook week whose unpaid purchases moved to a later week (`carriedTo`)",
+            ),
           txnId: zod
             .string()
             .nullable()
             .describe("The row behind the fate (confirmed"),
           txnDate: zod.string().nullable(),
-          txnAmount: zod.string().nullable(),
+          txnAmount: zod
+            .string()
+            .nullable()
+            .describe(
+              "(F5 round 2) What the payment(s) paid toward this occurrence: an everyday hook week, the payments allocated to it; a minimum paid on the card's own ledger, the minimum. Otherwise the row's amount",
+            ),
           txnOnThisAccount: zod.boolean(),
           difference: zod
             .string()
@@ -9758,6 +9780,12 @@ export const GetBankingReviewResponse = zod
             ])
             .nullable()
             .describe("An everyday hook (its card payoff)"),
+          carriedTo: zod
+            .string()
+            .nullable()
+            .describe(
+              "(F5 round 2) fate `carried`: the day its unpaid purchases land on the forecast, with the week that carries them; null otherwise",
+            ),
           eventKind: zod
             .enum(["income", "bill", "debt", "hook"])
             .describe(

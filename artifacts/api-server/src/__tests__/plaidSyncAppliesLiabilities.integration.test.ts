@@ -54,7 +54,7 @@ vi.mock("../lib/plaid", async () => {
   };
 });
 
-import { db, debtBalanceHistoryTable, debtsTable, plaidAccountsTable, plaidItemsTable } from "@workspace/db";
+import { db, debtBalanceHistoryTable, debtsTable, plaidAccountsTable, plaidItemsTable, transactionsTable } from "@workspace/db";
 import plaidRouter from "../routes/plaid";
 import { fetchLiabilitiesForItem } from "../lib/plaidLiabilities";
 import { createTestHousehold } from "./_helpers/testHousehold";
@@ -70,6 +70,7 @@ let server: Server;
 let baseUrl: string;
 
 async function cleanup(): Promise<void> {
+  await db.delete(transactionsTable).where(eq(transactionsTable.userId, TEST_USER));
   await db.delete(debtBalanceHistoryTable).where(eq(debtBalanceHistoryTable.userId, TEST_USER));
   await db.delete(debtsTable).where(eq(debtsTable.userId, TEST_USER));
   await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.userId, TEST_USER));
@@ -179,5 +180,73 @@ describe("(WP2 review) the liability fetch time is stamped only with a cached ba
     // Before: stamped "now" with no balance behind it.
     expect(b!.liabilityLastFetchedAt!.getTime()).toBe(earlier.getTime());
     expect(b!.liabilityMinPayment).toBe("40.00");
+  });
+});
+
+describe("⭐ (F5 round 3/4/6) the liability fetch keeps, with each balance it caches, the card's rows pending at that instant — and (round 6) whether it came right after a transactions sync", () => {
+  /** One pending and one posted row on Platinum, one pending row on Blue. */
+  async function rows(plat: { ext: string }, blue: { ext: string }) {
+    const base = { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, source: "plaid:amex", description: "FUEL STOP" };
+    const [pending, posted, otherCard] = await db
+      .insert(transactionsTable)
+      .values([
+        { ...base, plaidAccountId: plat.ext, occurredOn: "2026-10-13", amount: "-35.00", pending: true, plaidTransactionId: `pend-${randomUUID()}` },
+        { ...base, plaidAccountId: plat.ext, occurredOn: "2026-10-12", amount: "-55.00", pending: false, plaidTransactionId: `post-${randomUUID()}` },
+        { ...base, plaidAccountId: blue.ext, occurredOn: "2026-10-13", amount: "-20.00", pending: true, plaidTransactionId: `blue-${randomUUID()}` },
+      ])
+      .returning({ id: transactionsTable.id });
+    return { pending: pending!, posted: posted!, otherCard: otherCard! };
+  }
+  const snapshotOf = async (rowId: string) => (await db.select().from(plaidAccountsTable).where(eq(plaidAccountsTable.id, rowId)))[0]!;
+
+  it("after a sync: the pending rows' ids beside the balance (never a posted row, never another card's); an account with no balance keeps its previous snapshot", async () => {
+    const { itemRowId, plat, blue } = await seed();
+    await db.update(plaidAccountsTable).set({ liabilityPendingTxnIds: ["earlier"] }).where(eq(plaidAccountsTable.id, blue.rowId));
+    const { pending, posted, otherCard } = await rows(plat, blue);
+    accounts = [
+      { account_id: plat.ext, type: "credit", subtype: "credit card", balances: { current: 285 } },
+      { account_id: blue.ext, type: "credit", subtype: "credit card", balances: { current: null } },
+    ];
+    await fetchLiabilitiesForItem(TEST_USER, itemRowId, { afterTxnSync: true });
+    const p = await snapshotOf(plat.rowId);
+    expect(p.liabilityBalance).toBe("285.00");
+    expect(p.liabilityPendingTxnIds).toEqual([pending.id]);
+    expect(p.liabilityPendingAfterSync).toBe(true);
+    expect(p.liabilityPendingTxnIds).not.toContain(posted.id);
+    expect(p.liabilityPendingTxnIds).not.toContain(otherCard.id);
+    expect((await snapshotOf(blue.rowId)).liabilityPendingTxnIds).toEqual(["earlier"]);
+    // Nothing pending at the next read: an empty list, not null (null = not kept).
+    await db.update(transactionsTable).set({ pending: false }).where(eq(transactionsTable.id, pending.id));
+    await fetchLiabilitiesForItem(TEST_USER, itemRowId, { afterTxnSync: true });
+    expect((await snapshotOf(plat.rowId)).liabilityPendingTxnIds).toEqual([]);
+  });
+
+  it("⭐ (round 6, review) any other fetch keeps its pending rows too, flagged NOT after a sync (round 4: null) — the cap reads that list for payment credits and refunds only — and replaces a list kept at an earlier Sync's read", async () => {
+    const { itemRowId, plat, blue } = await seed();
+    await db.update(plaidAccountsTable).set({ liabilityPendingTxnIds: ["earlier"], liabilityPendingAfterSync: true }).where(eq(plaidAccountsTable.id, plat.rowId));
+    const { pending } = await rows(plat, blue);
+    accounts = [{ account_id: plat.ext, type: "credit", subtype: "credit card", balances: { current: 320 } }];
+    await fetchLiabilitiesForItem(TEST_USER, itemRowId);
+    const p = await snapshotOf(plat.rowId);
+    expect(p.liabilityBalance).toBe("320.00");
+    expect(p.liabilityPendingTxnIds).toEqual([pending.id]); // round 4–5: null
+    expect(p.liabilityPendingAfterSync).toBe(false);
+  });
+
+  it("⭐ (round 4, review; round 6) POST /plaid/sync keeps them flagged after a sync (the fetch follows the item's transactions sync); GET /plaid/liability-accounts?refresh=true (no transactions sync) keeps them flagged not (round 4–5: null)", async () => {
+    const { itemRowId, plat, blue } = await seed();
+    const { pending } = await rows(plat, blue);
+    accounts = [{ account_id: plat.ext, type: "credit", subtype: "credit card", balances: { current: 285 } }];
+    const sync = await fetch(`${baseUrl}/plaid/sync`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ itemId: itemRowId }) });
+    expect(sync.status).toBe(200);
+    expect((await snapshotOf(plat.rowId)).liabilityPendingTxnIds).toEqual([pending.id]);
+    expect((await snapshotOf(plat.rowId)).liabilityPendingAfterSync).toBe(true);
+    accounts = [{ account_id: plat.ext, type: "credit", subtype: "credit card", balances: { current: 300 } }];
+    const refresh = await fetch(`${baseUrl}/plaid/liability-accounts?refresh=true`);
+    expect(refresh.status).toBe(200);
+    const p = await snapshotOf(plat.rowId);
+    expect(p.liabilityBalance).toBe("300.00");
+    expect(p.liabilityPendingTxnIds).toEqual([pending.id]);
+    expect(p.liabilityPendingAfterSync).toBe(false);
   });
 });

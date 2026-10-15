@@ -3025,8 +3025,17 @@ export async function syncAllForUser(
   opts: {
     forceRefresh?: boolean;
     syncOrigin?: "manual" | "webhook" | "cron" | "internal";
+    /**
+     * (F5 round 5) Run right after EACH item's own sync, before the others
+     * finish (best-effort: a throw is swallowed). POST /plaid/sync reads the
+     * item's card balances here, right after the rows they are compared with —
+     * not after the slowest item's poll (up to ~22 s), time in which Plaid's
+     * refresh could land on the balance but not yet on H2's rows.
+     */
+    onItemSynced?: (result: SyncResult) => Promise<void>;
   } = {},
 ): Promise<SyncResult[]> {
+  const { onItemSynced, ...syncOpts } = opts;
   // (#671 follow-up) Cull orphans BEFORE we fetch the new batch so the
   // first-sync merge inside `syncPlaidItem` doesn't have to compete
   // with rows that already carry a (now-meaningless) plaidTransactionId
@@ -3044,7 +3053,11 @@ export async function syncAllForUser(
   // refresh window, not the sum of both back-to-back.
   // (#671) Per-item promise chain still guards same-item concurrency.
   const out = await Promise.all(
-    items.map((it) => syncPlaidItemSerialized(actorUserId, it.id, opts)),
+    items.map(async (it) => {
+      const r = await syncPlaidItemSerialized(actorUserId, it.id, syncOpts);
+      if (onItemSynced) await onItemSynced(r).catch(() => {});
+      return r;
+    }),
   );
   return out;
 }

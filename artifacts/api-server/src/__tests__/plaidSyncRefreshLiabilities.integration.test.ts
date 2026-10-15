@@ -48,7 +48,11 @@ type SyncResultLike = {
   error?: string | null;
 };
 type SyncFn = (userId: string, itemRowId: string) => Promise<SyncResultLike>;
-type SyncAllFn = (userId: string, householdId: string) => Promise<SyncResultLike[]>;
+type SyncAllFn = (
+  userId: string,
+  householdId: string,
+  opts?: { onItemSynced?: (r: SyncResultLike) => Promise<void> },
+) => Promise<SyncResultLike[]>;
 
 let syncPlaidItemMock: SyncFn = async (_u, itemRowId) => ({
   itemId: itemRowId,
@@ -73,7 +77,8 @@ vi.mock("../lib/plaidSync", async () => {
     // delegate straight to the mock so the per-item promise-chain
     // doesn't drag in the real Plaid client.
     syncPlaidItemSerialized: (u: string, i: string) => syncPlaidItemMock(u, i),
-    syncAllForUser: (u: string, h: string) => syncAllForUserMock(u, h),
+    syncAllForUser: (u: string, h: string, o?: Parameters<SyncAllFn>[2]) =>
+      syncAllForUserMock(u, h, o),
   };
 });
 
@@ -328,5 +333,52 @@ describe("(#651) POST /plaid/sync refreshes liability balances after transaction
     expect(fetchLiabilitiesCalls).toEqual([
       { userId: TEST_USER, itemRowId },
     ]);
+  });
+});
+
+// ⭐ (F5 round 5, round-4 review) Syncing EVERY item: each item's liabilities are
+// read right after its own transactions sync, not after the slowest item's poll.
+// The card balance is compared with the rows H2 holds (the balance cap); round 4
+// read it only once every item had finished — up to ~22 s while another bank
+// polled, time in which Plaid's refresh could reach the balance and not H2's rows.
+describe("⭐ (F5 round 5) POST /plaid/sync for every item reads each item's liabilities right after its own sync", () => {
+  it("the card item's liabilities are read before the slower bank item finishes; every item once", async () => {
+    const card = await insertItem({ accounts: [{ type: "credit", subtype: "credit card" }] });
+    const bank = await insertItem({ accounts: [{ type: "credit", subtype: "credit card" }, { type: "depository", subtype: "checking" }] });
+    const ok = (id: string): SyncResultLike => ({
+      itemId: id, plaidItemRowId: id, institutionName: null, added: 0, modified: 0, removed: 0, autoCategorized: 0, ruleAttributions: [], error: null,
+    });
+    const readBeforeBankFinished: string[] = [];
+    syncAllForUserMock = async (_u, _h, opts) => {
+      // The card item finishes first; the bank item is still polling.
+      const a = ok(card.itemRowId);
+      await opts?.onItemSynced?.(a);
+      // The bank item finishes now: what had been read by then?
+      readBeforeBankFinished.push(...fetchLiabilitiesCalls.map((c) => c.itemRowId));
+      const b = ok(bank.itemRowId);
+      await opts?.onItemSynced?.(b);
+      return [a, b];
+    };
+    try {
+      const res = await fetch(`${baseUrl}/plaid/sync`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      expect(res.status).toBe(200);
+    } finally {
+      syncAllForUserMock = async () => [];
+    }
+    expect(readBeforeBankFinished).toEqual([card.itemRowId]); // round 4: [] — read only after every item
+    expect(fetchLiabilitiesCalls.map((c) => c.itemRowId)).toEqual([card.itemRowId, bank.itemRowId]); // once each
+  });
+
+  it("a sync that does not report per item still reads every synced item's liabilities once, after it", async () => {
+    const card = await insertItem({ accounts: [{ type: "credit", subtype: "credit card" }] });
+    syncAllForUserMock = async () => [
+      { itemId: card.itemRowId, plaidItemRowId: card.itemRowId, institutionName: null, added: 0, modified: 0, removed: 0, autoCategorized: 0, ruleAttributions: [], error: null },
+    ];
+    try {
+      await fetch(`${baseUrl}/plaid/sync`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+    } finally {
+      syncAllForUserMock = async () => [];
+    }
+    expect(fetchLiabilitiesCalls).toEqual([{ userId: TEST_USER, itemRowId: card.itemRowId }]);
   });
 });

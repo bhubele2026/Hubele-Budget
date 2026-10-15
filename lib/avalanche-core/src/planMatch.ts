@@ -112,6 +112,19 @@ export type MatchRow = {
   /** (Decision 13) The row's category (a mapping rule's or the user's). */
   categoryId?: string | null;
   /**
+   * ⭐ (F5) THE CARD'S OWN LEDGER: the row is the checking half of a payment
+   * credit on a card (`pairCardPaymentCredits`), and these are the debts linked
+   * to that card (empty for a card with no debt row). Such a row is that card's
+   * payment: it never pays another debt's plan — as a row the user tagged to
+   * another debt never does — so a weekly card's payment can no longer pay the
+   * debt-plan card's minimum by the issuer's name. Null or absent: no card
+   * credit pairs with it (the rules read it as before). (F5 round 3) When the
+   * user's tag (`debtId`) names a debt NOT linked to that card, the card's
+   * ledger wins (`ledgerOverridesTag`): the money is on that card, so the row
+   * never pays the tagged debt's plan — one payment, never two obligations.
+   */
+  ledgerDebtIds?: readonly string[] | null;
+  /**
    * (Decision 13) The row counts as checking cash (`classifyCashRows`: a Plaid row
    * on the configured account, or a manual/imported checking row) and is not a
    * payment logged in the app against a debt (a manual row carrying a `debtId`).
@@ -389,6 +402,8 @@ export type PaidInFull = {
  *   - the row pays at least the plan (no upper bound: real card payments run
  *     many times the minimum);
  *   - the pair was not rejected ("Not this");
+ *   - (F5) the row is not another card's payment by the card's own ledger
+ *     (`MatchRow.ledgerDebtIds`);
  *   - and the row is a payment OF THIS DEBT, by one of:
  *     - (debt tag, decision 13 tier 1) the user tagged the row to the plan's debt
  *       (`debtId`, PR7's rule 2). The name is not needed: "CHASE ONLINE PAYMENT"
@@ -424,10 +439,13 @@ export function plansPaidInFullByName(
       if (cents(row.amount) < cents(plan.amount)) return;
       if (notMatch.has(`${plan.key}#${row.txnId}`)) return;
       if (row.debtId) {
-        // The user's tag decides: this debt's payment, or not this plan at all.
-        if (plan.debtId && row.debtId === plan.debtId) candidates.push({ plan, row, days, evidence: "debt_tag" });
+        // The user's tag decides: this debt's payment, or not this plan at all —
+        // (F5 round 3) unless another card's own ledger received the row.
+        if (!ledgerOverridesTag(row) && plan.debtId && row.debtId === plan.debtId) candidates.push({ plan, row, days, evidence: "debt_tag" });
         return;
       }
+      // (F5) Another card's ledger received it: not this plan's payment.
+      if (row.ledgerDebtIds && !(plan.debtId && row.ledgerDebtIds.includes(plan.debtId))) return;
       if (!row.plaidChecking) return;
       if (nameMatch(planWords, rowWords[j]!) === 0) return;
       if (!isCardPaymentRow(row)) return;
@@ -473,6 +491,17 @@ type Candidate = {
 
 type Tiered = { tier: MatchTier; evidence: MatchEvidence | null };
 const SUGGESTION: Tiered = { tier: 3, evidence: null };
+
+/**
+ * ⭐ (F5 round 3) THE CARD'S LEDGER WINS OVER A TAG THAT DISAGREES: the row is
+ * the checking half of a payment credit on a card (`ledgerDebtIds`), and the
+ * user tagged it to a debt not linked to that card (a mis-tag, or a debt tracked
+ * by hand). The money reached that card; counting the tag too paid two
+ * obligations with one payment.
+ */
+export function ledgerOverridesTag(row: Pick<MatchRow, "debtId" | "ledgerDebtIds">): boolean {
+  return !!row.debtId && !!row.ledgerDebtIds && !row.ledgerDebtIds.includes(row.debtId);
+}
 
 /**
  * (Decision 13) TIER 1 — explicit evidence that the row paid the plan.
@@ -543,8 +572,12 @@ function inConfirmedRange(plan: MatchPlan, rowCents: number): boolean {
 /** (Decision 13) The tier of a pair. See the file header. */
 function tierOf(c: Candidate, ambiguous: boolean, items: ItemIndex): Tiered {
   const { plan, row } = c;
+  // (F5 round 3) A row another card's ledger received is never the tagged debt's payment.
+  if (ledgerOverridesTag(row) && plan.debtId && !row.ledgerDebtIds!.includes(plan.debtId)) return SUGGESTION;
   // A row the user tagged to another debt is never a payment of this plan.
   if (row.debtId && plan.debtId && row.debtId !== plan.debtId) return SUGGESTION;
+  // (F5) Nor is a row another card's own ledger received (the user's tag wins).
+  if (!row.debtId && row.ledgerDebtIds && plan.debtId && !row.ledgerDebtIds.includes(plan.debtId)) return SUGGESTION;
   const explicit = explicitEvidence(c);
   if (explicit) return { tier: 1, evidence: explicit };
   if (ambiguous || !row.onChecking) return SUGGESTION;

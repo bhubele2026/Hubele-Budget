@@ -379,6 +379,9 @@ const LISTED_FATES: ReadonlySet<LedgerPlanFate> = new Set<LedgerPlanFate>([
   "overdue_outside",
   "income_not_arrived",
   "outside_window",
+  // (F5 round 2) An everyday hook week whose unpaid purchases moved to a later
+  // occurrence: listed, with the day they land on the forecast (`carriedTo`).
+  "carried",
 ]);
 
 export async function buildBankingReview(householdId: string, ownerUserId: string, q: BankingReviewQuery) {
@@ -470,6 +473,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     if (p) answerIds.add(p);
   }
   const answers = await readRowAnswers(householdId, [...answerIds]);
+  const rowDateById = new Map(counted.map((r) => [r.id, r.occurredOn] as const));
   /** The row's own answers; with none, the answers on the pending row it replaced (they carry). */
   const answersOf = (id: string) => {
     const own = answers.get(id);
@@ -496,6 +500,22 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     if (m.tier <= 2 && !m.ambiguous) evidencePairByTxn.set(m.txnId, planRefOf(o));
     else suggestionByTxn.set(m.txnId, planRefOf(o));
   }
+  // ⭐ (F5 round 2) A PAYMENT AGAINST EVERYTHING IT PAID. One statement payment pays
+  // several weeks of card purchases; one card payment pays two minimums. The ledger
+  // says how much of the row each obligation took (`paymentAllocations`); the row is
+  // compared with their SUM, never with one occurrence ("−520 vs a −130 week" was a
+  // fake 390 "different amount"). The plan named is the one due nearest the row.
+  const allocatedRefOf = (txnId: string): BankReviewPlanRef | null => {
+    const list = ledger.paymentAllocations.get(txnId);
+    if (!list || list.length === 0) return null;
+    const paid = list.map((a) => ({ a, o: occByKey.get(a.planKey) })).filter((x): x is { a: (typeof list)[number]; o: LedgerPlanOccurrence } => !!x.o);
+    if (paid.length === 0) return null;
+    const on = rowDateById.get(txnId);
+    const gap = (o: LedgerPlanOccurrence) => (on ? Math.abs(pairDayDelta(o.dueDate, on)) : 0);
+    const named = paid.reduce((b, x) => (gap(x.o) < gap(b.o) || (gap(x.o) === gap(b.o) && x.o.dueDate < b.o.dueDate) ? x : b));
+    const total = list.reduce((sum, a) => sum + a.cents, 0);
+    return { ...planRefOf(named.o), planned: -(total / 100) };
+  };
   const rowsFrom = ledger.planComparison.rowsFromISO;
   const evidenceCtx = evidenceContextOf(money2, billSuggestionsOf(ledger, money2.supersede));
 
@@ -504,9 +524,12 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
     const own = answersOf(r.id);
     const replaced = replacedOf(r.id);
     const answeredPlan = answeredByTxn.get(r.id) ?? (replaced ? answeredByTxn.get(replaced) : undefined);
+    const allocated = comparisonAvailable ? allocatedRefOf(r.id) : null;
     const resolutions = own.map((a) => {
       let plan: BankReviewPlanRef | null = null;
-      if ((a.status === "matched" || a.status === "partial") && answeredPlan) plan = planRefOf(answeredPlan);
+      // (F5 round 2) A matched row that paid more than its own week is compared with all it paid.
+      if (a.status === "matched" && allocated) plan = allocated;
+      else if ((a.status === "matched" || a.status === "partial") && answeredPlan) plan = planRefOf(answeredPlan);
       else if (a.recurringItemId && a.occurrenceDate) {
         const o = occByKey.get(`${a.recurringItemId}|${a.occurrenceDate}`);
         if (o) plan = planRefOf(o);
@@ -514,7 +537,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
       return { status: a.status, plan };
     });
     const evidenceOcc = comparisonAvailable ? evidenceByTxn.get(r.id) : undefined;
-    const evidence = comparisonAvailable ? (evidencePairByTxn.get(r.id) ?? (evidenceOcc ? planRefOf(evidenceOcc) : null)) : null;
+    const evidence = comparisonAvailable ? (allocated ?? evidencePairByTxn.get(r.id) ?? (evidenceOcc ? planRefOf(evidenceOcc) : null)) : null;
     const suggestion = comparisonAvailable ? (suggestionByTxn.get(r.id) ?? null) : null;
     const compared = comparisonAvailable && r.occurredOn >= rowsFrom && r.occurredOn <= today;
     const amountCents = toCents(r.amount);
@@ -674,6 +697,7 @@ export async function buildBankingReview(householdId: string, ownerUserId: strin
       remainder: moneyOrNull(o.remainder),
       onCurve: o.onCurve,
       hook: o.hookCadence,
+      carriedTo: o.carriedTo ?? null,
       eventKind,
       direction: v.direction,
       expected: moneyOrNull(v.expected),

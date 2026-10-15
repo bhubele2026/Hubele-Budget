@@ -21,7 +21,7 @@ import { BucketRows } from "./banking/BucketRows";
 import { ProposedFixes } from "./banking/ProposedFixes";
 import { PRESETS, isDay, presetOf, presetRange, rangeWords, sanitizeRange } from "./banking/reviewDates";
 import { bankingBase, bankingSummaryParams } from "./banking/reviewParams";
-import { BUCKETS, KIND_ORDER, KIND_WORDS, dayWords, fateWords, isBucketName, isKind, sideWords, signedCash } from "./banking/words";
+import { BUCKETS, KIND_ORDER, KIND_WORDS, dayWords, isBucketName, isKind, plannedFateWords, sideWords, signedCash } from "./banking/words";
 
 /**
  * (W3) ⭐ BANKING › REVIEW — "what wasn't in the plan?" for ONE bank account.
@@ -363,7 +363,7 @@ export default function BankingReviewPage() {
                     <div className="min-w-0">
                       <div className="truncate text-body font-medium text-brand-ink">{p.label}</div>
                       <div className="text-micro text-neutral-500">
-                        Due {dayWords(p.scheduledDate)} · {fateWords(p.fate)}
+                        Due {dayWords(p.scheduledDate)} · {plannedFateWords(p)}
                         {p.txnAmount != null && p.txnDate ? ` · ${formatCurrency(Math.abs(Number(p.txnAmount)))} on ${dayWords(p.txnDate)}` : ""}
                       </div>
                     </div>

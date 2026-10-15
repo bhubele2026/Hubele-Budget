@@ -41,6 +41,27 @@ export interface HookPayoffLine {
    * Null when the signal does not say.
    */
   parts: { incurred: string; carried: string; left: string } | null;
+  /**
+   * ⭐ (F5 round 2) The day this occurrence's unpaid card purchases land on the
+   * forecast, with the later week that carries them (the server's
+   * `hookReserves[].carriedTo`, placed by that week's curve event). Null when
+   * nothing was carried on. A week answered "missed" whose purchases are still
+   * owed is CARRIED, never missed.
+   */
+  carriedTo?: string | null;
+  /** (F5 round 2) What is left of the period's allowance (`hookReserves[].allowanceLeft`); absent when the signal does not say. */
+  left?: number | null;
+}
+
+/**
+ * ⭐ (F5 round 2) What a hook row really is when the household answered it
+ * "missed": its purchases moved to a later week (`carried`), or they are still
+ * on the forecast (`still_owed`). Null: nothing owed — the answer stands.
+ */
+export function hookOwedStatus(line: HookPayoffLine | null | undefined): "carried" | "still_owed" | null {
+  if (!line) return null;
+  if (line.carriedTo) return "carried";
+  return line.payoff != null && line.payoff > 0 ? "still_owed" : null;
 }
 
 type HookSignal = Pick<CashSignal, "events" | "hookAmountIgnored" | "overdueAssumedPaid" | "hookReserves">;
@@ -48,6 +69,9 @@ type HookSignal = Pick<CashSignal, "events" | "hookAmountIgnored" | "overdueAssu
 const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 /** "$450" for a round plan, "$451.20" otherwise — the dashboard's plan money. */
 const planMoney = (n: number) => money(n).replace(/\.00$/, "");
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2026-10-15" → "Oct 15". */
+const shortDay = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
 
 export function hookPayoffsOf(
   signal: HookSignal | null | undefined,
@@ -67,6 +91,13 @@ export function hookPayoffsOf(
   }
   for (const h of signal?.hookAmountIgnored ?? []) hooks.set(h.itemId, h);
   if (hooks.size === 0) return out;
+  // (F5 round 2) Where each carrying occurrence lands on the curve (its event's date).
+  const carrierDate = new Map<string, string>();
+  for (const e of signal?.events ?? []) {
+    if (!e.itemId || !hooks.has(e.itemId)) continue;
+    const key = e.occurrenceKey ?? `${e.itemId}|${e.originalDate ?? e.date}`;
+    if (!carrierDate.has(key)) carrierDate.set(key, e.date);
+  }
   const lineFor = (itemId: string, planKey: string): HookPayoffLine => {
     let line = out.get(planKey);
     if (!line) {
@@ -81,6 +112,8 @@ export function hookPayoffsOf(
         basis: r?.basis ?? null,
         label: r?.label || null,
         parts: r && r.basis === "plan" && r.incurred != null && r.allowanceLeft != null ? { incurred: r.incurred, carried: r.carried ?? "0.00", left: r.allowanceLeft } : null,
+        ...(r?.carriedTo ? { carriedTo: carrierDate.get(`${itemId}|${r.carriedTo}`) ?? r.carriedTo } : {}),
+        ...(r?.allowanceLeft != null && Number.isFinite(Number(r.allowanceLeft)) ? { left: Number(r.allowanceLeft) } : {}),
       };
       out.set(planKey, line);
     }
@@ -93,6 +126,11 @@ export function hookPayoffsOf(
     const planKey = e.occurrenceKey ?? `${e.itemId}|${e.originalDate ?? e.date}`;
     const line = lineFor(e.itemId, planKey);
     line.payoff = Math.round(((line.payoff ?? 0) + Math.abs(amount)) * 100) / 100;
+  }
+  // (F5 round 2) A week whose unpaid purchases were carried on is off the curve
+  // and paid by nothing: it gets a line too, so it never reads "missed".
+  for (const r of signal?.hookReserves ?? []) {
+    if (r.carriedTo && hooks.has(r.recurringItemId)) lineFor(r.recurringItemId, r.planKey);
   }
   for (const p of signal?.overdueAssumedPaid ?? []) {
     if (!hooks.has(p.itemId)) continue;
@@ -113,11 +151,19 @@ export function hookPayoffsOf(
  */
 export function hookPayoffWords(line: HookPayoffLine): string {
   const noPlan = `no ${line.cadence} plan set`;
+  // (F5 round 2) Carried on: the purchases are on a later day of the forecast.
+  if (line.carriedTo) return `card purchases carried to ${shortDay(line.carriedTo)}`;
+  if (line.paidOnEvidence && line.payoff != null && line.payoff > 0) {
+    const by = line.paidOnEvidence.description ?? `a ${money(line.paidOnEvidence.amount)} card payment`;
+    return `part paid by ${by} · ${money(line.payoff)} still owed`;
+  }
   if (line.paidOnEvidence) {
     const by = line.paidOnEvidence.description ?? `a ${money(line.paidOnEvidence.amount)} card payment`;
     return line.basis === "stored_amount" ? `paid on evidence by ${by} · ${noPlan}` : `paid on evidence by ${by} · plan ${planMoney(line.plan)}`;
   }
   if (line.basis === "stored_amount") {
+    // (F5 round 2) Nothing left to spend (a closed or answered week): what is on the forecast is card purchases.
+    if (line.left === 0 && line.payoff != null && line.payoff > 0) return `card purchases ${money(line.payoff)} still owed`;
     return `${line.label ?? "Spend"} reserve ${planMoney(line.plan)} · ${noPlan}`;
   }
   // (F4) With a plan: the three things the reserve is made of, in the owner's words.

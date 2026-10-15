@@ -5265,7 +5265,7 @@ components:
       type: object
       required:
         [key, itemId, label, scheduledDate, occurrenceDate, planned, fate, txnId, txnDate, txnAmount,
-         txnOnThisAccount, difference, dayDelta, remainder, onCurve, hook, eventKind, direction, expected, actual,
+         txnOnThisAccount, difference, dayDelta, remainder, onCurve, hook, carriedTo, eventKind, direction, expected, actual,
          variance, varianceKind]
       properties:
         key: { type: string, description: "<itemId>|<occurrenceDate>, the resolution key" }
@@ -5277,13 +5277,14 @@ components:
         fate: { $ref: "#/components/schemas/BankingReviewPlanFate" }
         txnId: { type: ["string", "null"], description: The row behind the fate (confirmed, evidence or suggested) }
         txnDate: { type: ["string", "null"] }
-        txnAmount: { type: ["string", "null"] }
+        txnAmount: { type: ["string", "null"], description: "(F5 round 2) What the payment(s) paid toward this occurrence: an everyday hook week, the payments allocated to it; a minimum paid on the card's own ledger, the minimum. Otherwise the row's amount" }
         txnOnThisAccount: { type: boolean }
         difference: { type: ["string", "null"], description: "|row| − |plan| (positive: more than planned)" }
         dayDelta: { type: ["integer", "null"], description: "Row date − due date, in days (negative: early)" }
         remainder: { type: ["string", "null"], description: "Signed, still assumed unpaid after a partial or an evidence row" }
         onCurve: { type: boolean, description: It (or its remainder) still weighs on the forecast }
         hook: { type: ["string", "null"], enum: [weekly, monthly, null], description: An everyday hook (its card payoff) }
+        carriedTo: { type: ["string", "null"], description: "(F5 round 2) fate `carried`: the day its unpaid purchases land on the forecast, with the week that carries them; null otherwise" }
         eventKind: { $ref: "#/components/schemas/BankingReviewPlanKind" }
         direction: { $ref: "#/components/schemas/BankingReviewDirection" }
         expected: { type: ["string", "null"], description: "(F2) |planned|, a positive magnitude; null when not sized" }
@@ -5293,9 +5294,10 @@ components:
 
     BankingReviewPlanFate:
       type: string
+      description: "(F5 round 2) `carried`: an everyday hook week whose unpaid purchases moved to a later week (`carriedTo`)"
       enum:
         [matched, partial, skipped, missed, paid_on_evidence, suggested, on_curve, overdue_outside,
-         income_not_arrived, outside_window, not_due]
+         income_not_arrived, outside_window, not_due, carried]
 
     BankingReviewPlanKind:
       type: string
@@ -8369,6 +8371,15 @@ components:
             occurrence carried on: paid + allowanceLeft), so summed over the
             reserves every obligation counts once; the curve holds `amount −
             paid`. The F1 fields are always sent by an F1 server.
+
+            ⭐ (F5 round 2) A missed / skipped / dismissed answer closes an
+            occurrence's reserve (`allowanceLeft` 0), never its purchases; a
+            matched answer's row pays its week first and the rest of the row
+            pays the other weeks. A payment dated before an occurrence pays the
+            purchases already made by then. A card's carried + current unpaid
+            never exceeds what the card's own live balance says it owes: the
+            excess is `cappedByBalance` (oldest first), off the curve, so
+            own purchases = incurred + paid + cappedByBalance.
           items:
             type: object
             required: [hook, recurringItemId, planKey, occurrenceDate, label, amount, basis]
@@ -8397,6 +8408,7 @@ components:
                     amount: { type: string }
               carriedTo: { type: ["string", "null"], description: "(F1) The occurrence date its unpaid part was carried into" }
               allowanceLeft: { type: string, description: "(F1) What is left of the period's allowance (the plan's, or the stored reserve's)" }
+              cappedByBalance: { type: string, description: "(F5 round 2) Its own purchases the card's balance shows already paid beyond the payments H2 sees (never on the curve). Sent only when not zero." }
               cards:
                 type: array
                 description: (F1) The cards the hook pays in full at its cadence, each with its own period's purchases − refunds
@@ -8427,9 +8439,13 @@ components:
             (`matches`-style; older occurrences pair for this list only), or,
             for a debt's minimum, a payment of at least the minimum that either
             names the card (`card_payment`) or is tagged to that debt
-            (`debt_tag`). Off the curve except `unpaidRemainder`, which drags while
-            the plan is at most 14 days overdue. Listed so an unrelated row
-            that hid an unpaid bill is never silent. Sorted by due date.
+            (`debt_tag`), or (F5) a payment the card's own ledger received in
+            the minimum's billing cycle or late while it was unpaid
+            (`card_ledger`; listed even when the household answered the
+            minimum missed or skipped). Off the curve except `unpaidRemainder`,
+            which drags while the plan is at most 14 days overdue. Listed so an
+            unrelated row that hid an unpaid bill is never silent. Sorted by due
+            date.
           items:
             $ref: "#/components/schemas/CashSignalAssumedPaidPlan"
         matches:
@@ -8517,7 +8533,7 @@ components:
         planAmount: { type: string, description: Signed like the plan. }
         txnId: { type: string }
         txnAmount: { type: string, description: Signed like the row. }
-        confidence: { type: string, description: '"high", "medium" or "low" (the pair''s), "card_payment", or "debt_tag" (a row the user tagged to the debt).' }
+        confidence: { type: string, description: '"high", "medium" or "low" (the pair''s), "card_payment", "debt_tag" (a row the user tagged to the debt), or "card_ledger" (F5: a payment the debt''s own card received).' }
         unpaidRemainder: { type: string, description: Signed; "0.00" when the row covered it (within $1). On the curve only while at most 14 days overdue. }
     CashSignalListedPlan:
       type: object

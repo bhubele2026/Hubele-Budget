@@ -7939,6 +7939,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             }>, "many">>;
             carriedTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             allowanceLeft: zod.ZodOptional<zod.ZodString>;
+            cappedByBalance: zod.ZodOptional<zod.ZodString>;
             cards: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
                 accountId: zod.ZodString;
                 name: zod.ZodNullable<zod.ZodString>;
@@ -7978,6 +7979,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             }[] | undefined;
             carriedTo?: string | null | undefined;
             allowanceLeft?: string | undefined;
+            cappedByBalance?: string | undefined;
             cards?: {
                 mode: "in_full" | "debt_plan" | null;
                 amount: string;
@@ -8005,6 +8007,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             }[] | undefined;
             carriedTo?: string | null | undefined;
             allowanceLeft?: string | undefined;
+            cappedByBalance?: string | undefined;
             cards?: {
                 mode: "in_full" | "debt_plan" | null;
                 amount: string;
@@ -8223,6 +8226,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             }[] | undefined;
             carriedTo?: string | null | undefined;
             allowanceLeft?: string | undefined;
+            cappedByBalance?: string | undefined;
             cards?: {
                 mode: "in_full" | "debt_plan" | null;
                 amount: string;
@@ -8342,6 +8346,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             }[] | undefined;
             carriedTo?: string | null | undefined;
             allowanceLeft?: string | undefined;
+            cappedByBalance?: string | undefined;
             cards?: {
                 mode: "in_full" | "debt_plan" | null;
                 amount: string;
@@ -8618,6 +8623,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             }[] | undefined;
             carriedTo?: string | null | undefined;
             allowanceLeft?: string | undefined;
+            cappedByBalance?: string | undefined;
             cards?: {
                 mode: "in_full" | "debt_plan" | null;
                 amount: string;
@@ -8841,6 +8847,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             }[] | undefined;
             carriedTo?: string | null | undefined;
             allowanceLeft?: string | undefined;
+            cappedByBalance?: string | undefined;
             cards?: {
                 mode: "in_full" | "debt_plan" | null;
                 amount: string;
@@ -9224,6 +9231,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         }>, "many">>;
         carriedTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         allowanceLeft: zod.ZodOptional<zod.ZodString>;
+        cappedByBalance: zod.ZodOptional<zod.ZodString>;
         cards: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
             accountId: zod.ZodString;
             name: zod.ZodNullable<zod.ZodString>;
@@ -9263,6 +9271,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         }[] | undefined;
         carriedTo?: string | null | undefined;
         allowanceLeft?: string | undefined;
+        cappedByBalance?: string | undefined;
         cards?: {
             mode: "in_full" | "debt_plan" | null;
             amount: string;
@@ -9290,6 +9299,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         }[] | undefined;
         carriedTo?: string | null | undefined;
         allowanceLeft?: string | undefined;
+        cappedByBalance?: string | undefined;
         cards?: {
             mode: "in_full" | "debt_plan" | null;
             amount: string;
@@ -9508,6 +9518,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         }[] | undefined;
         carriedTo?: string | null | undefined;
         allowanceLeft?: string | undefined;
+        cappedByBalance?: string | undefined;
         cards?: {
             mode: "in_full" | "debt_plan" | null;
             amount: string;
@@ -9627,6 +9638,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         }[] | undefined;
         carriedTo?: string | null | undefined;
         allowanceLeft?: string | undefined;
+        cappedByBalance?: string | undefined;
         cards?: {
             mode: "in_full" | "debt_plan" | null;
             amount: string;
@@ -20902,7 +20914,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         scheduledDate: zod.ZodString;
         occurrenceDate: zod.ZodString;
         planned: zod.ZodNullable<zod.ZodString>;
-        fate: zod.ZodEnum<["matched", "partial", "skipped", "missed", "paid_on_evidence", "suggested", "on_curve", "overdue_outside", "income_not_arrived", "outside_window", "not_due"]>;
+        fate: zod.ZodEnum<["matched", "partial", "skipped", "missed", "paid_on_evidence", "suggested", "on_curve", "overdue_outside", "income_not_arrived", "outside_window", "not_due", "carried"]>;
         txnId: zod.ZodNullable<zod.ZodString>;
         txnDate: zod.ZodNullable<zod.ZodString>;
         txnAmount: zod.ZodNullable<zod.ZodString>;
@@ -20912,6 +20924,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         remainder: zod.ZodNullable<zod.ZodString>;
         onCurve: zod.ZodBoolean;
         hook: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"weekly">, zod.ZodLiteral<"monthly">, zod.ZodLiteral<null>]>>;
+        carriedTo: zod.ZodNullable<zod.ZodString>;
         eventKind: zod.ZodEnum<["income", "bill", "debt", "hook"]>;
         direction: zod.ZodEnum<["in", "out"]>;
         expected: zod.ZodNullable<zod.ZodString>;
@@ -20929,12 +20942,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         txnDate: string | null;
         txnAmount: string | null;
         hook: "weekly" | "monthly" | null;
+        carriedTo: string | null;
         txnId: string | null;
         dayDelta: number | null;
         key: string;
         onCurve: boolean;
         scheduledDate: string;
-        fate: "skipped" | "matched" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
+        fate: "skipped" | "matched" | "carried" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
         txnOnThisAccount: boolean;
         remainder: string | null;
         eventKind: "income" | "hook" | "debt" | "bill";
@@ -20952,12 +20966,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         txnDate: string | null;
         txnAmount: string | null;
         hook: "weekly" | "monthly" | null;
+        carriedTo: string | null;
         txnId: string | null;
         dayDelta: number | null;
         key: string;
         onCurve: boolean;
         scheduledDate: string;
-        fate: "skipped" | "matched" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
+        fate: "skipped" | "matched" | "carried" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
         txnOnThisAccount: boolean;
         remainder: string | null;
         eventKind: "income" | "hook" | "debt" | "bill";
@@ -26478,12 +26493,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         txnDate: string | null;
         txnAmount: string | null;
         hook: "weekly" | "monthly" | null;
+        carriedTo: string | null;
         txnId: string | null;
         dayDelta: number | null;
         key: string;
         onCurve: boolean;
         scheduledDate: string;
-        fate: "skipped" | "matched" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
+        fate: "skipped" | "matched" | "carried" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
         txnOnThisAccount: boolean;
         remainder: string | null;
         eventKind: "income" | "hook" | "debt" | "bill";
@@ -27273,12 +27289,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         txnDate: string | null;
         txnAmount: string | null;
         hook: "weekly" | "monthly" | null;
+        carriedTo: string | null;
         txnId: string | null;
         dayDelta: number | null;
         key: string;
         onCurve: boolean;
         scheduledDate: string;
-        fate: "skipped" | "matched" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
+        fate: "skipped" | "matched" | "carried" | "partial" | "suggested" | "missed" | "paid_on_evidence" | "on_curve" | "overdue_outside" | "income_not_arrived" | "outside_window" | "not_due";
         txnOnThisAccount: boolean;
         remainder: string | null;
         eventKind: "income" | "hook" | "debt" | "bill";

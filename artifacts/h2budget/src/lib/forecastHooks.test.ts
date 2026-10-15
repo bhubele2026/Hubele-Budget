@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hookPayoffsOf, hookPayoffWords } from "./forecastHooks";
+import { hookOwedStatus, hookPayoffsOf, hookPayoffWords } from "./forecastHooks";
 
 // (WP8) The register's words for an everyday hook: display only.
 const signal = {
@@ -152,5 +152,39 @@ describe("(F4) the reserve says what it is made of", () => {
     const m = hookPayoffsOf(planSignal as never);
     expect(hookPayoffWords(m.get("ws|2026-10-17")!)).toBe("Weekly Spend: card purchases $120.00 + left to spend $120.00");
     expect(hookPayoffWords(m.get("ws|2026-10-10")!)).toBe("Weekly Spend: card purchases $240.00 (+ carried $50.00) + left to spend $0.00");
+  });
+});
+
+// ⭐ (F5 round 2) The words never hide a card week that is still owed.
+describe("(F5) a carried or part-paid week says so", () => {
+  const base = { cadence: "weekly" as const, plan: 300, basis: "stored_amount" as const, label: "Weekly Spend", parts: null };
+  it("carried on: 'card purchases carried to <day>'; status carried", () => {
+    const line = { ...base, planKey: "ws|2026-10-03", payoff: null, paidOnEvidence: null, carriedTo: "2026-10-15", left: 0 };
+    expect(hookPayoffWords(line)).toBe("card purchases carried to Oct 15");
+    expect(hookOwedStatus(line)).toBe("carried");
+  });
+  it("paid in part, the rest on the forecast: 'part paid by <row> · $X still owed'", () => {
+    const line = { ...base, planKey: "ws|2026-10-10", payoff: 210, paidOnEvidence: { txnId: "t", amount: 30, description: "AMERICAN EXPRESS" }, left: 0 };
+    expect(hookPayoffWords(line)).toBe("part paid by AMERICAN EXPRESS · $210.00 still owed");
+    expect(hookOwedStatus(line)).toBe("still_owed");
+  });
+  it("a closed (or answered) week with nothing left to spend holds card purchases, never 'reserve $300'", () => {
+    expect(hookPayoffWords({ ...base, planKey: "ws|2026-10-10", payoff: 180, paidOnEvidence: null, left: 0 })).toBe("card purchases $180.00 still owed");
+    // The open week keeps the reserve words.
+    expect(hookPayoffWords({ ...base, planKey: "ws|2026-10-17", payoff: 300, paidOnEvidence: null, left: 210 })).toBe("Weekly Spend reserve $300 · no weekly plan set");
+    expect(hookOwedStatus(null)).toBe(null);
+    expect(hookOwedStatus({ ...base, planKey: "k", payoff: null, paidOnEvidence: null })).toBe(null);
+  });
+  it("hookPayoffsOf places a carried week by its carrier's curve event; a carried week with no event still gets a line", () => {
+    const m = hookPayoffsOf({
+      hookReserves: [
+        { hook: "weekly", recurringItemId: "ws", planKey: "ws|2026-10-03", occurrenceDate: "2026-10-03", label: "Weekly Spend", amount: "0.00", basis: "stored_amount", allowanceLeft: "0.00", carriedTo: "2026-10-10" },
+        { hook: "weekly", recurringItemId: "ws", planKey: "ws|2026-10-10", occurrenceDate: "2026-10-10", label: "Weekly Spend", amount: "270.00", basis: "stored_amount", allowanceLeft: "0.00" },
+      ],
+      events: [{ date: "2026-10-15", label: "Weekly Spend", amount: "-270.00", itemId: "ws", originalDate: "2026-10-10" }],
+      overdueAssumedPaid: [],
+    } as never);
+    expect(m.get("ws|2026-10-03")).toMatchObject({ carriedTo: "2026-10-15", payoff: null, left: 0 });
+    expect(m.get("ws|2026-10-10")).toMatchObject({ payoff: 270, left: 0 });
   });
 });

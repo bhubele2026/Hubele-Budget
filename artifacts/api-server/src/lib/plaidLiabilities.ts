@@ -1,8 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   plaidItemsTable,
   plaidAccountsTable,
+  transactionsTable,
 } from "@workspace/db";
 // (#623) plaidLiabilities scopes account/item writes by household, not
 // actor: any household member must be able to refresh balances on
@@ -108,9 +109,58 @@ export function isLiabilitiesNotEnabled(e: unknown): boolean {
   );
 }
 
+/** (F5 round 3) Most pending rows one account may hold for the snapshot to be kept. */
+const PENDING_SNAPSHOT_MAX = 500;
+
+/**
+ * (F5 round 3) Each account's rows that are pending now (ids), for the snapshot
+ * kept with its balance. An account with more than `PENDING_SNAPSHOT_MAX` gets
+ * none (null): a cut list would read some pending rows as posted. Bounded.
+ */
+async function readPendingTxnIds(householdId: string, externalAccountIds: readonly string[]): Promise<Map<string, string[] | null>> {
+  const out = new Map<string, string[] | null>();
+  if (externalAccountIds.length === 0) return out;
+  const rows = await db
+    .select({ id: transactionsTable.id, accountId: transactionsTable.plaidAccountId })
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        inArray(transactionsTable.plaidAccountId, [...externalAccountIds]),
+        eq(transactionsTable.pending, true),
+      ),
+    )
+    .limit(PENDING_SNAPSHOT_MAX * externalAccountIds.length + 1);
+  for (const id of externalAccountIds) out.set(id, []);
+  for (const r of rows) {
+    if (!r.accountId) continue;
+    const list = out.get(r.accountId);
+    if (list) list.push(r.id);
+  }
+  for (const [id, list] of out) if (list && list.length > PENDING_SNAPSHOT_MAX) out.set(id, null);
+  if (rows.length > PENDING_SNAPSHOT_MAX * externalAccountIds.length) for (const id of externalAccountIds) out.set(id, null);
+  return out;
+}
+
+/** (F5 round 4) How a liability fetch was reached. */
+export interface FetchLiabilitiesOptions {
+  /**
+   * The fetch follows a transactions sync of THIS item in the same request (POST
+   * /plaid/sync): H2's rows are current at the read, so the card balance cap may
+   * read rows by the instant. Every other caller (link, debt Refresh,
+   * liability-accounts refresh, create-debt) reads a balance that may be ahead
+   * of H2's rows. (Round 6) Both keep the card's pending rows with the balance
+   * (`liability_pending_txn_ids`) and say which read it was
+   * (`liability_pending_after_sync`); the cap reads a non-Sync read's list for
+   * payment credits and refunds only.
+   */
+  afterTxnSync?: boolean;
+}
+
 export async function fetchLiabilitiesForItem(
   userId: string,
   itemRowId: string,
+  opts: FetchLiabilitiesOptions = {},
 ): Promise<LiabilityRow[]> {
   const [item] = await db
     .select()
@@ -326,10 +376,29 @@ export async function fetchLiabilitiesForItem(
   const now = new Date();
 
   // Step 1: refresh balance for every debt-like account.
-  for (const a of accountsById.values()) {
+  const isDebtAccount = (a: { type?: string | null; subtype?: string | null }): boolean => {
     const sub = (a.subtype ?? "").toLowerCase();
-    const isDebt = a.type === "credit" || a.type === "loan" || debtSubtypes.has(sub);
-    if (!isDebt) continue;
+    return a.type === "credit" || a.type === "loan" || debtSubtypes.has(sub);
+  };
+  // ⭐ (F5 round 3) The rows that were PENDING at this read, kept with the balance:
+  // Plaid's current balance holds posted rows only, and the pending→posted re-key
+  // keeps H2's row (same id), so only this says which of today's posted rows were
+  // outside the balance when it was read (the card balance cap, core
+  // `outsideCardBalanceRead`). Read just before the balance is stamped.
+  // (Round 4) Read by the instant only right after this item's transactions
+  // sync: otherwise H2's pending flags may be stale (a row Plaid already posted,
+  // and the balance holds, still reads pending here). ⭐ (Round 6) Every read
+  // keeps its list anyway, flagged (`liabilityPendingAfterSync`): after a read
+  // that is not a Sync, a payment credit or refund pending at it that posts in
+  // place later must still read outside the balance (round 5 held it over what
+  // the card owes until the next Sync). A stale flag only reads the cap low.
+  const pendingIdsByAccount = await readPendingTxnIds(
+    householdId,
+    [...accountsById.values()].filter((a) => isDebtAccount(a) && a.balances?.current != null).map((a) => a.account_id),
+  );
+  const afterTxnSync = opts.afterTxnSync === true;
+  for (const a of accountsById.values()) {
+    if (!isDebtAccount(a)) continue;
     const bal = a.balances?.current;
     if (bal == null) continue;
     await db
@@ -337,6 +406,8 @@ export async function fetchLiabilitiesForItem(
       .set({
         liabilityBalance: bal.toFixed(2),
         liabilityLastFetchedAt: now,
+        liabilityPendingTxnIds: pendingIdsByAccount.get(a.account_id) ?? null,
+        liabilityPendingAfterSync: afterTxnSync,
       })
       .where(
         and(

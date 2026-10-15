@@ -23,6 +23,7 @@
 // The hook item's own stored amount is never read.
 
 import { weekBounds, monthBounds, addDaysISO } from "./householdTime";
+import { CARD_CREDIT_PAIR_BEFORE } from "./cardLedger";
 
 export type HookCadence = "weekly" | "monthly";
 
@@ -196,13 +197,16 @@ export function nextHookOccurrence(cadence: HookCadence, occurrenceISO: string):
 //                   with no plan, the stored amount less the period's own
 //                   purchases, never below 0; 0 once the period has closed.
 //
-// "Unpaid" is measured per occurrence from evidence, never from the card's
+// "Unpaid" is measured per occurrence from evidence, never FROM the card's
 // balance: the balance is a point-in-time sync value with no period split, and
 // it holds whatever the card owed before the window (an archived debt's old
 // balance) — reserving it would move a whole paydown onto one Saturday. So a
 // purchase counts once (its period, pending→posted once), a refund nets the
 // period it is dated in, and each payment is allocated ONCE, oldest obligation
-// first, possibly across several weeks (`allocateHookPayments`).
+// first, possibly across several weeks (`allocateHookPayments`). ⭐ (F5 round 2)
+// The balance is still a CEILING: a card's carried + current unpaid never
+// exceeds what the card says it owes (`capHookObligationsAtBalance`, oldest
+// cut first) — the owner: "cautious but never over".
 
 /** One in_full card's obligation for one hook occurrence's period. */
 export interface HookObligation {
@@ -214,6 +218,19 @@ export interface HookObligation {
   accountId: string;
   /** The period's purchases − refunds on the card, in cents (≥ 0). */
   cents: number;
+  /**
+   * ⭐ (F5 round 2) The period's rows on the card, by day: a purchase positive,
+   * a refund negative, in cents. A payment pays only what had been bought by
+   * its date (`accruedByCents`). Absent: nothing of the period is payable
+   * before the period's end (`periodEnd`, else the occurrence date — F1's rule).
+   */
+  rows?: ReadonlyArray<{ on: string; cents: number }>;
+  /**
+   * (F5 round 3) The period's last day. A monthly occurrence is dated at its
+   * period's START (the 1st), so "on or after the occurrence" is no proof the
+   * month's purchases were made by then. Absent: the occurrence date.
+   */
+  periodEnd?: string;
 }
 
 /** A payment the obligations may be paid by. */
@@ -224,6 +241,13 @@ export interface HookPaymentEvidence {
   cents: number;
   /** The card it is known to have paid (a debt tag, the card's own ledger), or null: any in_full card. */
   accountId: string | null;
+  /**
+   * ⭐ (F5 round 2) The occurrence a Review "matched" answer tied this payment
+   * to. It pays that occurrence first, whatever its date; the rest of it pays
+   * the other obligations by the usual rule — an answer never throws away the
+   * rest of a payment.
+   */
+  forKey?: string | null;
 }
 
 export interface HookAllocation {
@@ -244,37 +268,274 @@ const byDateThen = <T>(date: (t: T) => string, ...rest: Array<(t: T) => string>)
   };
 
 /**
+ * (F5 round 2) What of an obligation had been bought by `dayISO`: the
+ * period's rows dated on or before it, never below 0 nor above the obligation.
+ * (F5 round 3) Whenever the rows are known they decide, whatever the
+ * occurrence date: a monthly occurrence is dated the 1st, and a payment on the
+ * 2nd must not pay purchases made on the 12th. With no rows, nothing before the
+ * period's end (`periodEnd`, else the occurrence date), all of it from then on.
+ */
+export function accruedByCents(o: Pick<HookObligation, "occurrenceDate" | "cents" | "rows" | "periodEnd">, dayISO: string): number {
+  const total = Math.max(0, Math.round(o.cents));
+  if (!o.rows) return (o.periodEnd ?? o.occurrenceDate) <= dayISO ? total : 0;
+  let running = 0;
+  for (const r of o.rows) if (r.on <= dayISO) running += Math.round(r.cents);
+  return Math.min(total, Math.max(0, running));
+}
+
+const obligationOrder = byDateThen<HookObligation>((o) => o.occurrenceDate, (o) => (o.cadence === "weekly" ? "0" : "1"), (o) => o.accountId, (o) => o.key);
+
+/**
  * ⭐ ONE PAYMENT, ALLOCATED ONCE, OLDEST OBLIGATION FIRST. Payments in date
- * order; each pays the outstanding obligations already DUE on its date (the
- * occurrence on or before the payment — a payment never pays a week that has
- * not closed, as before F1), oldest first (weekly before monthly on the same
- * day, then the card), only its own card's when it is known; what is left of it
- * pays nothing (it paid an older balance). Multi-week and partial payments fall
- * out of this; a payment can never be counted twice. Pure.
+ * order; each pays the outstanding obligations oldest first (weekly before
+ * monthly on the same day, then the card), only its own card's when it is
+ * known. An obligation is payable for what had been BOUGHT by the payment's
+ * date (`accruedByCents`; all of it once its period has ended) — (F5 round 2)
+ * a statement-size payment also pays the open week's purchases made before
+ * it, instead of dropping its leftover. A
+ * payment tied to an occurrence by a "matched" answer (`forKey`) pays that one
+ * first. What is still left of a payment pays nothing here (it paid an older
+ * balance, or sits on the card as a credit — the card's balance cap,
+ * `capHookObligationsAtBalance`, sees that). Multi-week and partial payments
+ * fall out of this; a payment can never be counted twice.
+ *
+ * (F5 round 3) `firstOccurrence`: the earliest sized occurrence of each
+ * cadence. A payment dated BEFORE it has no obligation in the window that had
+ * closed by its date — it paid the balance from before the window (typically
+ * the previous statement) — so it pays nothing of that cadence here, F1's rule
+ * (the forecast reads low until the card's balance cap or Review says
+ * otherwise). Accrual only places what is left of a payment AFTER the
+ * obligations closed by its date. A "matched" answer still ties its row to its
+ * occurrence. Pure.
  */
 export function allocateHookPayments(
   obligations: readonly HookObligation[],
   payments: readonly HookPaymentEvidence[],
+  opts: { firstOccurrence?: Partial<Record<HookCadence, string>> } = {},
 ): HookAllocation[] {
   const open = obligations
     .filter((o) => o.cents > 0)
     .map((o) => ({ ...o, left: Math.round(o.cents) }))
-    .sort(byDateThen((o) => o.occurrenceDate, (o) => (o.cadence === "weekly" ? "0" : "1"), (o) => o.accountId, (o) => o.key));
+    .sort(obligationOrder);
   const out: HookAllocation[] = [];
   const ordered = payments.filter((p) => p.cents > 0).slice().sort(byDateThen((p) => p.occurredOn, (p) => p.txnId));
+  const beforeWindow = (p: HookPaymentEvidence, o: HookObligation): boolean => {
+    const first = opts.firstOccurrence?.[o.cadence];
+    return first != null && p.occurredOn < first;
+  };
   for (const p of ordered) {
     let left = Math.round(p.cents);
+    const take = (o: (typeof open)[number], payable: number): void => {
+      const cents = Math.min(left, payable);
+      if (cents <= 0) return;
+      o.left -= cents;
+      left -= cents;
+      out.push({ txnId: p.txnId, key: o.key, accountId: o.accountId, cents });
+    };
+    if (p.forKey) {
+      for (const o of open) {
+        if (left <= 0) break;
+        if (o.key !== p.forKey || o.left <= 0) continue;
+        if (p.accountId != null && p.accountId !== o.accountId) continue;
+        take(o, o.left);
+      }
+    }
     for (const o of open) {
       if (left <= 0) break;
-      if (o.left <= 0 || o.occurrenceDate > p.occurredOn) continue;
+      if (o.left <= 0) continue;
       if (p.accountId != null && p.accountId !== o.accountId) continue;
-      const take = Math.min(left, o.left);
-      o.left -= take;
-      left -= take;
-      out.push({ txnId: p.txnId, key: o.key, accountId: o.accountId, cents: take });
+      if (beforeWindow(p, o)) continue;
+      const paidSoFar = Math.round(o.cents) - o.left;
+      take(o, Math.max(0, accruedByCents(o, p.occurredOn) - paidSoFar));
     }
   }
   return out;
+}
+
+/**
+ * ⭐ (F5 round 2) A CARD NEVER OWES MORE THAN ITS BALANCE. For each in_full
+ * card with a known cap (what the card itself says it owes now — the caller
+ * reads it), the obligations still unpaid after the payments (`allocations`)
+ * — every period carried plus the open one — are cut down to the cap, OLDEST
+ * FIRST: whatever paid the difference (a payment H2 cannot see, the leftover of
+ * one that paid an older balance) paid the oldest purchases. A card with no cap
+ * is not touched. The cut can only lower what is reserved, and never moves a
+ * paydown onto one day. Returns the cut, per occurrence and card (`txnId` "").
+ * Pure.
+ */
+export function capHookObligationsAtBalance(
+  obligations: readonly HookObligation[],
+  allocations: readonly HookAllocation[],
+  capCentsByCard: ReadonlyMap<string, number>,
+): HookAllocation[] {
+  const paid = new Map<string, number>();
+  for (const a of allocations) paid.set(`${a.key}#${a.accountId}`, (paid.get(`${a.key}#${a.accountId}`) ?? 0) + a.cents);
+  const out: HookAllocation[] = [];
+  const byCard = new Map<string, HookObligation[]>();
+  for (const o of obligations) {
+    if (o.cents <= 0 || !capCentsByCard.has(o.accountId)) continue;
+    byCard.set(o.accountId, [...(byCard.get(o.accountId) ?? []), o]);
+  }
+  for (const [accountId, list] of byCard) {
+    const unpaid = list
+      .sort(obligationOrder)
+      .map((o) => ({ o, left: Math.max(0, Math.round(o.cents) - (paid.get(`${o.key}#${accountId}`) ?? 0)) }));
+    const total = unpaid.reduce((s, u) => s + u.left, 0);
+    let excess = total - Math.max(0, Math.round(capCentsByCard.get(accountId)!));
+    for (const u of unpaid) {
+      if (excess <= 0) break;
+      const cut = Math.min(excess, u.left);
+      if (cut <= 0) continue;
+      excess -= cut;
+      out.push({ txnId: "", key: u.o.key, accountId, cents: cut });
+    }
+  }
+  return out;
+}
+
+/** (F5 round 3) A card's last balance read: what it owed, and when. */
+export interface CardBalanceRead {
+  /** What the card owed at the read, cents. */
+  balanceCents: number;
+  /** The instant it was read (ISO). */
+  asOf: string;
+  /** The household day of `asOf`. */
+  asOfDay: string;
+  /**
+   * The ids of the card's rows that were PENDING at the read, kept with the
+   * balance. (F5 round 4) Kept ONLY by a read that came right after a
+   * transactions sync of the card's item (the Sync button): non-null says H2's
+   * rows were current when the balance was read, so "pending at the read" and
+   * "stored after the read" mean something. Null: any other read (a debt's
+   * Refresh, a link, a liability-accounts refresh, or a read before 0210) — the
+   * day decides alone. (Round 6) Such a read's own list is `pendingAtOtherRead`.
+   */
+  pendingAtRead: ReadonlySet<string> | null;
+  /**
+   * ⭐ (F5 round 6) The ids of the card's rows H2 held as PENDING at a read that
+   * did NOT follow a transactions sync (every liability fetch keeps its list;
+   * this is the list of a non-Sync one). H2's pending flags may lag that
+   * balance, so it is read for payment credits and refunds only
+   * (`creditOutsideCardBalanceRead`): one pending at the read is outside, even
+   * after it posts in place. A stale flag (the balance already held it) reads
+   * the cap LOW — the side the owner allows. Purchases never read it. Absent /
+   * null: none kept (a Sync's read, or a read before 0210).
+   */
+  pendingAtOtherRead?: ReadonlySet<string> | null;
+}
+
+/** (F5 round 3) A card row as a balance read sees it. */
+export interface CardBalanceRow {
+  txnId: string;
+  on: string;
+  /** cents: a purchase or a payment credit positive, a refund negative. */
+  cents: number;
+  /** Still pending now. */
+  pending: boolean;
+  /** When H2 stored the row (ISO instant); null or absent: unknown. */
+  createdAt?: string | null;
+}
+
+/**
+ * ⭐ (F5 round 3, round 4) WAS A CARD ROW OUTSIDE THE BALANCE WHEN IT WAS READ?
+ * Plaid's current balance holds the card's POSTED rows (the available balance is
+ * the one that moves with pending ones). On ANY read, outside:
+ *   - a row still pending now;
+ *   - a row dated after the read's day.
+ * On a read right after a transactions sync of the card's item (`pendingAtRead`
+ * kept: H2's rows were current at the read), also outside:
+ *   - a row pending at the read that has posted in place since (Plaid's
+ *     pending→posted re-key keeps H2's row, its id and its store time);
+ *   - a row H2 stored after the read (`createdAt` > `asOf`): the sync just before
+ *     the read had not seen it. A purchase pending at a morning read that posts
+ *     later that day as a new row is dated the read day; so is a payment made
+ *     after the read. Only the instant tells them apart.
+ * (Round 4) On any other read (a debt's Refresh, a link, a read before 0210 —
+ * `pendingAtRead` null) H2's rows may lag the balance it read, so neither the
+ * pending flags nor the store time say anything: the day decides alone. And a
+ * pending row kept at the read says nothing about the posted row that replaced
+ * it: a leftover pending copy H2 keeps beside its posted twin (the superseded
+ * pairing) is pending at every read, while the twin — stored before the read —
+ * is inside the balance (round 3 read the twin outside: the cap ran high for a
+ * purchase, low for a payment credit). The twin stored after the read is
+ * outside by its store time. Purchases read by this one rule; (round 5) a
+ * payment credit — and (round 6) a refund — also by
+ * `creditOutsideCardBalanceRead` (pending at a non-Sync read, or stored after
+ * it: outside — never over). Pure.
+ */
+export function outsideCardBalanceRead(row: CardBalanceRow, read: Pick<CardBalanceRead, "asOf" | "asOfDay" | "pendingAtRead">): boolean {
+  if (row.pending) return true;
+  if (row.on > read.asOfDay) return true;
+  // Not read right after a sync: the day decides.
+  if (!read.pendingAtRead) return false;
+  if (read.pendingAtRead.has(row.txnId)) return true;
+  return storedAfterRead(row, read);
+}
+
+/** H2 stored the row after the read's instant (an unknown store time: no). */
+const storedAfterRead = (row: Pick<CardBalanceRow, "createdAt">, read: Pick<CardBalanceRead, "asOf">): boolean => {
+  if (!row.createdAt) return false;
+  const created = Date.parse(row.createdAt);
+  const asOf = Date.parse(read.asOf);
+  return Number.isFinite(created) && Number.isFinite(asOf) && created > asOf;
+};
+
+/**
+ * ⭐ (F5 round 5) A PAYMENT CREDIT READS ON THE "NEVER OVER" SIDE. Outside the
+ * balance whenever `outsideCardBalanceRead` says so, and — on a read that kept
+ * no pending list (a debt's Refresh, a link, a read before 0210: H2's rows may
+ * lag it) — also when H2 stored it AFTER the read and it is dated no earlier
+ * than `CARD_CREDIT_PAIR_BEFORE` days before the read's day (the window a
+ * payment counts as in flight). A payment made after a debt's Refresh posts
+ * as a credit dated on or before the read's day and stored later; round 4 read
+ * it inside by the day, so once the credit paired its checking row left "in
+ * flight" and the paid amount came back: H2 held up to the whole payment more
+ * than the card owed until the next Sync. Subtracted now, the cap may read LOW
+ * instead — when the balance already held a credit H2 stored late — until the
+ * next Sync: the side the owner allows. Older credits stored after the read are
+ * history arriving late (a link, a backfill) that the balance holds.
+ * ⭐ (Round 6) Also — on such a read — a credit H2 held as PENDING at it
+ * (`pendingAtOtherRead`), whatever its date or store time: Plaid's
+ * pending→posted re-key keeps H2's row and its store time, so a credit pending
+ * at a debt's Refresh that posted in place later read inside (round 5) and H2
+ * held the whole payment over what the card owes until the next Sync. A stale
+ * pending flag (the balance already held it) reads the cap LOW instead: allowed.
+ * (Round 6) A REFUND reads by this rule too (it lowers what the card owes, like
+ * a payment credit): stored after a non-Sync read, or pending at it, it is
+ * outside. Purchases keep the day rule (`outsideCardBalanceRead`): read inside,
+ * a late one can only lower the cap. Pure.
+ */
+export function creditOutsideCardBalanceRead(
+  credit: CardBalanceRow,
+  read: Pick<CardBalanceRead, "asOf" | "asOfDay" | "pendingAtRead" | "pendingAtOtherRead">,
+): boolean {
+  if (outsideCardBalanceRead(credit, read)) return true;
+  if (read.pendingAtRead) return false; // a Sync's read: the store time already decided
+  if (read.pendingAtOtherRead?.has(credit.txnId)) return true;
+  if (credit.on < addDaysISO(read.asOfDay, -CARD_CREDIT_PAIR_BEFORE)) return false;
+  return storedAfterRead(credit, read);
+}
+
+/**
+ * ⭐ (F5 round 3) WHAT A CARD OWES NOW, from its last balance read: the balance,
+ * + purchases outside it (`outsideCardBalanceRead`), − refunds and payment
+ * credits outside it (`creditOutsideCardBalanceRead`: round 5 credits, round 6
+ * refunds — never over), − payments already sent that the card has not
+ * received at all (`inFlightCents`: checking payments with no card credit
+ * yet). Never below 0. The ceiling `capHookObligationsAtBalance` cuts to. Pure.
+ */
+export function cardOwedNowCents(
+  read: CardBalanceRead,
+  rows: readonly CardBalanceRow[],
+  credits: readonly CardBalanceRow[],
+  inFlightCents: number,
+): number {
+  let owed = Math.round(read.balanceCents);
+  // A refund (cents < 0) reads by the credit rule (round 6); a purchase by the day rule.
+  for (const r of rows) if (r.cents < 0 ? creditOutsideCardBalanceRead(r, read) : outsideCardBalanceRead(r, read)) owed += Math.round(r.cents);
+  for (const c of credits) if (creditOutsideCardBalanceRead(c, read)) owed -= Math.round(c.cents);
+  owed -= Math.max(0, Math.round(inFlightCents));
+  return Math.max(0, owed);
 }
 
 /** What the model knows about one hook occurrence. */
@@ -294,18 +555,41 @@ export interface HookOccurrenceFacts {
   ownCents: number;
   /** Payments allocated to its own period, cents (≤ ownCents). */
   paidCents: number;
+  /**
+   * (F5 round 2) What the cards' balances show was already paid of its own
+   * purchases beyond the payments H2 sees (`capHookObligationsAtBalance`),
+   * cents. Never on the curve. Absent: 0.
+   */
+  cappedCents?: number;
   /** On or before the drag cutoff (and sized): due now. */
   due: boolean;
-  /** Answered matched / skipped / missed / dismissed: settled, never carried. */
+  /**
+   * Answered matched: settled by the confirmed row, never carried, never a
+   * carrier. (F5) Only "matched": a missed / skipped / dismissed answer is
+   * `reserveClosed`, never settled.
+   */
   settled: boolean;
+  /**
+   * ⭐ (F5) Answered missed / skipped / dismissed. The answer closes the
+   * occurrence's RESERVE (allowance left → 0), never its purchases: on an
+   * in_full card they stay owed (the owner, 2026-10-14: "exhausting an
+   * allowance never erases the obligation to pay existing purchases"), are paid
+   * by evidence, and carry — or carry the earlier ones in — exactly as an
+   * unanswered occurrence's do. Before F5 the answer settled the week, and a
+   * household that had answered every past week (to stop the pre-F1 stored
+   * reserve dragging) lost every unpaid purchase from the curve.
+   */
+  reserveClosed?: boolean;
   /** Answered partial: keeps its own amount, never carried, never a carrier. */
   partial: boolean;
 }
 
 export interface HookOccurrenceAmounts {
-  /** Own unpaid: ownCents − paidCents. */
+  /** Own unpaid: ownCents − paidCents − cappedCents. */
   incurredCents: number;
   paidCents: number;
+  /** (F5 round 2) Its own purchases the cards' balances show paid (never on the curve). */
+  cappedCents: number;
   /** Earlier occurrences' unpaid carried into this one. */
   carriedCents: number;
   /** The occurrences carried in, oldest first. */
@@ -313,7 +597,7 @@ export interface HookOccurrenceAmounts {
   /** The occurrence this one's unpaid was carried into (its key), or null. */
   carriedTo: string | null;
   allowanceLeftCents: number;
-  /** Before payment evidence and review answers: (carriedTo ? 0 : incurred) + paid + carried + allowanceLeft. */
+  /** Before payment evidence and review answers: (carriedTo ? 0 : incurred) + paid + carried + allowanceLeft (never `cappedCents`). */
   amountCents: number;
   /** What lands on the curve before review answers: amountCents − paidCents. */
   curveCents: number;
@@ -322,10 +606,13 @@ export interface HookOccurrenceAmounts {
 
 /**
  * ⭐ EACH OCCURRENCE'S AMOUNT (F1). See the section header. For each hook item,
- * the LATEST due occurrence that is not answered (nor partial) is the carrier:
- * every earlier due, unanswered occurrence with something unpaid moves it there
+ * the LATEST due occurrence that is not settled (matched) nor partial is the
+ * carrier: every earlier such occurrence with something unpaid moves it there
  * (`carriedTo` / `carriedFrom`), so the curve holds each obligation once, on
- * one event, until it is paid. Pure.
+ * one event, until it is paid. (F5) A missed / skipped answer
+ * (`reserveClosed`) only drops the occurrence's allowance left: it carries and
+ * can be the carrier like any other, so Σ curve over an item = Σ own − Σ paid
+ * (settled and partial aside) + Σ allowance left, whatever was answered. Pure.
  */
 export function hookOccurrenceAmounts(facts: readonly HookOccurrenceFacts[], todayISO: string): Map<string, HookOccurrenceAmounts> {
   const out = new Map<string, HookOccurrenceAmounts>();
@@ -333,20 +620,22 @@ export function hookOccurrenceAmounts(facts: readonly HookOccurrenceFacts[], tod
     const closed = f.periodEnd < todayISO;
     const own = Math.max(0, Math.round(f.ownCents));
     const paid = Math.min(own, Math.max(0, Math.round(f.paidCents)));
-    const allowanceLeft = closed
+    const capped = Math.min(own - paid, Math.max(0, Math.round(f.cappedCents ?? 0)));
+    const allowanceLeft = closed || f.reserveClosed
       ? 0
       : f.capCents != null
         ? Math.max(0, Math.round(f.capCents) - Math.round(f.spentCents))
         : Math.max(0, Math.round(f.storedCents) - own);
     out.set(f.key, {
-      incurredCents: own - paid,
+      incurredCents: own - paid - capped,
       paidCents: paid,
+      cappedCents: capped,
       carriedCents: 0,
       carriedFrom: [],
       carriedTo: null,
       allowanceLeftCents: allowanceLeft,
-      amountCents: own + allowanceLeft,
-      curveCents: own - paid + allowanceLeft,
+      amountCents: own - capped + allowanceLeft,
+      curveCents: own - paid - capped + allowanceLeft,
       closed,
     });
   }

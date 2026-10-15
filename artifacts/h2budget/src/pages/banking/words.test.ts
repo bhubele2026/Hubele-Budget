@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classificationNote, planLine, sideWords, signedCash, varianceWords } from "./words";
+import { classificationNote, fateWords, planLine, plannedFateWords, sideWords, signedCash, varianceWords } from "./words";
 
 /** (F4) Direction-aware words: income is 'less / more than expected', an expense is 'over / under'. */
 const plan = (o: Record<string, unknown>) => ({ key: "k", label: "L", scheduledDate: "2026-10-09", planned: null, difference: null, dayDelta: 0, eventKind: "bill", direction: "out", expected: null, actual: null, variance: null, varianceKind: null, ...o });
@@ -54,5 +54,17 @@ describe("classificationNote", () => {
     expect(classificationNote(row({ classificationIssue: "inflow_into_expense", category: { id: "c", name: "Dining & Coffee" } }))).toBe("Filed as Dining & Coffee — looks like income");
     expect(classificationNote(row({ classificationIssue: "outflow_into_income", category: { id: "c", name: "Other income" } }))).toBe("Filed as Other income — looks like an expense");
     expect(classificationNote(row({}))).toBeNull();
+  });
+});
+
+// ⭐ (F5 round 2) A card week whose purchases moved on is never "Missed".
+describe("plannedFateWords", () => {
+  it("carried → 'Carried to <day>'; part paid with the rest on the forecast → 'Part paid · $X still owed'; else the fate's words", () => {
+    expect(plannedFateWords({ fate: "carried", carriedTo: "2026-10-15", onCurve: false, remainder: "-10.00" })).toBe("Carried to Oct 15");
+    expect(plannedFateWords({ fate: "carried", carriedTo: null, onCurve: false, remainder: null })).toBe("Carried");
+    expect(plannedFateWords({ fate: "paid_on_evidence", carriedTo: null, onCurve: true, remainder: "-210.00" })).toBe("Part paid · $210.00 still owed");
+    expect(plannedFateWords({ fate: "paid_on_evidence", carriedTo: null, onCurve: false, remainder: "0.00" })).toBe("Paid");
+    expect(plannedFateWords({ fate: "missed", carriedTo: null, onCurve: false, remainder: null })).toBe("Missed");
+    expect(fateWords("carried")).toBe("Carried");
   });
 });

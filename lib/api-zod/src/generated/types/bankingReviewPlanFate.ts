@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * (F5 round 2) `carried`: an everyday hook week whose unpaid purchases moved to a later week (`carriedTo`)
+ */
 export type BankingReviewPlanFate =
   (typeof BankingReviewPlanFate)[keyof typeof BankingReviewPlanFate];
 
@@ -21,4 +24,5 @@ export const BankingReviewPlanFate = {
   income_not_arrived: "income_not_arrived",
   outside_window: "outside_window",
   not_due: "not_due",
+  carried: "carried",
 } as const;

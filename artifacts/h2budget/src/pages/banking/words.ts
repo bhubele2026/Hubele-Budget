@@ -2,6 +2,7 @@ import type {
   BankingReviewBucketName,
   BankingReviewKind,
   BankingReviewPlanFate,
+  BankingReviewPlanned,
   BankingReviewReason,
   BankingReviewRow,
   BankingReviewVarianceKind,
@@ -64,9 +65,22 @@ export function fateWords(fate: BankingReviewPlanFate): string {
       return "Missed";
     case "skipped":
       return "Skipped";
+    case "carried":
+      return "Carried";
     default:
       return "Not paid yet";
   }
+}
+
+/**
+ * ⭐ (F5 round 2) A planned item's fate as the household reads it: a card week
+ * whose unpaid purchases moved on reads "Carried to Oct 15" (never "Missed"); one
+ * paid in part reads "Part paid · $210.00 still owed". Otherwise `fateWords`.
+ */
+export function plannedFateWords(p: Pick<BankingReviewPlanned, "fate" | "carriedTo" | "onCurve" | "remainder">): string {
+  if (p.fate === "carried") return p.carriedTo ? `Carried to ${dayWords(p.carriedTo)}` : "Carried";
+  if (p.fate === "paid_on_evidence" && p.onCurve && p.remainder != null && Number(p.remainder) !== 0) return `Part paid · ${unsigned(p.remainder)} still owed`;
+  return fateWords(p.fate);
 }
 
 const DAY = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

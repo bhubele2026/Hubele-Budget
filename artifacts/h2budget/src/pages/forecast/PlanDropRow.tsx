@@ -10,7 +10,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { fmtMonth } from "@/lib/avalanche";
 import type { PlanLine } from "@/lib/forecastMatch";
 import type { PayoffInfo } from "@/lib/forecastDebts";
-import { hookPayoffWords, type HookPayoffLine } from "@/lib/forecastHooks";
+import { hookOwedStatus, hookPayoffWords, type HookPayoffLine } from "@/lib/forecastHooks";
 import { Flame } from "lucide-react";
 import { isPlanRowMatchEligible, statusBadge } from "./statusBadge";
 import { canRecordPartial } from "@/lib/forecastMatch";
@@ -134,6 +134,11 @@ export function PlanDropRow({
   // row directly under the cursor (`isOverEligible`) gets a stronger
   // highlight via the existing primary ring. Ineligible rows show a clear
   // disabled style.
+  // ⭐ (F5 round 2) A card week is never "missed" while its purchases are owed: it
+  // reads "Carried" (moved to a later week) or, answered missed but still on the
+  // forecast, "Still owed".
+  const owed = hookOwedStatus(hook);
+  const hookChip = owed === "carried" ? "carried" : owed === "still_owed" && row.status === "missed" ? "still_owed" : null;
   const showDropAffordance = isDragActive && isEligible && !isOverEligible;
   const showDropBlocked = isDragActive && !isEligible;
   return (
@@ -283,7 +288,7 @@ export function PlanDropRow({
               : pp.needsReview
                 ? "needs_review"
                 : "suggested"
-            : row.status,
+            : (hookChip ?? row.status),
         )}
         <span
           className={`font-mono text-label tabular-nums ${

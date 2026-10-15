@@ -676,6 +676,24 @@ export const plaidAccountsTable = pgTable(
     liabilityDueDay: integer("liability_due_day"),
     liabilityStatementDay: integer("liability_statement_day"),
     liabilityLastFetchedAt: timestamp("liability_last_fetched_at", { withTimezone: true }),
+    // (F5 round 3) The ids of this account's rows that were PENDING when
+    // `liability_balance` was read (written with it, by the same liability
+    // fetch). Plaid's current balance holds posted rows only, and Plaid's
+    // pending→posted re-key keeps H2's row (same id, `pending` flipped, dated the
+    // posting day), so without this a purchase pending at a morning read that
+    // posted later that day read as already in the balance. Read by the card
+    // balance cap (core `outsideCardBalanceRead`). (Round 4) Kept only by a
+    // fetch right after a transactions sync of the same item (POST /plaid/sync);
+    // null: any other read, or one before 0210 — the cap reads by the day.
+    // Added by lib/db/migrations/0210_liability_pending_txn_ids.sql.
+    // (Round 6) Every fetch keeps the list now; see `liabilityPendingAfterSync`.
+    liabilityPendingTxnIds: jsonb("liability_pending_txn_ids").$type<string[]>(),
+    // (F5 round 6) Whether the read that kept `liabilityPendingTxnIds` came right
+    // after a transactions sync of the same item (POST /plaid/sync). True: the cap
+    // reads every row by the instant. False / null: any other read — its list is
+    // read for payment credits and refunds only (a pending one is outside the
+    // balance, even after it posts in place). Same migration (0210).
+    liabilityPendingAfterSync: boolean("liability_pending_after_sync"),
     importCutoffDate: date("import_cutoff_date"),
     firstSyncCompletedAt: timestamp("first_sync_completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

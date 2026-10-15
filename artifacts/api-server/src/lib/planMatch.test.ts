@@ -751,3 +751,55 @@ describe("(PR-B2) a runner-up an earlier pair already consumed casts no doubt �
     expect(planTaken(-1, "Acme Loan", "ACME LOAN")).toMatchObject({ txnId: "early", ambiguous: true, tier: 3, offCurve: false });
   });
 });
+
+// ⭐ (F5) THE CARD'S OWN LEDGER. A checking row paired with a payment credit on a
+// card is that card's payment: it never pays another debt's plan, by name or by
+// amount — two cards of one issuer ("AMERICAN EXPRESS") can no longer pay each
+// other's minimums. (Round 3) A tag that names a debt not linked to that card loses too.
+describe("(F5) a row another card's ledger received never pays this debt's plan", () => {
+  const blueMin = plan("debt:blue", "2026-10-04", -45, "Amex Blue Cash minimum", { debtId: "blue" });
+  const amexPay = (txnId: string, on: string, amount: number, extra: Partial<MatchRow> = {}) =>
+    row(txnId, on, amount, "American Express payment", { pfcDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT", ...extra });
+
+  it("the name rule: the weekly card's 10/8 payment paid the weekly card, so it cannot pay Blue's 10/4 minimum", () => {
+    expect(plansPaidInFullByName([blueMin], [amexPay("p", "2026-10-08", -150)])).toEqual([
+      { planKey: "debt:blue|2026-10-04", txnId: "p", txnAmount: -150, evidence: "card_payment" },
+    ]);
+    expect(plansPaidInFullByName([blueMin], [amexPay("p", "2026-10-08", -150, { ledgerDebtIds: ["platinum"] })])).toEqual([]);
+    // A card with no debt row ([]) is not Blue either.
+    expect(plansPaidInFullByName([blueMin], [amexPay("p", "2026-10-08", -150, { ledgerDebtIds: [] })])).toEqual([]);
+    // Blue's own ledger: still the name rule's to decide (unchanged).
+    expect(plansPaidInFullByName([blueMin], [amexPay("b", "2026-10-01", -300, { ledgerDebtIds: ["blue"] })])).toEqual([
+      { planKey: "debt:blue|2026-10-04", txnId: "b", txnAmount: -300, evidence: "card_payment" },
+    ]);
+    // (F5 round 3, deliberate) A tag that disagrees with the card's ledger loses: Platinum's
+    // ledger received the row, so it never pays Blue's minimum (it pays Platinum, once).
+    // Round 2 let the tag win, and the row paid both.
+    expect(plansPaidInFullByName([blueMin], [amexPay("t", "2026-10-08", -150, { ledgerDebtIds: ["platinum"], debtId: "blue" })])).toEqual([]);
+    // A tag that agrees with the ledger (or with no ledger at all) still decides.
+    expect(plansPaidInFullByName([blueMin], [amexPay("t", "2026-10-08", -150, { ledgerDebtIds: ["blue"], debtId: "blue" })])).toEqual([
+      { planKey: "debt:blue|2026-10-04", txnId: "t", txnAmount: -150, evidence: "debt_tag" },
+    ]);
+    expect(plansPaidInFullByName([blueMin], [amexPay("t", "2026-10-08", -150, { debtId: "blue" })])).toEqual([
+      { planKey: "debt:blue|2026-10-04", txnId: "t", txnAmount: -150, evidence: "debt_tag" },
+    ]);
+  });
+
+  it("(F5 round 3) the matcher: a row tagged to Blue that Platinum's ledger received is a suggestion for Blue's minimum, never tier 1", () => {
+    const tagged = amexPay("t", "2026-10-05", -45, { debtId: "blue" });
+    expect(match([blueMin], [tagged])[0]).toMatchObject({ tier: 1, evidence: "debt_tag", offCurve: true });
+    expect(match([blueMin], [{ ...tagged, ledgerDebtIds: ["platinum"] }])[0]).toMatchObject({ tier: 3, offCurve: false });
+    expect(match([blueMin], [{ ...tagged, ledgerDebtIds: ["blue"] }])[0]).toMatchObject({ tier: 1, evidence: "debt_tag" });
+  });
+
+  it("the matcher: an exact, named payment on another card's ledger is a suggestion only (tier 3), never evidence", () => {
+    const exact = amexPay("p", "2026-10-05", -45);
+    expect(match([blueMin], [exact])[0]).toMatchObject({ tier: 2, offCurve: true });
+    expect(match([blueMin], [{ ...exact, ledgerDebtIds: ["platinum"] }])[0]).toMatchObject({ tier: 3, offCurve: false });
+    // Its own card's ledger: unchanged.
+    expect(match([blueMin], [{ ...exact, ledgerDebtIds: ["blue"] }])[0]).toMatchObject({ tier: 2, offCurve: true });
+    // A plan with no debt (a plain bill) is not judged by the card ledger.
+    const bill = plan("amex-bill", "2026-10-05", -45, "Amex");
+    expect(match([bill], [{ ...exact, ledgerDebtIds: ["platinum"] }])[0]).toMatchObject({ tier: 2 });
+  });
+});
