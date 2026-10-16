@@ -28,6 +28,7 @@ import { Breakdown, provisionalLine } from "./Breakdown";
 import { weekStatus, withinOfRemaining } from "@/lib/weekFigures";
 import { Details } from "./Details";
 import { PlanPrompt } from "./PlanPrompt";
+import { AmexWeekLine } from "./AmexWeekLine";
 import { canGoBack, isIsoDay, monthWords, periodTitle, resolveStart, shiftPeriod, type PeriodView } from "./periodDates";
 
 /**
@@ -179,6 +180,17 @@ export function PeriodView({ view }: { view: PeriodView }) {
           </div>
           {provisionalLine(d) ? (
             <p className="text-label text-neutral-700" data-testid="sp-provisional-line">{provisionalLine(d)}</p>
+          ) : null}
+
+          {view === "week" && !account ? (
+            <AmexWeekLine
+              start={d.start}
+              end={d.end}
+              onOpen={() => {
+                const el = document.getElementById("sp-breakdown");
+                if (el && "scrollIntoView" in el) el.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+              }}
+            />
           ) : null}
 
           {d.plan.status === "not_set" && d.isCurrent ? (

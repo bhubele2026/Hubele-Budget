@@ -169,6 +169,7 @@ import {
   type PlannedItem,
 } from "./forecast/PlannedItemsList";
 import { hookLineOf, hookOwedStatus, hookPayoffWords, hookPayoffsOf } from "@/lib/forecastHooks";
+import { afterScrollSettles } from "@/lib/afterScrollSettles";
 import { ForecastBody, TAB_OF_MODE, forecastTitle } from "./forecast/ForecastBody";
 import { statusBadge, isPlanRowMatchEligible } from "./forecast/statusBadge";
 
@@ -667,6 +668,7 @@ export default function ForecastPage({
     null,
   );
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jumpTokenRef = useRef(0);
   useEffect(
     () => () => {
       if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
@@ -707,10 +709,14 @@ export default function ForecastPage({
     const key = `${itemId}|${date}`;
     setHighlightedPlanKey(key);
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    highlightTimerRef.current = setTimeout(
-      () => setHighlightedPlanKey(null),
-      2000,
-    );
+    // The highlight lasts 2 s once the row has ARRIVED: on a phone the smooth scroll to a register row takes
+    // seconds, and a timer started at the click ended before the row was on screen.
+    const token = ++jumpTokenRef.current;
+    const dim = () => {
+      if (token !== jumpTokenRef.current) return; // a later jump owns the highlight now
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => setHighlightedPlanKey(null), 2000);
+    };
     // Defer to next frame so the row is mounted/visible before scrolling.
     requestAnimationFrame(() => {
       const el = document.querySelector(
@@ -721,7 +727,8 @@ export default function ForecastPage({
           behavior: "smooth",
           block: "center",
         });
-      }
+        afterScrollSettles(el, dim);
+      } else dim();
     });
   };
   const [reconciledNow, setReconciledNow] = useState(false);

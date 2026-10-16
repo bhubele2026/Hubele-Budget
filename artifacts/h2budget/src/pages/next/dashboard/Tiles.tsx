@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, type ReactNode } from "react";
+import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useGetSettings, type Spine } from "@workspace/api-client-react";
@@ -31,6 +31,8 @@ const BankConfidence = lazy(() => import("./BankConfidence"));
 // (C1) The calculated line + Details (the shared note of components/checking-balance): its own chunk, as the
 // balance check is — the landing keeps only the label and the figure.
 const CheckingNote = lazy(() => import("@/components/checking-balance-note"));
+// (E3) The week tile's no-plan line + action (owner only): after first paint, off the landing bytes.
+const WeekPlanAction = lazy(() => import("./WeekPlanAction"));
 
 function BankingTile({ s, older }: { s: Spine | undefined; older?: string | null }) {
   if (!s) return <Tile testid="banking" title="Banking" href="/banking" accent="checking" index={1}><Skel /></Tile>;
@@ -150,13 +152,15 @@ function AmexTile({ weekCharges }: AmexTileProps) {
 // plan read is "—" with Retry; the rows keep their height through every state.
 function WeekTile({ s }: { s: Spine | undefined }) {
   const pos = useMoneyPositionQ();
+  // (E3) A plan that reads $0 (found by the lazy no-plan part, from the cash signal): the chip says it.
+  const [noPlan, setNoPlan] = useState<TileStatus>();
   if (!s) return <Tile testid="week" title="This week" href="/spending/week" accent="checking" index={3}><Skel /></Tile>;
   const w = weekStory(s.position);
   // ONE rule for the word: `knownWithinPlan` (the header and Needs attention read it too). Over on the known
   // figure is certain (unconfirmed rows are outflows, so the known figure can only rise): it reads Over even when
   // the week is provisional. A provisional week that is not over reads "Not final", in plain words.
   const within = knownWithinPlan(s.position);
-  const status: TileStatus = weekStatus(within, w.provisional);
+  const status: TileStatus = noPlan && !w.planSet ? noPlan : weekStatus(within, w.provisional);
   const lo = w.planSet && w.remainingKnown != null ? leftOver(w.remainingKnown) : null;
   const line = lo ? (w.provisional ? `${lo.text} so far` : lo.text) : null;
   // The plan figure keeps ONE text line in every state (skeleton one text line high (1lh), Retry inline beside the dash): the tile does not change height.
@@ -169,7 +173,7 @@ function WeekTile({ s }: { s: Spine | undefined }) {
   return (
     <Tile
       testid="week" title="This week" href="/spending/week" accent="checking" index={3} status={status}
-      why={<Why>Confirmed purchases only. Unconfirmed rows are not counted until you confirm them.</Why>}
+      why={<Why>Unconfirmed rows are not counted until you confirm them.</Why>}
     >
       <Fig label={WEEK_FIGURE_WORDS.known} big testid="tile-week-spent" value={money(w.known)} />
       {w.planSet ? (
@@ -177,7 +181,12 @@ function WeekTile({ s }: { s: Spine | undefined }) {
           <Fig label="Plan" value={plan} testid="tile-week-plan" />
           <div className={cn("font-mono text-body font-semibold tabular-nums", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-week-left">{line}</div>
         </>
-      ) : null /* the chip already says "Plan not set" */}
+      ) : (
+        // The chip says "Plan not set"; the line and the owner's action load after first paint (own chunk).
+        <Suspense>
+          <WeekPlanAction onStatus={setNoPlan} />
+        </Suspense>
+      )}
       {hasCents(w.unconfirmed) ? (
         <div className="text-micro text-neutral-600" data-testid="tile-week-provisional">
           {WEEK_FIGURE_WORDS.unresolved} {money(w.unconfirmed)}{w.provisional ? " may change this" : ""}
@@ -196,8 +205,8 @@ function MonthTile({ s }: { s: Spine | undefined }) {
   // money is computed here (`over` is −remaining when over, by construction).
   const lo = planSet && m.remaining != null ? leftOver(Number(m.remaining)) : null;
   const status: TileStatus = !planSet
-    ? { word: "Plan not set", tone: "neutral" }
-    : m.status === "over" ? { word: "Over", tone: "bad" } : { word: "Within", tone: "ok" };
+    ? weekStatus(null, false)
+    : m.status === "over" ? weekStatus("over", false) : { word: "Within", tone: "ok" };
   return (
     <Tile testid="month" title="Monthly allowance" href="/spending/month" accent="checking" index={4} status={status}>
       <Fig label="Spent" big testid="tile-month-spent" value={money(m.actual)} />
@@ -206,9 +215,7 @@ function MonthTile({ s }: { s: Spine | undefined }) {
           <Fig label="Plan" value={money(m.plan)} testid="tile-month-plan" />
           <div className={cn("font-mono text-body font-semibold tabular-nums", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-month-left">{lo!.text}</div>
         </>
-      ) : (
-        <p className="text-label text-neutral-600" data-testid="tile-month-noplan">Plan not set</p>
-      )}
+      ) : null /* the chip already says "Plan not set" */}
     </Tile>
   );
 }
