@@ -630,7 +630,7 @@ function BucketCard({
           {plan === undefined
             ? "—"
             : !hasPlan
-            ? plan.words
+            ? "" /* the plan line above already says so */
             : !known
               ? "—"
               : over
@@ -1140,12 +1140,14 @@ export default function AllowancesPage() {
           )}
           {noPlanWeeks.length > 0 ? (
             <ul className="mt-2 space-y-0.5 text-label text-neutral-600" data-testid="allowance-noplan-weeks">
-              {noPlanWeeks.map((h) => (
-                <li key={h.weekISO} className="flex justify-between gap-3" data-testid="allowance-noplan-week">
-                  <span>{formatWeekStamp(h.weekSun)}</span>
-                  <span>{h.words === "Plan set to $0" ? h.words : "No plan"}</span>
-                </li>
-              ))}
+              {(["Plan not set", "Plan set to $0"] as const).map((words) => {
+                const weeks = noPlanWeeks.filter((h) => (h.words ?? "Plan not set") === words);
+                return weeks.length ? (
+                  <li key={words} data-testid="allowance-noplan-row">
+                    {words === "Plan set to $0" ? words : "No plan"}: {weeks.map((h) => formatWeekStamp(h.weekSun)).join(" · ")}
+                  </li>
+                ) : null;
+              })}
             </ul>
           ) : null}
         </div>

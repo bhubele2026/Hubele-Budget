@@ -632,7 +632,8 @@ describe("Allowances — no plan, never over (T4)", () => {
     renderPage();
     expect(screen.getByTestId("allowance-state-weekly").textContent).toBe("No plan");
     expect(screen.getByTestId("allowance-plan-weekly").textContent).toBe("Plan not set");
-    expect(screen.getByTestId("allowance-variance-weekly").textContent).toBe("Plan not set");
+    // Said once (the plan line); the variance line stays empty rather than repeat it.
+    expect(screen.getByTestId("allowance-variance-weekly").textContent).toBe("");
     expect(screen.getByTestId("allowance-card-weekly").textContent).not.toMatch(/over/i);
     expect(screen.getByTestId("allowance-summary-weekly").textContent).not.toMatch(/Over/);
   });
@@ -677,7 +678,7 @@ describe("Allowances — no plan, never over (T4)", () => {
     renderPage();
     // Newest first: one week over, then a week with no plan: a streak of 1 is not a pattern.
     expect(screen.queryByTestId("allowance-over-streak")).toBeNull();
-    expect(screen.getAllByTestId("allowance-noplan-week")).toHaveLength(1);
+    expect(screen.getAllByTestId("allowance-noplan-row").map((r) => r.textContent)).toEqual(["No plan: Apr 26"]);
   });
 
   it("history: a no-plan week is listed as 'No plan' and has no bar; a $0 week says so", () => {
@@ -686,8 +687,8 @@ describe("Allowances — no plan, never over (T4)", () => {
       "week:2026-04-26": wk(null, null, "override"),
     };
     renderPage();
-    const rows = screen.getAllByTestId("allowance-noplan-week").map((r) => r.textContent);
-    expect(rows).toEqual(["Apr 26Plan set to $0", "May 3No plan"]);
+    const rows = screen.getAllByTestId("allowance-noplan-row").map((r) => r.textContent);
+    expect(rows).toEqual(["No plan: May 3", "Plan set to $0: Apr 26"]);
     expect(varianceBarLabels()).toHaveLength(6);
     expect(screen.queryByTestId("allowance-over-streak")).toBeNull();
   });
