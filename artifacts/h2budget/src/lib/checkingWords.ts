@@ -82,8 +82,8 @@ export function rowsWords(since: SinceLike | null | undefined, when: "since" | "
 /**
  * ⭐ (C1) THE CALCULATED LINE — the one sentence under "Checking today" on every surface:
  *
- *   "Calculated · bank read $0.00 Oct 15, 4:19 PM · +2 rows since"
- *   "Calculated · bank read $0.00 Oct 15, 4:19 PM · no rows since"
+ *   "Calculated · bank read $0.00 Oct 15, 7:02 AM · +2 rows since"
+ *   "Calculated · bank read $0.00 Oct 15, 7:02 AM · no rows since"
  *   "Typed balance $120.00 (not from the bank) · Oct 15"          (source manual)
  *   "No bank reading yet"                                          (no reading)
  *

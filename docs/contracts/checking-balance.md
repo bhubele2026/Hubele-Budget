@@ -25,7 +25,7 @@ Banking tile, the Banking cell, the Forecast KPI, the Forecast "Checking today" 
 ```
 Checking today
 $3,374.60
-Calculated · bank read $0.00 Oct 15, 4:19 PM · +2 rows since
+Calculated · bank read $0.00 Oct 15, 7:02 AM · +2 rows since
 Details
 ```
 
@@ -33,9 +33,9 @@ Details
 
 | Case | Line |
 |---|---|
-| Bank reading, rows counted | `Calculated · bank read $0.00 Oct 15, 4:19 PM · +2 rows since` (`+1 row since` for one) |
-| Bank reading, none counted | `Calculated · bank read $0.00 Oct 15, 4:19 PM · no rows since` |
-| Bank reading, the response did not carry the rows | `Calculated · bank read $0.00 Oct 15, 4:19 PM` (says nothing about rows) |
+| Bank reading, rows counted | `Calculated · bank read $0.00 Oct 15, 7:02 AM · +2 rows since` (`+1 row since` for one) |
+| Bank reading, none counted | `Calculated · bank read $0.00 Oct 15, 7:02 AM · no rows since` |
+| Bank reading, the response did not carry the rows | `Calculated · bank read $0.00 Oct 15, 7:02 AM` (says nothing about rows) |
 | Typed balance | `Typed balance $120.00 (not from the bank) · Oct 15` |
 | No reading | `No bank reading yet` (the figure is "—") |
 | Answer older than the newest reading seen | `Earlier reading (Oct 14) — updating…` replaces the line; the figure is grey |

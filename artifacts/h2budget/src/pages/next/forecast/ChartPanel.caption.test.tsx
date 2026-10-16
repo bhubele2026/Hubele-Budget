@@ -19,7 +19,7 @@ import { ChartPanel } from "./ChartPanel";
 
 afterEach(cleanup);
 
-const READING = { balance: "0.00", at: "2026-10-15T21:19:00.000Z", source: "plaid" as const };
+const READING = { balance: "0.00", at: "2026-10-15T12:02:00.000Z", source: "plaid" as const };
 
 function ctx(over: { opening?: unknown; closeFirst?: number; bankBalance?: string | null }) {
   return {
@@ -56,7 +56,7 @@ describe("ChartPanel start caption", () => {
   it("rows dated the opening day: opens at the bare reading, closes at Checking today, '+2 rows since'", () => {
     show(ctx({}));
     expect(line0()).toBe("Oct 16 · opens $0.00 · closes $3,374.60");
-    expect(line1()).toBe("Bank read $0.00 Oct 15, 4:19 PM · +2 rows since");
+    expect(line1()).toBe("Bank read $0.00 Oct 15, 7:02 AM · +2 rows since");
     expect(screen.getByTestId("chart-stub").getAttribute("data-opening")).toBe("0");
   });
 
@@ -66,13 +66,13 @@ describe("ChartPanel start caption", () => {
       closeFirst: 3300,
     }));
     expect(line0()).toBe("Oct 16 · opens $3,374.60 · closes $3,300.00");
-    expect(line1()).toBe("Bank read $0.00 Oct 15, 4:19 PM · +2 rows since");
+    expect(line1()).toBe("Bank read $0.00 Oct 15, 7:02 AM · +2 rows since");
   });
 
   it("the caption's figures are opening.balance and daily[0].balance, to the cent", () => {
     show(ctx({ opening: { date: "2026-10-16", balance: "12.30", reading: { ...READING, balance: "12.30" }, since: { net: "0.00", count: 0, through: "2026-10-16" } }, closeFirst: 98.76, bankBalance: "12.30" }));
     expect(line0()).toBe("Oct 16 · opens $12.30 · closes $98.76");
-    expect(line1()).toBe("Bank read $12.30 Oct 15, 4:19 PM · no rows since");
+    expect(line1()).toBe("Bank read $12.30 Oct 15, 7:02 AM · no rows since");
   });
 
   it("no reading: dashes and 'No bank reading yet', never $0.00", () => {

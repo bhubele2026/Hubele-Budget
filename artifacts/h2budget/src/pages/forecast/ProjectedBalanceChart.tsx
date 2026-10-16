@@ -155,7 +155,7 @@ export function ProjectedBalanceChart({
   monthTicks?: boolean;
   /**
    * (T1/C2) Expanded only: the caption drawn at the curve's first point, one or two short lines
-   * ("Oct 16 · opens $0.00 · closes $3,812.39" / "Bank read $0.00 Oct 15, 4:19 PM · +2 rows since").
+   * ("Oct 16 · opens $0.00 · closes $2,614.20" / "Bank read $0.00 Oct 15, 7:02 AM · +2 rows since").
    * The first point is that day's CLOSE; the caption says both moments.
    */
   startLabel?: string | readonly string[] | null;

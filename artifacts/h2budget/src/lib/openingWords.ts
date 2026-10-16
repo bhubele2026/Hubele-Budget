@@ -5,8 +5,8 @@ import { NO_READING_WORDS, readingLine, dayTimeOf, rowsWords, type ReadingLike, 
 
 /**
  * ⭐ (C2) The chart's first point, in two short lines:
- *   "Oct 16 · opens $0.00 · closes $3,812.39"
- *   "Bank read $0.00 Oct 15, 4:19 PM · +2 rows since"
+ *   "Oct 16 · opens $0.00 · closes $2,614.20"
+ *   "Bank read $0.00 Oct 15, 7:02 AM · +2 rows since"
  * Missing opening/close/reading are "—", never $0.00.
  */
 export function openingCaption(args: {

@@ -6,12 +6,12 @@ Builder notes: `2026-10-16-c-a-balance.md` (C1–C3), `2026-10-16-c-b-hooks.md` 
 
 ## What was fixed
 1. **One checking balance, one presentation.** Dashboard tile, Banking cell, Forecast figures and card, and the Forecast
-   Overview stat all show "Checking today", the figure, one calculated line ("Calculated · bank read $0.00 Oct 15, 4:19 PM
+   Overview stat all show "Checking today", the figure, one calculated line ("Calculated · bank read $0.00 Oct 15, 7:02 AM
    · +2 rows since") and one **Details** action (the existing "Why this number?" evidence). "H2 balance", "Bank today" and
    the bare "as of" lines are gone. A typed balance says "Typed balance … (not from the bank)". A missing figure is "—"; a
    real $0.00 prints "$0.00". Contract: `docs/contracts/checking-balance.md` (term table + the calculated-line rule).
-2. **Chart start says what it means.** The caption reads "Oct 16 · opens $0.00 · closes $3,812.39" and "Bank read $0.00
-   Oct 15, 4:19 PM · +2 rows since" with Details, drawn once in the panel head. The hero line is "Opening · <date>". The
+2. **Chart start says what it means.** The caption reads "Oct 16 · opens $0.00 · closes $2,614.20" and "Bank read $0.00
+   Oct 15, 7:02 AM · +2 rows since" with Details, drawn once in the panel head. The hero line is "Opening · <date>". The
    cash signal carries an additive `opening` block (date, balance, reading, rows since) read from the same ledger.
 3. **Overview and detail are one forecast.** Both default to 90 days (the detail no longer opens on 30; 30 stays a tab);
    `?horizon=` and `?day=` are URL state on `/forecast`, restored by Back/Forward; Overview figures name the horizon
@@ -45,7 +45,7 @@ Builder notes: `2026-10-16-c-a-balance.md` (C1–C3), `2026-10-16-c-b-hooks.md` 
 - Overview was hard-wired to 90 days with its own words; the detail opened on 30 with the shared chip words.
 - Register hook rows showed the item's STORED amount while the words described the forecast's figure, and the words were
   read under the displayed day (so a moved occurrence read the next period's reserve and borrowed its answer).
-  The owner's Nov 1 row fits three shapes — a stored amount of $440.45, October's occurrence moved onto Nov 1, or a
+  The owner's Nov 1 row fits three shapes — a stored amount of the lower figure, October's occurrence moved onto Nov 1, or a
   partial answer — and only his live data (not reachable: signed out) says which. All three now read correctly.
 - The $450 weekly reserve and the weekly plan are two sources by design (the Weekly Spend item's amount stands in until a
   plan exists); nothing said so, and the Forecast had no way to the plan.

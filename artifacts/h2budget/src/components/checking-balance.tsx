@@ -7,7 +7,7 @@ import { CHECKING_WORDS } from "@/lib/checkingWords";
  *
  *   Checking today            (the label, everywhere)
  *   $3,374.60                 (the figure: the reading rolled forward; "—" with no reading)
- *   Calculated · bank read $0.00 Oct 15, 4:19 PM · +2 rows since     } the note
+ *   Calculated · bank read $0.00 Oct 15, 7:02 AM · +2 rows since     } the note
  *   Details                   (the existing "Why this number?" popover) }
  *
  * This file is the FACE (label + figure) and nothing else: it is on the landing path (the Dashboard

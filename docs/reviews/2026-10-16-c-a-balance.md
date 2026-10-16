@@ -5,7 +5,7 @@ Branch `cons/a-balance` from origin/main d8da19c4. Local commit only; not pushed
 ## What changed (plain words)
 ### C1 — one presentation of the checking balance
 - Five places now say the same thing in the same words: Dashboard Banking tile, Banking cell, Forecast KPI, Forecast "Checking today" card, Overview stat.
-- Label "Checking today". Figure. One line: "Calculated · bank read $0.00 Oct 15, 4:19 PM · +2 rows since". One **Details** button (the existing "Why this number?").
+- Label "Checking today". Figure. One line: "Calculated · bank read $0.00 Oct 15, 7:02 AM · +2 rows since". One **Details** button (the existing "Why this number?").
 - "H2 balance", "Bank today", the per-surface reading lines and "as of Oct 15" are gone from those faces.
 - "Bank's last reading" is named only inside Details.
 - Line variants: "no rows since" · typed ("Typed balance $X (not from the bank) · Oct 15") · "No bank reading yet" · "Earlier reading (…) — updating…" (grey figure).
@@ -15,7 +15,7 @@ Branch `cons/a-balance` from origin/main d8da19c4. Local commit only; not pushed
 
 ### C2 — chart caption and first point are one moment
 - Additive `CashSignal.opening { date, balance, reading, since }` (OpenAPI + codegen). Nothing else moved.
-- Chart caption, two lines at the first point: "Oct 14 · opens $0.00 · closes $3,374.60" and "Bank read $0.00 Oct 13, 4:19 PM · +2 rows today" (+ Details).
+- Chart caption, two lines at the first point: "Oct 14 · opens $0.00 · closes $3,374.60" and "Bank read $0.00 Oct 13, 7:02 AM · +2 rows today" (+ Details).
 - "+N rows today" when the rows are dated the opening day; "+N rows since" when all are dated before it.
 - Hero adds-up line "Starting balance" → "Opening". First-day tooltip says Opening and Close.
 - No reading → "—" words and "No bank reading yet", never $0.00.
@@ -54,7 +54,7 @@ Branch `cons/a-balance` from origin/main d8da19c4. Local commit only; not pushed
 - Overview Runway stat reads "until negative · 90-day read": the spine's runway is a 90-day read at any horizon.
 - Detail's "Overview" tab link does not carry `?horizon=` (the tab strip is layout-owned); the Overview reads the same saved choice the detail writes, so it follows anyway.
 - Caption uses `+N rows today` vs `since` by comparing `opening.balance` with Checking today (no arithmetic).
-- `dayTimeOf` composed from parts: WebKit printed "Oct 13 at 4:19 PM" for the old formatter.
+- `dayTimeOf` composed from parts: WebKit printed "Oct 13 at 7:02 AM" for the old formatter.
 - No server-side fixture assertion test (headless/curl instead).
 - e2e specs not run (need the real stack); none reference changed words.
 

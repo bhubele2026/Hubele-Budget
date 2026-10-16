@@ -228,11 +228,11 @@ describe("Forecast Overview — headline figures come from the spine", () => {
   it("(C1) stat 1 is the one Checking today block: same label, figure and calculated line", () => {
     state.spine = {
       ...SPINE,
-      bank: { ...SPINE.bank, snapshot: { balance: "0.00", at: "2026-08-14T21:19:00.000Z", source: "plaid" }, sinceSnapshot: { net: "3374.60", count: 2, through: "2026-08-15" } },
+      bank: { ...SPINE.bank, snapshot: { balance: "0.00", at: "2026-08-14T12:02:00.000Z", source: "plaid" }, sinceSnapshot: { net: "3374.60", count: 2, through: "2026-08-15" } },
     };
     render(<ForecastOverviewPage />);
     expect(statOf("fo-stat-bank")).toContain("Checking today");
-    expect(screen.getByTestId("checking-balance-line").textContent).toBe("Calculated · bank read $0.00 Aug 14, 4:19 PM · +2 rows since");
+    expect(screen.getByTestId("checking-balance-line").textContent).toBe("Calculated · bank read $0.00 Aug 14, 7:02 AM · +2 rows since");
   });
 
   it("renders an em dash rather than $0 while the spine is still loading", () => {
