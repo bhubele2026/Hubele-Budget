@@ -18,7 +18,8 @@ export function TimeRangeToggle({
   className,
   size = "sm",
 }: {
-  value: RangeMode;
+  /** null = a custom span: no preset is lit. */
+  value: RangeMode | null;
   onChange: (mode: RangeMode) => void;
   className?: string;
   size?: "sm" | "md";

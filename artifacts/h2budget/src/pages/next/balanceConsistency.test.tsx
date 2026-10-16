@@ -55,6 +55,7 @@ import NextAccountsPage from "./Accounts";
 import TransactionsPage from "../transactions";
 import ForecastPage from "../forecast";
 import ForecastOverviewPage from "../forecast-overview";
+import ReportsPage from "../reports";
 
 class ResizeObserverStub {
   observe() {}
@@ -275,7 +276,7 @@ describe("⭐ (C1) one Checking today block — the same label, figure and calcu
     line: scope.querySelector("[data-testid='checking-balance-line'], [data-testid='br-balance-asof'], [data-testid='text-bank-calculated'], [data-testid='kpi-bank-today-line']")!.textContent,
   });
 
-  it("Dashboard tile, Banking cell, Forecast KPI, Forecast card and Overview stat agree; the bank's reading is inside Details only", async () => {
+  it("Dashboard tile, Banking cell, Forecast KPI, Forecast card, Overview stat and Reports hub agree; the bank's reading is inside Details only", async () => {
     serve(ROLLED2);
     const seen: Array<{ label: string | null; figure: string | null; line: string | null }> = [];
 
@@ -306,6 +307,16 @@ describe("⭐ (C1) one Checking today block — the same label, figure and calcu
     seen.push(read(screen.getByTestId("fo-stat-bank")));
 
     cleanup(); qc.clear();
+
+    // (R) Reports hub: the same block, from the same spine.
+    at("/reports", <ReportsPage />);
+    await waitFor(() => expect(within(screen.getByTestId("reports-tile-bank")).getByTestId("checking-balance-figure").textContent).toBe("$84.50"));
+    seen.push(read(screen.getByTestId("reports-tile-bank")));
+    const hubText = screen.getByTestId("reports-tile-bank").textContent ?? "";
+    // Details is inside the tile, the bank's own reading only in the calculated line (never "Bank balance" / "Plaid ·").
+    expect(within(screen.getByTestId("reports-tile-bank")).getByTestId("checking-balance-details").textContent).toBe("Details");
+    expect(hubText).not.toMatch(/Bank balance|Plaid ·|Manual ·|Bank's last reading/);
+    cleanup(); qc.clear();
     // Details opens the existing "Why this number?" — the one place the bank's reading is named.
     at("/", <Tiles />);
     await waitFor(() => expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$84.50"));
@@ -313,7 +324,7 @@ describe("⭐ (C1) one Checking today block — the same label, figure and calcu
     // (The popover's own content is pinned in bankBalanceWhy.test.tsx; the fake serves no explain.)
     await screen.findByTestId("bank-why", undefined, { timeout: 3000 });
 
-    expect(seen).toHaveLength(5);
+    expect(seen).toHaveLength(6);
     for (const r of seen) expect(r).toStrictEqual({ label: "Checking today", figure: "$84.50", line: LINE });
   });
 });

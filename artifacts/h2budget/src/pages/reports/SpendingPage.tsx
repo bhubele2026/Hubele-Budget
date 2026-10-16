@@ -41,7 +41,6 @@ import {
   tdNum,
   Foot,
 } from "@/ui";
-import { type RangeMode } from "@/lib/timeRange";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -67,7 +66,7 @@ import {
   ReportShell,
   ReportsRangeControls,
   Stat,
-  daysForMode,
+  useReportRange,
   ReportLoadFailed,
 } from "./reportsShared";
 
@@ -79,15 +78,9 @@ export const REIMBURSABLE_SERIES = {
 
 export default function SpendingPage() {
   // Weekly-first: opens on the current week; Mo/Yr are opt-in.
-  const [mode, setMode] = useState<RangeMode>("wk");
-  const rangeDays = daysForMode(mode);
-  // Date-window derivation lifted verbatim from the old shared reports data hook.
-  const today = useMemo(() => new Date(), []);
-  const fromDate = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - rangeDays);
-    return d;
-  }, [today, rangeDays]);
+  // (R) The period is the address's (?mode / ?from&to), not state: a hub tile's span, reload and Back keep it.
+  const range = useReportRange();
+  const { fromDate, toDate: today } = range;
   // (#a8 per-page fetch) The charts read server-computed spending facts; this
   // scoped pull only feeds the Recategorize popover with real txn rows + IDs
   // for exactly the page's window (the old shared hook fetched a 95-day floor).
@@ -115,7 +108,7 @@ export default function SpendingPage() {
       crumb="Spending"
       title="Spending"
       controls={
-        <ReportsRangeControls mode={mode} setMode={setMode} showCompare={false} />
+        <ReportsRangeControls mode={range.mode} customLabel={range.customLabel} setMode={range.setMode} showCompare={false} />
       }
     >
       <SpendingSection

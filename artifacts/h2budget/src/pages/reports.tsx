@@ -10,6 +10,7 @@ import {
 import { Sparkline, StackBar, MiniBars, RingStat, MoneyText } from "@/components/viz";
 import { dataState } from "@/lib/queryState";
 import { fmtISO } from "@/lib/reportsAnalytics";
+import { spanQuery } from "@/lib/reportRange";
 import { effectiveDebtBalance } from "@/lib/debtBalance";
 // Tokens only — no recharts on the hub. `viz` is plain SVG/CSS, so this whole
 // route stays chart-library-free.
@@ -41,7 +42,7 @@ function ReportTile({
       href={href}
       className="panel panel-link press group tile-in span-4 flex flex-col p-4"
       style={{ animationDelay: `calc(${index} * var(--stagger))` }}
-      data-testid={`report-tile-${href.split("/").pop()}`}
+      data-testid={`report-tile-${href.split("?")[0]!.split("/").pop()}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className={fieldLabel}>{label}</span>
@@ -79,6 +80,9 @@ export default function ReportsPage() {
     from: fmtISO(fromDate),
     to: fmtISO(today),
   });
+  // (R) The tiles whose figure comes from these facts hand the SAME span on: the report opens on the
+  // dates its tile promised ("Last 30 days"), not on its own week. Debt has no range; Budget is a month.
+  const span = spanQuery(fmtISO(fromDate), fmtISO(today));
   const facts = factsQuery.data;
   // ⚠️ NO FACTS, NO CLAIMS. Until the aggregate arrives (or after it failed) a
   // tile says so, rather than "$0.00", "No spend in range" or "No income
@@ -196,7 +200,7 @@ export default function ReportsPage() {
         <ReportTile
           index={1}
           label="Cash flow"
-          href="/reports/cashflow"
+          href={`/reports/cashflow${span}`}
           value="Daily net"
           sub="What came in against what went out"
           visual={
@@ -215,7 +219,7 @@ export default function ReportsPage() {
         <ReportTile
           index={2}
           label="Spending"
-          href="/reports/spending"
+          href={`/reports/spending${span}`}
           value={facts ? <MoneyText amount={spent} /> : "—"}
           sub={
             uncategorizedSpent > 0 ? (
@@ -293,7 +297,7 @@ export default function ReportsPage() {
         <ReportTile
           index={4}
           label="Habits"
-          href="/reports/behavior"
+          href={`/reports/behavior${span}`}
           value="Weekday rhythm"
           sub="When you spend, and how often"
           visual={

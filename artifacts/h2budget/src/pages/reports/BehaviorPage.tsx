@@ -1,9 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useGetReportsBehaviorFacts } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { fmtISO } from "@/lib/reportsAnalytics";
-import { type RangeMode } from "@/lib/timeRange";
 import { ANIM_BAR, CHART, animBegin, niceAxis } from "@/lib/chartTokens";
 import { emptyNote, fieldLabel, Foot } from "@/ui";
 import { PageGrid, Panel } from "@/components/next";
@@ -26,7 +25,7 @@ import {
   ReportShell,
   Stat,
   ReportsRangeControls,
-  daysForMode,
+  useReportRange,
 } from "./reportsShared";
 
 /**
@@ -43,23 +42,18 @@ import {
  */
 export default function BehaviorPage() {
   // Weekly-first: opens on the current week; Mo/Yr are opt-in.
-  const [mode, setMode] = useState<RangeMode>("wk");
-  const rangeDays = daysForMode(mode);
+  // (R) The period is the address's (?mode / ?from&to), not state.
+  const range = useReportRange();
+  const { fromDate, toDate: today } = range;
   // Date-window derivation lifted verbatim from the old shared reports data hook.
   // This page fetches nothing itself — HabitsSection reads server-computed
   // behavior facts for [from, to], so no transaction pull happens here.
-  const today = useMemo(() => new Date(), []);
-  const fromDate = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - rangeDays);
-    return d;
-  }, [today, rangeDays]);
   return (
     <ReportShell
       crumb="Habits"
       title="Habits"
       controls={
-        <ReportsRangeControls mode={mode} setMode={setMode} showCompare={false} />
+        <ReportsRangeControls mode={range.mode} customLabel={range.customLabel} setMode={range.setMode} showCompare={false} />
       }
     >
       <HabitsSection from={fmtISO(fromDate)} to={fmtISO(today)} />

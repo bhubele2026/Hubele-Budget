@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   db,
   importSnapshotsTable,
@@ -10,6 +10,14 @@ import {
   monthlySnapshotsTable,
   debtsTable,
   budgetCategoriesTable,
+  categoryDecisionsTable,
+  transactionSplitsTable,
+  debtBalanceHistoryTable,
+  debtStatementsTable,
+  debtLedgerEventsTable,
+  debtProgressSnapshotsTable,
+  debtMilestonesTable,
+  settingsTable,
   type MappingRule,
 } from "@workspace/db";
 import {
@@ -51,10 +59,13 @@ const TABLES = {
   transactions: transactionsTable,
 } as const;
 
-// Restore order: parents before children (see note above).
+// Restore order: parents before children (see note above). (Task 7, V) Debts
+// come FIRST: `budget_categories.debt_id`, `recurring_items.debt_id` and
+// `transactions.debt_id` reference them, so a category tied to a debt could
+// not be put back before its debt.
 const RESTORE_ORDER: TableKey[] = [
-  "budgetCategories",
   "debts",
+  "budgetCategories",
   "budgetMonths",
   "budgetLines",
   "recurringItems",
@@ -63,7 +74,92 @@ const RESTORE_ORDER: TableKey[] = [
   "transactions",
 ];
 
-export type ImportSnapshotPayload = Record<TableKey, unknown[]>;
+/**
+ * (Task 7, V) The rows the wipe takes WITH its parents. Deleting the user's
+ * transactions cascades their category decisions, splits and debt ledger
+ * events; deleting the debts cascades their balance history, statements,
+ * ledger events and progress snapshots, and empties `debt_milestones.debt_id`
+ * (set null: the milestone is kept). None of these is keyed by user, so they
+ * are captured by their parent's id, and put back after the parents.
+ */
+type CascadeKey =
+  | "categoryDecisions"
+  | "transactionSplits"
+  | "debtBalanceHistory"
+  | "debtStatements"
+  | "debtProgressSnapshots"
+  | "debtLedgerEvents";
+
+const CASCADE_TABLES = {
+  categoryDecisions: categoryDecisionsTable,
+  transactionSplits: transactionSplitsTable,
+  debtBalanceHistory: debtBalanceHistoryTable,
+  debtStatements: debtStatementsTable,
+  debtProgressSnapshots: debtProgressSnapshotsTable,
+  debtLedgerEvents: debtLedgerEventsTable,
+} as const;
+
+/** Child order on restore (each after the parents it references). */
+const CASCADE_ORDER: CascadeKey[] = [
+  "categoryDecisions",
+  "transactionSplits",
+  "debtBalanceHistory",
+  "debtStatements",
+  "debtProgressSnapshots",
+  "debtLedgerEvents",
+];
+
+export type ImportSnapshotPayload = Record<TableKey, unknown[]> & {
+  /** (Task 7, V) Absent on snapshots taken before it was captured: those restore the parents only. */
+  cascade?: Record<CascadeKey, unknown[]> & {
+    /** Milestones whose debt link the wipe set to null: put back on restore. */
+    debtMilestoneLinks: Array<{ id: string; debtId: string }>;
+  };
+  /**
+   * (Task 7, V) The settings the import rewrites: `refreshAmexAnchor` replaces
+   * `preferences.amexAnchor`. `present: false` = the key was not there.
+   */
+  settings?: { amexAnchor: { present: boolean; value: unknown } };
+};
+
+const CHUNK = 500;
+
+async function cascadeRows(exec: typeof db, txnIds: string[], debtIds: string[]) {
+  const out = {} as Record<CascadeKey, unknown[]>;
+  const byTxn = async (key: "categoryDecisions" | "transactionSplits") => {
+    const table = CASCADE_TABLES[key];
+    const rows: unknown[] = [];
+    for (let i = 0; i < txnIds.length; i += CHUNK) {
+      rows.push(...(await exec.select().from(table).where(inArray(table.transactionId, txnIds.slice(i, i + CHUNK)))));
+    }
+    return rows;
+  };
+  const byDebt = async (key: "debtBalanceHistory" | "debtStatements" | "debtProgressSnapshots") => {
+    const table = CASCADE_TABLES[key];
+    return debtIds.length ? await exec.select().from(table).where(inArray(table.debtId, debtIds)) : [];
+  };
+  out.categoryDecisions = await byTxn("categoryDecisions");
+  out.transactionSplits = await byTxn("transactionSplits");
+  out.debtBalanceHistory = await byDebt("debtBalanceHistory");
+  out.debtStatements = await byDebt("debtStatements");
+  out.debtProgressSnapshots = await byDebt("debtProgressSnapshots");
+  // A ledger event goes with its debt OR its transaction.
+  const events = new Map<string, unknown>();
+  const addEvents = (rows: Array<{ id: string }>) => rows.forEach((r) => events.set(r.id, r));
+  if (debtIds.length) {
+    addEvents(await exec.select().from(debtLedgerEventsTable).where(inArray(debtLedgerEventsTable.debtId, debtIds)));
+  }
+  for (let i = 0; i < txnIds.length; i += CHUNK) {
+    addEvents(
+      await exec
+        .select()
+        .from(debtLedgerEventsTable)
+        .where(and(isNotNull(debtLedgerEventsTable.transactionId), inArray(debtLedgerEventsTable.transactionId, txnIds.slice(i, i + CHUNK)))),
+    );
+  }
+  out.debtLedgerEvents = [...events.values()];
+  return out;
+}
 
 /**
  * Capture every per-user row the importer is about to wipe into one
@@ -93,6 +189,30 @@ export async function captureImportSnapshot(
       .where(eq((table as any).userId, opts.userId));
     payload[key] = rows;
   }
+  // (Task 7, V) What the wipe takes with the parents, and the anchor it rewrites.
+  const txnIds = (payload.transactions as Array<{ id: string }>).map((t) => t.id);
+  const debtIds = (payload.debts as Array<{ id: string }>).map((d) => d.id);
+  const milestones = debtIds.length
+    ? await tx
+        .select({ id: debtMilestonesTable.id, debtId: debtMilestonesTable.debtId })
+        .from(debtMilestonesTable)
+        .where(inArray(debtMilestonesTable.debtId, debtIds))
+    : [];
+  payload.cascade = {
+    ...(await cascadeRows(tx, txnIds, debtIds)),
+    debtMilestoneLinks: milestones.filter((m): m is { id: string; debtId: string } => m.debtId !== null),
+  };
+  const [settings] = await tx
+    .select({ preferences: settingsTable.preferences })
+    .from(settingsTable)
+    .where(eq(settingsTable.userId, opts.userId));
+  const prefs = (settings?.preferences ?? null) as Record<string, unknown> | null;
+  payload.settings = {
+    amexAnchor:
+      prefs && Object.prototype.hasOwnProperty.call(prefs, "amexAnchor")
+        ? { present: true, value: prefs.amexAnchor }
+        : { present: false, value: null },
+  };
 
   const [row] = await tx
     .insert(importSnapshotsTable)
@@ -179,7 +299,10 @@ export async function restoreImportSnapshot(
 
     // Re-insert the snapshotted rows, parents first. Chunk transactions since
     // a power user can have thousands of rows.
-    const CHUNK = 500;
+    // (Task 7, V) `transactions.confirmed_by_txn_id` points at another
+    // transaction, which may sit in a later chunk: insert without it, then put
+    // every link back once all the rows are in.
+    const links: Array<{ id: string; confirmedByTxnId: string }> = [];
     for (const key of RESTORE_ORDER) {
       const table = TABLES[key];
       const rows = (payload[key] ?? []) as Record<string, unknown>[];
@@ -187,10 +310,57 @@ export async function restoreImportSnapshot(
       for (let i = 0; i < rows.length; i += CHUNK) {
         const chunk = rows.slice(i, i + CHUNK);
         if (chunk.length === 0) continue;
-        await tx.insert(table).values(chunk.map(reviveSnapshotRow) as any);
+        const values = chunk.map(reviveSnapshotRow);
+        if (key === "transactions") {
+          for (const v of values) {
+            if (typeof v.confirmedByTxnId === "string") {
+              links.push({ id: String(v.id), confirmedByTxnId: v.confirmedByTxnId });
+              v.confirmedByTxnId = null;
+            }
+          }
+        }
+        await tx.insert(table).values(values as any);
         inserted += chunk.length;
       }
       counts[key] = inserted;
+    }
+    for (const l of links) {
+      await tx
+        .update(transactionsTable)
+        .set({ confirmedByTxnId: l.confirmedByTxnId })
+        .where(and(eq(transactionsTable.id, l.id), eq(transactionsTable.userId, userId)));
+    }
+
+    // (Task 7, V) The rows the import's wipe cascaded away, after their parents.
+    if (payload.cascade) {
+      for (const key of CASCADE_ORDER) {
+        const table = CASCADE_TABLES[key];
+        const rows = (payload.cascade[key] ?? []) as Record<string, unknown>[];
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          const chunk = rows.slice(i, i + CHUNK);
+          if (chunk.length) await tx.insert(table).values(chunk.map(reviveSnapshotRow) as any);
+        }
+        counts[key] = rows.length;
+      }
+      const restoredDebtIds = new Set((payload.debts as Array<{ id: string }>).map((d) => d.id));
+      for (const m of payload.cascade.debtMilestoneLinks ?? []) {
+        if (!restoredDebtIds.has(m.debtId)) continue;
+        await tx.update(debtMilestonesTable).set({ debtId: m.debtId }).where(eq(debtMilestonesTable.id, m.id));
+      }
+    }
+    // (Task 7, V) The Amex anchor as it was before the import (the other
+    // preferences are left as they are now).
+    if (payload.settings) {
+      const [cur] = await tx
+        .select({ preferences: settingsTable.preferences })
+        .from(settingsTable)
+        .where(eq(settingsTable.userId, userId));
+      if (cur) {
+        const next = { ...((cur.preferences ?? {}) as Record<string, unknown>) };
+        if (payload.settings.amexAnchor.present) next.amexAnchor = payload.settings.amexAnchor.value;
+        else delete next.amexAnchor;
+        await tx.update(settingsTable).set({ preferences: next, updatedAt: new Date() }).where(eq(settingsTable.userId, userId));
+      }
     }
 
     await recordRuleChanges(

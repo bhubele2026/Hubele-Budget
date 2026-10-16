@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useGetReportsBudgetFacts } from "@workspace/api-client-react";
 import {
   Select,
@@ -21,10 +21,11 @@ import {
   Foot,
 } from "@/ui";
 import { PageGrid } from "@/components/next";
-import { ChartCard, PanelCard, ReportShell, Stat } from "./reportsShared";
+import { ChartCard, PanelCard, ReportShell, Stat, useReportMonth } from "./reportsShared";
 
 export default function BudgetPage() {
-  const [monthOffset, setMonthOffset] = useState("0");
+  // (R) The month is the address's (?month=0..3 months back), so reload and Back keep it; "this month" is not written.
+  const [monthOffset, setMonthOffset] = useReportMonth();
   // Month-start derivation lifted verbatim from the old shared reports data hook.
   // This page fetches nothing itself — BudgetSection reads server-computed
   // budget facts for the picked month, so no transaction pull happens here.

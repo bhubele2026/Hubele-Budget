@@ -1,9 +1,8 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import { db, importBatchesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
-import { importWorkbook } from "../lib/workbookImporter";
+import { importWorkbook, WorkbookImportError } from "../lib/workbookImporter";
 import { restoreImportSnapshot } from "../lib/importSnapshot";
 
 const upload = multer({
@@ -22,21 +21,23 @@ router.post(
       res.status(400).json({ error: "Missing 'file' field" });
       return;
     }
+    let wb: XLSX.WorkBook;
     try {
-      const wb = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
-      const [batch] = await db
-        .insert(importBatchesTable)
-        .values({
-          userId: req.userId!,
-          householdId: req.householdId!,
-          filename: req.file.originalname ?? null,
-        })
-        .returning();
-      const result = await importWorkbook(req.userId!, req.householdId!, wb, batch!.id, {
+      wb = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
+    } catch (e) {
+      req.log.warn({ err: e }, "Workbook import: the file did not parse");
+      res.status(400).json({ error: "This file is not a workbook H2 can read." });
+      return;
+    }
+    try {
+      // (Task 7, V) The batch row is written inside the import's own
+      // transaction (batch id null), so a refused or failed import writes
+      // nothing at all — not even the batch.
+      const result = await importWorkbook(req.userId!, req.householdId!, wb, null, {
         filename: req.file.originalname ?? null,
       });
       res.json({
-        batchId: batch!.id,
+        batchId: result.batchId,
         counts: result.counts,
         ruleAttributions: result.ruleAttributions,
         // Pre-import safety snapshot id — POST this to
@@ -44,9 +45,17 @@ router.post(
         snapshotId: result.snapshotId,
       });
     } catch (e) {
+      // A problem with the file is the person's to fix: say what it is. Any
+      // other failure (a row the database refused, a lost connection) rolled
+      // the whole import back; say that, never the database's own message
+      // (it carries the SQL and the rows).
+      if (e instanceof WorkbookImportError) {
+        req.log.warn({ err: e }, "Workbook import refused");
+        res.status(400).json({ error: e.message });
+        return;
+      }
       req.log.error({ err: e }, "Workbook import failed");
-      const msg = e instanceof Error ? e.message : "Import failed";
-      res.status(400).json({ error: msg });
+      res.status(500).json({ error: "The import could not be saved, so nothing was changed." });
     }
   },
 );
