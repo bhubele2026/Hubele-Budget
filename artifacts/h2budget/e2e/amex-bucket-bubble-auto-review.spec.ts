@@ -193,6 +193,8 @@ test.describe("Amex WK/MO/UN bubble auto-review (#619)", () => {
       seeds[b.key] = { cleanId: cleanRow.id, onId: onRow.id };
     }
 
+    // (P1) The bucket marks sit in the rows in Categorize mode (Review, the default, says the bucket in words).
+    await page.addInitScript(() => window.localStorage.setItem("amex.rowMode", "categorize"));
     await page.goto("/amex");
     await expect(
       page.getByRole("heading", { name: /american express/i }),

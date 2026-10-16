@@ -65,6 +65,7 @@ import {
   dedupeTransactionsForUser,
 } from "../lib/dedupeTransactions";
 
+import { dataAsOfOf } from "../lib/dataAsOf";
 const router: IRouter = Router();
 
 async function ensureSettings(ownerUserId: string, householdId: string) {
@@ -492,6 +493,8 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   );
 
   res.json({
+    // ⭐ (T1) The bank reading this bundle's balances roll forward from (cashSignal's).
+    dataAsOf: dataAsOfOf(cashSignal.snapshotAt),
     fromDate: fromISO,
     toDate: toISO,
     events,
@@ -583,7 +586,8 @@ router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void>
     fromDate = req.query.fromDate;
   }
   const signal = await computeCashSignal(req.householdId!, req.householdOwnerId!, { horizonDays, fromDate });
-  res.json(signal);
+  // (T1) Additive: the reading this projection starts from, and when it was computed.
+  res.json({ ...signal, dataAsOf: dataAsOfOf(signal.snapshotAt) });
 });
 
 // (#826) Avalanche extra-payment schedule. Recomputes the deterministic

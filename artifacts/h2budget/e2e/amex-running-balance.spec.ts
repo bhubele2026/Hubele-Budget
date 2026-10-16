@@ -209,13 +209,11 @@ test.describe("Amex page — per-row running balance on Plaid card rows (Q3)", (
     await expect(page.getByTestId(`text-running-balance-${posted[0]!.id}`)).toContainText(fmtCurrency(1000), {
       timeout: 15_000,
     });
+    // (P1) One row per transaction, phone and desktop alike: one "bal" each.
     for (const e of expected) {
-      const desktop = page.getByTestId(`text-running-balance-${e.id}`);
-      const mobile = page.getByTestId(`text-running-balance-mobile-${e.id}`);
-      await expect(desktop).toBeVisible({ timeout: 15_000 });
-      await expect(mobile).toBeAttached({ timeout: 15_000 });
-      expect(parseBalText((await desktop.textContent()) ?? "")).toBeCloseTo(e.bal, 2);
-      expect(parseBalText((await mobile.textContent()) ?? "")).toBeCloseTo(e.bal, 2);
+      const bal = page.getByTestId(`text-running-balance-${e.id}`);
+      await expect(bal).toBeVisible({ timeout: 15_000 });
+      expect(parseBalText((await bal.textContent()) ?? "")).toBeCloseTo(e.bal, 2);
     }
 
     // The pending hold is listed, with no "bal"; the other card's row is not on this card's page.
@@ -224,9 +222,7 @@ test.describe("Amex page — per-row running balance on Plaid card rows (Q3)", (
     await expect(page.getByText("Q3 OTHER CARD")).toHaveCount(0);
 
     // DOM order obeys the owed recurrence: next = prev − owedDelta(prev row).
-    const rendered = page.locator(
-      '[data-testid^="text-running-balance-"]:not([data-testid^="text-running-balance-mobile-"])',
-    );
+    const rendered = page.locator('[data-testid^="text-running-balance-"]');
     await expect(rendered).toHaveCount(posted.length, { timeout: 15_000 });
     const owedById = new Map(posted.map((s) => [s.id, owed(s)]));
     let prev: { bal: number; owed: number } | null = null;

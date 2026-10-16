@@ -7,6 +7,7 @@
  */
 import type { BankSnapshot } from "./bankSnapshot";
 import type { CashSignal } from "./cashSignal";
+import type { DataAsOf } from "./dataAsOf";
 import type { ForecastBundleAccountSnapshots } from "./forecastBundleAccountSnapshots";
 import type { ForecastBundleMonthSnapshots } from "./forecastBundleMonthSnapshots";
 import type { ForecastEvent } from "./forecastEvent";
@@ -15,6 +16,7 @@ import type { ForecastSettings } from "./forecastSettings";
 import type { PlaidCheckingAccount } from "./plaidCheckingAccount";
 import type { Transaction } from "./transaction";
 export interface ForecastBundle {
+    dataAsOf?: DataAsOf;
     fromDate: string;
     toDate: string;
     events: ForecastEvent[];

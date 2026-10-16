@@ -32,7 +32,9 @@ const Body = lazy(() => import("./bank-balance-why-body"));
  */
 // (F4) `trigger` replaces the corner icon with the caller's own button (the
 // Banking review's "Investigate"); the popover and its body are the same.
-export function BankBalanceWhy({ trigger }: { trigger?: ReactNode } = {}) {
+// (T2) `onReviewDifference`: the check is off — the body offers "Review difference", which closes this
+// popover and opens the investigation (the caller's dialog). Absent: no link.
+export function BankBalanceWhy({ trigger, onReviewDifference }: { trigger?: ReactNode; onReviewDifference?: () => void } = {}) {
   const [open, setOpen] = useState(false);
   const query = useGetForecastBankBalanceExplain({
     query: {
@@ -59,7 +61,17 @@ export function BankBalanceWhy({ trigger }: { trigger?: ReactNode } = {}) {
       </PopoverTrigger>
       <PopoverContent className="w-80 p-3" align="end" data-testid="bank-why">
         <Suspense fallback={<p className="text-micro text-neutral-500" data-testid="bank-why-chunk">Loading…</p>}>
-          <Body query={query} />
+          <Body
+            query={query}
+            onReviewDifference={
+              onReviewDifference
+                ? () => {
+                    setOpen(false);
+                    onReviewDifference();
+                  }
+                : undefined
+            }
+          />
         </Suspense>
       </PopoverContent>
     </Popover>

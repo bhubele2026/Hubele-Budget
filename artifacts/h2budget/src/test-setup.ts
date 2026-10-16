@@ -3,9 +3,8 @@
 //
 // matchMedia: jsdom has no window.matchMedia, so any component (chart libs,
 // responsive hooks) that calls it unguarded throws "matchMedia is not a
-// function". We return matches:true for prefers-reduced-motion so animations
-// (e.g. useCountUp) deterministically jump to their final value in tests
-// instead of waiting on a requestAnimationFrame tick that never runs.
+// function". We return matches:true for prefers-reduced-motion so motion
+// code deterministically takes its final state in tests.
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
   window.matchMedia = (query: string): MediaQueryList =>
     ({

@@ -100,7 +100,7 @@ describe("accounts selector", () => {
     // (WP3) The dashboard's figure (the snapshot rolled forward), with the bank's
     // own snapshot under it, dated — it was the raw snapshot, undated.
     expect(within(chk).getByTestId("chip-balance").textContent).toBe("Balance $2,156.55");
-    expect(within(chk).getByTestId("chip-snapshot").textContent).toBe("Snapshot $3,458.98 · Oct 2 · +20 entries");
+    expect(within(chk).getByTestId("chip-snapshot").textContent).toBe("Bank's last reading $3,458.98 · Oct 2 · +20 entries since");
     // (WP3) Three stamps, each named: synced · balance read · data through
     // (the newest bank row, never the sync day).
     expect(within(chk).getByTestId("chip-stamps").textContent).toMatch(/^synced .+ · balance read .+ · data through Oct 7$/);
@@ -424,7 +424,7 @@ describe("checking variant", () => {
     expect(screen.queryByTestId("amex-ledger")).toBeNull();
     // (WP3) "Balance today" is the rolled-forward figure; the bank snapshot sits under it.
     expect(within(screen.getByTestId("summary-balance")).getByText("$2,156.55")).toBeTruthy();
-    expect(screen.getByTestId("summary-balance").textContent).toContain("Includes 20 entries since the Oct 2 snapshot");
+    expect(screen.getByTestId("summary-balance").textContent).toContain("Includes 20 entries since the Oct 2 reading");
     const snap = screen.getByTestId("summary-bank-snapshot");
     expect(within(snap).getByText("$3,458.98")).toBeTruthy();
     expect(snap.textContent).toContain("Oct 2 · +20 entries");

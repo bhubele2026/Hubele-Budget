@@ -58,7 +58,7 @@ describe("BankSnapshotFreshness — bank balance freshness label (#285)", () => 
     ).toBe("Last auto-updated 12 minutes ago");
   });
 
-  it("labels user-set snapshots as manual so they aren't mistaken for auto-refresh", () => {
+  it("(T1) labels a typed balance as typed — never the bank's reading, never mistaken for auto-refresh", () => {
     render(
       <BankSnapshotFreshness
         source="manual"
@@ -68,7 +68,7 @@ describe("BankSnapshotFreshness — bank balance freshness label (#285)", () => 
     );
     expect(
       screen.getByTestId("text-bank-snapshot-freshness").textContent,
-    ).toBe("Set manually 3 hours ago");
+    ).toBe("Typed balance (not from the bank) · 3 hours ago");
   });
 
   it("ticks the label up roughly once a minute while mounted (#332)", () => {

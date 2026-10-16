@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BUCKETS, bucketAria, classificationNote, fateWords, planLine, plannedFateWords, sideWords, signedCash, varianceWords } from "./words";
+import { BUCKETS, bucketAria, bucketNote, classificationNote, fateWords, inOutWords, kindChipWords, planLine, plannedFateWords, sideShort, sideWords, varianceWords } from "./words";
 
 /** (F4) Direction-aware words: income is 'less / more than expected', an expense is 'over / under'. */
 const plan = (o: Record<string, unknown>) => ({ key: "k", label: "L", scheduledDate: "2026-10-09", planned: null, difference: null, dayDelta: 0, eventKind: "bill", direction: "out", expected: null, actual: null, variance: null, varianceKind: null, ...o });
@@ -20,7 +20,7 @@ describe("varianceWords", () => {
   });
 });
 
-describe("sideWords / signedCash", () => {
+describe("sideWords / sideShort", () => {
   it("money in and money out are worded apart, never netted", () => {
     expect(sideWords("in", "-108.60")).toBe("Income $108.60 less than expected");
     expect(sideWords("in", "5.00")).toBe("Income $5.00 more than expected");
@@ -28,8 +28,12 @@ describe("sideWords / signedCash", () => {
     expect(sideWords("out", "4.00")).toBe("Bills $4.00 under");
     expect(sideWords("out", "0.00")).toBeNull();
     expect(sideWords("in", null)).toBeNull();
-    expect(signedCash("-108.60")).toBe("−$108.60");
-    expect(signedCash("12.00")).toBe("+$12.00");
+  });
+  it("a pill's short side drops 'than expected'", () => {
+    expect(sideShort("in", "-60.00")).toBe("Income $60.00 less");
+    expect(sideShort("in", "5.00")).toBe("Income $5.00 more");
+    expect(sideShort("out", "-12.00")).toBe("Bills $12.00 over");
+    expect(sideShort("out", "0.00")).toBeNull();
   });
 });
 
@@ -71,21 +75,40 @@ describe("plannedFateWords", () => {
 
 describe("(Q5) bucket words and aria", () => {
   const meta = Object.fromEntries(BUCKETS.map((b) => [b.name, b]));
-  it("direction-aware titles: received or paid, a different day, not on the plan", () => {
-    expect(meta.amountDifference!.title).toBe("Received or paid a different amount");
-    expect(meta.timingDifference!.title).toBe("On a different day");
-    expect(meta.unmatched!.title).toBe("Not on the plan");
-    expect(BUCKETS.map((b) => b.title).join(" ")).not.toMatch(/Unmatched|Different date|Different amount/);
+  it("the owner's five labels, in order", () => {
+    expect(BUCKETS.map((b) => b.title)).toEqual(["Unplanned activity", "Amount differences", "Timing differences", "Marked unplanned", "Unclear"]);
+    expect(BUCKETS.map((b) => b.title).join(" ")).not.toMatch(/Unmatched|Different date|Different amount|Not sure|excluded/i);
+  });
+  it("in / out words leave a zero side out and never net", () => {
+    expect(inOutWords({ moneyIn: "135.13", moneyOut: "4603.46" })).toBe("In $135.13 · Out $4,603.46");
+    expect(inOutWords({ moneyIn: "0.00", moneyOut: "40.00" })).toBe("Out $40.00");
+    expect(inOutWords({ moneyIn: "0.00", moneyOut: "0.00" })).toBe("");
+  });
+  it("a kind chip: its count, then its own in and out", () => {
+    expect(kindChipWords("spending", { count: 3, moneyIn: "0.00", moneyOut: "112.80" })).toBe("Spending 3 · Out $112.80");
+    expect(kindChipWords("transfer", { count: 2, moneyIn: "50.00", moneyOut: "50.00" })).toBe("Transfer 2 · In $50.00 · Out $50.00");
+  });
+  it("the one note under a selected title, only when it says something", () => {
+    const side = (o: Record<string, unknown>) => ({ varianceIn: null, varianceOut: null, byReason: null, ...o }) as never;
+    expect(bucketNote("unmatched", side({}))).toBeNull();
+    expect(bucketNote("confirmedUnplanned", side({}))).toBeNull();
+    expect(bucketNote("amountDifference", side({ varianceIn: "-60.00", varianceOut: "-12.00" }))).toBe("Income $60.00 less than expected · Bills $12.00 over");
+    expect(bucketNote("amountDifference", side({}))).toBe("On the plan, but a different amount");
+    expect(bucketNote("timingDifference", side({}))).toBe("On the plan, but more than 3 days early or late");
+    const reason = (n: number, m: number) => ({ needs_review: { count: n }, suggested_match: { count: m }, not_compared: { count: 5 } });
+    expect(bucketNote("uncertain", side({ byReason: reason(1, 1) }))).toBe("1 needs review · 1 suggested match");
+    expect(bucketNote("uncertain", side({ byReason: reason(0, 2) }))).toBe("2 suggested matches");
+    expect(bucketNote("uncertain", side({ byReason: reason(0, 0) }))).toBeNull();
   });
   it("aria / tooltip: the count, then money in and money out apart; a zero side is not mentioned", () => {
-    expect(bucketAria("Not on the plan", { count: 2, moneyIn: "300.00", moneyOut: "25.00" })).toBe("Not on the plan: 2 rows, money in $300.00, money out $25.00");
-    expect(bucketAria("On a different day", { count: 1, moneyIn: "0.00", moneyOut: "40.00" })).toBe("On a different day: 1 row, money out $40.00");
-    expect(bucketAria("Not sure", { count: 0, moneyIn: "0.00", moneyOut: "0.00" })).toBe("Not sure: 0 rows");
+    expect(bucketAria("Unplanned activity", { count: 2, moneyIn: "300.00", moneyOut: "25.00" })).toBe("Unplanned activity: 2 rows, money in $300.00, money out $25.00");
+    expect(bucketAria("Timing differences", { count: 1, moneyIn: "0.00", moneyOut: "40.00" })).toBe("Timing differences: 1 row, money out $40.00");
+    expect(bucketAria("Unclear", { count: 0, moneyIn: "0.00", moneyOut: "0.00" })).toBe("Unclear: 0 rows");
     // (Q5 fix) the variance lines the card shows lead the accessible name
-    expect(bucketAria("Received or paid a different amount", { count: 2, moneyIn: "1940.00", moneyOut: "152.00", varianceIn: "-60.00", varianceOut: "-12.00" })).toBe(
-      "Received or paid a different amount: Income $60.00 less than expected, Bills $12.00 over, 2 rows, money in $1,940.00, money out $152.00",
+    expect(bucketAria("Amount differences", { count: 2, moneyIn: "1940.00", moneyOut: "152.00", varianceIn: "-60.00", varianceOut: "-12.00" })).toBe(
+      "Amount differences: Income $60.00 less than expected, Bills $12.00 over, 2 rows, money in $1,940.00, money out $152.00",
     );
-    expect(bucketAria("Not sure", { count: 1, moneyIn: "0.00", moneyOut: "40.00", varianceIn: null, varianceOut: "-4.00" })).toBe("Not sure: Bills $4.00 over, 1 row, money out $40.00");
+    expect(bucketAria("Unclear", { count: 1, moneyIn: "0.00", moneyOut: "40.00", varianceIn: null, varianceOut: "-4.00" })).toBe("Unclear: Bills $4.00 over, 1 row, money out $40.00");
   });
 });
 

@@ -21,6 +21,8 @@ const h = vi.hoisted(() => ({
   createOpts: [] as unknown[],
   dry: undefined as unknown,
   dryFails: false,
+  /** (T4) 'refresh': the newest request failed, the last answer is kept; 'load': nothing to show. */
+  fail: null as null | "refresh" | "load",
 }));
 
 vi.mock("@workspace/api-client-react", async (orig) => ({
@@ -42,8 +44,16 @@ vi.mock("@workspace/api-client-react/features", async (orig) => ({
     const key = `${params.period}:${params.start}`;
     const base = (h.bd[key] ?? h.bd[String(params.period)]) as Record<string, unknown> | undefined;
     // The server marks the period it was asked for; the fixture follows the request.
-    const data = base && { ...base, start: params.start, isCurrent: params.start === "2026-10-11" || params.start === "2026-10-01" };
-    return { data, isError: false, isLoading: false, isPlaceholderData: h.placeholder, refetch: vi.fn() };
+    // A request for one account is answered with that account's scope, as the server echoes it.
+    const scope = params.account
+      ? { kind: "account", id: params.account, institution: "American Express", name: "Platinum", mask: "1001" }
+      : undefined;
+    const data = base && { ...base, ...(scope ? { scope } : {}), start: params.start, isCurrent: params.start === "2026-10-11" || params.start === "2026-10-01" };
+    if (h.fail === "load") return { data: undefined, isError: true, isLoadingError: true, isLoading: false, refetch: vi.fn() };
+    return {
+      data, isError: h.fail === "refresh", isRefetchError: h.fail === "refresh", dataUpdatedAt: h.fail ? Date.now() - 3 * 60_000 : 0,
+      isLoading: false, isPlaceholderData: h.placeholder, refetch: vi.fn(),
+    };
   },
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
@@ -78,7 +88,7 @@ const bd = (o: Record<string, unknown> = {}) => ({
   limitations: [], ...o,
 });
 const notSet = () =>
-  bd({ plan: { status: "not_set", amount: null, source: "plan", planId: null, effectiveFrom: null }, remaining: null, over: null, withinPlan: null, actual: "125.50",
+  bd({ plan: { status: "not_set", amount: null, source: "none", planId: null, effectiveFrom: null }, remaining: null, over: null, withinPlan: null, actual: "125.50",
     known: "125.50", categories: [cat("c-gro", "Groceries", "100.00")], needsClassification: group("25.50", 1, [row("u1", "25.50", { reason: { coverage: "needs_classification", nets: null, rule: "unfiled" } })]) });
 
 const prefills = [
@@ -116,6 +126,7 @@ beforeEach(() => {
   h.budget = undefined;
   h.create.mockReset();
   h.dryFails = false;
+  h.fail = null;
   h.dry = {
     dryRun: true, allowed: true, reason: null,
     plan: { period: "weekly", amount: "380.00", effectiveFrom: "2026-10-11" },
@@ -336,7 +347,7 @@ describe("This week", () => {
     expect(order).toEqual(["$156.60", "$92.40", "$50.00"]);
     expect(screen.getByTestId("sp-usual-c-gro").textContent).toBe("usual by Wed $45.00");
     const chip = screen.getByTestId("sp-above-c-gro");
-    expect(chip.textContent).toBe("above usual $111.60");
+    expect(chip.textContent).toBe("Above usual $111.60");
     expect(chip.className).toContain("warn");
     expect(chip.className).not.toContain("bad");
     expect(screen.queryByTestId("sp-above-c-gas")).toBeNull();
@@ -503,7 +514,53 @@ describe("This week — provisional", () => {
   it("Unconfirmed links to the proposed fixes on Banking review", () => {
     h.bd.week = provisional();
     mount("/spending/week");
-    expect(screen.getByTestId("sp-fixes-link").getAttribute("href")).toBe("/banking?fixes=1");
+    expect(screen.getByTestId("sp-fixes-link").getAttribute("href")).toBe("/banking?fixes=1&from=2026-10-11&to=2026-10-17");
+  });
+});
+
+describe("(T4) plan words, links and a failed refresh", () => {
+  it("a $0 plan or override says 'Plan set to $0', never 'Plan not set' and never a cap", () => {
+    h.bd.week = bd({ plan: { status: "not_set", amount: null, source: "override", planId: null, effectiveFrom: null }, remaining: null, over: null, withinPlan: null });
+    mount("/spending/week");
+    expect(screen.getByTestId("sp-plan").textContent).toBe("Plan set to $0");
+    expect(screen.getByTestId("sp-left").textContent).toBe("—");
+  });
+
+  it("?open=details lands with Details open, once", () => {
+    mount("/spending/month?open=details", "month");
+    expect((screen.getByTestId("sp-details") as HTMLDetailsElement).open).toBe(true);
+    cleanup();
+    mount("/spending/month", "month");
+    expect((screen.getByTestId("sp-details") as HTMLDetailsElement).open).toBe(false);
+  });
+
+  it("?account= asks for that account, names it, and 'Household' clears it", () => {
+    mount("/spending/week?account=r-1");
+    expect(h.calls.at(-1)).toMatchObject({ period: "week", account: "r-1" });
+    const scope = screen.getByTestId("sp-scope");
+    expect(scope.textContent).toBe("American Express Platinum ••1001 · household weekly plan · Household");
+    fireEvent.click(screen.getByTestId("sp-scope-household"));
+    expect(window.location.search).not.toContain("account");
+    expect(h.calls.at(-1)).not.toHaveProperty("account");
+    expect(screen.getByTestId("sp-scope").textContent).toBe("Household · weekly plan");
+  });
+
+  it("the fixes link carries the period and the account", () => {
+    h.bd.week = provisional();
+    mount("/spending/week?account=r-1");
+    expect(screen.getByTestId("sp-fixes-link").getAttribute("href")).toBe("/banking?fixes=1&from=2026-10-11&to=2026-10-17&account=r-1");
+  });
+
+  it("a failed refresh keeps the figures and says when they are from; a failed first load says so", () => {
+    h.fail = "refresh";
+    mount("/spending/week");
+    expect(screen.getByTestId("sp-error").textContent).toMatch(/^Couldn't refresh\. Showing numbers from /);
+    expect(screen.getByTestId("sp-actual").textContent).toBe("$324.50");
+    cleanup();
+    h.fail = "load";
+    mount("/spending/week");
+    expect(screen.getByTestId("sp-error").textContent).toContain("Couldn't load these numbers");
+    expect(screen.queryByTestId("sp-summary")).toBeNull();
   });
 });
 
@@ -547,7 +604,7 @@ describe("This month", () => {
   });
 
   it("monthly not set: Plan not set, saved allowance offered, no default primary", async () => {
-    h.bd.month = { ...month(), plan: { status: "not_set", amount: null, source: "plan", planId: null, effectiveFrom: null }, remaining: null, over: null, withinPlan: null };
+    h.bd.month = { ...month(), plan: { status: "not_set", amount: null, source: "none", planId: null, effectiveFrom: null }, remaining: null, over: null, withinPlan: null };
     mount("/spending/month", "month");
     expect(screen.getByTestId("sp-plan").textContent).toBe("Plan not set");
     expect(screen.queryByTestId("plan-use-primary")).toBeNull();

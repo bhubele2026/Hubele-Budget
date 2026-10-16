@@ -1,4 +1,4 @@
-import { Router, type IRouter, type RequestHandler, type Response } from "express";
+import { Router, type IRouter, type Response } from "express";
 import {
   ApplyReviewProposalBody,
   ApplyReviewProposalParams,
@@ -6,6 +6,7 @@ import {
   UndoAppliedReviewProposalParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
+import { requireHouseholdOwner } from "../middlewares/requireHouseholdOwner";
 import { buildReviewProposals } from "../lib/reviewProposals";
 import {
   CorrectionRefusal,
@@ -27,15 +28,6 @@ import {
  * lib/reviewCorrections.ts.
  */
 const router: IRouter = Router();
-
-/** The signed-in user must be the household's owner, not merely a member of it. */
-const requireHouseholdOwner: RequestHandler = (req, res, next) => {
-  if (!req.actualUserId || req.actualUserId !== req.householdOwnerId) {
-    res.status(403).json({ error: "owner_only" });
-    return;
-  }
-  next();
-};
 
 /** A refused fix or undo answers its own status and words; anything else is a real error. */
 function refused(res: Response, e: unknown): boolean {

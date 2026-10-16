@@ -4,6 +4,7 @@ import {
   type Spine,
 } from "@workspace/api-client-react";
 import { dataState, type DataState } from "@/lib/queryState";
+import { useOlderSnapshot } from "@/lib/dataAsOf";
 
 /**
  * ⭐ THE SPINE — one snapshot, read once, shared by every surface that quotes
@@ -47,6 +48,15 @@ export interface SpineRead {
   /** When the data on screen was fetched (ISO), or null before the first success. */
   updatedAt: string | null;
   refetch: () => void;
+  /**
+   * ⭐ (T1) The bank reading this snapshot rolls forward from (`spine.dataAsOf`),
+   * and whether a newer one has been seen since (another response carried it):
+   * then the figures are an earlier reading, said so ("Earlier reading (Oct 14)
+   * — updating…") and asked again once (`lib/dataAsOf`). Never shown as current.
+   */
+  dataAsOf: { snapshotAt: string | null; computedAt: string } | null;
+  older: boolean;
+  olderWords: string | null;
 }
 
 export function useSpine(): SpineRead {
@@ -57,7 +67,11 @@ export function useSpine(): SpineRead {
       gcTime: 30 * 60_000,
     },
   });
+  const older = useOlderSnapshot(q);
   return {
+    dataAsOf: q.data?.dataAsOf ?? null,
+    older: older.older,
+    olderWords: older.words,
     data: q.data,
     isLoading: q.isLoading,
     isFetching: q.isFetching ?? false,

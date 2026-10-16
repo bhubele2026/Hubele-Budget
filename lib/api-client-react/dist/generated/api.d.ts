@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexCardPayoffMode, AmexSummary, AmexWeeklyPayoff, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BankingReview, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, Category, CategoryDecision, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, CreateWeekAdjustmentBody, CreateWishlistItemBody, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DirectionRefusal, DuplicateTransactionCount, EvaluateAffordBody, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexSummaryParams, GetAmexWeeklyPayoffParams, GetBankingReviewParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetMetricsParams, GetPeriodBreakdownParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, Goal, GoalCreate, GoalDeleteResult, GoalList, GoalUpdate, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategorizationReviewParams, ListCategoryDecisionsParams, ListDashboardBudgetsParams, ListGoalsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleHistory, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MemoryItem, MemoryList, MetricsRecomputeResult, MetricsResponse, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PlanUnsafe, PutMemoryBody, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecomputeMetricsParams, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewProposals, ReviewQueue, ReviewQueueCount, ReviewRefusal, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetAmexCardPayoffModeBody, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, UpdateWishlistItemBody, VersionInfo, WaysBack, WeekAdjustment, WeeklySettlement, WeeklySettlementInput, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexCardPayoffMode, AmexSummary, AmexWeeklyPayoff, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BankingCheckExplain, BankingReview, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, Category, CategoryDecision, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, CreateWeekAdjustmentBody, CreateWishlistItemBody, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DirectionRefusal, DuplicateTransactionCount, EvaluateAffordBody, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexSummaryParams, GetAmexWeeklyPayoffParams, GetBankingReviewParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetMetricsParams, GetPeriodBreakdownParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, Goal, GoalCreate, GoalDeleteResult, GoalList, GoalUpdate, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategorizationReviewParams, ListCategoryDecisionsParams, ListDashboardBudgetsParams, ListGoalsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleHistory, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MemoryItem, MemoryList, MetricsRecomputeResult, MetricsResponse, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PlanUnsafe, PutMemoryBody, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecomputeMetricsParams, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewProposals, ReviewQueue, ReviewQueueCount, ReviewRefusal, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetAmexCardPayoffModeBody, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, UpdateWishlistItemBody, VersionInfo, WaysBack, WeekAdjustment, WeeklySettlement, WeeklySettlementInput, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -2836,6 +2836,82 @@ export declare function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TErr
     queryKey: QueryKey;
 };
 /**
+ * `read` = the note ids the signed-in person pressed "I've read this" on (only ids H2 still ships). `from` = the first note day that needs their click: the first must-read note (READ_CLICK_FROM), or the day after they joined the household when that is later — a new member is never handed notes from before they had H2. Never anyone else's reads.
+ * @summary (WN) The notes this person has read, and where their click starts
+ */
+export declare const getGetWhatsNewMeUrl: () => string;
+export declare const getWhatsNewMe: (options?: RequestInit) => Promise<WhatsNewMe>;
+export declare const getGetWhatsNewMeQueryKey: () => readonly ["/api/whats-new/me"];
+export declare const getGetWhatsNewMeQueryOptions: <TData = Awaited<ReturnType<typeof getWhatsNewMe>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewMe>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewMe>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetWhatsNewMeQueryResult = NonNullable<Awaited<ReturnType<typeof getWhatsNewMe>>>;
+export type GetWhatsNewMeQueryError = ErrorType<unknown>;
+/**
+ * @summary (WN) The notes this person has read, and where their click starts
+ */
+export declare function useGetWhatsNewMe<TData = Awaited<ReturnType<typeof getWhatsNewMe>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewMe>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * One row per person per note. A repeat changes nothing and keeps the first read time. A well-formed id H2 does not ship (an older bundle) is dropped, never refused. Moves no money and no figure.
+ * @summary (WN) Record "I've read this" for the signed-in person
+ */
+export declare const getMarkWhatsNewReadUrl: () => string;
+export declare const markWhatsNewRead: (whatsNewReadInput: WhatsNewReadInput, options?: RequestInit) => Promise<WhatsNewReadResult>;
+export declare const getMarkWhatsNewReadMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof markWhatsNewRead>>, TError, {
+        data: BodyType<WhatsNewReadInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof markWhatsNewRead>>, TError, {
+    data: BodyType<WhatsNewReadInput>;
+}, TContext>;
+export type MarkWhatsNewReadMutationResult = NonNullable<Awaited<ReturnType<typeof markWhatsNewRead>>>;
+export type MarkWhatsNewReadMutationBody = BodyType<WhatsNewReadInput>;
+export type MarkWhatsNewReadMutationError = ErrorType<void>;
+/**
+ * @summary (WN) Record "I've read this" for the signed-in person
+ */
+export declare const useMarkWhatsNewRead: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof markWhatsNewRead>>, TError, {
+        data: BodyType<WhatsNewReadInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof markWhatsNewRead>>, TError, {
+    data: BodyType<WhatsNewReadInput>;
+}, TContext>;
+/**
+ * For every must-read note, each other person in the household it is theirs to read (their start is on or before its day) and when they pressed "I've read this" (null = not yet). The owner is never listed. Names are first names only, never an email; "Household member" when no name is known. A member gets 403.
+ * @summary (WN) Who else in the household has read each note (owner only)
+ */
+export declare const getGetWhatsNewReadsUrl: () => string;
+export declare const getWhatsNewReads: (options?: RequestInit) => Promise<WhatsNewReadReport>;
+export declare const getGetWhatsNewReadsQueryKey: () => readonly ["/api/whats-new/reads"];
+export declare const getGetWhatsNewReadsQueryOptions: <TData = Awaited<ReturnType<typeof getWhatsNewReads>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewReads>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewReads>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetWhatsNewReadsQueryResult = NonNullable<Awaited<ReturnType<typeof getWhatsNewReads>>>;
+export type GetWhatsNewReadsQueryError = ErrorType<void>;
+/**
+ * @summary (WN) Who else in the household has read each note (owner only)
+ */
+export declare function useGetWhatsNewReads<TData = Awaited<ReturnType<typeof getWhatsNewReads>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewReads>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
  * @summary List all invitations (owner only).
  */
 export declare const getListInvitationsUrl: () => string;
@@ -3362,6 +3438,30 @@ export type GetBankingReviewQueryError = ErrorType<void>;
  */
 export declare function useGetBankingReview<TData = Awaited<ReturnType<typeof getBankingReview>>, TError = ErrorType<void>>(params: GetBankingReviewParams, options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingReview>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * (T2) The forecast checking account's last balance check (the record a manual Sync stored) and what H2 holds about it: the previous reading, the bank's figure and what H2 expected; the bank rows the check counted between the two readings; pending deposits its rules left out and deposits they added; rows H2 recorded itself (no Plaid account: counted in H2's balance, left out of the check); rows that arrived after the check; today's balance and the reading under it; and a verdict — late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded itself add up to the difference), unknown, or null when there is no difference to explain. `check` is GET /banking/review's balanceCheck for the same account. Each row list holds at most 200 rows. No Plaid call, no write: nothing here clears or changes the check.
+ * @summary Review difference — the last balance check, explained (read-only)
+ */
+export declare const getGetBankingCheckExplainUrl: () => string;
+export declare const getBankingCheckExplain: (options?: RequestInit) => Promise<BankingCheckExplain>;
+export declare const getGetBankingCheckExplainQueryKey: () => readonly ["/api/banking/check-explain"];
+export declare const getGetBankingCheckExplainQueryOptions: <TData = Awaited<ReturnType<typeof getBankingCheckExplain>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingCheckExplain>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getBankingCheckExplain>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetBankingCheckExplainQueryResult = NonNullable<Awaited<ReturnType<typeof getBankingCheckExplain>>>;
+export type GetBankingCheckExplainQueryError = ErrorType<unknown>;
+/**
+ * @summary Review difference — the last balance check, explained (read-only)
+ */
+export declare function useGetBankingCheckExplain<TData = Awaited<ReturnType<typeof getBankingCheckExplain>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingCheckExplain>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

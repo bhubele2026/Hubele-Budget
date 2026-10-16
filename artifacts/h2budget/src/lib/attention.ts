@@ -125,7 +125,7 @@ export function attentionItems(i: {
       kind: "short",
       title: "The forecast runs short",
       detail: `Low ${formatCurrency(low.value)}${low.date ? ` on ${shortDate(low.date)}` : ""} · ${low.words}`,
-      action: { label: "See where it runs short", href: "/forecast" },
+      action: { label: "See where it runs short", href: low.date ? `/forecast?day=${low.date.slice(0, 10)}` : "/forecast" },
     });
   }
   if (i.withinPlan === "over") {
@@ -134,7 +134,7 @@ export function attentionItems(i: {
       kind: "over",
       title: `Over this week's plan${by}${i.provisional ? " so far" : ""}`,
       detail: i.provisional ? "Counts toward plan. Unconfirmed rows may change it." : "Pick a way back.",
-      action: { label: "See allowances", href: "/allowances" },
+      action: { label: "See this week", href: "/spending/week" },
       wayBack: true,
     });
   }

@@ -46,6 +46,8 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/amex", () => undefined] as const,
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+// (P1) The household link reads the plan state (spine / period breakdown): not this test's subject.
+vi.mock("@/components/amex-over-link", () => ({ AmexOverLink: () => null }));
 vi.mock("@/components/plaid-link-button", () => ({ PlaidLinkButton: () => null }));
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => null }));
 vi.mock("@/components/category-picker", () => ({
@@ -203,6 +205,9 @@ function renderPage() {
 beforeEach(() => {
   state.monthTxns = [];
   state.updateCalls = [];
+  // (P1) The bucket marks sit in the rows in Categorize mode (Review, the default, says the
+  // bucket in words and keeps the marks in each row's details). The PATCHes below are unchanged.
+  window.localStorage.setItem("amex.rowMode", "categorize");
 });
 afterEach(() => cleanup());
 

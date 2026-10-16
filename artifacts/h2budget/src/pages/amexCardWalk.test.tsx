@@ -38,6 +38,8 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/amex", () => undefined] as const,
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+// (P1) The household link reads the plan state (spine / period breakdown): not this test's subject.
+vi.mock("@/components/amex-over-link", () => ({ AmexOverLink: () => null }));
 vi.mock("@/components/plaid-link-button", () => ({ PlaidLinkButton: () => null }));
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => null }));
 vi.mock("@/components/category-picker", () => ({
@@ -216,8 +218,8 @@ describe("(Q3) one card: Plaid purchases walk DOWN going back in time", () => {
     expect(bal("p2")).toBe("bal $936.00");
     expect(bal("p3")).toBe("bal $897.25");
     expect(bal("p4")).toBe("bal $845.15");
-    // The mobile layout reads the same map.
-    expect(screen.getByTestId("text-running-balance-mobile-p2").textContent).toBe("bal $936.00");
+    // (P1) One row per transaction: no second ("-mobile-") copy of the balance.
+    expect(screen.queryByTestId("text-running-balance-mobile-p2")).toBeNull();
   });
 
   it("a pending row shows no bal; other cards' and workbook rows are not in this card's list", async () => {
@@ -258,8 +260,8 @@ describe("(Q3) All cards: each card's balance, no combined walk or chart", () =>
     expect(plat.textContent).toContain("$1,000.00");
     const blue = within(panel).getByTestId(`amex-card-balance-${BLUE}`);
     expect(blue.textContent).toContain("Blue Cash ••2003");
-    expect(blue.textContent).toContain("—");
-    expect(blue.textContent).not.toContain("$0.00");
+    // Unknown owed is a dash, never $0.00 (its purchases are a real $0.00).
+    expect(within(panel).getByTestId(`amex-card-owed-${BLUE}`).textContent).toBe("—");
     // Rows of every card (and the workbook) are still listed.
     expect(screen.getAllByText("B1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("W1").length).toBeGreaterThan(0);

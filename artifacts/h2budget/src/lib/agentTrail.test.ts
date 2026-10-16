@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentAction, AgentFinding } from "@workspace/api-client-react/features";
-import { FINDING_LINK, FINDING_TITLE, groupTrail, isStatus, payloadLines, trailTitle } from "./agentTrail";
+import { FINDING_LINK, FINDING_TITLE, findingLink, groupTrail, isStatus, payloadLines, trailTitle } from "./agentTrail";
 
 const a = (id: string, runId: string, type: AgentAction["type"], over: Partial<AgentAction> = {}): AgentAction => ({
   id, runId, type, targetKind: "transaction", targetId: id, outcome: "applied", reversible: true, undoneAt: null, createdAt: "2026-10-07T14:00:00Z", ...over,
@@ -46,6 +46,13 @@ describe("titles, links, statuses", () => {
     for (const k of Object.keys(FINDING_TITLE) as AgentFinding["kind"][]) expect(FINDING_TITLE[k].length).toBeGreaterThan(0);
     expect(FINDING_LINK.shortfall_before_income?.href).toBe("/forecast");
     expect(FINDING_LINK.goal_behind).toBeUndefined();
+  });
+  it("(T4) a shortfall finding opens the day it names; without one it opens the forecast", () => {
+    expect(findingLink({ kind: "shortfall_before_income", payload: { lowestDate: "2026-11-03" } })?.href).toBe("/forecast?day=2026-11-03");
+    expect(findingLink({ kind: "shortfall_before_income", payload: {} })?.href).toBe("/forecast");
+    expect(findingLink({ kind: "shortfall_before_income", payload: { lowestDate: "soon" } })?.href).toBe("/forecast");
+    expect(findingLink({ kind: "bill_increase", payload: { lowestDate: "2026-11-03" } })?.href).toBe("/bills");
+    expect(findingLink({ kind: "goal_behind", payload: {} })).toBeUndefined();
   });
   it("trail titles pluralise", () => {
     expect(trailTitle("remember", 1)).toBe("Remembered 1 merchant");

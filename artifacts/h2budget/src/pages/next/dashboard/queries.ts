@@ -27,10 +27,15 @@ const GC = 30 * MIN;
 export const usePlaidItemsQ = () =>
   useListPlaidItems({ query: { queryKey: getListPlaidItemsQueryKey(), staleTime: MIN, gcTime: GC } });
 
-export const useCashSignalQ = (horizonDays: number) => {
+/**
+ * `placeholderData` (the lazy panel passes tanstack's `keepPreviousData`) keeps the last horizon's answer
+ * on screen while the next one loads; `q.isPlaceholderData` says so. Imported by the caller, not here, so the
+ * landing entry does not carry it.
+ */
+export const useCashSignalQ = (horizonDays: number, opts?: { placeholderData?: <T>(prev: T | undefined) => T | undefined }) => {
   const params = { horizonDays };
   return useGetForecastCashSignal(params, {
-    query: { queryKey: getGetForecastCashSignalQueryKey(params), staleTime: 5 * MIN, gcTime: GC },
+    query: { queryKey: getGetForecastCashSignalQueryKey(params), staleTime: 5 * MIN, gcTime: GC, ...(opts?.placeholderData ? { placeholderData: opts.placeholderData } : {}) },
   });
 };
 

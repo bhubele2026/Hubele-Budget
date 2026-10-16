@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { latestMemberPlans, matchesSuggestion, monthWords, parsePositiveDollars, planErrorWords, planFor, plainDollars } from "./planWords";
+import { latestMemberPlans, matchesSuggestion, monthWords, parsePositiveDollars, planErrorWords, planFor, plainDollars, planStatusWords } from "./planWords";
 
 const plan = (id: string, memberUserId: string | null, period: string, amount: string, effectiveFrom: string) => ({
   id, memberUserId, period, amount, effectiveFrom, source: "owner",
@@ -39,5 +39,12 @@ describe("plan words", () => {
     expect(matchesSuggestion(350, 350)).toBe(true);
     expect(matchesSuggestion(350, 350.01)).toBe(false);
     expect(matchesSuggestion(null, 350)).toBe(false);
+  });
+  it("(T4) planStatusWords: none is 'Plan not set', a $0 plan or override is 'Plan set to $0', a cap says nothing", () => {
+    expect(planStatusWords({ status: "not_set", source: "none" })).toBe("Plan not set");
+    expect(planStatusWords({ status: "not_set", source: "plan" })).toBe("Plan set to $0");
+    expect(planStatusWords({ status: "not_set", source: "override" })).toBe("Plan set to $0");
+    expect(planStatusWords({ status: "set", source: "plan" })).toBeNull();
+    expect(planStatusWords(null)).toBeNull();
   });
 });

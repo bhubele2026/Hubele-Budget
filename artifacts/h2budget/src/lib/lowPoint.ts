@@ -1,4 +1,5 @@
 import { formatCurrency } from "@/lib/utils";
+import { shortDate } from "@/lib/dates";
 
 // (Bundle) Deliberately not `@/lib/money`: this file is on the landing path
 // (CashPanel), and importing that module there pulled all of it into the entry
@@ -49,6 +50,13 @@ export interface LowPointView {
   tone: "bad" | "neutral";
   /** The bank balance behind the projection is out of date. */
   stale: boolean;
+  /**
+   * ⭐ (T2) The one status word for the low point, the same on every surface:
+   * "Below zero on Oct 22" (rust — the only alarm) · "Under the $500 buffer"
+   * (quiet: at or above $0) · "Near buffer" · "Above buffer" (ok). Null with no
+   * projection. A real $0.00 is never rust.
+   */
+  chip: { word: string; tone: "bad" | "neutral" | "ok" } | null;
 }
 
 const KIND: Readonly<Record<string, LowPointKind>> = {
@@ -66,17 +74,28 @@ export function lowPointView(
   const kind: LowPointKind =
     !forecast || forecast.status === "no_data" || value == null ? "none" : (KIND[forecast.status] ?? "none");
   if (kind === "none") {
-    return { kind, value: null, date: null, words: "No bank balance yet, so no forecast", tone: "neutral", stale };
+    return { kind, value: null, date: null, words: "No bank balance yet, so no forecast", tone: "neutral", stale, chip: null };
   }
   const buffer = num(opts.buffer ?? forecast?.cashBuffer);
-  const yours = buffer == null ? "your buffer" : `your ${formatCurrency(buffer).replace(/\.00$/, "")} buffer`;
+  const bufferText = buffer == null ? null : formatCurrency(buffer).replace(/\.00$/, "");
+  const yours = bufferText == null ? "your buffer" : `your ${bufferText} buffer`;
   const phrase = kind === "below" ? `below ${yours}` : kind === "tight" ? `just above ${yours}` : `above ${yours}`;
+  const date = forecast?.lowPointDate ?? null;
+  const chip: LowPointView["chip"] =
+    value! < 0
+      ? { word: `Below zero${date ? ` on ${shortDate(date.slice(0, 10))}` : ""}`, tone: "bad" }
+      : kind === "below"
+        ? { word: bufferText ? `Under the ${bufferText} buffer` : "Under the buffer", tone: "neutral" }
+        : kind === "tight"
+          ? { word: "Near buffer", tone: "neutral" }
+          : { word: "Above buffer", tone: "ok" };
   return {
     kind,
     value,
-    date: forecast?.lowPointDate ?? null,
+    date,
     words: stale ? `${phrase}, from an out-of-date bank balance` : phrase,
     tone: value! < 0 ? "bad" : "neutral",
     stale,
+    chip,
   };
 }

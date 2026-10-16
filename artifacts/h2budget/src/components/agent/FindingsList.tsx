@@ -4,7 +4,7 @@ import { useDismissAgentFinding, useResolveAgentFinding, type AgentFinding } fro
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { relativeTime } from "@/lib/dates";
-import { FINDING_LINK, SEVERITY_WORD, findingTitle } from "@/lib/agentTrail";
+import { SEVERITY_WORD, findingLink, findingTitle } from "@/lib/agentTrail";
 import { btnLink } from "@/ui";
 import { OWN_INVALIDATION } from "@/lib/mutationInvalidation";
 import { PayloadList } from "./PayloadList";
@@ -43,7 +43,7 @@ export function FindingsList({
     <>
       <ul className="list-none p-0" data-testid="findings">
         {findings.map((f) => {
-          const link = FINDING_LINK[f.kind];
+          const link = findingLink(f);
           const tone = f.severity === "high" ? "bad" : f.severity === "watch" ? "warn" : "gray";
           return (
             <li

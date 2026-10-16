@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
-import { useCountUp } from "@/hooks/useCountUp";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
@@ -40,8 +39,7 @@ export function StatChip({
   // Amex Ending balance tile from #455.
   const isLoading = !!loading;
   const isMissing = !isLoading && (value == null || !Number.isFinite(value));
-  // (#wow) Numbers tick up on load.
-  const shown = useCountUp(isLoading || isMissing ? null : (value as number));
+  const shown = isLoading || isMissing ? 0 : (value as number);
   const display = isLoading
     ? "Loading…"
     : isMissing

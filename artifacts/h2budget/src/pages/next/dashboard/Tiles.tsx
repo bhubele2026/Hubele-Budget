@@ -29,7 +29,7 @@ import { Fig, Skel, Tile, Why, leftOver, type TileStatus } from "./tileParts";
 // ── Banking ─────────────────────────────────────────────────────────────────
 const BankConfidence = lazy(() => import("./BankConfidence"));
 
-function BankingTile({ s }: { s: Spine | undefined }) {
+function BankingTile({ s, older }: { s: Spine | undefined; older?: string | null }) {
   if (!s) return <Tile testid="banking" title="Banking" href="/banking" accent="checking" index={1}><Skel /></Tile>;
   const v = bankBalanceView(s.bank);
   const acct = v.account;
@@ -38,24 +38,31 @@ function BankingTile({ s }: { s: Spine | undefined }) {
     : null;
   const bal = Number(s.bank.balance);
   const n = s.reviewCount;
+  const pending = s.bankConfidence?.pendingCount ?? 0;
   const href = acct?.rowId ? `/banking?account=${encodeURIComponent(acct.rowId)}` : "/banking";
   return (
     <Tile
       testid="banking" title="Banking" href={href} accent="checking" index={1}
       sub={identity ? <span data-testid="tile-banking-account">{identity.label}{identity.mask4 ? ` ••${identity.mask4}` : ""}</span> : "Checking"}
-      status={{ word: n > 0 ? `${n} to review` : "Nothing to review", tone: n > 0 ? "bad" : "ok" }}
+      status={{ word: n === 1 ? "1 charge to match" : n > 0 ? `${n} charges to match` : "Nothing to match", tone: n > 0 ? "bad" : "ok" }}
     >
       <Fig
         label="Checking" big testid="tile-banking-balance"
         value={v.balance == null ? "—" : money(s.bank.balance)}
-        tone={Number.isFinite(bal) && bal < 0 ? "bad" : "neutral"}
+        tone={!older && Number.isFinite(bal) && bal < 0 ? "bad" : "neutral"}
       />
-      <div className="text-micro text-neutral-500" data-testid="tile-banking-fresh">
-        {v.balance == null ? "No bank balance yet." : <FreshnessLine bank={s.bank} fetchedAt={s.bankConfidence?.fetchedAt} />}
+      {/* Row A (data): when it was updated, and how many rows are pending. Row B (below): the check, apart. */}
+      <div className="flex flex-wrap items-baseline gap-x-1 text-label text-neutral-600" data-testid="tile-banking-fresh">
+        {v.balance == null ? "No bank balance yet." : (
+          <>
+            {older ?? <FreshnessLine bank={s.bank} fetchedAt={s.bankConfidence?.fetchedAt} />}
+            {pending > 0 && !older ? <><span aria-hidden>{" · "}</span><span data-testid="tile-banking-pending">{pending} pending</span></> : null}
+          </>
+        )}
       </div>
       {v.balance != null && s.bankConfidence ? (
         // (Q5) Separate facts, in a lazy chunk (the landing stays the same size): the check says "Matches bank" only when it did.
-        <Suspense fallback={<div className="h-5" aria-hidden />}><BankConfidence s={s} variant="tile" /></Suspense>
+        <Suspense fallback={<div className="h-5" aria-hidden />}><BankConfidence s={s} /></Suspense>
       ) : null}
     </Tile>
   );
@@ -204,13 +211,16 @@ function ForecastTile({ s }: { s: Spine | undefined }) {
   if (!s) return <Tile testid="forecast" title="Forecast" href="/forecast" accent="other" index={5}><Skel /></Tile>;
   const f = s.forecast;
   const v = lowPointView(f, { buffer: f.cashBuffer, stale: s.bank.stale });
-  const status: TileStatus | null = v.kind === "none" ? null
-    : v.value != null && v.value < 0 ? { word: "Below zero", tone: "bad" }
-    : v.kind === "below" ? { word: "Below buffer", tone: "bad" }
-    : { word: "Above buffer", tone: "ok" };
+  // (T2) One status word (lowPointView's chip): only a projected NEGATIVE is rust; under the buffer at or
+  // above $0 is quiet. Below zero, the tile opens the day it happens ("Review shortfall").
+  const status: TileStatus | null = v.chip;
+  const short = v.value != null && v.value < 0 && v.date != null;
   const nb = s.nextBill;
   return (
-    <Tile testid="forecast" title="Forecast" href="/forecast" accent="other" index={5} status={status}>
+    <Tile
+      testid="forecast" title="Forecast" accent="other" index={5} status={status}
+      href={short ? `/forecast?day=${encodeURIComponent(v.date!.slice(0, 10))}` : "/forecast"}
+    >
       <Fig
         label={`Lowest point${v.date ? ` · ${weekdayLabel(v.date) ?? dayLabel(v.date)}` : ""}`} big testid="tile-forecast-low"
         value={v.kind === "none" ? "—" : money(v.value)} tone={v.tone}
@@ -223,6 +233,7 @@ function ForecastTile({ s }: { s: Spine | undefined }) {
       ) : v.kind === "none" ? (
         <p className="text-label text-neutral-600">{v.words}</p>
       ) : null}
+      {short ? <span className="text-label font-semibold text-bad-ink" data-testid="tile-forecast-shortfall">Review shortfall →</span> : null}
     </Tile>
   );
 }
@@ -251,7 +262,7 @@ export default function Tiles(props: AmexTileProps = {}) {
   }
   return (
     <>
-      <BankingTile s={s} />
+      <BankingTile s={s} older={spine.olderWords} />
       <AmexTile {...props} />
       <WeekTile s={s} />
       <MonthTile s={s} />

@@ -56,6 +56,7 @@ function Bubble({
   name,
   title,
   disabled,
+  wordy,
 }: {
   label: { short: string; full: string };
   on: boolean;
@@ -63,6 +64,7 @@ function Bubble({
   name: string;
   title: string;
   disabled?: boolean;
+  wordy?: boolean;
 }) {
   return (
     <button
@@ -90,8 +92,14 @@ function Bubble({
       {/* (W3) Readable text, 11px, never the old 9px glyph: two letters on a
           phone, the word from `sm` up. The tooltip carries the one-line meaning. */}
       <span className="text-[11px] font-semibold leading-none text-neutral-500" aria-hidden="true">
-        <span className="sm:hidden @6xl:inline">{label.short}</span>
-        <span className="hidden sm:inline @6xl:hidden">{label.full}</span>
+        {wordy ? (
+          label.full
+        ) : (
+          <>
+            <span className="sm:hidden @6xl:inline">{label.short}</span>
+            <span className="hidden sm:inline @6xl:hidden">{label.full}</span>
+          </>
+        )}
       </span>
     </button>
   );
@@ -103,15 +111,18 @@ export function BucketBubbles({
   disabled,
   buckets = ORDER,
   className,
+  wordy = false,
 }: {
   flags: BucketFlags;
   onToggle: (bucket: BucketKey, next: boolean) => void;
   disabled?: boolean;
   buckets?: BucketKey[];
   className?: string;
+  /** (P1) Always the full words under the marks ("Weekly", never "W"): a row's details, where there is room. */
+  wordy?: boolean;
 }) {
   return (
-    <div className={cn("flex items-start gap-2 sm:gap-3", className)}>
+    <div className={cn("flex items-start", wordy ? "gap-4" : "gap-2 sm:gap-3", className)}>
       {buckets.map((b) => (
         <Bubble
           key={b}
@@ -121,6 +132,7 @@ export function BucketBubbles({
           name={NAMES[b]}
           title={MEANINGS[b]}
           disabled={disabled}
+          wordy={wordy}
         />
       ))}
     </div>

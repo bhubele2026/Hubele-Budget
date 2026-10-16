@@ -5788,5 +5788,6 @@ export * from "./recap";
 export * from "./debt";
 export * from "./metrics";
 export * from "./goals";
+export * from "./whatsNew";
 export * from "./money";
 //# sourceMappingURL=index.d.ts.map

@@ -34,3 +34,30 @@ export const LEDGER_GRID =
  */
 export const LEDGER_GRID_WIDE_ACTIONS =
   "@6xl:grid-cols-[1.75rem_minmax(0,1fr)_8.5rem_12rem_6.75rem_7rem_16rem]";
+
+/**
+ * (P1) THE AMEX LEDGER, TWO WAYS. Review (the default) says each row's
+ * spending in words (a wider, wrapping column); Categorize shows the four
+ * bucket marks (the old 6.75rem column). The last column is only the row's
+ * Details toggle. The Card column is there on All cards only — one card's
+ * page names its card once, in the header.
+ *
+ * ⚠️ LITERAL STRINGS: Tailwind only generates classes it can read in the
+ * source, so each track list is spelled out, never assembled.
+ */
+export const AMEX_GRID_REVIEW_CARD =
+  "@6xl:grid-cols-[1.75rem_minmax(0,1fr)_8.5rem_12rem_8.5rem_7rem_2.5rem]";
+export const AMEX_GRID_REVIEW =
+  "@6xl:grid-cols-[1.75rem_minmax(0,1fr)_12rem_8.5rem_7rem_2.5rem]";
+export const AMEX_GRID_CATEGORIZE_CARD =
+  "@6xl:grid-cols-[1.75rem_minmax(0,1fr)_8.5rem_12rem_6.75rem_7rem_2.5rem]";
+export const AMEX_GRID_CATEGORIZE =
+  "@6xl:grid-cols-[1.75rem_minmax(0,1fr)_12rem_6.75rem_7rem_2.5rem]";
+
+export type AmexRowMode = "review" | "categorize";
+
+/** The Amex track list for a row mode, with or without the Card column. */
+export function amexLedgerGrid(mode: AmexRowMode, showCard: boolean): string {
+  if (mode === "categorize") return showCard ? AMEX_GRID_CATEGORIZE_CARD : AMEX_GRID_CATEGORIZE;
+  return showCard ? AMEX_GRID_REVIEW_CARD : AMEX_GRID_REVIEW;
+}

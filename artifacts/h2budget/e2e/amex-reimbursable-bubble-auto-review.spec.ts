@@ -170,6 +170,8 @@ test.describe("Amex Reimbursable bubble auto-review (#617)", () => {
       },
     );
 
+    // (P1) The bucket marks sit in the rows in Categorize mode (Review, the default, says the bucket in words).
+    await page.addInitScript(() => window.localStorage.setItem("amex.rowMode", "categorize"));
     await page.goto("/amex");
     await expect(
       page.getByRole("heading", { name: /american express/i }),

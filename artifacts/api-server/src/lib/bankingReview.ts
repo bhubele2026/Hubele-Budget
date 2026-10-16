@@ -32,6 +32,7 @@ import {
   type BankReviewVarianceKind,
   type BankReviewVarianceTotals,
   type RowEvidence,
+  type BankBalanceCheck,
 } from "@workspace/avalanche-core";
 import {
   LedgerRequestError,
@@ -59,6 +60,7 @@ import { billSuggestionsOf, evidenceContextOf, rowEvidenceOf } from "./rowEviden
 import { readPausedReview } from "./oneTimeBillMove";
 import { readBankBalanceCheck } from "./bankBalanceCheck";
 import { addDaysISO, householdTodayISO } from "./householdClock";
+import { dataAsOfOf } from "./dataAsOf";
 import type { LedgerPlanFate, LedgerPlanOccurrence } from "./forecastLedger";
 
 /**
@@ -797,6 +799,8 @@ export async function buildBankingReview(
   const placedNet = summary.netCents;
 
   return {
+    // ⭐ (T1) The bank reading this review's balances roll forward from (= spine.dataAsOf.snapshotAt).
+    dataAsOf: dataAsOfOf(scope.anchor.snapshotAt),
     account: {
       id: identityRowId ?? null,
       institution: identity?.institution ?? null,
@@ -809,6 +813,9 @@ export async function buildBankingReview(
     balance: {
       today: scope.anchor.todayBalance,
       asOf: scope.anchor.snapshotAt,
+      // (T1) The bank's own reading that `today` rolls forward from, at `asOf` — from THIS request's
+      // ledger scope (one moment with `today`), never the spine's. Null when `today` is null.
+      reading: scope.anchor.todayBalance == null ? null : scope.anchor.snapshotBalance,
       start: balanceStart,
       end: balanceAtEndOf(register, q.to),
       unavailableReason: balanceUnavailableReason(scope),
@@ -871,26 +878,7 @@ export async function buildBankingReview(
     balanceTie: tieApplies
       ? { status: tie!.status, checkedAt: tie!.checkedAt, unexplained: tie!.unexplained }
       : { status: "not_checked" as const, checkedAt: null, unexplained: null },
-    balanceCheck: {
-      status: balanceCheck.status,
-      reason: balanceCheck.reason,
-      stale: balanceCheck.stale,
-      staleReason: balanceCheck.staleReason,
-      checkedAt: balanceCheck.checkedAt,
-      bank: balanceCheck.bank
-        ? { balance: money(balanceCheck.bank.balanceCents), at: balanceCheck.bank.at, field: balanceCheck.bank.field }
-        : null,
-      h2: balanceCheck.h2 ? { balance: money(balanceCheck.h2.balanceCents) } : null,
-      difference: balanceCheck.differenceCents == null ? null : money(balanceCheck.differenceCents),
-      direction: balanceCheck.direction,
-      lastDrift: balanceCheck.lastDrift
-        ? {
-            checkedAt: balanceCheck.lastDrift.checkedAt,
-            difference: money(balanceCheck.lastDrift.differenceCents),
-            direction: balanceCheck.lastDrift.direction,
-          }
-        : null,
-    },
+    balanceCheck: presentBalanceCheck(balanceCheck),
     household: {
       scope: HOUSEHOLD_SCOPE,
       weekStart: position.weekStart,
@@ -914,3 +902,31 @@ export async function buildBankingReview(
 }
 
 export type BankingReview = Awaited<ReturnType<typeof buildBankingReview>>;
+
+/**
+ * The review's `balanceCheck` (two-decimal strings) from the check's cents. Shared
+ * with GET /banking/check-explain (T2), so "Review difference" reads the very
+ * check the review shows.
+ */
+export function presentBalanceCheck(balanceCheck: BankBalanceCheck) {
+  return {
+    status: balanceCheck.status,
+    reason: balanceCheck.reason,
+    stale: balanceCheck.stale,
+    staleReason: balanceCheck.staleReason,
+    checkedAt: balanceCheck.checkedAt,
+    bank: balanceCheck.bank
+      ? { balance: money(balanceCheck.bank.balanceCents), at: balanceCheck.bank.at, field: balanceCheck.bank.field }
+      : null,
+    h2: balanceCheck.h2 ? { balance: money(balanceCheck.h2.balanceCents) } : null,
+    difference: balanceCheck.differenceCents == null ? null : money(balanceCheck.differenceCents),
+    direction: balanceCheck.direction,
+    lastDrift: balanceCheck.lastDrift
+      ? {
+          checkedAt: balanceCheck.lastDrift.checkedAt,
+          difference: money(balanceCheck.lastDrift.differenceCents),
+          direction: balanceCheck.lastDrift.direction,
+        }
+      : null,
+  };
+}

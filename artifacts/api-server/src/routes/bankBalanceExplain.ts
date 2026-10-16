@@ -13,6 +13,7 @@ import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "../lib/householdClock";
 import { bankFetchedAt, computeBankFreshness } from "../lib/bankFreshness";
 import { classifyLedgerRowsThroughToday } from "../lib/ledgerCashRows";
+import { dataAsOfOf } from "../lib/dataAsOf";
 
 const router: IRouter = Router();
 
@@ -165,6 +166,8 @@ router.get(
 
     res.json({
       asOf: new Date().toISOString(),
+      // (T1) The bank reading these figures roll forward from (the stored anchor's instant).
+      dataAsOf: dataAsOfOf(settings?.bankSnapshotAt ?? null),
       // What every screen is showing right now.
       displayed: { bankToday: signal.bankToday },
       // Whether that balance can be trusted right now, and why not. The spine's

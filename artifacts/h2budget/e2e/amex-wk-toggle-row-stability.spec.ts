@@ -121,9 +121,10 @@ const LAYOUTS: Layout[] = [
     rowTestId: (id) => `row-amex-${id}`,
   },
   {
+    // (P1) One row per transaction: the phone renders the same row.
     name: "mobile",
     viewport: { width: 390, height: 844 },
-    rowTestId: (id) => `row-amex-mobile-${id}`,
+    rowTestId: (id) => `row-amex-${id}`,
   },
 ];
 
@@ -182,6 +183,8 @@ test.describe("Amex WK toggle row stability (#626)", () => {
         // the seeded rows themselves are a stronger readiness
         // signal than the page header (which can be hidden behind
         // the mobile sidebar collapse).
+        // (P1) The bucket marks sit in the rows in Categorize mode (Review, the default, says the bucket in words).
+        await page.addInitScript(() => window.localStorage.setItem("amex.rowMode", "categorize"));
         await page.goto("/amex");
         for (const id of seededIds) {
           await expect(page.getByTestId(layout.rowTestId(id))).toBeVisible({

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within, waitFor, act } from "@testing-library/react";
 import type { ReactNode } from "react";
 
 // Every query the panels read is one entry in `Q`; a test sets what it needs.
@@ -66,6 +66,7 @@ import { BELOW_FOLD } from "./belowFoldSizes";
 import { bankLines } from "./bankState";
 import { cleanRecap, recapSourceWords } from "./recapWords";
 import { remainingDebtTotal } from "@/lib/debtBalance";
+import { _resetWhatsNewSignalForTests, onWhatsNewOpen, setWhatsNewUnread } from "@/lib/whatsNewSignal";
 
 // (WP1) The spine's bank carries the snapshot under the balance, what rolled
 // since (4,180.50 + 20.00 = 4,200.50) and the account with its ids (row c1).
@@ -141,32 +142,16 @@ describe("header", () => {
     expect(li.getAttribute("data-state")).toBe("ok");
     expect(li.textContent).not.toContain("not synced yet");
   });
-  it("(Q5 fix) the confidence line's room is reserved below sm (it wraps there), so the tiles do not move when its chunk lands", async () => {
+  it("the header carries the bank connection lines only: the check, updated and pending live once, on the Banking tile", () => {
     h.spine.data = spine({ bankConfidence: { fetchedAt: "2026-10-08T15:00:00Z", bankBalance: "4180.50", bankAsOf: null, h2Balance: "4200.50", pendingCount: 1, check: { status: "matches", reason: null, stale: false, staleReason: null, checkedAt: "2026-10-08T14:00:00Z", difference: "0.00", direction: null } } });
     wrap(<DashboardHeader />);
-    const line = await screen.findByTestId("dash-bank-confidence");
-    expect(line.parentElement!.className).toContain("min-h-[2.25rem]");
-    expect(line.parentElement!.className).toContain("sm:min-h-4");
-  });
-  it("(Q5) the checking account's confidence, apart from the per-bank dots: updated, check, pending", async () => {
-    const bc = (check: Record<string, unknown>, o: Record<string, unknown> = {}) => ({
-      fetchedAt: "2026-10-08T15:00:00Z", bankBalance: "4180.50", bankAsOf: "2026-10-07T20:00:00Z", h2Balance: "4200.50", pendingCount: 1,
-      check: { status: "matches", reason: null, stale: false, staleReason: null, checkedAt: "2026-10-08T14:00:00Z", difference: "0.00", direction: null, ...check }, ...o,
-    });
-    h.spine.data = spine({ bankConfidence: bc({}) });
-    const a = wrap(<DashboardHeader />);
-    const line = await screen.findByTestId("dash-bank-confidence");
-    expect(line.getAttribute("data-tone")).toBe("ok");
-    expect(screen.getByTestId("dash-bank-updated").textContent).toBe("Updated 2 h ago");
-    expect(screen.getByTestId("dash-bank-check").textContent).toBe("Matches bank");
-    expect(screen.getByTestId("dash-bank-pending").textContent).toBe("1 pending");
-    a.unmount();
-    // Never checked: grey, with the reason; an all-clear review count cannot make it green.
-    h.spine.data = spine({ reviewCount: 0, bankConfidence: bc({ status: "not_checked", reason: "anchor_too_old", checkedAt: null, difference: null }, { pendingCount: 0 }) });
-    wrap(<DashboardHeader />);
-    expect((await screen.findByTestId("dash-bank-confidence")).getAttribute("data-tone")).toBe("grey");
-    expect(screen.getByTestId("dash-bank-check").textContent).toBe("Not checked yet — last balance too old");
+    expect(screen.queryByTestId("dash-bank-confidence")).toBeNull();
+    expect(screen.queryByTestId("dash-bank-updated")).toBeNull();
+    expect(screen.queryByTestId("dash-bank-check")).toBeNull();
     expect(screen.queryByTestId("dash-bank-pending")).toBeNull();
+    expect(screen.getByTestId("dash-bank-fresh").textContent).toContain("Chase · synced 2 h ago");
+    // the connection lines are label size now
+    expect(screen.getByTestId("dash-bank-fresh").className).toContain("text-label");
   });
   it("ONE action by priority: Reconnect beats a week over plan, which beats Afford", () => {
     h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "refresh_failed" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00", remainingWeekKnown: "-25.00" } });
@@ -211,7 +196,7 @@ describe("header", () => {
     h.spine.data = spine({ position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00", remainingWeekKnown: "-25.00" } });
     const a = wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("short");
-    expect(screen.getByTestId("dash-runs-short").getAttribute("href")).toBe("/forecast");
+    expect(screen.getByTestId("dash-runs-short").getAttribute("href")).toBe("/forecast?day=2026-10-20");
     expect(screen.getByTestId("dash-runs-short").textContent).toBe("See where it runs short");
     expect(screen.getByTestId("afford-open")).toBeTruthy();
     a.unmount();
@@ -229,6 +214,30 @@ describe("header", () => {
     fireEvent.click(t);
     await waitFor(() => expect(screen.getByTestId("recap-stub")).toBeTruthy());
     expect(t.getAttribute("aria-expanded")).toBe("true");
+  });
+  it("(WN) a quiet What's new link in the second row; New only while a note is unread; it opens the sheet", () => {
+    const opened = vi.fn();
+    const off = onWhatsNewOpen(opened);
+    try {
+      wrap(<DashboardHeader />);
+      const link = screen.getByTestId("dash-whats-new");
+      expect(link.tagName).toBe("BUTTON");
+      expect(link.textContent).toBe("What's new");
+      // Unknown (the host has not asked yet) and 0 both show no chip.
+      expect(screen.queryByTestId("dash-whats-new-new")).toBeNull();
+      act(() => setWhatsNewUnread(0));
+      expect(screen.queryByTestId("dash-whats-new-new")).toBeNull();
+      act(() => setWhatsNewUnread(1));
+      expect(screen.getByTestId("dash-whats-new-new").textContent).toBe("New");
+      expect(link.textContent).toBe("What's newNew");
+      // Same row as Afford and Morning text, after them.
+      expect(screen.getByTestId("dash-recap-toggle").parentElement).toBe(link.parentElement);
+      fireEvent.click(link);
+      expect(opened).toHaveBeenCalledTimes(1);
+    } finally {
+      off();
+      act(() => _resetWhatsNewSignalForTests());
+    }
   });
   it("with nothing to act on there is no action button, only the small links", () => {
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
@@ -330,7 +339,7 @@ describe("summary row: four figures, status-aware", () => {
     h.spine.data = spine({ bank: { ...spineBank, asOfDate: at, stale: true, staleReason: "old",
       snapshot: { balance: "4224.50", at, source: "plaid" }, sinceSnapshot: { net: "-24.00", count: 2, through: "2026-10-08" } } });
     const a = wrap(<SummaryRow />);
-    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 2 entries since the Oct 5 snapshot");
+    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 2 entries since the Oct 5 reading");
     a.unmount();
     // Nothing rolled on top: nothing said.
     h.spine.data = spine({ bank: { ...spineBank, sinceSnapshot: { net: "0.00", count: 0, through: "2026-10-08" } } });
@@ -342,7 +351,7 @@ describe("summary row: four figures, status-aware", () => {
     h.spine.data = spine({ bank: { ...spineBank, asOfDate: "2026-10-08T14:00:00Z",
       snapshot: { balance: "4212.50", at: "2026-10-08T14:00:00Z", source: "plaid" }, sinceSnapshot: { net: "-12.00", count: 1, through: "2026-10-08" } } });
     const c = wrap(<SummaryRow />);
-    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 1 entry since the Oct 8 snapshot");
+    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 1 entry since the Oct 8 reading");
     c.unmount();
     // No snapshot at all: nothing to say it rolled from.
     h.spine.data = spine({ bank: { ...spineBank, snapshot: null, sinceSnapshot: null } });
@@ -728,8 +737,13 @@ describe("coming up", () => {
   const signal = {
     account: cashAcct,
     hookAmountIgnored: [{ itemId: "r6", cadence: "weekly", storedAmount: "450.00" }],
+    // (T3) The server's real shape: `events` are planned expenses only; income (and the
+    // counted bank rows) are in `dayItems`, which is where the payday footnote reads.
+    dayItems: [
+      { date: "2026-10-09", kind: "income", label: "Paycheck", amount: "2000.00", itemId: "r1" },
+      { date: "2026-10-09", kind: "bank_row", amount: "-12.00", txnId: "t1", matched: false },
+    ],
     events: [
-      { date: "2026-10-09", label: "Paycheck", amount: "2000.00", itemId: "r1" },
       { date: "2026-10-10", label: "Rent", amount: "-1200.00", itemId: "r2", occurrenceDate: "2026-10-10" },
       { date: "2026-10-10", label: "Weekly Spend", amount: "-612.40", itemId: "r6", occurrenceDate: "2026-10-10" },
       { date: "2026-10-12", label: "Visa payment", amount: "-150.00", itemId: "r3" },
@@ -820,6 +834,8 @@ describe("cash-flow forecast", () => {
     wrap(<ForecastPanel />);
     expect(h.horizons[0]).toBe(90);
     expect(screen.getByTestId("dash-forecast-low").textContent).toBe("Low point in these 90 days: $350.00 on Tue Oct 20");
+    // (T2) Under the $500 buffer but above $0: quiet, never rust.
+    expect(screen.getByTestId("dash-forecast-low").querySelector("[data-tone]")!.getAttribute("data-tone")).toBe("neutral");
     await waitFor(() => expect(screen.getByTestId("chart-stub").textContent).toBe("3 points, buffer 500, short label"));
     expect(screen.getByTestId("dash-forecast-link").getAttribute("href")).toBe("/forecast");
     expect(screen.getByTestId("dash-forecast-chart").className).toContain("h-80");
@@ -839,6 +855,21 @@ describe("cash-flow forecast", () => {
     expect(h.horizons.at(-1)).toBe(30);
     expect(screen.getByTestId("dash-horizon-30").getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("dash-forecast-low").textContent).toContain("these 30 days");
+  });
+  it("offers 30, 90 and 120 days (the server's horizons), never 180", () => {
+    h.Q.cash = ok(signal());
+    wrap(<ForecastPanel />);
+    expect(screen.getByTestId("dash-horizon-120")).toBeTruthy();
+    expect(screen.queryByTestId("dash-horizon-180")).toBeNull();
+  });
+  it("a horizon switch keeps the last answer mounted, dimmed and busy, and says 'Loading N days…' instead of the old low point", () => {
+    h.Q.cash = { ...ok(signal()), isPlaceholderData: true };
+    wrap(<ForecastPanel />);
+    expect(screen.getByTestId("dash-forecast-chart").className).toContain("opacity-60");
+    expect(screen.getByTestId("dash-forecast-chart").getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByTestId("dash-forecast-loading").textContent).toBe("Loading 90 days…");
+    expect(screen.queryByTestId("dash-forecast-low")).toBeNull();
+    expect(screen.getByTestId("chart-stub")).toBeTruthy();
   });
   it("draws nothing false when there is no bank balance", () => {
     h.Q.cash = ok(signal({ status: "no_data" }));
@@ -898,7 +929,7 @@ describe("spending pace", () => {
     expect(screen.getByTestId("dash-spent-week").textContent).toBe("$120.00");
     expect(screen.getByTestId("dash-spent-month").textContent).toBe("$900.00");
     expect(screen.getByTestId("dash-link-allowances").getAttribute("href")).toBe("/allowances");
-    expect(screen.getByTestId("dash-link-biggest").getAttribute("href")).toBe("/banking");
+    expect(screen.getByTestId("dash-link-biggest").getAttribute("href")).toBe("/spending/month?open=details");
     const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/budget");
   });
@@ -919,9 +950,9 @@ describe("(WP6) why the two month totals differ", () => {
   });
   it("one bridge line from the server's terms, and 'Why these differ' opens every term with its sign", async () => {
     wrap(<SpendingPanel />);
-    expect(screen.getByTestId("dash-spend-bridge-words").textContent).toBe(
-      "Budget counts $1,450.00 of card payments and $620.00 of debt payments that purchases leave out; refunds net $42.50",
-    );
+    // (T4) The sentence lives in the popover only: the page face carries the link, not the words.
+    expect(screen.queryByTestId("dash-spend-bridge-words")).toBeNull();
+    expect(screen.getByTestId("dash-spend-bridge").textContent).not.toContain("card payments and");
     fireEvent.click(screen.getByTestId("dash-spend-why"));
     const body = await screen.findByTestId("dash-spend-why-body");
     expect(body.textContent).toContain("Budget, Oct 1–end$5,511.84");
@@ -993,7 +1024,7 @@ describe("needs attention", () => {
     const row = screen.getByTestId("dash-att-short");
     expect(row.textContent).toContain("The forecast runs short");
     expect(row.textContent).toContain("Low $350.00 on Oct 20 · below your $500 buffer");
-    expect(row.getAttribute("href")).toBe("/forecast");
+    expect(row.getAttribute("href")).toBe("/forecast?day=2026-10-20");
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("short");
     expect(screen.getByTestId("dash-runs-short").getAttribute("href")).toBe(row.getAttribute("href"));
   });

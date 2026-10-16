@@ -8,6 +8,7 @@ import {
 } from "wouter";
 import {
   MutationCache,
+  QueryCache,
   QueryClient,
   QueryClientProvider,
   keepPreviousData,
@@ -21,12 +22,15 @@ import { shadcn } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
 import { PlaidReconnectListener } from "@/components/plaid-reconnect-listener";
 import { VersionUpdatePrompt } from "@/components/version-update-prompt";
+import { WhatsNewMount } from "@/components/whats-new/WhatsNewMount";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
 import { askForSpineAgainIfFailed, askForUnauthorizedAgain, clerkHasSettled, isUnauthorized, noteClerkSettled } from "@/lib/spineRecovery";
 import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { onWriteSuccess } from "@/lib/mutationInvalidation";
+import { recordDataAsOf, resetDataAsOf } from "@/lib/dataAsOf";
+import { useRefetchMoneyOnReturn } from "@/hooks/useRefetchMoneyOnReturn";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -138,7 +142,16 @@ const mutationCache = new MutationCache({
   },
 });
 
+// ⭐ (T1) Every answer that names its bank reading (`dataAsOf`) raises the high-water mark, so an
+// answer built on an older reading is never shown as current (`lib/dataAsOf`).
+const queryCache = new QueryCache({
+  onSuccess: (data) => {
+    recordDataAsOf(data);
+  },
+});
+
 const queryClient = new QueryClient({
+  queryCache,
   mutationCache,
   defaultOptions: {
     queries: {
@@ -603,11 +616,14 @@ function ClerkQueryClientCacheInvalidator() {
         prevUserIdRef.current !== userId
       ) {
         qc.clear();
+        resetDataAsOf();
       }
       prevUserIdRef.current = userId;
     });
     return unsubscribe;
   }, [addListener, qc]);
+  // (T1) Back to this tab: the balance reads older than a minute are asked again.
+  useRefetchMoneyOnReturn();
   return null;
 }
 
@@ -643,6 +659,10 @@ function ClerkProviderWithRoutes() {
               Polls /api/version and prompts a one-click reload when a
               new bundle has been deployed. No-op in dev. */}
           <VersionUpdatePrompt />
+          {/* (WN) What's new: greets each person once the page is quiet, until
+              they press "I've read this" (recorded on the server). Tiny here;
+              the notes and the sheet load at idle. Off in the test suite. */}
+          <WhatsNewMount />
         </TooltipProvider>
 
       </QueryClientProvider>

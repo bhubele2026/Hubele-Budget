@@ -10,8 +10,8 @@ import { resolveStart, type PeriodView } from "./periodDates";
  */
 export const PERIOD_MIN = 60_000;
 
-export function periodParams(view: PeriodView, start: string): GetPeriodBreakdownParams {
-  return { period: view, start, rowsPerGroup: 50 };
+export function periodParams(view: PeriodView, start: string, account?: string): GetPeriodBreakdownParams {
+  return { period: view, start, rowsPerGroup: 50, ...(account ? { account } : {}) };
 }
 
 /** The current period's first request (an empty `?start=`). */

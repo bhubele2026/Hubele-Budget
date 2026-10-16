@@ -339,7 +339,7 @@ test.describe("Chase Transactions Review Bucket badge (#426)", () => {
       "data-forecast-state",
       "unplanned",
     );
-    await expect(badgeUnplanned).toContainText(/Marked not in plan/);
+    await expect(badgeUnplanned).toContainText(/Marked unplanned/);
     await expect(
       page.getByTestId("link-bucket-pending-count"),
     ).toHaveCount(0);

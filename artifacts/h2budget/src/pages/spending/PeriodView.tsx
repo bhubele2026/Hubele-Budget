@@ -15,11 +15,14 @@ import {
 import { useUrlState, type UrlCodec } from "@/hooks/useUrlState";
 import { useOwner } from "@/hooks/useOwner";
 import { scoped } from "@/lib/queryState";
+import { planStatusWords } from "@/lib/planWords";
+import { QueryRefreshBanner } from "@/components/query-refresh-banner";
 import { householdToday } from "@/lib/householdDay";
 import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
 import { SpendingWhy } from "@/pages/next/dashboard/SpendingPanel";
 import { cn, formatCurrency } from "@/lib/utils";
+import { figLabel } from "@/ui";
 import { periodParams, PERIOD_MIN } from "./periodParams";
 import { Breakdown, provisionalLine } from "./Breakdown";
 import { weekStatus, withinOfRemaining } from "@/lib/weekFigures";
@@ -40,26 +43,29 @@ const openCodec: UrlCodec<string[]> = {
   read: (raw) => (raw ? raw.split(",").filter(Boolean) : null),
   write: (v) => (v.length ? v.join(",") : null),
 };
+const accountCodec: UrlCodec<string> = { read: (raw) => raw || null, write: (v) => v || null };
 const NONE: string[] = [];
 const MIN = PERIOD_MIN;
 
 const CELL = "surface rounded-card px-4 py-3 ring-1 ring-brand-line";
-const CELL_LABEL = "text-micro font-semibold uppercase tracking-wide text-neutral-600";
-const CELL_VALUE = "mt-1 font-mono text-display font-semibold tabular-nums";
+const CELL_LABEL = figLabel;
+const CELL_VALUE = "mt-1 whitespace-nowrap font-mono text-kpi font-semibold tabular-nums";
 
 export function PeriodView({ view }: { view: PeriodView }) {
   const today = useMemo(() => householdToday(new Date()), []);
   const [startParam, setStartParam] = useUrlState<string>("start", startCodec, "");
   const [open, setOpen] = useUrlState<string[]>("open", openCodec, NONE);
+  // (T4) `?account=` (a card's "Why over?"): that account's contribution; the plan stays the household's.
+  const [account, setAccount] = useUrlState<string>("account", accountCodec, "");
   const start = resolveStart(view, startParam, today);
   const currentStart = resolveStart(view, "", today);
 
-  const params: GetPeriodBreakdownParams = periodParams(view, start);
+  const params: GetPeriodBreakdownParams = periodParams(view, start, account);
   const q = useGetPeriodBreakdown(params, {
     query: { queryKey: getGetPeriodBreakdownQueryKey(params), staleTime: MIN },
   });
   // (Q4) The breakdown on screen is THIS period's: the old period's (kept while this one loads) is not.
-  const own = scoped(q, (r) => r.start === start && r.period === view);
+  const own = scoped(q, (r) => r.start === start && r.period === view && (r.scope.id ?? "") === account);
   const d = own.data;
   const isCurrent = d?.isCurrent ?? start === currentStart;
 
@@ -111,16 +117,21 @@ export function PeriodView({ view }: { view: PeriodView }) {
             </button>
           </div>
         </div>
-        <p className="text-label text-neutral-600" data-testid="sp-scope">Household · {planWord} plan</p>
+        <p className="text-label text-neutral-600" data-testid="sp-scope">
+          {account && d?.scope.kind === "account" ? (
+            <>
+              {[d.scope.institution, d.scope.name].filter(Boolean).join(" ")}{d.scope.mask ? ` ••${d.scope.mask.slice(-4)}` : ""} · household {planWord} plan{" · "}
+              <button type="button" className="font-medium text-brand-navy underline" onClick={() => setAccount("")} data-testid="sp-scope-household">Household</button>
+            </>
+          ) : (
+            <>Household · {planWord} plan</>
+          )}
+        </p>
       </header>
 
+      <QueryRefreshBanner q={q} data-testid="sp-error" />
       {d === undefined ? (
-        q.isError ? (
-          <div className="surface rounded-card px-4 py-4 text-body text-neutral-700 ring-1 ring-brand-line" role="alert" data-testid="sp-error">
-            This {view} did not load.{" "}
-            <button type="button" className="underline" onClick={() => void q.refetch()}>Try again</button>
-          </div>
-        ) : (
+        q.isError ? null : (
           <div className="skeleton h-24 w-full rounded-card" aria-busy="true" data-testid="sp-loading" />
         )
       ) : (
@@ -129,7 +140,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
             <div className={CELL}>
               <div className={CELL_LABEL}>Plan</div>
               {d.plan.status === "not_set" ? (
-                <div className="mt-1 text-title font-semibold text-neutral-700" data-testid="sp-plan">Plan not set</div>
+                <div className="mt-1 text-title font-semibold text-neutral-700" data-testid="sp-plan">{planStatusWords(d.plan)}</div>
               ) : (
                 <div className={cn(CELL_VALUE, "text-brand-ink")} data-testid="sp-plan">{formatCurrency(d.plan.amount)}</div>
               )}
@@ -167,7 +178,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
           ) : null}
 
           <Breakdown data={d} open={open} onToggle={toggle} routeOf={routeOf} />
-          <Details data={d} view={view} />
+          <Details data={d} view={view} openOnMount={open.includes("details")} />
 
           {view === "month" ? (
             <section className="surface rounded-card px-4 py-3 ring-1 ring-brand-line" data-testid="sp-household-budget">

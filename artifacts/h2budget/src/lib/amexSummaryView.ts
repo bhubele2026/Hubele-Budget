@@ -123,3 +123,94 @@ export const FIGURE_WORDS: Record<AmexFigure, string> = {
   payments: "Payments",
   credits: "Credits & refunds",
 };
+
+/**
+ * (P1) The Summary's title IS its period (the card is named once, in the
+ * page's header): "This week · Oct 11 – 17", "October 2026", or "2026". Week
+ * on another month reads as that month, as `amexSummaryPeriod` asks for it.
+ */
+export function summaryTitle(mode: RangeMode, month: MonthKey, now: Date = new Date()): string {
+  const thisMonth = householdToday(now).slice(0, 7);
+  const monthStr = `${month.year}-${pad(month.month + 1)}`;
+  if (mode === "wk" && monthStr === thisMonth) return `This week · ${currentWeekRange(now).label}`;
+  if (mode === "yr") return String(month.year);
+  return monthWordsOf(month);
+}
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+function monthWordsOf(m: MonthKey): string {
+  return `${MONTH_NAMES[m.month] ?? ""} ${m.year}`.trim();
+}
+/** "October" for a month's link words. */
+export function monthNameOf(m: MonthKey): string {
+  return MONTH_NAMES[m.month] ?? "";
+}
+
+/**
+ * Where the household link goes, for the period the Summary shows: this week's
+ * page for the current week; any other period opens the month that holds it
+ * (`?start=`: a month's first day; a year, the month holding its end).
+ */
+export function whyOverPath(
+  mode: RangeMode,
+  isThisWeek: boolean,
+  period?: { from: string; to: string } | null,
+  accountRowId?: string | null,
+): string {
+  // (T4) One card: Spending reads `?account=<plaid_accounts.id>` and shows that card's part.
+  const acct = accountRowId ? `account=${encodeURIComponent(accountRowId)}` : "";
+  if (mode === "wk" && isThisWeek) return acct ? `/spending/week?${acct}` : "/spending/week";
+  const day = period ? (mode === "yr" ? period.to : period.from) : null;
+  const qs = [day ? `start=${day}` : "", acct].filter(Boolean).join("&");
+  return `/spending/month${qs ? `?${qs}` : ""}`;
+}
+
+/**
+ * The plan's state for the household link, from the same rules Spending uses:
+ * the spine's `knownWithinPlan` for this week, the month's own breakdown
+ * (`plan.status`, `withinOfRemaining`) for a month. "loading" and "failed" are
+ * their own states: neither is "no plan".
+ */
+export type OverLinkPlan = "loading" | "failed" | "none" | "over" | "set";
+
+export type OverLinkInput =
+  | { period: "year" }
+  | {
+      period: "week" | "month";
+      /** "October" (a month), for "View October spending →". */
+      monthName?: string;
+      /** The current week or month: only it can be given a plan. */
+      current: boolean;
+      plan: OverLinkPlan;
+      /** `useOwner()`: true, false or "unknown". */
+      owner?: boolean | "unknown";
+    };
+
+export type OverLinkState = "over" | "within" | "set_plan" | "review" | "view" | "year";
+
+/**
+ * (P1) "Why are we over? →" only when the household IS over: a link that asks
+ * why when nothing is over (or no plan is set) reads as an accusation.
+ *   over                              → "Why are we over? →"
+ *   set, not over                     → "View this week's spending →" / "View October spending →"
+ *   no plan, current, the owner       → "Set a weekly plan →" / "Set a monthly plan →"
+ *   no plan, current, anyone else     → "Review this week →" / "Review this month →"
+ *   no plan on a past month, loading,
+ *   or the plan read failed           → "View … spending →"
+ *   a year                            → "View spending by month →"
+ */
+export function overLinkView(input: OverLinkInput): { text: string; state: OverLinkState } {
+  if (input.period === "year") return { text: "View spending by month →", state: "year" };
+  const week = input.period === "week";
+  const view = week ? "View this week's spending →" : `View ${input.monthName ?? "this month's"} spending →`;
+  if (input.plan === "over") return { text: "Why are we over? →", state: "over" };
+  if (input.plan === "set") return { text: view, state: "within" };
+  if (input.plan === "none" && input.current) {
+    if (input.owner === true) return { text: week ? "Set a weekly plan →" : "Set a monthly plan →", state: "set_plan" };
+    return { text: week ? "Review this week →" : "Review this month →", state: "review" };
+  }
+  return { text: view, state: "view" };
+}

@@ -238,7 +238,7 @@ export function Breakdown({ data, open, onToggle, routeOf }: {
                         <span data-testid={`sp-nohistory-${token}`}>Not enough history</span>
                       )}
                       {c.aboveUsual != null && cents(c.aboveUsual) > 0 ? (
-                        <span className="chip warn" data-testid={`sp-above-${token}`}>above usual {formatCurrency(c.aboveUsual)}</span>
+                        <span className="chip warn" data-testid={`sp-above-${token}`}>Above usual {formatCurrency(c.aboveUsual)}</span>
                       ) : null}
                     </>
                   }
@@ -314,7 +314,7 @@ export function Breakdown({ data, open, onToggle, routeOf }: {
             </div>
           ) : null}
           <div className="px-4 pb-3">
-            <Link href="/banking?fixes=1" className="text-label font-medium text-brand-navy underline" data-testid="sp-fixes-link">
+            <Link href={`/banking?fixes=1&from=${data.start}&to=${data.end}${data.scope.id ? `&account=${encodeURIComponent(data.scope.id)}` : ""}`} className="text-label font-medium text-brand-navy underline" data-testid="sp-fixes-link">
               See proposed fixes
             </Link>
           </div>

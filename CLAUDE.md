@@ -186,6 +186,34 @@ by **the same function the owning page's endpoint calls** — never reimplemente
   `vendor-charts`) before removing a capability; a cap may rise only with a
   written justification in the PR.
 
+### ⭐ What's new — every bigger visible change gets a note, in the same commit
+
+(Owner, 2026-10-15: "so my wife can actually see what's changing as I update".)
+
+- **Notes live in `lib/avalanche-core/src/whatsNew.ts`**, newest first; the id
+  is the day it shipped (`YYYY-MM-DD`, then `.2` … `.9`). A new feature or
+  screen, or a real change in how a number is worked out, adds one **in the
+  same commit**. Ties, labels, polish, speed and internal work get none, and
+  so do tools only the owner uses (proposed fixes). The feature itself gets
+  none.
+- **Write for the people who use H2**, in plain words and short. Never version
+  numbers, package codes, system names (Plaid, Clerk, Render), code words
+  (spine, API, endpoint, commit, deploy) or cents. The app is "H2", never "I".
+  `artifacts/h2budget/src/lib/whatsNew.test.ts` checks this.
+- **Never change or reuse a shipped id** — it carries people's reads.
+- A sheet greets each person until they press "I've read this"; Escape or a
+  click outside does nothing while something is unread. The press is recorded
+  for the person on the server (`whats_new_reads`), never in the browser. The
+  owner sees "Read by <name> on <day>" or "Not read yet". The click starts at
+  `READ_CLICK_FROM`; a new member starts the day after they join. History:
+  "What's new" in the account menu (also the phone drawer) and the quiet link
+  in the dashboard header — never a tile.
+- **The What's new code stays off the open path:** only `lib/whatsNewSignal.ts`,
+  `components/whats-new/WhatsNewMount.tsx`, the account-menu item and the
+  header link are on it (`featuresImportGraph.test.ts`); the notes, the host
+  and the sheet load lazily. The "I've read this" POST uses `OWN_INVALIDATION`
+  — it is not a money write.
+
 ## 4. Workflow
 
 - **Branch per task; PR per task.** Never commit directly to `main`; never

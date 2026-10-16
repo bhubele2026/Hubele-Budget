@@ -53,6 +53,7 @@ import type {
   BadgeCount,
   BankBalanceExplain,
   BankSnapshot,
+  BankingCheckExplain,
   BankingReview,
   BehaviorFacts,
   BillsSummary,
@@ -248,6 +249,10 @@ import type {
   WeekAdjustment,
   WeeklySettlement,
   WeeklySettlementInput,
+  WhatsNewMe,
+  WhatsNewReadInput,
+  WhatsNewReadReport,
+  WhatsNewReadResult,
   WishlistEvaluationResult,
   WishlistItem,
   WishlistList,
@@ -10117,6 +10122,245 @@ export function useGetMe<
 }
 
 /**
+ * `read` = the note ids the signed-in person pressed "I've read this" on (only ids H2 still ships). `from` = the first note day that needs their click: the first must-read note (READ_CLICK_FROM), or the day after they joined the household when that is later — a new member is never handed notes from before they had H2. Never anyone else's reads.
+ * @summary (WN) The notes this person has read, and where their click starts
+ */
+export const getGetWhatsNewMeUrl = () => {
+  return `/api/whats-new/me`;
+};
+
+export const getWhatsNewMe = async (
+  options?: RequestInit,
+): Promise<WhatsNewMe> => {
+  return customFetch<WhatsNewMe>(getGetWhatsNewMeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWhatsNewMeQueryKey = () => {
+  return [`/api/whats-new/me`] as const;
+};
+
+export const getGetWhatsNewMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWhatsNewMe>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getWhatsNewMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetWhatsNewMeQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getWhatsNewMe>>> = ({
+    signal,
+  }) => getWhatsNewMe({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWhatsNewMe>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWhatsNewMeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWhatsNewMe>>
+>;
+export type GetWhatsNewMeQueryError = ErrorType<unknown>;
+
+/**
+ * @summary (WN) The notes this person has read, and where their click starts
+ */
+
+export function useGetWhatsNewMe<
+  TData = Awaited<ReturnType<typeof getWhatsNewMe>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getWhatsNewMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWhatsNewMeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * One row per person per note. A repeat changes nothing and keeps the first read time. A well-formed id H2 does not ship (an older bundle) is dropped, never refused. Moves no money and no figure.
+ * @summary (WN) Record "I've read this" for the signed-in person
+ */
+export const getMarkWhatsNewReadUrl = () => {
+  return `/api/whats-new/read`;
+};
+
+export const markWhatsNewRead = async (
+  whatsNewReadInput: WhatsNewReadInput,
+  options?: RequestInit,
+): Promise<WhatsNewReadResult> => {
+  return customFetch<WhatsNewReadResult>(getMarkWhatsNewReadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(whatsNewReadInput),
+  });
+};
+
+export const getMarkWhatsNewReadMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markWhatsNewRead>>,
+    TError,
+    { data: BodyType<WhatsNewReadInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markWhatsNewRead>>,
+  TError,
+  { data: BodyType<WhatsNewReadInput> },
+  TContext
+> => {
+  const mutationKey = ["markWhatsNewRead"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markWhatsNewRead>>,
+    { data: BodyType<WhatsNewReadInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return markWhatsNewRead(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkWhatsNewReadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markWhatsNewRead>>
+>;
+export type MarkWhatsNewReadMutationBody = BodyType<WhatsNewReadInput>;
+export type MarkWhatsNewReadMutationError = ErrorType<void>;
+
+/**
+ * @summary (WN) Record "I've read this" for the signed-in person
+ */
+export const useMarkWhatsNewRead = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markWhatsNewRead>>,
+    TError,
+    { data: BodyType<WhatsNewReadInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markWhatsNewRead>>,
+  TError,
+  { data: BodyType<WhatsNewReadInput> },
+  TContext
+> => {
+  return useMutation(getMarkWhatsNewReadMutationOptions(options));
+};
+
+/**
+ * For every must-read note, each other person in the household it is theirs to read (their start is on or before its day) and when they pressed "I've read this" (null = not yet). The owner is never listed. Names are first names only, never an email; "Household member" when no name is known. A member gets 403.
+ * @summary (WN) Who else in the household has read each note (owner only)
+ */
+export const getGetWhatsNewReadsUrl = () => {
+  return `/api/whats-new/reads`;
+};
+
+export const getWhatsNewReads = async (
+  options?: RequestInit,
+): Promise<WhatsNewReadReport> => {
+  return customFetch<WhatsNewReadReport>(getGetWhatsNewReadsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWhatsNewReadsQueryKey = () => {
+  return [`/api/whats-new/reads`] as const;
+};
+
+export const getGetWhatsNewReadsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWhatsNewReads>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getWhatsNewReads>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetWhatsNewReadsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getWhatsNewReads>>
+  > = ({ signal }) => getWhatsNewReads({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWhatsNewReads>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWhatsNewReadsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWhatsNewReads>>
+>;
+export type GetWhatsNewReadsQueryError = ErrorType<void>;
+
+/**
+ * @summary (WN) Who else in the household has read each note (owner only)
+ */
+
+export function useGetWhatsNewReads<
+  TData = Awaited<ReturnType<typeof getWhatsNewReads>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getWhatsNewReads>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWhatsNewReadsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary List all invitations (owner only).
  */
 export const getListInvitationsUrl = () => {
@@ -11904,6 +12148,83 @@ export function useGetBankingReview<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetBankingReviewQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * (T2) The forecast checking account's last balance check (the record a manual Sync stored) and what H2 holds about it: the previous reading, the bank's figure and what H2 expected; the bank rows the check counted between the two readings; pending deposits its rules left out and deposits they added; rows H2 recorded itself (no Plaid account: counted in H2's balance, left out of the check); rows that arrived after the check; today's balance and the reading under it; and a verdict — late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded itself add up to the difference), unknown, or null when there is no difference to explain. `check` is GET /banking/review's balanceCheck for the same account. Each row list holds at most 200 rows. No Plaid call, no write: nothing here clears or changes the check.
+ * @summary Review difference — the last balance check, explained (read-only)
+ */
+export const getGetBankingCheckExplainUrl = () => {
+  return `/api/banking/check-explain`;
+};
+
+export const getBankingCheckExplain = async (
+  options?: RequestInit,
+): Promise<BankingCheckExplain> => {
+  return customFetch<BankingCheckExplain>(getGetBankingCheckExplainUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBankingCheckExplainQueryKey = () => {
+  return [`/api/banking/check-explain`] as const;
+};
+
+export const getGetBankingCheckExplainQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBankingCheckExplain>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingCheckExplain>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBankingCheckExplainQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBankingCheckExplain>>
+  > = ({ signal }) => getBankingCheckExplain({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingCheckExplain>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBankingCheckExplainQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBankingCheckExplain>>
+>;
+export type GetBankingCheckExplainQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Review difference — the last balance check, explained (read-only)
+ */
+
+export function useGetBankingCheckExplain<
+  TData = Awaited<ReturnType<typeof getBankingCheckExplain>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingCheckExplain>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBankingCheckExplainQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -22,6 +22,7 @@ import amexRouter from "./amex";
 import reportsRouter from "./reports";
 import spineRouter from "./spine";
 import bankBalanceExplainRouter from "./bankBalanceExplain";
+import bankingCheckExplainRouter from "./bankingCheckExplain";
 import opsRouter from "./ops";
 import moneyRouter from "./money";
 import agentRouter from "./agent";
@@ -36,6 +37,7 @@ import aiRouter from "./ai";
 import goalsRouter from "./goals";
 import bankingRouter from "./banking";
 import reviewProposalsRouter from "./reviewProposals";
+import whatsNewRouter from "./whatsNew";
 import { ledgerWriteFence } from "../middlewares/ledgerWriteFence";
 
 const router: IRouter = Router();
@@ -65,6 +67,8 @@ router.use(membersRouter);
 router.use(amexRouter);
 router.use(reportsRouter);
 router.use(bankBalanceExplainRouter);
+// (T2) "Review difference": the last balance check, explained. Read-only.
+router.use(bankingCheckExplainRouter);
 router.use(spineRouter);
 router.use(opsRouter);
 router.use(moneyRouter);
@@ -80,5 +84,7 @@ router.use(aiRouter);
 router.use(goalsRouter);
 router.use(bankingRouter);
 router.use(reviewProposalsRouter);
+// (WN) What's new: "I've read this", per person. Moves no money.
+router.use(whatsNewRouter);
 
 export default router;

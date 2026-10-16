@@ -64,7 +64,7 @@ describe("Chase register — labels that say what they mean", () => {
     expect(page).not.toMatch(/>\s*All reconciled\s*</);
     expect(page).not.toContain('label: "Not planned"');
     expect(page).toContain("Review inbox clear");
-    expect(page).toContain('label: "Marked not in plan"');
+    expect(page).toContain('label: "Marked unplanned"');
   });
   it("the household strip says UN is an allowance flag, not a plan comparison", () => {
     expect(strip).toContain("Unplanned allowance (UN)");

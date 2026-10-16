@@ -27,13 +27,23 @@ export type ForecastNextCtx = {
   jumpToPlan: (itemId: string, date: string) => void;
   onMarkMissed: (row: PlanLine) => void;
   onSkipDraggingPlan: (row: DraggingPlanRow) => void;
-  openSnapshot: () => void;
   openSettings: () => void;
   cashProjectionLoading: boolean;
-  bankBalance: string | number;
+  /** ⭐ (T1) Checking today (`cashSignal.bankToday`); null with no bank reading — a dash, never $0. */
+  bankBalance: string | null;
+  /** (T1) The bank reading it rolls forward from (`cashSignal.snapshotAt`). */
+  bankReadAt: string | null;
+  /** (T1) "Earlier reading (Oct 14) — updating…" while the bundle is older than the newest reading seen. */
+  bankOlder?: string | null;
+  /** (T1) A checking account is linked (the empty chart offers Sync, else "Link a bank"). */
+  hasCheckingLink?: boolean;
   bankAccountName: string;
   bankAccountMask: string | null;
   debtLinks: ReadonlyMap<string, string>;
+  /** (T3) A counted checking row's own description (the forecast bundle's rows), for the day panel. */
+  bankLabel?: (txnId: string) => string | null;
+  /** (T3) How many rows each Month & bank list holds (the "How this adds up" links); 0 hides a line. */
+  listCounts?: { unpaid: number; incomeNotArrived: number; olderUnpaid: number };
   inboxCount: number;
   fromDate: string;
   lookbackOpen: boolean;

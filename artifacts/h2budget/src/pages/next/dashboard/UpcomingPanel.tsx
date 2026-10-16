@@ -26,9 +26,13 @@ export default function UpcomingPanel() {
     () => upcomingRows({ signal: cash.data, recurring: recurring.data, debts: debts.data, today }),
     [cash.data, recurring.data, debts.data, today],
   );
+  // ⭐ (T3) The next payday is the curve's own: `dayItems` income (`events` carries expenses only,
+  // so the old read here never found one).
   const payday = useMemo(() => {
-    const e = (cash.data?.events ?? []).filter((x) => Number(x.amount) > 0 && x.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1))[0];
-    return e ? { date: e.date, label: e.label, amount: Number(e.amount) } : null;
+    const e = (cash.data?.dayItems ?? [])
+      .filter((x) => x.kind === "income" && Number(x.amount) > 0 && x.date >= today)
+      .sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+    return e ? { date: e.date, label: e.label ?? "Income", amount: Number(e.amount) } : null;
   }, [cash.data, today]);
 
   const acct = cash.data?.account;

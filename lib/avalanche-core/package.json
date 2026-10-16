@@ -8,6 +8,7 @@
     "./householdTime": "./src/householdTime.ts",
     "./pendingDebt": "./src/pendingDebt.ts",
     "./freshness": "./src/freshness.ts",
-    "./glossary": "./src/glossary.ts"
+    "./glossary": "./src/glossary.ts",
+    "./whatsNew": "./src/whatsNew.ts"
   }
 }

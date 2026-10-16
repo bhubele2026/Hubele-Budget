@@ -248,16 +248,18 @@ describe("usePlaidSync — bank reconciliation toast", () => {
       title: string;
       description: string;
     };
-    expect(arg.title).toContain("Chase");
-    expect(arg.description).toContain("$4,453.96");
-    expect(arg.description).toContain("$4,284.06");
-    expect(arg.description).toContain("$169.90");
-    // The direction matters: money the bank has that we don't know about is a
-    // MISSING deposit, not a duplicated charge.
-    expect(arg.description).toContain("deposit or credit is probably missing");
+    // (T2) The chip's own words; the bank is named in the line.
+    expect(arg.title).toBe("Difference needs review");
+    expect(arg.description).toContain("Chase reads $4,453.96");
+    expect(arg.description).toContain("H2 expected $4,284.06");
+    expect(arg.description).toContain("$169.90 H2 can't account for");
+    // The direction matters: money the bank holds that H2's rows do not is a
+    // deposit that may not have arrived — said as a possibility, never a verdict.
+    expect(arg.description).toContain("A deposit the bank holds may not have reached H2's rows yet");
+    expect(arg.description).toContain("Banking → Balance check");
   });
 
-  it("blames a double-count when the ledger claims MORE than the bank holds", async () => {
+  it("(T2) the bank holds LESS: no guess at the cause; H2 starts from the bank's figure and keeps the difference", async () => {
     syncResponse = {
       items: [
         {
@@ -280,8 +282,10 @@ describe("usePlaidSync — bank reconciliation toast", () => {
       expect(toastFn).toHaveBeenCalled();
     });
     const arg = toastFn.mock.calls[0][0] as { description: string };
-    expect(arg.description).toContain("$100.00");
-    expect(arg.description).toContain("counted twice");
+    expect(arg.description).toBe(
+      "Chase reads $900.00. From its earlier reading plus the rows since, H2 expected $1,000.00 — $100.00 H2 can't account for. H2 now starts from the bank's figure; the difference is kept under Banking → Balance check.",
+    );
+    expect(arg.description).not.toContain("counted twice");
   });
 
   it("says nothing when the two sides tie", async () => {
@@ -298,7 +302,7 @@ describe("usePlaidSync — bank reconciliation toast", () => {
     const titles = toastFn.mock.calls.map(
       (c) => (c[0] as { title: string }).title,
     );
-    expect(titles.some((t) => t.includes("doesn't match"))).toBe(false);
+    expect(titles.some((t) => t.includes("Difference needs review"))).toBe(false);
   });
 });
 
@@ -782,5 +786,32 @@ describe("usePlaidSync — keeps 'Why this number?' current", () => {
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ["/api/forecast/bank-balance-explain"],
     });
+  });
+});
+
+describe("(T1) usePlaidSync — a balance-only Sync refreshes the forecast and the banking review", () => {
+  it("⭐ marks the forecast bundle, the cash signal and the banking review stale even when no rows changed", async () => {
+    // The owner's symptom: after a Sync that changed no row, every page showed $0.00 but the
+    // Forecast card kept the 5-minute bundle's older reading. The Sync re-read the balance.
+    syncResponse = { items: [{ added: 0, modified: 0, removed: 0, error: null, institutionName: "Chase" }] };
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const BUNDLE = ["/api/forecast", { days: 90 }];
+    const SIGNAL = ["/api/forecast/cash-signal", { horizonDays: 30 }];
+    const REVIEW = ["/api/banking/review", { from: "2026-10-01", to: "2026-10-15" }];
+    const LIST = ["/api/transactions", { from: "2026-10-01" }];
+    for (const k of [BUNDLE, SIGNAL, REVIEW, LIST]) qc.setQueryData(k, { seeded: true });
+    render(
+      <QueryClientProvider client={qc}>
+        <Harness />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    const stale = (k: readonly unknown[]) => qc.getQueryState(k)?.isInvalidated ?? false;
+    expect(stale(BUNDLE)).toBe(true);
+    expect(stale(SIGNAL)).toBe(true);
+    expect(stale(REVIEW)).toBe(true);
+    // The transaction list still refreshes only when rows changed.
+    expect(stale(LIST)).toBe(false);
   });
 });

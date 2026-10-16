@@ -30,9 +30,14 @@ export function amexMonthParams(month: MonthKey, scope: AmexScope) {
   return { limit: AMEX_MONTH_LIMIT, from: monthFirstISO(month), to: monthLastISO(month), ...scope };
 }
 
-/** The summary's request (`accountId` is "all" or one card's external account id). */
+/**
+ * The summary's request (`accountId` is "all" or one card's external account id).
+ * (P1) `rowsPerGroup: 50` (the API's most): the To-review buttons narrow the
+ * activity to each group's rows, so the page asks for as many as it may list.
+ */
+export const AMEX_ROWS_PER_GROUP = 50;
 export function amexSummaryParams(accountId: string, period: { from: string; to: string } | null) {
-  return { accountId, from: period?.from ?? "", to: period?.to ?? "" };
+  return { accountId, from: period?.from ?? "", to: period?.to ?? "", rowsPerGroup: AMEX_ROWS_PER_GROUP };
 }
 
 /** What /amex asks first with an empty address: the "all cards" summary for this week, and this month's rows. */

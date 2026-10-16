@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { DataAsOf } from "./dataAsOf";
 import type { SpineBank } from "./spineBank";
 import type { SpineBankConfidence } from "./spineBankConfidence";
 import type { SpineDebt } from "./spineDebt";
@@ -15,6 +16,7 @@ import type { SpinePosition } from "./spinePosition";
 export interface Spine {
     /** ISO timestamp the snapshot was read */
     asOf: string;
+    dataAsOf?: DataAsOf;
     bank: SpineBank;
     /** buildSpendingFacts(monthStart..today).householdSpend.total */
     spentMonth: number;
