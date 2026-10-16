@@ -52,6 +52,24 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-10-16.5",
+    headline: "Reports keep their period, and safer imports",
+    items: [
+      {
+        title: "A report opens on the period you clicked",
+        body: "Open a report from its tile and it shows the same days and total the tile did. The period stays through a reload and Back, and you can still switch to a week, month or year.",
+      },
+      {
+        title: "Reports show Checking today the same way",
+        body: "The balance on Reports is the same block as the dashboard: how it was worked out, whether rows are still pending, and Details.",
+      },
+      {
+        title: "Imports stop before writing anything wrong",
+        body: "A workbook with a bad amount or a missing sheet is refused with a plain reason, and nothing changes. Restoring an import now brings back everything it touched.",
+      },
+    ],
+  },
+  {
     id: "2026-10-16.4",
     headline: "Unclear bank rows, matching a skipped bill, honest failures",
     items: [
