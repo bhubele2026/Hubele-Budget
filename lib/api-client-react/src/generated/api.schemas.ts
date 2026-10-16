@@ -6010,6 +6010,50 @@ export interface SettingsPreferences {
 }
 
 /**
+ * (WN) This person's What's new reads.
+ */
+export interface WhatsNewMe {
+  /** Note ids this person has read (known notes only) */
+  read: string[];
+  /**
+   * The first note day that needs this person's click
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  from: string;
+}
+
+export interface WhatsNewReadInput {
+  /**
+   * @minItems 1
+   * @maxItems 50
+   */
+  ids: string[];
+}
+
+export interface WhatsNewReadResult {
+  /** The known ids now recorded as read for this person */
+  ids: string[];
+}
+
+export interface WhatsNewReader {
+  userId: string;
+  /** First name, or "Household member" */
+  name: string;
+  /** @nullable */
+  readAt: string | null;
+}
+
+export type WhatsNewReadReportUpdatesItem = {
+  id: string;
+  readers: WhatsNewReader[];
+};
+
+export interface WhatsNewReadReport {
+  /** Every must-read note, newest first */
+  updates: WhatsNewReadReportUpdatesItem[];
+}
+
+/**
  * Per-user (not per-household) UI preferences for the signed-in user.
  */
 export interface UiPreferences {
@@ -6020,9 +6064,11 @@ depends on it.
  */
   chaseHideReviewed?: boolean;
   /**
-   * (S1) The id of the last "What's new" sheet this user dismissed
-("h2-1"). A view setting only.
+   * (Retired 2026-10-15) The deleted interim app's one sheet id
+("h2-1"). Nothing reads it; reads live in whats_new_reads
+(GET /whats-new/me).
 
+   * @deprecated
    * @maxLength 32
    */
   whatsNewSeen?: string;

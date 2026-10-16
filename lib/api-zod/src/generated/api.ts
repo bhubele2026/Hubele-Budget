@@ -7915,7 +7915,7 @@ export const GetUiPreferencesResponse = zod
       .max(getUiPreferencesResponseWhatsNewSeenMax)
       .optional()
       .describe(
-        '(S1) The id of the last \"What\'s new\" sheet this user dismissed\n(\"h2-1\"). A view setting only.\n',
+        '(Retired 2026-10-15) The deleted interim app\'s one sheet id\n(\"h2-1\"). Nothing reads it; reads live in whats_new_reads\n(GET \/whats-new\/me).\n',
       ),
     autoCategorize: zod
       .boolean()
@@ -7949,7 +7949,7 @@ export const UpdateUiPreferencesBody = zod
       .max(updateUiPreferencesBodyWhatsNewSeenMax)
       .optional()
       .describe(
-        '(S1) The id of the last \"What\'s new\" sheet this user dismissed\n(\"h2-1\"). A view setting only.\n',
+        '(Retired 2026-10-15) The deleted interim app\'s one sheet id\n(\"h2-1\"). Nothing reads it; reads live in whats_new_reads\n(GET \/whats-new\/me).\n',
       ),
     autoCategorize: zod
       .boolean()
@@ -7980,7 +7980,7 @@ export const UpdateUiPreferencesResponse = zod
       .max(updateUiPreferencesResponseWhatsNewSeenMax)
       .optional()
       .describe(
-        '(S1) The id of the last \"What\'s new\" sheet this user dismissed\n(\"h2-1\"). A view setting only.\n',
+        '(Retired 2026-10-15) The deleted interim app\'s one sheet id\n(\"h2-1\"). Nothing reads it; reads live in whats_new_reads\n(GET \/whats-new\/me).\n',
       ),
     autoCategorize: zod
       .boolean()
@@ -7994,6 +7994,69 @@ export const UpdateUiPreferencesResponse = zod
   .describe(
     "Per-user (not per-household) UI preferences for the signed-in user.",
   );
+
+/**
+ * `read` = the note ids the signed-in person pressed "I've read this" on (only ids H2 still ships). `from` = the first note day that needs their click: the first must-read note (READ_CLICK_FROM), or the day after they joined the household when that is later — a new member is never handed notes from before they had H2. Never anyone else's reads.
+ * @summary (WN) The notes this person has read, and where their click starts
+ */
+export const getWhatsNewMeResponseFromRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const GetWhatsNewMeResponse = zod
+  .object({
+    read: zod
+      .array(zod.string())
+      .describe("Note ids this person has read (known notes only)"),
+    from: zod
+      .string()
+      .regex(getWhatsNewMeResponseFromRegExp)
+      .describe("The first note day that needs this person's click"),
+  })
+  .describe("(WN) This person's What's new reads.");
+
+/**
+ * One row per person per note. A repeat changes nothing and keeps the first read time. A well-formed id H2 does not ship (an older bundle) is dropped, never refused. Moves no money and no figure.
+ * @summary (WN) Record "I've read this" for the signed-in person
+ */
+export const markWhatsNewReadBodyIdsItemRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}(\\.[2-9])?$",
+);
+export const markWhatsNewReadBodyIdsMax = 50;
+
+export const MarkWhatsNewReadBody = zod.object({
+  ids: zod
+    .array(zod.string().regex(markWhatsNewReadBodyIdsItemRegExp))
+    .min(1)
+    .max(markWhatsNewReadBodyIdsMax),
+});
+
+export const MarkWhatsNewReadResponse = zod.object({
+  ids: zod
+    .array(zod.string())
+    .describe("The known ids now recorded as read for this person"),
+});
+
+/**
+ * For every must-read note, each other person in the household it is theirs to read (their start is on or before its day) and when they pressed "I've read this" (null = not yet). The owner is never listed. Names are first names only, never an email; "Household member" when no name is known. A member gets 403.
+ * @summary (WN) Who else in the household has read each note (owner only)
+ */
+export const GetWhatsNewReadsResponse = zod.object({
+  updates: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        readers: zod.array(
+          zod.object({
+            userId: zod.string(),
+            name: zod.string().describe('First name, or \"Household member\"'),
+            readAt: zod.coerce.date().nullable(),
+          }),
+        ),
+      }),
+    )
+    .describe("Every must-read note, newest first"),
+});
 
 /**
  * @summary List all invitations (owner only).

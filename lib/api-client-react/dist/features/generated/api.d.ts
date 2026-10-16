@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexCardPayoffMode, AmexSummary, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, BankingCheckExplain, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PlanUnsafe, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewProposals, ReviewRefusal, ReviewResolution, RunCategorizationInput, SetAmexCardPayoffModeBody, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexCardPayoffMode, AmexSummary, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, BankingCheckExplain, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PlanUnsafe, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewProposals, ReviewRefusal, ReviewResolution, RunCategorizationInput, SetAmexCardPayoffModeBody, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -423,6 +423,82 @@ export type GetAmexSummaryQueryError = ErrorType<void>;
  */
 export declare function useGetAmexSummary<TData = Awaited<ReturnType<typeof getAmexSummary>>, TError = ErrorType<void>>(params: GetAmexSummaryParams, options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getAmexSummary>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * `read` = the note ids the signed-in person pressed "I've read this" on (only ids H2 still ships). `from` = the first note day that needs their click: the first must-read note (READ_CLICK_FROM), or the day after they joined the household when that is later — a new member is never handed notes from before they had H2. Never anyone else's reads.
+ * @summary (WN) The notes this person has read, and where their click starts
+ */
+export declare const getGetWhatsNewMeUrl: () => string;
+export declare const getWhatsNewMe: (options?: RequestInit) => Promise<WhatsNewMe>;
+export declare const getGetWhatsNewMeQueryKey: () => readonly ["/api/whats-new/me"];
+export declare const getGetWhatsNewMeQueryOptions: <TData = Awaited<ReturnType<typeof getWhatsNewMe>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewMe>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewMe>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetWhatsNewMeQueryResult = NonNullable<Awaited<ReturnType<typeof getWhatsNewMe>>>;
+export type GetWhatsNewMeQueryError = ErrorType<unknown>;
+/**
+ * @summary (WN) The notes this person has read, and where their click starts
+ */
+export declare function useGetWhatsNewMe<TData = Awaited<ReturnType<typeof getWhatsNewMe>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewMe>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * One row per person per note. A repeat changes nothing and keeps the first read time. A well-formed id H2 does not ship (an older bundle) is dropped, never refused. Moves no money and no figure.
+ * @summary (WN) Record "I've read this" for the signed-in person
+ */
+export declare const getMarkWhatsNewReadUrl: () => string;
+export declare const markWhatsNewRead: (whatsNewReadInput: WhatsNewReadInput, options?: RequestInit) => Promise<WhatsNewReadResult>;
+export declare const getMarkWhatsNewReadMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof markWhatsNewRead>>, TError, {
+        data: BodyType<WhatsNewReadInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof markWhatsNewRead>>, TError, {
+    data: BodyType<WhatsNewReadInput>;
+}, TContext>;
+export type MarkWhatsNewReadMutationResult = NonNullable<Awaited<ReturnType<typeof markWhatsNewRead>>>;
+export type MarkWhatsNewReadMutationBody = BodyType<WhatsNewReadInput>;
+export type MarkWhatsNewReadMutationError = ErrorType<void>;
+/**
+ * @summary (WN) Record "I've read this" for the signed-in person
+ */
+export declare const useMarkWhatsNewRead: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof markWhatsNewRead>>, TError, {
+        data: BodyType<WhatsNewReadInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof markWhatsNewRead>>, TError, {
+    data: BodyType<WhatsNewReadInput>;
+}, TContext>;
+/**
+ * For every must-read note, each other person in the household it is theirs to read (their start is on or before its day) and when they pressed "I've read this" (null = not yet). The owner is never listed. Names are first names only, never an email; "Household member" when no name is known. A member gets 403.
+ * @summary (WN) Who else in the household has read each note (owner only)
+ */
+export declare const getGetWhatsNewReadsUrl: () => string;
+export declare const getWhatsNewReads: (options?: RequestInit) => Promise<WhatsNewReadReport>;
+export declare const getGetWhatsNewReadsQueryKey: () => readonly ["/api/whats-new/reads"];
+export declare const getGetWhatsNewReadsQueryOptions: <TData = Awaited<ReturnType<typeof getWhatsNewReads>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewReads>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewReads>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetWhatsNewReadsQueryResult = NonNullable<Awaited<ReturnType<typeof getWhatsNewReads>>>;
+export type GetWhatsNewReadsQueryError = ErrorType<void>;
+/**
+ * @summary (WN) Who else in the household has read each note (owner only)
+ */
+export declare function useGetWhatsNewReads<TData = Awaited<ReturnType<typeof getWhatsNewReads>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getWhatsNewReads>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
