@@ -14,6 +14,7 @@ import {
  * - Every `/api/reports/*` aggregate: spending facts include category and
  *   unplanned edits, and must refresh with the ledger even when a page only
  *   invalidates transactions.
+ * - (T4) The period breakdown (Spending) and the Amex summary.
  * - (T1) The banking review (`/api/banking/review`, every account and range):
  *   it shows the same balance and check as the spine.
  *
@@ -25,6 +26,9 @@ export const MONEY_POSITION_KEY = ["/api/money/position"] as const;
 export const WAYS_BACK_KEY = ["/api/money/ways-back"] as const;
 /** (T1) The banking review: its balance, its check and its buckets move with any write (a prefix: every account and range). */
 export const BANKING_REVIEW_KEY = ["/api/banking/review"] as const;
+/** (T4) Spending's period breakdown and the Amex summary: prefixes, so every param suffix is covered. */
+export const PERIOD_BREAKDOWN_KEY = ["/api/money/period-breakdown"] as const;
+export const AMEX_SUMMARY_KEY = ["/api/amex/summary"] as const;
 
 export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
@@ -35,6 +39,9 @@ export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: MONEY_POSITION_KEY });
   void queryClient.invalidateQueries({ queryKey: WAYS_BACK_KEY });
   void queryClient.invalidateQueries({ queryKey: BANKING_REVIEW_KEY });
+  // (T4) Spending (every week and month, any account) and the Amex summary move with any write too.
+  void queryClient.invalidateQueries({ queryKey: PERIOD_BREAKDOWN_KEY });
+  void queryClient.invalidateQueries({ queryKey: AMEX_SUMMARY_KEY });
   void queryClient.invalidateQueries({
     predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/"),
   });

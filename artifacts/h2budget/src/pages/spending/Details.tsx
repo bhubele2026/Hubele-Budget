@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PeriodBreakdown } from "@workspace/api-client-react";
 import { WEEK_FIGURE_WORDS } from "@workspace/avalanche-core/glossary";
 import { formatCurrency } from "@/lib/utils";
@@ -14,7 +14,7 @@ const isZero = (v: string | null | undefined): boolean => Math.round(Number(v ??
  * what is counted somewhere else, and every purchase on every account. All
  * amounts are the server's.
  */
-export function Details({ data, view }: { data: PeriodBreakdown; view: PeriodView }) {
+export function Details({ data, view, openOnMount = false }: { data: PeriodBreakdown; view: PeriodView; openOnMount?: boolean }) {
   const b = data.beside;
   const other = view === "week" ? { label: "Monthly allowance", v: b.monthly } : { label: "Weekly allowance", v: b.weekly };
   const lines: Array<[string, string | null, string]> = [
@@ -28,8 +28,17 @@ export function Details({ data, view }: { data: PeriodBreakdown; view: PeriodVie
   const fullUsual = usualPoint(data) ? sortedCategories(data.categories).filter((c) => c.usualFullPeriod != null) : [];
   // (W3) The charges list reads transactions, so it mounts only once Details is opened.
   const [opened, setOpened] = useState(false);
+  // (T4) `?open=details` (the dashboard's "Biggest charges") lands with Details open, in view, once.
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!openOnMount || !ref.current) return;
+    ref.current.open = true;
+    setOpened(true);
+    ref.current.scrollIntoView?.({ block: "start" });
+  }, [openOnMount]);
   return (
     <details
+      ref={ref}
       className="surface rounded-card ring-1 ring-brand-line"
       data-testid="sp-details"
       onToggle={(e) => {

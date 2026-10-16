@@ -74,3 +74,13 @@ export function latestMemberPlans<P extends PlanLike>(plans: readonly P[]): P[] 
 export function matchesSuggestion(suggested: number | null, current: number | null): boolean {
   return suggested != null && current != null && Math.round(suggested * 100) === Math.round(current * 100);
 }
+
+/**
+ * (T4) What a period with no cap says: "Plan not set" when nothing is in force,
+ * "Plan set to $0" when the household chose $0 (the server's `source` is the
+ * week's own override or a plan row, its cap null). `null` when a cap is in force.
+ */
+export function planStatusWords(plan: { status: string; source: string } | null | undefined): "Plan not set" | "Plan set to $0" | null {
+  if (!plan || plan.status !== "not_set") return null;
+  return plan.source === "none" ? "Plan not set" : "Plan set to $0";
+}

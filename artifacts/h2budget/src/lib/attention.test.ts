@@ -32,6 +32,8 @@ describe("attentionItems", () => {
     const a = attentionItems({ ...base, withinPlan: "over", overBy: 40 })[0]!;
     expect(a.kind).toBe("over");
     expect(a.title).toBe("Over this week's plan by $40.00");
+    // (T4) The week's own page, not the allowances list.
+    expect(a.action).toEqual({ label: "See this week", href: "/spending/week" });
     // (Q5) With unconfirmed rows still open the same item says "so far".
     expect(attentionItems({ ...base, withinPlan: "over", overBy: 40, provisional: true })[0]!.title).toBe("Over this week's plan by $40.00 so far");
   });
@@ -107,7 +109,7 @@ describe("headerActionOf — the forecast running short (lead, 2026-10-09; WP6: 
   it("order: Link a bank → Reconnect → runs short → Pick a way back → Afford", () => {
     expect(headerActionOf(attentionItems({ ...over, forecast: short }), { noBank: true }).kind).toBe("link");
     expect(headerActionOf(attentionItems({ ...over, forecast: short, reauthBanks: ["Amex"] })).kind).toBe("reconnect");
-    expect(headerActionOf(attentionItems({ ...over, forecast: short }))).toEqual({ kind: "short", label: "See where it runs short", href: "/forecast" });
+    expect(headerActionOf(attentionItems({ ...over, forecast: short }))).toEqual({ kind: "short", label: "See where it runs short", href: "/forecast?day=2026-10-20" });
     expect(headerActionOf(attentionItems({ ...over, forecast: fine }))).toEqual({ kind: "wayBack" });
     expect(headerActionOf(attentionItems(base), {})).toEqual({ kind: "afford" });
   });
@@ -116,7 +118,7 @@ describe("headerActionOf — the forecast running short (lead, 2026-10-09; WP6: 
     expect(items.map((a) => a.kind)).toEqual(["stale", "short", "over"]);
     expect(items[1]).toEqual({
       kind: "short", title: "The forecast runs short", detail: "Low $350.00 on Oct 20 · below your $500 buffer",
-      action: { label: "See where it runs short", href: "/forecast" },
+      action: { label: "See where it runs short", href: "/forecast?day=2026-10-20" },
     });
     // Below zero runs short even above the buffer's verdict; tight and ready do not.
     expect(attentionItems({ ...base, forecast: { ...fine, lowPoint: "-40.00", status: "tight" } }).some((a) => a.kind === "short")).toBe(true);

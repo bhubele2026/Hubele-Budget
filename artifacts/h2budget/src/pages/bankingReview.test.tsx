@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
   calls: [] as Array<Record<string, unknown>>,
   items: undefined as unknown,
   error: false,
+  /** (T4) The newest request failed but the last good answer is kept. */
+  refreshError: false,
   proposals: undefined as unknown,
   proposalCalls: 0,
   /** (Q4) The query holds another account's/range's answer (keepPreviousData). */
@@ -74,7 +76,7 @@ vi.mock("@workspace/api-client-react/features", async (orig) => ({
   useGetBankingReview: (params: Record<string, unknown>, opts?: { query?: { enabled?: boolean } }) => {
     if (opts?.query?.enabled === false) return { data: undefined, isError: false, isLoading: false, refetch: vi.fn() };
     h.calls.push(params);
-    if (h.error) return { data: undefined, isError: true, isLoading: false, refetch: vi.fn() };
+    if (h.error) return { data: undefined, isError: true, isLoadingError: true, isLoading: false, refetch: vi.fn() };
     const key = params.bucket ? `${params.bucket}|${params.kind ?? ""}|${params.cursor ?? ""}` : "";
     const page = key ? (h.pages[key] ?? { bucket: params.bucket, kind: params.kind ?? null, rows: [], nextCursor: null, limit: 25 }) : null;
     // (P4) The summary carries each bucket's first page, as the server does.
@@ -85,7 +87,7 @@ vi.mock("@workspace/api-client-react/features", async (orig) => ({
       period: { ...(seeded as { period: Record<string, unknown> }).period, ...(params.from ? { from: params.from } : {}), ...(params.to ? { to: params.to } : {}) },
       page,
     };
-    return { data: echoed, isError: false, isLoading: false, isPlaceholderData: h.placeholder, refetch: vi.fn() };
+    return { data: echoed, isError: h.refreshError, isRefetchError: h.refreshError, dataUpdatedAt: h.refreshError ? Date.now() - 5 * 60_000 : 0, isLoading: false, isPlaceholderData: h.placeholder, refetch: vi.fn() };
   },
 }));
 vi.mock("@/hooks/useSpine", () => ({ useSpine: () => ({ data: h.spine, state: h.spine ? "loaded" : "cold", refetch: () => {} }) }));
@@ -219,6 +221,7 @@ beforeEach(() => {
   h.calls = [];
   h.items = [item()];
   h.error = false;
+  h.refreshError = false;
   h.placeholder = false;
   h.hold = null;
   h.proposals = undefined;
@@ -604,7 +607,7 @@ describe("Banking review — planned, household, unexplained", () => {
   it("household: labelled, secondary, the glossary's words, 'Plan not set' is never $0", () => {
     mount();
     const box = screen.getByTestId("br-household");
-    expect(box.textContent).toContain("All accounts · this week");
+    expect(box.textContent).toContain("Household · this week");
     // Counts toward plan = known (100), Unconfirmed 24, the cautious total (124) named as such.
     expect(box.textContent).toContain("Counts toward plan");
     expect(text("br-hh-spent")).toBe("$100.00");
@@ -614,7 +617,7 @@ describe("Banking review — planned, household, unexplained", () => {
     expect(text("br-hh-plan")).toBe("Not set");
     expect(screen.queryByTestId("br-hh-left")).toBeNull();
     expect(box.textContent).not.toContain("Counts toward weekly plan");
-    expect(within(box).getByText("Open this week →").getAttribute("href")).toBe("/spending/week");
+    expect(within(box).getByText("Open this week's plan →").getAttribute("href")).toBe("/spending/week");
     // It comes last.
     const planned = screen.getByTestId("br-planned");
     expect(planned.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -712,7 +715,15 @@ describe("Banking review — states", () => {
   it("a failed load says so and offers a retry", () => {
     h.error = true;
     mount();
-    expect(screen.getByTestId("br-error").textContent).toContain("did not load");
+    expect(screen.getByTestId("br-error").textContent).toContain("Couldn't load these numbers");
+  });
+
+  it("(T4) a failed refresh keeps the figures and says when they are from", () => {
+    h.refreshError = true;
+    mount();
+    expect(screen.getByTestId("br-error").textContent).toMatch(/^Couldn't refresh\. Showing numbers from /);
+    expect(screen.getByTestId("br-summary")).toBeTruthy();
+    expect(screen.getByTestId("br-household")).toBeTruthy();
   });
 
   it("an account at a bank with no register of its own keeps a Sync button", () => {

@@ -50,6 +50,8 @@ const state = vi.hoisted(() => ({
   summary: undefined as unknown,
   summaryParams: [] as Array<Record<string, unknown>>,
   summaryError: false,
+  /** (T4) The newest request failed but the last summary is kept. */
+  summaryRefreshError: false,
   refetch: vi.fn(),
   /** (P1) The plan state the household link reads: the spine (this week), a month's breakdown, the owner. */
   spine: { data: undefined, state: "cold" } as { data: unknown; state: string },
@@ -123,7 +125,15 @@ vi.mock("@workspace/api-client-react/features", () => ({
       scope: { ...s.scope, accountId: params.accountId === "all" ? null : params.accountId },
       period: { ...s.period, from: params.from, to: params.to },
     };
-    return { data: state.summaryError ? undefined : data, isError: state.summaryError, isLoading: false, refetch: state.refetch };
+    return {
+      data: state.summaryError ? undefined : data,
+      isError: state.summaryError || state.summaryRefreshError,
+      isLoadingError: state.summaryError,
+      isRefetchError: state.summaryRefreshError,
+      dataUpdatedAt: state.summaryRefreshError ? Date.now() - 2 * 60_000 : 0,
+      isLoading: false,
+      refetch: state.refetch,
+    };
   },
   getGetAmexSummaryQueryKey: (p: unknown) => ["/api/amex/summary", p],
   // (P1) Mounted only for a month's link: the Spending page's own read.
@@ -269,6 +279,7 @@ beforeEach(() => {
   state.summary = summaryFixture();
   state.summaryParams = [];
   state.summaryError = false;
+  state.summaryRefreshError = false;
   state.refetch.mockReset();
   state.spine = { data: undefined, state: "cold" };
   state.owner = true;
@@ -628,7 +639,8 @@ describe("Amex page — the top summary and the journey fixes (Q6b → P1)", () 
     expect(sum.textContent).not.toContain("Platinum");
     expect(within(sum).getByRole("heading", { level: 2 }).textContent).toMatch(/^This week · /);
     expect(screen.getByTestId("amex-fig-owed").textContent).toContain("as of Oct 14");
-    expect(screen.getByTestId("amex-household-link").getAttribute("href")).toBe("/spending/week");
+    // (T4) One card: the link carries it (the plaid_accounts row id), so Spending shows that card's part.
+    expect(screen.getByTestId("amex-household-link").getAttribute("href")).toBe("/spending/week?account=row-plat");
     // One card: its balance history is a link away (the chart sits below the activity).
     expect(screen.getByTestId("amex-owed-history-link").textContent).toBe("Balance history");
   });
@@ -658,6 +670,17 @@ describe("Amex page — the top summary and the journey fixes (Q6b → P1)", () 
     expect(err.textContent).toContain("The summary did not load.");
     expect(screen.queryByTestId("amex-fig-owed")).toBeNull();
     fireEvent.click(within(err).getByTestId("amex-summary-retry"));
+    expect(state.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("(T4) a failed refresh keeps the summary and says how old it is; the first-load error stays the panel's own", async () => {
+    state.summaryRefreshError = true;
+    render(tree());
+    await ready();
+    expect(screen.getByTestId("amex-summary-refresh").textContent).toMatch(/^Couldn't refresh\. Showing numbers from /);
+    expect(screen.getByTestId("amex-fig-owed")).toBeTruthy();
+    expect(screen.queryByTestId("amex-summary-error")).toBeNull();
+    fireEvent.click(within(screen.getByTestId("amex-summary-refresh")).getByRole("button", { name: "Retry" }));
     expect(state.refetch).toHaveBeenCalledTimes(1);
   });
 

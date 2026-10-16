@@ -1,5 +1,5 @@
 import { UserButton } from "@clerk/react";
-import { Info, Sparkles } from "lucide-react";
+import { Info } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import { toast } from "@/hooks/use-toast";
 import { requestWhatsNewOpen, useWhatsNewUnread } from "@/lib/whatsNewSignal";
@@ -40,7 +40,7 @@ export function AccountMenu() {
       <UserButton.MenuItems>
         <UserButton.Action
           label={whatsNewMenuLabel(unread)}
-          labelIcon={<Sparkles className="size-4" aria-hidden />}
+          labelIcon={<Info className="size-4" aria-hidden />}
           // The next frame, so Clerk's popover has closed before the sheet opens.
           onClick={() => requestAnimationFrame(() => requestWhatsNewOpen())}
         />
