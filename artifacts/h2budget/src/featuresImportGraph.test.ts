@@ -208,6 +208,30 @@ describe("the entry path and the generated client's sub-modules", () => {
     expect(chartImporters).toEqual([]);
   });
 
+  it("(WN) only the What's new signal and mount are on the open path; the notes, the host and the sheet are lazy", () => {
+    const files = new Set(Array.from(graph.keys(), rel));
+    // Positive controls: the tiny pieces the menu, the header and App read.
+    expect(files.has("lib/whatsNewSignal.ts")).toBe(true);
+    expect(files.has("components/whats-new/WhatsNewMount.tsx")).toBe(true);
+    for (const lazyFile of [
+      "components/whats-new/WhatsNewHost.tsx",
+      "components/whats-new/WhatsNewSheet.tsx",
+      "components/whats-new/greet.ts",
+    ]) {
+      expect(files.has(lazyFile), `${lazyFile} must stay off the open path`).toBe(false);
+    }
+    // The notes' words never ride on the open path.
+    const notesImporters: string[] = [];
+    for (const [file, edges] of graph) {
+      for (const e of edges) if (e.spec === "@workspace/avalanche-core/whatsNew") notesImporters.push(rel(file));
+    }
+    expect(notesImporters).toEqual([]);
+    // …and the host really is reached only through a dynamic import.
+    const mount = readFileSync(join(SRC, "components/whats-new/WhatsNewMount.tsx"), "utf8");
+    expect(staticEdges(mount).some((e) => e.spec.includes("WhatsNewHost"))).toBe(false);
+    expect(mount).toMatch(/import\("\.\/WhatsNewHost"\)/);
+  });
+
   it("the edge parser ignores dynamic imports and type-only imports", () => {
     const edges = staticEdges(`
       import type { A } from "${FEATURES}";
