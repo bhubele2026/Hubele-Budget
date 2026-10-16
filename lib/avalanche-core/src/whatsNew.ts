@@ -52,6 +52,28 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-10-16.3",
+    headline: "The rows behind your balance, and clearer forecast rows",
+    items: [
+      {
+        title: "Every row behind Checking today",
+        body: "Details now lists each bank row the balance counts after the reading, says whether it is pending or posted, and links to it. While a row is pending, the figure is called an estimate.",
+      },
+      {
+        title: "Spend rows show what the forecast takes",
+        body: "A Weekly or Monthly Spend row now leads with the amount the forecast uses. The item's own amount sits in its Details as a template.",
+      },
+      {
+        title: "A weekly plan, one tap away",
+        body: "With no weekly plan, the dashboard says what the forecast assumes and offers Set weekly plan. Nothing is chosen for you.",
+      },
+      {
+        title: "A cleaner forecast chart",
+        body: "Labels no longer overlap, and markers show only for paydays, big bills and the day you pick.",
+      },
+    ],
+  },
+  {
     id: "2026-10-16.2",
     headline: "One checking balance and a clearer Forecast",
     items: [
