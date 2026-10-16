@@ -116,13 +116,18 @@ export interface CategorizeJobResult {
 
 const RETRYABLE_KINDS = new Set(["rate_limited", "timeout", "connection", "api_error"]);
 
-function summaryOf(status: string, filed: number, waiting: number): string {
+/** (Task 7, V) Failures where the categorizer answered, but with nothing usable. */
+const UNREADABLE_KINDS: ReadonlySet<string> = new Set(["parse_failed", "validation_failed", "max_tokens"]);
+
+function summaryOf(status: string, filed: number, waiting: number, failureKind?: string): string {
   const charges = (n: number) => `${n} charge${n === 1 ? "" : "s"}`;
   if (status === "budget_exceeded") return `Paused: this month's AI budget is used up. ${charges(waiting)} waiting for you.`;
   if (status === "refused") return `The categorizer declined this batch. ${charges(waiting)} waiting for you.`;
   if (status === "failed") {
-    return filed > 0
-      ? `Filed ${charges(filed)}, then stopped on an error. ${waiting} waiting for you.`
+    if (filed > 0) return `Filed ${charges(filed)}, then stopped on an error. ${waiting} waiting for you.`;
+    // (Task 7, V) It was reached: say its answer could not be read, not that it could not be reached.
+    return failureKind && UNREADABLE_KINDS.has(failureKind)
+      ? `Could not read the categorizer's answer. ${charges(waiting)} waiting for you.`
       : `Could not reach the categorizer. ${charges(waiting)} waiting for you.`;
   }
   if (filed === 0 && waiting === 0) return "Nothing new to file.";
@@ -284,7 +289,7 @@ export async function runCategorizeJob(
         inputTokens: u.input,
         outputTokens: u.output,
         costUsd: u.cost,
-        summary: summaryOf(status, filed, waiting),
+        summary: summaryOf(status, filed, waiting, failure?.kind),
         error: failure && !benign ? `${failure.kind}`.slice(0, 300) : null,
       })
       .where(eq(agentRunsTable.id, run.id));

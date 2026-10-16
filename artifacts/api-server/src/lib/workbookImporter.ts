@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import {
   db,
   debtsTable,
+  importBatchesTable,
   budgetCategoriesTable,
   budgetMonthsTable,
   budgetLinesTable,
@@ -19,14 +20,32 @@ import { recordRuleChanges, ruleSnapshot, type RuleChange } from "./mappingRuleA
 
 type Row = (string | number | Date | null)[];
 
-const toNum = (v: unknown): string => {
+/**
+ * (Task 7, V) A money cell as a 2-dp string. A blank cell or "—" is 0, as
+ * before. A cell that holds text that is not a number used to become 0.00 —
+ * a typed figure silently replaced by zero — and now stops the import with
+ * the sheet, row and field (`where`), before anything is written. `where:
+ * null` keeps the old reading (Monthly Tracking's free-form metrics only).
+ */
+const toNum = (v: unknown, where: { at: string; field: string } | null): string => {
   if (v === null || v === undefined || v === "" || v === "—") return "0";
   const n =
     typeof v === "number"
       ? v
       : parseFloat(String(v).replace(/[$,]/g, ""));
-  return Number.isNaN(n) ? "0" : n.toFixed(2);
+  if (!Number.isFinite(n)) {
+    if (where) {
+      throw new WorkbookImportError(
+        `${where.at}: the ${where.field} ${JSON.stringify(v instanceof Date ? v.toISOString().slice(0, 10) : v)} is not a number.`,
+      );
+    }
+    return "0";
+  }
+  return n.toFixed(2);
 };
+
+/** "Payments row 14" — the row as the spreadsheet numbers it (1-based). */
+const rowAt = (sheetName: string, index: number): string => `${sheetName} row ${index + 1}`;
 
 /**
  * Canonical Amex sign convention (Task #93/#130): expense charges are stored
@@ -41,7 +60,19 @@ export function amexSignedAmount(typeStr: string, amount: number): string {
   return n.toFixed(2);
 }
 
-export class AprImportError extends Error {
+/**
+ * (Task 7, V) What is wrong with the FILE, in words the person can act on. The
+ * route answers 400 with this message; any other failure is a 500 that says
+ * nothing was changed (the whole import is one transaction).
+ */
+export class WorkbookImportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkbookImportError";
+  }
+}
+
+export class AprImportError extends WorkbookImportError {
   constructor(message: string) {
     super(message);
     this.name = "AprImportError";
@@ -80,7 +111,12 @@ const toStr = (v: unknown): string | null =>
   v === null || v === undefined || v === "" ? null : String(v);
 const excelDate = (v: unknown): string | null => {
   if (v === null || v === undefined || v === "") return null;
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  // (Task 7, V) SheetJS builds a date cell as a Date in the SERVER's local
+  // time, so its calendar day is the local one (toISOString shifted a late
+  // evening, or any cell east of UTC, to the next or previous day).
+  if (v instanceof Date) {
+    return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`;
+  }
   if (typeof v === "number") {
     const d = XLSX.SSF.parse_date_code(v);
     if (!d) return null;
@@ -118,10 +154,14 @@ const excelDateTime = (v: unknown): string | null => {
     if (!Number.isNaN(parsed.getTime())) d = parsed;
   }
   if (!d) return null;
+  // (Task 7, V) A date cell from SheetJS is local midnight (see excelDate): read
+  // its time of day locally, or every date-only cell gets an invented time on
+  // a server that is not on UTC. Serial numbers and text are built in UTC above.
+  const local = v instanceof Date;
   if (
-    d.getUTCHours() === 0 &&
-    d.getUTCMinutes() === 0 &&
-    d.getUTCSeconds() === 0
+    (local ? d.getHours() : d.getUTCHours()) === 0 &&
+    (local ? d.getMinutes() : d.getUTCMinutes()) === 0 &&
+    (local ? d.getSeconds() : d.getUTCSeconds()) === 0
   ) {
     return null;
   }
@@ -145,6 +185,8 @@ export type ImportRuleAttribution = {
 };
 
 export type ImportResult = {
+  /** The import_batches row the rows carry (created inside the import's transaction when none was passed). */
+  batchId: string;
   counts: Record<string, number>;
   // Id of the pre-import safety snapshot taken before the destructive wipe.
   // Surfaced so the client can offer a one-click "Undo this import" that hits
@@ -165,7 +207,12 @@ export async function importWorkbook(
   userId: string,
   householdId: string,
   wb: XLSX.WorkBook,
-  batchId: string,
+  /**
+   * The batch the rows belong to. (Task 7, V) `null`: the import creates it
+   * inside its own transaction, so a failed import leaves no batch row behind
+   * (`POST /import/workbook` passes null).
+   */
+  batchIdIn: string | null,
   opts?: { filename?: string | null },
 ): Promise<ImportResult> {
   const REQUIRED = [
@@ -177,7 +224,7 @@ export async function importWorkbook(
   ];
   const missing = REQUIRED.filter((s) => !wb.Sheets[s]);
   if (missing.length) {
-    throw new Error(
+    throw new WorkbookImportError(
       `Workbook is missing required sheet(s): ${missing.join(", ")}`,
     );
   }
@@ -195,6 +242,14 @@ export async function importWorkbook(
   >();
 
   return await db.transaction(async (tx) => {
+    const batchId =
+      batchIdIn ??
+      (
+        await tx
+          .insert(importBatchesTable)
+          .values({ userId, householdId, filename: opts?.filename ?? null })
+          .returning({ id: importBatchesTable.id })
+      )[0]!.id;
     // Snapshot data we want to merge BEFORE wiping, so user-edited mapping
     // rules and manual transaction category overrides survive a re-import.
     const priorCats = await tx
@@ -286,9 +341,9 @@ export async function importWorkbook(
         name,
         type: toStr(r[2]),
         apr: toAprDecimal(r[3], `debt "${name}"`),
-        balance: toNum(r[4]),
-        minPayment: toNum(r[5]),
-        payment: toNum(r[5]),
+        balance: toNum(r[4], { at: rowAt("Debt Tracker", i), field: "balance" }),
+        minPayment: toNum(r[5], { at: rowAt("Debt Tracker", i), field: "minimum payment" }),
+        payment: toNum(r[5], { at: rowAt("Debt Tracker", i), field: "minimum payment" }),
       });
     }
     const insertedDebts = debtValues.length
@@ -322,7 +377,7 @@ export async function importWorkbook(
       });
       lineSeed.push({
         name: label,
-        planned: toNum(r[2]),
+        planned: toNum(r[2], { at: rowAt("Monthly Budget", i), field: "amount" }),
         note: toStr(r[6]),
       });
     }
@@ -385,7 +440,7 @@ export async function importWorkbook(
         householdId,
         name,
         kind,
-        amount: toNum(r[3]),
+        amount: toNum(r[3], { at: rowAt("Recurring Items", i), field: "amount" }),
         frequency: (toStr(r[4]) ?? "monthly").toLowerCase(),
         dayOfMonth: r[5] != null && r[5] !== "" ? Number(r[5]) : null,
         anchorDate: excelDate(r[6]),
@@ -516,7 +571,7 @@ export async function importWorkbook(
       const description = toStr(r[2]) ?? "(no description)";
       const target = toStr(r[4]);
       const typeStr = String(r[3] ?? "Expense").toLowerCase();
-      const rawAmount = toNum(r[5]);
+      const rawAmount = toNum(r[5], { at: rowAt("Payments", i), field: "amount" });
       const num = Number(rawAmount);
       const signed = amexSignedAmount(typeStr, num);
       const explicitCat = target ? catByName.get(target) ?? null : null;
@@ -637,7 +692,7 @@ export async function importWorkbook(
           const v = r[m.col];
           if (v === null || v === undefined || v === "") continue;
           const bucket = byMonth.get(m.monthStart) ?? {};
-          bucket[metric] = toNum(v);
+          bucket[metric] = toNum(v, null);
           byMonth.set(m.monthStart, bucket);
         }
       }
@@ -672,6 +727,6 @@ export async function importWorkbook(
       attributionCounts.values(),
     ).sort((a, b) => b.count - a.count);
 
-    return { counts, ruleAttributions, snapshotId };
+    return { batchId, counts, ruleAttributions, snapshotId };
   });
 }
