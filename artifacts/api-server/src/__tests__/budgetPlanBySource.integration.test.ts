@@ -32,6 +32,7 @@ vi.mock("../middlewares/requireAuth", () => ({
 
 import {
   db,
+  allowancePlansTable,
   avalancheSettingsTable,
   budgetCategoriesTable,
   budgetLinesTable,
@@ -275,12 +276,35 @@ describe("GET /budget/months/:m — planBySource", () => {
 
 describe("GET /budget/months/:m — allowance", () => {
   it("returns all three buckets with the caps from settings, weekly scaled to the month", async () => {
+    // No plan row has started (the history before plans existed): the classic settings.
     const d = await fetchMonth();
     const by = Object.fromEntries(d.allowance.lines.map((l) => [l.bucket, l]));
     expect(d.allowance.weeksInMonth).toBe("4.29"); // June: 30 / 7
     expect(by.weekly!.planned).toBe((100 * (30 / 7)).toFixed(2));
     expect(by.monthly!.planned).toBe("250.00");
     expect(by.unplanned!.planned).toBe("0.00");
+  });
+
+  it("⭐ (Task 6, A1) a plan in force is the cap — a weekly plan set in the plan dialog reaches the card; a $0 plan is $0, never the setting", async () => {
+    // The plan dialog writes `allowance_plans` only (never `settings`): before the repair the card kept 100 / 250.
+    const rows = await db
+      .insert(allowancePlansTable)
+      .values([
+        { householdId: TEST_HOUSEHOLD_ID, memberUserId: null, period: "weekly", amount: "320.00", effectiveFrom: "2026-06-07", source: "owner" },
+        { householdId: TEST_HOUSEHOLD_ID, memberUserId: null, period: "monthly", amount: "0.00", effectiveFrom: "2026-06-01", source: "owner" },
+      ])
+      .returning({ id: allowancePlansTable.id });
+    try {
+      const d = await fetchMonth();
+      const by = Object.fromEntries(d.allowance.lines.map((l) => [l.bucket, l]));
+      expect(by.weekly!.planned).toBe((320 * (30 / 7)).toFixed(2));
+      expect(by.monthly!.planned).toBe("0.00");
+      // Unplanned has no plan: still its setting.
+      expect(by.unplanned!.planned).toBe("0.00");
+      expect(d.allowance.planned).toBe((320 * (30 / 7)).toFixed(2));
+    } finally {
+      for (const r of rows) await db.delete(allowancePlansTable).where(eq(allowancePlansTable.id, r.id));
+    }
   });
 
   it("⚠️ counts only spend the user FILED into a bucket — unmarked counts nowhere", async () => {

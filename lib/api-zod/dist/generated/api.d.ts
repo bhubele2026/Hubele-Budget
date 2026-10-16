@@ -7972,6 +7972,34 @@ export declare const GetForecastResponse: zod.ZodObject<{
         txnDescription: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         txnAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         txnForecastFlag: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+        replaced: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            userId: zod.ZodString;
+            recurringItemId: zod.ZodNullable<zod.ZodString>;
+            occurrenceDate: zod.ZodNullable<zod.ZodString>;
+            status: zod.ZodString;
+            matchedTxnId: zod.ZodNullable<zod.ZodString>;
+            rescheduledTo: zod.ZodNullable<zod.ZodString>;
+            createdAt: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            status: string;
+            id: string;
+            createdAt: string;
+            userId: string;
+            recurringItemId: string | null;
+            occurrenceDate: string | null;
+            matchedTxnId: string | null;
+            rescheduledTo: string | null;
+        }, {
+            status: string;
+            id: string;
+            createdAt: string;
+            userId: string;
+            recurringItemId: string | null;
+            occurrenceDate: string | null;
+            matchedTxnId: string | null;
+            rescheduledTo: string | null;
+        }>, "many">>;
     }, "strip", zod.ZodTypeAny, {
         status: string;
         id: string;
@@ -7983,6 +8011,16 @@ export declare const GetForecastResponse: zod.ZodObject<{
         txnDescription?: string | null | undefined;
         txnAmount?: string | null | undefined;
         txnForecastFlag?: boolean | null | undefined;
+        replaced?: {
+            status: string;
+            id: string;
+            createdAt: string;
+            userId: string;
+            recurringItemId: string | null;
+            occurrenceDate: string | null;
+            matchedTxnId: string | null;
+            rescheduledTo: string | null;
+        }[] | undefined;
     }, {
         status: string;
         id: string;
@@ -7994,6 +8032,16 @@ export declare const GetForecastResponse: zod.ZodObject<{
         txnDescription?: string | null | undefined;
         txnAmount?: string | null | undefined;
         txnForecastFlag?: boolean | null | undefined;
+        replaced?: {
+            status: string;
+            id: string;
+            createdAt: string;
+            userId: string;
+            recurringItemId: string | null;
+            occurrenceDate: string | null;
+            matchedTxnId: string | null;
+            rescheduledTo: string | null;
+        }[] | undefined;
     }>, "many">;
     closedMonths: zod.ZodArray<zod.ZodString, "many">;
     settings: zod.ZodObject<{
@@ -8899,6 +8947,16 @@ export declare const GetForecastResponse: zod.ZodObject<{
         txnDescription?: string | null | undefined;
         txnAmount?: string | null | undefined;
         txnForecastFlag?: boolean | null | undefined;
+        replaced?: {
+            status: string;
+            id: string;
+            createdAt: string;
+            userId: string;
+            recurringItemId: string | null;
+            occurrenceDate: string | null;
+            matchedTxnId: string | null;
+            rescheduledTo: string | null;
+        }[] | undefined;
     }[];
     closedMonths: string[];
     settings: {
@@ -9160,6 +9218,16 @@ export declare const GetForecastResponse: zod.ZodObject<{
         txnDescription?: string | null | undefined;
         txnAmount?: string | null | undefined;
         txnForecastFlag?: boolean | null | undefined;
+        replaced?: {
+            status: string;
+            id: string;
+            createdAt: string;
+            userId: string;
+            recurringItemId: string | null;
+            occurrenceDate: string | null;
+            matchedTxnId: string | null;
+            rescheduledTo: string | null;
+        }[] | undefined;
     }[];
     closedMonths: string[];
     settings: {
@@ -9428,6 +9496,34 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
     txnDescription: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     txnAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     txnForecastFlag: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    replaced: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        userId: zod.ZodString;
+        recurringItemId: zod.ZodNullable<zod.ZodString>;
+        occurrenceDate: zod.ZodNullable<zod.ZodString>;
+        status: zod.ZodString;
+        matchedTxnId: zod.ZodNullable<zod.ZodString>;
+        rescheduledTo: zod.ZodNullable<zod.ZodString>;
+        createdAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        id: string;
+        createdAt: string;
+        userId: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+        rescheduledTo: string | null;
+    }, {
+        status: string;
+        id: string;
+        createdAt: string;
+        userId: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+        rescheduledTo: string | null;
+    }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     id: string;
@@ -9439,6 +9535,16 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
     txnDescription?: string | null | undefined;
     txnAmount?: string | null | undefined;
     txnForecastFlag?: boolean | null | undefined;
+    replaced?: {
+        status: string;
+        id: string;
+        createdAt: string;
+        userId: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+        rescheduledTo: string | null;
+    }[] | undefined;
 }, {
     status: string;
     id: string;
@@ -9450,6 +9556,16 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
     txnDescription?: string | null | undefined;
     txnAmount?: string | null | undefined;
     txnForecastFlag?: boolean | null | undefined;
+    replaced?: {
+        status: string;
+        id: string;
+        createdAt: string;
+        userId: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+        rescheduledTo: string | null;
+    }[] | undefined;
 }>;
 export declare const DeleteForecastResolutionParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -9457,6 +9573,80 @@ export declare const DeleteForecastResolutionParams: zod.ZodObject<{
     id: string;
 }, {
     id: string;
+}>;
+/**
+ * One transaction: deletes the answer and restores the answers POST /forecast/resolutions returned as `replaced` (same ids, statuses, dates, rows and times). Only answers that write could have deleted are accepted, so a Match made on a skipped occurrence un-does to the skip. 400 invalid_restore (not those answers; nothing written), 409 not_found / changed_since (nothing written).
+ * @summary (Task 6) Undo one answer exactly — delete it and put back the answers its write replaced
+ */
+export declare const UndoForecastResolutionParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const undoForecastResolutionBodyRestoreMax = 20;
+export declare const UndoForecastResolutionBody: zod.ZodObject<{
+    restore: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        userId: zod.ZodString;
+        recurringItemId: zod.ZodNullable<zod.ZodString>;
+        occurrenceDate: zod.ZodNullable<zod.ZodString>;
+        status: zod.ZodString;
+        matchedTxnId: zod.ZodNullable<zod.ZodString>;
+        rescheduledTo: zod.ZodNullable<zod.ZodString>;
+        createdAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        id: string;
+        createdAt: string;
+        userId: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+        rescheduledTo: string | null;
+    }, {
+        status: string;
+        id: string;
+        createdAt: string;
+        userId: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+        rescheduledTo: string | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    restore: {
+        status: string;
+        id: string;
+        createdAt: string;
+        userId: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+        rescheduledTo: string | null;
+    }[];
+}, {
+    restore: {
+        status: string;
+        id: string;
+        createdAt: string;
+        userId: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+        rescheduledTo: string | null;
+    }[];
+}>;
+export declare const UndoForecastResolutionResponse: zod.ZodObject<{
+    undone: zod.ZodString;
+    restored: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    undone: string;
+    restored: number;
+}, {
+    undone: string;
+    restored: number;
 }>;
 export declare const SetForecastBankSnapshotBody: zod.ZodObject<{
     balance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -13474,6 +13664,25 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
         to: string;
     }>;
     owed: zod.ZodObject<{
+        tracked: zod.ZodUnion<[zod.ZodObject<{
+            debtId: zod.ZodString;
+            name: zod.ZodString;
+            balance: zod.ZodString;
+            source: zod.ZodEnum<["plaid", "manual"]>;
+            asOf: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            source: "plaid" | "manual";
+            debtId: string;
+            name: string;
+            balance: string;
+            asOf: string | null;
+        }, {
+            source: "plaid" | "manual";
+            debtId: string;
+            name: string;
+            balance: string;
+            asOf: string | null;
+        }>, zod.ZodNull]>;
         current: zod.ZodNullable<zod.ZodString>;
         statement: zod.ZodNullable<zod.ZodString>;
         asOf: zod.ZodNullable<zod.ZodString>;
@@ -13482,11 +13691,25 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
         source: "plaid" | "anchor" | "debt" | "computed" | "missing";
         statement: string | null;
         asOf: string | null;
+        tracked: {
+            source: "plaid" | "manual";
+            debtId: string;
+            name: string;
+            balance: string;
+            asOf: string | null;
+        } | null;
         current: string | null;
     }, {
         source: "plaid" | "anchor" | "debt" | "computed" | "missing";
         statement: string | null;
         asOf: string | null;
+        tracked: {
+            source: "plaid" | "manual";
+            debtId: string;
+            name: string;
+            balance: string;
+            asOf: string | null;
+        } | null;
         current: string | null;
     }>;
     purchases: zod.ZodObject<{
@@ -14299,6 +14522,13 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
         source: "plaid" | "anchor" | "debt" | "computed" | "missing";
         statement: string | null;
         asOf: string | null;
+        tracked: {
+            source: "plaid" | "manual";
+            debtId: string;
+            name: string;
+            balance: string;
+            asOf: string | null;
+        } | null;
         current: string | null;
     };
     purchases: {
@@ -14505,6 +14735,13 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
         source: "plaid" | "anchor" | "debt" | "computed" | "missing";
         statement: string | null;
         asOf: string | null;
+        tracked: {
+            source: "plaid" | "manual";
+            debtId: string;
+            name: string;
+            balance: string;
+            asOf: string | null;
+        } | null;
         current: string | null;
     };
     purchases: {
@@ -20650,15 +20887,21 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                         label: zod.ZodString;
                         planKey: zod.ZodString;
                         occurrenceDate: zod.ZodString;
+                        planned: zod.ZodNullable<zod.ZodString>;
+                        skipped: zod.ZodBoolean;
                     }, "strip", zod.ZodTypeAny, {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
                     }, {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -20669,6 +20912,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -20679,6 +20924,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -20697,6 +20944,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -20715,6 +20964,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -20760,6 +21011,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -20805,6 +21058,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -20857,6 +21112,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -20914,6 +21171,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21011,15 +21270,21 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                         label: zod.ZodString;
                         planKey: zod.ZodString;
                         occurrenceDate: zod.ZodString;
+                        planned: zod.ZodNullable<zod.ZodString>;
+                        skipped: zod.ZodBoolean;
                     }, "strip", zod.ZodTypeAny, {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
                     }, {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21030,6 +21295,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21040,6 +21307,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21058,6 +21327,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21076,6 +21347,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21121,6 +21394,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21166,6 +21441,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21217,6 +21494,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21268,6 +21547,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21362,15 +21643,21 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                         label: zod.ZodString;
                         planKey: zod.ZodString;
                         occurrenceDate: zod.ZodString;
+                        planned: zod.ZodNullable<zod.ZodString>;
+                        skipped: zod.ZodBoolean;
                     }, "strip", zod.ZodTypeAny, {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
                     }, {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21381,6 +21668,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21391,6 +21680,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21409,6 +21700,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21427,6 +21720,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21472,6 +21767,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21517,6 +21814,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21567,6 +21866,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21618,6 +21919,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21711,15 +22014,21 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                         label: zod.ZodString;
                         planKey: zod.ZodString;
                         occurrenceDate: zod.ZodString;
+                        planned: zod.ZodNullable<zod.ZodString>;
+                        skipped: zod.ZodBoolean;
                     }, "strip", zod.ZodTypeAny, {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
                     }, {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21730,6 +22039,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21740,6 +22051,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21758,6 +22071,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21776,6 +22091,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21821,6 +22138,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21866,6 +22185,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21916,6 +22237,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -21966,6 +22289,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -22046,6 +22371,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -22129,6 +22456,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -22185,6 +22514,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -22237,6 +22568,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -22300,6 +22633,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -22383,6 +22718,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -22439,6 +22776,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -22491,6 +22830,8 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
                     target: {
                         id: string;
                         kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
                         label: string;
                         occurrenceDate: string;
                         planKey: string;
@@ -22817,8 +23158,115 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
                 direction: zod.ZodEnum<["in", "out"]>;
                 classificationIssue: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"inflow_into_expense">, zod.ZodLiteral<"outflow_into_income">, zod.ZodLiteral<null>]>>;
-                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan", "evidence_unresolved"]>;
                 evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                rowEvidence: zod.ZodUnion<[zod.ZodObject<{
+                    class: zod.ZodEnum<["known_purchase", "confirmed_payment", "unresolved"]>;
+                    reason: zod.ZodEnum<["household_flag", "purchase_category", "atm_withdrawal", "person_to_person", "no_contrary_evidence", "transfer", "bank_noise", "debt_payment", "card_payment", "excluded_category", "bill_match", "bill_suggestion", "loan_payment", "transfer_evidence", "income_evidence", "debit_in_income_category", "credit_in_expense_category"]>;
+                    items: zod.ZodArray<zod.ZodObject<{
+                        field: zod.ZodEnum<["pfc_primary", "pfc_detailed", "bill_suggestion", "category", "household"]>;
+                        value: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }>, "many">;
+                    suggestion: zod.ZodUnion<[zod.ZodObject<{
+                        kind: zod.ZodEnum<["loan_payment", "transfer", "income", "bill"]>;
+                        detail: zod.ZodNullable<zod.ZodString>;
+                        target: zod.ZodUnion<[zod.ZodObject<{
+                            kind: zod.ZodEnum<["bill"]>;
+                            id: zod.ZodString;
+                            label: zod.ZodString;
+                            planKey: zod.ZodString;
+                            occurrenceDate: zod.ZodString;
+                            planned: zod.ZodNullable<zod.ZodString>;
+                            skipped: zod.ZodBoolean;
+                        }, "strip", zod.ZodTypeAny, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }>, zod.ZodNull]>;
+                    }, "strip", zod.ZodTypeAny, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }>, zod.ZodNull]>;
+                }, "strip", zod.ZodTypeAny, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }>, zod.ZodNull]>;
                 plan: zod.ZodUnion<[zod.ZodObject<{
                     key: zod.ZodString;
                     label: zod.ZodString;
@@ -22886,7 +23334,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -22898,6 +23346,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }, {
                 date: string;
                 id: string;
@@ -22925,7 +23394,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -22937,6 +23406,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
             differenceTotal: zod.ZodNullable<zod.ZodString>;
@@ -23235,6 +23725,25 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 }>;
+                evidence_unresolved: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
             }, "strip", zod.ZodTypeAny, {
                 needs_review: {
                     count: number;
@@ -23257,6 +23766,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                evidence_unresolved: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
             }, {
                 needs_review: {
                     count: number;
@@ -23273,6 +23789,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -23309,7 +23832,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -23321,6 +23844,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -23397,6 +23941,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -23433,7 +23984,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -23445,6 +23996,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -23521,6 +24093,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -23578,8 +24157,115 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
                 direction: zod.ZodEnum<["in", "out"]>;
                 classificationIssue: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"inflow_into_expense">, zod.ZodLiteral<"outflow_into_income">, zod.ZodLiteral<null>]>>;
-                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan", "evidence_unresolved"]>;
                 evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                rowEvidence: zod.ZodUnion<[zod.ZodObject<{
+                    class: zod.ZodEnum<["known_purchase", "confirmed_payment", "unresolved"]>;
+                    reason: zod.ZodEnum<["household_flag", "purchase_category", "atm_withdrawal", "person_to_person", "no_contrary_evidence", "transfer", "bank_noise", "debt_payment", "card_payment", "excluded_category", "bill_match", "bill_suggestion", "loan_payment", "transfer_evidence", "income_evidence", "debit_in_income_category", "credit_in_expense_category"]>;
+                    items: zod.ZodArray<zod.ZodObject<{
+                        field: zod.ZodEnum<["pfc_primary", "pfc_detailed", "bill_suggestion", "category", "household"]>;
+                        value: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }>, "many">;
+                    suggestion: zod.ZodUnion<[zod.ZodObject<{
+                        kind: zod.ZodEnum<["loan_payment", "transfer", "income", "bill"]>;
+                        detail: zod.ZodNullable<zod.ZodString>;
+                        target: zod.ZodUnion<[zod.ZodObject<{
+                            kind: zod.ZodEnum<["bill"]>;
+                            id: zod.ZodString;
+                            label: zod.ZodString;
+                            planKey: zod.ZodString;
+                            occurrenceDate: zod.ZodString;
+                            planned: zod.ZodNullable<zod.ZodString>;
+                            skipped: zod.ZodBoolean;
+                        }, "strip", zod.ZodTypeAny, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }>, zod.ZodNull]>;
+                    }, "strip", zod.ZodTypeAny, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }>, zod.ZodNull]>;
+                }, "strip", zod.ZodTypeAny, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }>, zod.ZodNull]>;
                 plan: zod.ZodUnion<[zod.ZodObject<{
                     key: zod.ZodString;
                     label: zod.ZodString;
@@ -23647,7 +24333,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -23659,6 +24345,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }, {
                 date: string;
                 id: string;
@@ -23686,7 +24393,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -23698,6 +24405,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
             differenceTotal: zod.ZodNullable<zod.ZodString>;
@@ -23996,6 +24724,25 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 }>;
+                evidence_unresolved: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
             }, "strip", zod.ZodTypeAny, {
                 needs_review: {
                     count: number;
@@ -24018,6 +24765,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                evidence_unresolved: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
             }, {
                 needs_review: {
                     count: number;
@@ -24034,6 +24788,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -24070,7 +24831,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -24082,6 +24843,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -24158,6 +24940,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -24194,7 +24983,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -24206,6 +24995,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -24282,6 +25092,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -24339,8 +25156,115 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
                 direction: zod.ZodEnum<["in", "out"]>;
                 classificationIssue: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"inflow_into_expense">, zod.ZodLiteral<"outflow_into_income">, zod.ZodLiteral<null>]>>;
-                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan", "evidence_unresolved"]>;
                 evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                rowEvidence: zod.ZodUnion<[zod.ZodObject<{
+                    class: zod.ZodEnum<["known_purchase", "confirmed_payment", "unresolved"]>;
+                    reason: zod.ZodEnum<["household_flag", "purchase_category", "atm_withdrawal", "person_to_person", "no_contrary_evidence", "transfer", "bank_noise", "debt_payment", "card_payment", "excluded_category", "bill_match", "bill_suggestion", "loan_payment", "transfer_evidence", "income_evidence", "debit_in_income_category", "credit_in_expense_category"]>;
+                    items: zod.ZodArray<zod.ZodObject<{
+                        field: zod.ZodEnum<["pfc_primary", "pfc_detailed", "bill_suggestion", "category", "household"]>;
+                        value: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }>, "many">;
+                    suggestion: zod.ZodUnion<[zod.ZodObject<{
+                        kind: zod.ZodEnum<["loan_payment", "transfer", "income", "bill"]>;
+                        detail: zod.ZodNullable<zod.ZodString>;
+                        target: zod.ZodUnion<[zod.ZodObject<{
+                            kind: zod.ZodEnum<["bill"]>;
+                            id: zod.ZodString;
+                            label: zod.ZodString;
+                            planKey: zod.ZodString;
+                            occurrenceDate: zod.ZodString;
+                            planned: zod.ZodNullable<zod.ZodString>;
+                            skipped: zod.ZodBoolean;
+                        }, "strip", zod.ZodTypeAny, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }>, zod.ZodNull]>;
+                    }, "strip", zod.ZodTypeAny, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }>, zod.ZodNull]>;
+                }, "strip", zod.ZodTypeAny, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }>, zod.ZodNull]>;
                 plan: zod.ZodUnion<[zod.ZodObject<{
                     key: zod.ZodString;
                     label: zod.ZodString;
@@ -24408,7 +25332,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -24420,6 +25344,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }, {
                 date: string;
                 id: string;
@@ -24447,7 +25392,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -24459,6 +25404,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
             differenceTotal: zod.ZodNullable<zod.ZodString>;
@@ -24757,6 +25723,25 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 }>;
+                evidence_unresolved: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
             }, "strip", zod.ZodTypeAny, {
                 needs_review: {
                     count: number;
@@ -24779,6 +25764,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                evidence_unresolved: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
             }, {
                 needs_review: {
                     count: number;
@@ -24795,6 +25787,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -24831,7 +25830,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -24843,6 +25842,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -24919,6 +25939,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -24955,7 +25982,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -24967,6 +25994,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -25043,6 +26091,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -25100,8 +26155,115 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
                 direction: zod.ZodEnum<["in", "out"]>;
                 classificationIssue: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"inflow_into_expense">, zod.ZodLiteral<"outflow_into_income">, zod.ZodLiteral<null>]>>;
-                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan", "evidence_unresolved"]>;
                 evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                rowEvidence: zod.ZodUnion<[zod.ZodObject<{
+                    class: zod.ZodEnum<["known_purchase", "confirmed_payment", "unresolved"]>;
+                    reason: zod.ZodEnum<["household_flag", "purchase_category", "atm_withdrawal", "person_to_person", "no_contrary_evidence", "transfer", "bank_noise", "debt_payment", "card_payment", "excluded_category", "bill_match", "bill_suggestion", "loan_payment", "transfer_evidence", "income_evidence", "debit_in_income_category", "credit_in_expense_category"]>;
+                    items: zod.ZodArray<zod.ZodObject<{
+                        field: zod.ZodEnum<["pfc_primary", "pfc_detailed", "bill_suggestion", "category", "household"]>;
+                        value: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }>, "many">;
+                    suggestion: zod.ZodUnion<[zod.ZodObject<{
+                        kind: zod.ZodEnum<["loan_payment", "transfer", "income", "bill"]>;
+                        detail: zod.ZodNullable<zod.ZodString>;
+                        target: zod.ZodUnion<[zod.ZodObject<{
+                            kind: zod.ZodEnum<["bill"]>;
+                            id: zod.ZodString;
+                            label: zod.ZodString;
+                            planKey: zod.ZodString;
+                            occurrenceDate: zod.ZodString;
+                            planned: zod.ZodNullable<zod.ZodString>;
+                            skipped: zod.ZodBoolean;
+                        }, "strip", zod.ZodTypeAny, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }>, zod.ZodNull]>;
+                    }, "strip", zod.ZodTypeAny, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }>, zod.ZodNull]>;
+                }, "strip", zod.ZodTypeAny, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }>, zod.ZodNull]>;
                 plan: zod.ZodUnion<[zod.ZodObject<{
                     key: zod.ZodString;
                     label: zod.ZodString;
@@ -25169,7 +26331,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -25181,6 +26343,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }, {
                 date: string;
                 id: string;
@@ -25208,7 +26391,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -25220,6 +26403,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
             differenceTotal: zod.ZodNullable<zod.ZodString>;
@@ -25518,6 +26722,25 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 }>;
+                evidence_unresolved: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
             }, "strip", zod.ZodTypeAny, {
                 needs_review: {
                     count: number;
@@ -25540,6 +26763,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                evidence_unresolved: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
             }, {
                 needs_review: {
                     count: number;
@@ -25556,6 +26786,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -25592,7 +26829,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -25604,6 +26841,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -25680,6 +26938,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -25716,7 +26981,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -25728,6 +26993,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -25804,6 +27090,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -25861,8 +27154,115 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
                 direction: zod.ZodEnum<["in", "out"]>;
                 classificationIssue: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"inflow_into_expense">, zod.ZodLiteral<"outflow_into_income">, zod.ZodLiteral<null>]>>;
-                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+                reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan", "evidence_unresolved"]>;
                 evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+                rowEvidence: zod.ZodUnion<[zod.ZodObject<{
+                    class: zod.ZodEnum<["known_purchase", "confirmed_payment", "unresolved"]>;
+                    reason: zod.ZodEnum<["household_flag", "purchase_category", "atm_withdrawal", "person_to_person", "no_contrary_evidence", "transfer", "bank_noise", "debt_payment", "card_payment", "excluded_category", "bill_match", "bill_suggestion", "loan_payment", "transfer_evidence", "income_evidence", "debit_in_income_category", "credit_in_expense_category"]>;
+                    items: zod.ZodArray<zod.ZodObject<{
+                        field: zod.ZodEnum<["pfc_primary", "pfc_detailed", "bill_suggestion", "category", "household"]>;
+                        value: zod.ZodString;
+                    }, "strip", zod.ZodTypeAny, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }, {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }>, "many">;
+                    suggestion: zod.ZodUnion<[zod.ZodObject<{
+                        kind: zod.ZodEnum<["loan_payment", "transfer", "income", "bill"]>;
+                        detail: zod.ZodNullable<zod.ZodString>;
+                        target: zod.ZodUnion<[zod.ZodObject<{
+                            kind: zod.ZodEnum<["bill"]>;
+                            id: zod.ZodString;
+                            label: zod.ZodString;
+                            planKey: zod.ZodString;
+                            occurrenceDate: zod.ZodString;
+                            planned: zod.ZodNullable<zod.ZodString>;
+                            skipped: zod.ZodBoolean;
+                        }, "strip", zod.ZodTypeAny, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }, {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        }>, zod.ZodNull]>;
+                    }, "strip", zod.ZodTypeAny, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }, {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    }>, zod.ZodNull]>;
+                }, "strip", zod.ZodTypeAny, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }, {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                }>, zod.ZodNull]>;
                 plan: zod.ZodUnion<[zod.ZodObject<{
                     key: zod.ZodString;
                     label: zod.ZodString;
@@ -25930,7 +27330,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -25942,6 +27342,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }, {
                 date: string;
                 id: string;
@@ -25969,7 +27390,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -25981,6 +27402,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }>, "many">;
             truncated: zod.ZodBoolean;
             differenceTotal: zod.ZodNullable<zod.ZodString>;
@@ -26279,6 +27721,25 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 }>;
+                evidence_unresolved: zod.ZodObject<{
+                    count: zod.ZodNumber;
+                    moneyIn: zod.ZodString;
+                    moneyOut: zod.ZodString;
+                    net: zod.ZodString;
+                    pendingNet: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }, {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                }>;
             }, "strip", zod.ZodTypeAny, {
                 needs_review: {
                     count: number;
@@ -26301,6 +27762,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                evidence_unresolved: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
             }, {
                 needs_review: {
                     count: number;
@@ -26317,6 +27785,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26353,7 +27828,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -26365,6 +27840,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -26441,6 +27937,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26477,7 +27980,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -26489,6 +27992,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -26565,6 +28089,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26603,7 +28134,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -26615,6 +28146,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -26691,6 +28243,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26728,7 +28287,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -26740,6 +28299,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -26816,6 +28396,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26853,7 +28440,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -26865,6 +28452,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -26941,6 +28549,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26978,7 +28593,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -26990,6 +28605,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -27066,6 +28702,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27103,7 +28746,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -27115,6 +28758,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -27191,6 +28855,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27229,7 +28900,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -27241,6 +28912,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -27317,6 +29009,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27354,7 +29053,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -27366,6 +29065,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -27442,6 +29162,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27479,7 +29206,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -27491,6 +29218,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -27567,6 +29315,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27604,7 +29359,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -27616,6 +29371,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -27692,6 +29468,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27729,7 +29512,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -27741,6 +29524,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -27817,6 +29621,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28060,8 +29871,115 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             kind: zod.ZodEnum<["spending", "card_payment", "debt_payment", "transfer", "income", "refund", "other"]>;
             direction: zod.ZodEnum<["in", "out"]>;
             classificationIssue: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"inflow_into_expense">, zod.ZodLiteral<"outflow_into_income">, zod.ZodLiteral<null>]>>;
-            reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan"]>;
+            reason: zod.ZodEnum<["partial", "amount", "timing", "as_planned", "marked_unplanned", "ignored_unforecasted", "needs_review", "suggested_match", "not_compared", "no_plan", "evidence_unresolved"]>;
             evidence: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"confirmed">, zod.ZodLiteral<"automatic">, zod.ZodLiteral<null>]>>;
+            rowEvidence: zod.ZodUnion<[zod.ZodObject<{
+                class: zod.ZodEnum<["known_purchase", "confirmed_payment", "unresolved"]>;
+                reason: zod.ZodEnum<["household_flag", "purchase_category", "atm_withdrawal", "person_to_person", "no_contrary_evidence", "transfer", "bank_noise", "debt_payment", "card_payment", "excluded_category", "bill_match", "bill_suggestion", "loan_payment", "transfer_evidence", "income_evidence", "debit_in_income_category", "credit_in_expense_category"]>;
+                items: zod.ZodArray<zod.ZodObject<{
+                    field: zod.ZodEnum<["pfc_primary", "pfc_detailed", "bill_suggestion", "category", "household"]>;
+                    value: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }, {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }>, "many">;
+                suggestion: zod.ZodUnion<[zod.ZodObject<{
+                    kind: zod.ZodEnum<["loan_payment", "transfer", "income", "bill"]>;
+                    detail: zod.ZodNullable<zod.ZodString>;
+                    target: zod.ZodUnion<[zod.ZodObject<{
+                        kind: zod.ZodEnum<["bill"]>;
+                        id: zod.ZodString;
+                        label: zod.ZodString;
+                        planKey: zod.ZodString;
+                        occurrenceDate: zod.ZodString;
+                        planned: zod.ZodNullable<zod.ZodString>;
+                        skipped: zod.ZodBoolean;
+                    }, "strip", zod.ZodTypeAny, {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    }, {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    }>, zod.ZodNull]>;
+                }, "strip", zod.ZodTypeAny, {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                }, {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                }>, zod.ZodNull]>;
+            }, "strip", zod.ZodTypeAny, {
+                items: {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }[];
+                reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                class: "unresolved" | "known_purchase" | "confirmed_payment";
+                suggestion: {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                } | null;
+            }, {
+                items: {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }[];
+                reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                class: "unresolved" | "known_purchase" | "confirmed_payment";
+                suggestion: {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                } | null;
+            }>, zod.ZodNull]>;
             plan: zod.ZodUnion<[zod.ZodObject<{
                 key: zod.ZodString;
                 label: zod.ZodString;
@@ -28129,7 +30047,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
-            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
                 weeklyAllowance: boolean;
                 monthlyAllowance: boolean;
@@ -28141,6 +30059,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             direction: "in" | "out";
             evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+            rowEvidence: {
+                items: {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }[];
+                reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                class: "unresolved" | "known_purchase" | "confirmed_payment";
+                suggestion: {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                } | null;
+            } | null;
         }, {
             date: string;
             id: string;
@@ -28168,7 +30107,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
-            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
                 weeklyAllowance: boolean;
                 monthlyAllowance: boolean;
@@ -28180,6 +30119,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             direction: "in" | "out";
             evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+            rowEvidence: {
+                items: {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }[];
+                reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                class: "unresolved" | "known_purchase" | "confirmed_payment";
+                suggestion: {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                } | null;
+            } | null;
         }>, "many">;
         nextCursor: zod.ZodNullable<zod.ZodString>;
         limit: zod.ZodNumber;
@@ -28213,7 +30173,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
-            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
                 weeklyAllowance: boolean;
                 monthlyAllowance: boolean;
@@ -28225,6 +30185,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             direction: "in" | "out";
             evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+            rowEvidence: {
+                items: {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }[];
+                reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                class: "unresolved" | "known_purchase" | "confirmed_payment";
+                suggestion: {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                } | null;
+            } | null;
         }[];
         nextCursor: string | null;
         bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
@@ -28258,7 +30239,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
-            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
                 weeklyAllowance: boolean;
                 monthlyAllowance: boolean;
@@ -28270,6 +30251,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             direction: "in" | "out";
             evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+            rowEvidence: {
+                items: {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }[];
+                reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                class: "unresolved" | "known_purchase" | "confirmed_payment";
+                suggestion: {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                } | null;
+            } | null;
         }[];
         nextCursor: string | null;
         bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
@@ -28395,7 +30397,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -28407,6 +30409,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -28483,6 +30506,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28520,7 +30550,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -28532,6 +30562,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -28608,6 +30659,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28645,7 +30703,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -28657,6 +30715,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -28733,6 +30812,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28770,7 +30856,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -28782,6 +30868,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -28858,6 +30965,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28895,7 +31009,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -28907,6 +31021,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -28983,6 +31118,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29065,7 +31207,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
-            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
                 weeklyAllowance: boolean;
                 monthlyAllowance: boolean;
@@ -29077,6 +31219,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             direction: "in" | "out";
             evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+            rowEvidence: {
+                items: {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }[];
+                reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                class: "unresolved" | "known_purchase" | "confirmed_payment";
+                suggestion: {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                } | null;
+            } | null;
         }[];
         nextCursor: string | null;
         bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
@@ -29206,7 +31369,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -29218,6 +31381,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -29294,6 +31478,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29331,7 +31522,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -29343,6 +31534,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -29419,6 +31631,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29456,7 +31675,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -29468,6 +31687,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -29544,6 +31784,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29581,7 +31828,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -29593,6 +31840,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -29669,6 +31937,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29706,7 +31981,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
                 } | null;
-                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+                reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
                     weeklyAllowance: boolean;
                     monthlyAllowance: boolean;
@@ -29718,6 +31993,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 direction: "in" | "out";
                 evidence: "confirmed" | "automatic" | null;
                 classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+                rowEvidence: {
+                    items: {
+                        value: string;
+                        field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                    }[];
+                    reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                    class: "unresolved" | "known_purchase" | "confirmed_payment";
+                    suggestion: {
+                        kind: "income" | "bill" | "transfer" | "loan_payment";
+                        detail: string | null;
+                        target: {
+                            id: string;
+                            kind: "bill";
+                            skipped: boolean;
+                            planned: string | null;
+                            label: string;
+                            occurrenceDate: string;
+                            planKey: string;
+                        } | null;
+                    } | null;
+                } | null;
             }[];
             moneyIn: string;
             moneyOut: string;
@@ -29794,6 +32090,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 not_compared: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
+                evidence_unresolved: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29876,7 +32179,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
             } | null;
-            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan";
+            reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
                 weeklyAllowance: boolean;
                 monthlyAllowance: boolean;
@@ -29888,6 +32191,27 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             direction: "in" | "out";
             evidence: "confirmed" | "automatic" | null;
             classificationIssue: "inflow_into_expense" | "outflow_into_income" | null;
+            rowEvidence: {
+                items: {
+                    value: string;
+                    field: "category" | "household" | "bill_suggestion" | "pfc_primary" | "pfc_detailed";
+                }[];
+                reason: "transfer" | "debt_payment" | "card_payment" | "bank_noise" | "excluded_category" | "household_flag" | "purchase_category" | "atm_withdrawal" | "person_to_person" | "no_contrary_evidence" | "bill_match" | "bill_suggestion" | "loan_payment" | "transfer_evidence" | "income_evidence" | "debit_in_income_category" | "credit_in_expense_category";
+                class: "unresolved" | "known_purchase" | "confirmed_payment";
+                suggestion: {
+                    kind: "income" | "bill" | "transfer" | "loan_payment";
+                    detail: string | null;
+                    target: {
+                        id: string;
+                        kind: "bill";
+                        skipped: boolean;
+                        planned: string | null;
+                        label: string;
+                        occurrenceDate: string;
+                        planKey: string;
+                    } | null;
+                } | null;
+            } | null;
         }[];
         nextCursor: string | null;
         bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
@@ -33315,6 +35639,13 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
         decisionId?: string | null | undefined;
     }[];
+    replaced: {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }[];
     dryRun: false;
     appliedAt: string;
     proposal: {
@@ -33325,13 +35656,6 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         proposalHash: string;
     };
     applicationId: string;
-    replaced: {
-        status: string;
-        id: string;
-        recurringItemId: string | null;
-        occurrenceDate: string | null;
-        matchedTxnId: string | null;
-    }[];
     learnedMemory: boolean;
 }, {
     rows: {
@@ -33376,6 +35700,13 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         resolutionSkipped: "no_occurrence" | "occurrence_shared" | null;
         decisionId?: string | null | undefined;
     }[];
+    replaced: {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }[];
     dryRun: false;
     appliedAt: string;
     proposal: {
@@ -33386,13 +35717,6 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         proposalHash: string;
     };
     applicationId: string;
-    replaced: {
-        status: string;
-        id: string;
-        recurringItemId: string | null;
-        occurrenceDate: string | null;
-        matchedTxnId: string | null;
-    }[];
     learnedMemory: boolean;
 }>]>;
 /**

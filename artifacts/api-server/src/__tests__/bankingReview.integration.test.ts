@@ -361,6 +361,8 @@ describe("S4 · GET /banking/review — the forecast account", () => {
       needs_review: { count: 1, moneyIn: "0.00", moneyOut: "70.00", net: "-70.00", pendingNet: "0.00" },
       suggested_match: { count: 1, moneyIn: "0.00", moneyOut: "75.00", net: "-75.00", pendingNet: "0.00" },
       not_compared: { count: 0, moneyIn: "0.00", moneyOut: "0.00", net: "0.00", pendingNet: "0.00" },
+      // (Task 6, A2) Rule 2u: no row of this scenario is unresolved by the evidence rule, so nothing moved.
+      evidence_unresolved: { count: 0, moneyIn: "0.00", moneyOut: "0.00", net: "0.00", pendingNet: "0.00" },
     });
     expect(r.notInPlan.unmatched.byReason).toBeNull();
     expect(r.notInPlan.uncertain.byKind).toBeNull();

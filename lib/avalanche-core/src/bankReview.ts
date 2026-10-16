@@ -1,3 +1,4 @@
+import type { EvidenceClass } from "./evidenceRule";
 import type { MovementCoverage } from "./householdMoney";
 import { MATCH_STRICT_DAYS, pairDayDelta, pairDifference, withinStrictTolerance } from "./planMatch";
 
@@ -17,7 +18,9 @@ import { MATCH_STRICT_DAYS, pairDayDelta, pairDifference, withinStrictTolerance 
  *        else                                                → asPlanned.
  *      A confirmed row whose plan the ledger did not load (dated before its
  *      window) is asPlanned on the household's word, with no plan detail.
- *   2. MARKED NOT IN THE PLAN (`ignored_unforecasted` / `unplanned`) → confirmedUnplanned.
+ *   2. MARKED NOT IN THE PLAN (`ignored_unforecasted` / `unplanned`) → confirmedUnplanned
+ *      — ⭐ (Task 6, A2) unless the evidence rule calls the row `unresolved`
+ *      (rule 2u below).
  *   3. A PAIR WAITING FOR REVIEW (`needs_review*`) → uncertain (needs_review).
  *   4. AUTOMATIC: the forecast ledger counted the row as paying a plan (a tier-1
  *      or tier-2 pair that is not ambiguous, or the row behind a plan the ledger
@@ -28,7 +31,19 @@ import { MATCH_STRICT_DAYS, pairDayDelta, pairDifference, withinStrictTolerance 
  *      account the forecast does not read → uncertain (not_compared). Never
  *      "unplanned": the plan was not asked.
  *   7. Otherwise → unmatched, by kind (spending, card payment, debt payment,
- *      transfer, income, refund, other).
+ *      transfer, income, refund, other) — unless rule 2u applies.
+ *
+ * ⭐ (Task 6, A2) 2u. EVIDENCE UNRESOLVED → uncertain (evidence_unresolved). A row
+ * the evidence rule (`classifyEvidence`, the one Spending reads) calls
+ * `unresolved` — the bank says loan payment / transfer / income, or it is filed
+ * against its direction — is never "not in the plan" here: Spending counts it
+ * as Unconfirmed, so Banking says Unclear, with the evidence. It applies where
+ * the row would otherwise land in confirmedUnplanned (rule 2: "not a planned
+ * payment" says nothing about what the row IS) or unmatched (rule 7). A
+ * household match (rule 1), a pair waiting for review (3), the ledger's own
+ * pair (4), a suggestion (5) and "not compared" (6) keep their place. Nothing is
+ * written: the household's answer stays stored, and the row moves when the
+ * household files it or matches it.
  *
  * ⚠️ "Not this" (`not_match`) only rejects one pairing; it never decides a row.
  * The unplanned-allowance flag ("UN") and a missing category are attributes of
@@ -95,7 +110,9 @@ export type BankReviewReason =
   | "needs_review"
   | "suggested_match"
   | "not_compared"
-  | "no_plan";
+  | "no_plan"
+  // (Task 6, A2) Rule 2u: the evidence rule calls the row unresolved.
+  | "evidence_unresolved";
 
 /**
  * (F2) What kind of plan an occurrence is: a paycheck (`income`), a bill, a
@@ -248,6 +265,12 @@ export interface BankReviewRowInput {
   suggestion: BankReviewPlanRef | null;
   /** False: before the comparison window, after today, or not the forecast's account (rule 6). */
   compared: boolean;
+  /**
+   * (Task 6, A2) The evidence rule's class for the row as it counts
+   * (`classifyEvidence`, with the window's evidence context); null or absent
+   * when the rule says nothing. `unresolved` triggers rule 2u.
+   */
+  evidenceClass?: EvidenceClass | null;
 }
 
 /** A plan beside a row: what was planned, and how the row differs. */
@@ -299,8 +322,12 @@ export function placeBankReviewRow(row: BankReviewRowInput): BankReviewRowPlacem
   const has = (...statuses: string[]) => row.resolutions.find((r) => statuses.includes(r.status));
   const confirmed = has("matched", "partial");
   if (confirmed) return split(row, confirmed.plan, "confirmed", confirmed.status === "partial");
+  // ⭐ (Task 6, A2) Rule 2u: what the bank's evidence leaves open is Unclear, never "not in the plan".
+  const evidenceUnresolved = row.evidenceClass === "unresolved";
+  const unclear: BankReviewRowPlacement = { bucket: "uncertain", reason: "evidence_unresolved", evidence: null, plan: null };
   const unplanned = has("ignored_unforecasted", "unplanned");
   if (unplanned) {
+    if (evidenceUnresolved) return unclear;
     return {
       bucket: "confirmedUnplanned",
       reason: unplanned.status === "unplanned" ? "marked_unplanned" : "ignored_unforecasted",
@@ -317,6 +344,7 @@ export function placeBankReviewRow(row: BankReviewRowInput): BankReviewRowPlacem
     return { bucket: "uncertain", reason: "suggested_match", evidence: null, plan: compare(row.suggestion, row) };
   }
   if (!row.compared) return { bucket: "uncertain", reason: "not_compared", evidence: null, plan: null };
+  if (evidenceUnresolved) return unclear;
   return { bucket: "unmatched", reason: "no_plan", evidence: null, plan: null };
 }
 
@@ -354,13 +382,18 @@ export interface BankReviewSummaryRow {
   placement: BankReviewRowPlacement;
 }
 
+/** The reasons an uncertain row has (rule 2u, 3, 5, 6). */
+export const UNCERTAIN_REASONS = ["needs_review", "suggested_match", "not_compared", "evidence_unresolved"] as const;
+export type UncertainReason = (typeof UNCERTAIN_REASONS)[number];
+const isUncertainReason = (r: BankReviewReason): r is UncertainReason => (UNCERTAIN_REASONS as readonly string[]).includes(r);
+
 export interface BankReviewSummary {
   buckets: Record<BankReviewBucket, BankReviewTotalsCents>;
   asPlanned: BankReviewTotalsCents;
   /** Unmatched rows by kind. */
   unmatchedByKind: Record<BankReviewKind, BankReviewTotalsCents>;
   /** Uncertain rows by reason. */
-  uncertainByReason: Record<"needs_review" | "suggested_match" | "not_compared", BankReviewTotalsCents>;
+  uncertainByReason: Record<UncertainReason, BankReviewTotalsCents>;
   /** Σ difference (whole cents) over the amountDifference rows whose plan amount is known. */
   differenceTotalCents: number;
   /** Σ every bucket's net + asPlanned's net: every row exactly once. */
@@ -392,11 +425,10 @@ export function summarizeBankReview(rows: readonly BankReviewSummaryRow[]): Bank
     BankReviewKind,
     BankReviewTotalsCents
   >;
-  const uncertainByReason = {
-    needs_review: emptyBankReviewTotals(),
-    suggested_match: emptyBankReviewTotals(),
-    not_compared: emptyBankReviewTotals(),
-  };
+  const uncertainByReason = Object.fromEntries(UNCERTAIN_REASONS.map((r) => [r, emptyBankReviewTotals()])) as Record<
+    UncertainReason,
+    BankReviewTotalsCents
+  >;
   const asPlanned = emptyBankReviewTotals();
   let differenceTotalCents = 0;
   let netCents = 0;
@@ -418,9 +450,7 @@ export function summarizeBankReview(rows: readonly BankReviewSummaryRow[]): Bank
     }
     addToBankReviewTotals(buckets[bucket], r.amountCents, r.pending);
     if (bucket === "unmatched") addToBankReviewTotals(unmatchedByKind[r.kind], r.amountCents, r.pending);
-    if (bucket === "uncertain" && (reason === "needs_review" || reason === "suggested_match" || reason === "not_compared")) {
-      addToBankReviewTotals(uncertainByReason[reason], r.amountCents, r.pending);
-    }
+    if (bucket === "uncertain" && isUncertainReason(reason)) addToBankReviewTotals(uncertainByReason[reason], r.amountCents, r.pending);
     if (bucket === "amountDifference" && plan?.difference != null) differenceTotalCents += toCents(plan.difference);
   }
   return { buckets, asPlanned, unmatchedByKind, uncertainByReason, differenceTotalCents, netCents, count: rows.length, varianceByBucket };

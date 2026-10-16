@@ -734,3 +734,25 @@ export function matchPlansToRows(
   }
   return out;
 }
+
+/**
+ * ⭐ (Task 6, A2) A SKIPPED OCCURRENCE MAY BE A SUGGESTION — NEVER EVIDENCE.
+ *
+ * The household skipped an occurrence ("Skip": it will not post), so the ledger
+ * leaves it out of `matchPlansToRows` and it never comes back onto the curve.
+ * But a bank row may still be that very payment (paid after the skip, or the
+ * skip was a slip). This pairs the skipped occurrences with the rows the main
+ * pass left free, by the matcher's own rules (sign, window, name or a confirmed
+ * row's description, amount; "Not this" pairs excluded), and makes every pair a
+ * SUGGESTION ONLY: tier 3, no evidence, never `offCurve`. It decides nothing:
+ * the occurrence stays skipped, the row stays where the evidence rule puts it,
+ * until the household answers (Match un-skips and matches in one write).
+ */
+export function suggestSkippedPlans(
+  plans: readonly MatchPlan[],
+  rows: readonly MatchRow[],
+  items: readonly MatchItem[],
+  notMatch: ReadonlySet<string> = new Set(),
+): PlanRowMatch[] {
+  return matchPlansToRows(plans, rows, items, notMatch).map((m) => ({ ...m, tier: 3 as const, evidence: null, offCurve: false }));
+}

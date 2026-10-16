@@ -63,7 +63,7 @@ import { TRACKING_START, buildSpendingFacts } from "./spendingFacts";
 import { householdTodayISO } from "./householdClock";
 import { expandSplits, loadSplitsForTxns } from "./categorizer/splits";
 import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
-import { billSuggestionsOf, evidenceContextOf, rowEvidenceOf } from "./rowEvidence";
+import { billSuggestionsOf, evidenceContextOf, evidenceView, rowEvidenceOf } from "./rowEvidence";
 import { suggestionsAfter, tier2PairedAfter, type CorrectionOverlay } from "./correctionOverlay";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -380,31 +380,6 @@ function rowView(
     reason: { coverage: m.coverage, nets: m.nets ?? null, rule: m.rule! },
     splitPart: e.splitPart ? { index: e.splitPart.index, count: e.splitPart.count, parentAmount: money(e.splitPart.parentCents) } : null,
     evidence: evidenceView(e.item.evidence),
-  };
-}
-
-/** (F2) A row's evidence as the response states it: its class, why, what was read, and what it probably is. */
-function evidenceView(ev: RowEvidence | null) {
-  if (!ev) return null;
-  return {
-    class: ev.class,
-    reason: ev.reason,
-    items: ev.evidence.map((i) => ({ field: i.field, value: i.value })),
-    suggestion: ev.suggestion
-      ? {
-          kind: ev.suggestion.kind,
-          detail: ev.suggestion.detail,
-          target: ev.suggestion.target
-            ? {
-                kind: ev.suggestion.target.kind,
-                id: ev.suggestion.target.itemId,
-                label: ev.suggestion.target.label,
-                planKey: ev.suggestion.target.planKey,
-                occurrenceDate: ev.suggestion.target.occurrenceDate,
-              }
-            : null,
-        }
-      : null,
   };
 }
 

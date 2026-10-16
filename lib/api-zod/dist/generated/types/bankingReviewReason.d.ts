@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 /**
- * Why a row is where it is: partial / amount (amountDifference), timing (timingDifference), marked_unplanned / ignored_unforecasted (confirmedUnplanned), needs_review / suggested_match / not_compared (uncertain), no_plan (unmatched)
+ * Why a row is where it is: partial / amount (amountDifference), timing (timingDifference), marked_unplanned / ignored_unforecasted (confirmedUnplanned), needs_review / suggested_match / not_compared / evidence_unresolved (uncertain), no_plan (unmatched). (Task 6) evidence_unresolved: the evidence rule Spending reads calls the row unresolved (the bank says loan payment, transfer or income, or it is filed against its direction) — never "not in the plan"; the row's `rowEvidence` says why
  */
 export type BankingReviewReason = (typeof BankingReviewReason)[keyof typeof BankingReviewReason];
 export declare const BankingReviewReason: {
@@ -20,5 +20,6 @@ export declare const BankingReviewReason: {
     readonly suggested_match: "suggested_match";
     readonly not_compared: "not_compared";
     readonly no_plan: "no_plan";
+    readonly evidence_unresolved: "evidence_unresolved";
 };
 //# sourceMappingURL=bankingReviewReason.d.ts.map

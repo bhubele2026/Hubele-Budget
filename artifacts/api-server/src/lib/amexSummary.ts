@@ -8,7 +8,13 @@
 //   owed           `resolveAmexAnchor` — GET /amex/anchor's own answer (per
 //                  card with `?accountId=`, the combined anchor for "all"), and
 //                  a debt-linked card's latest statement (`loadLatestStatements`).
-//                  Unknown is null, never 0.
+//                  Unknown is null, never 0. ⭐ (Task 6, matrix) Beside it,
+//                  `tracked`: the linked debt's balance as the DEBT PLAN counts
+//                  it (`debts.balance` net of pending tagged payments —
+//                  `withPendingPayments` + `effectiveDebtBalance`, GET /debts's
+//                  own figure) and where it came from. Two measures: the card's
+//                  own figure, and the debt row a typed (`manual`) balance
+//                  keeps, which no Sync overwrites.
 //   purchases …    every row on the card(s) dated in the period, once
 //                  (a pending row its posted row replaced is out —
 //                  `findSupersededPendingForRange` over the period, the
@@ -51,6 +57,7 @@
 
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { db, debtsTable, plaidAccountsTable, plaidItemsTable, settingsTable, transactionsTable } from "@workspace/db";
+import { withPendingPayments } from "./debtPending";
 import {
   HOUSEHOLD_TZ,
   addDaysISO,
@@ -59,6 +66,7 @@ import {
   amexCardLabel,
   classifyCardCredit,
   creditAmount,
+  effectiveDebtBalance,
   evidenceSplitCents,
   netAccountOf,
   readEverydayHooks,
@@ -393,11 +401,27 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
   const one = q.accountId === "all" ? null : cards[0]!;
   const anchor = one ? anchors.get(one.accountId)! : await resolveAmexAnchor(householdId, ownerUserId, null);
   const statements = one?.debtId ? await loadLatestStatements(householdId, [one.debtId]) : null;
+  // ⭐ (Task 6, matrix) The debt plan's own figure for this card, beside the card's (see the header).
+  let tracked: { debtId: string; name: string; balance: string; source: "plaid" | "manual"; asOf: string | null } | null = null;
+  if (one?.debtId) {
+    const [row] = await db.select().from(debtsTable).where(and(eq(debtsTable.id, one.debtId), eq(debtsTable.householdId, householdId)));
+    if (row && row.status === "active") {
+      const [netted] = await withPendingPayments(householdId, [row]);
+      tracked = {
+        debtId: row.id,
+        name: row.name,
+        balance: money(toCents(effectiveDebtBalance(netted!))),
+        source: row.balanceSource === "plaid" ? "plaid" : "manual",
+        asOf: (row.balanceSource === "plaid" ? row.plaidLastSyncedAt : row.lastBalanceUpdate)?.toISOString() ?? null,
+      };
+    }
+  }
   const owed = {
     current: anchor.amexEndingBalance == null ? null : money(toCents(anchor.amexEndingBalance)),
     statement: one?.debtId ? (statements?.get(one.debtId)?.balance ?? null) : null,
     asOf: anchor.source === "missing" ? null : anchor.asOf,
     source: anchor.source,
+    tracked,
   };
 
   // ── Every row on the card(s), once, in one bucket.

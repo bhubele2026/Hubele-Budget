@@ -41,7 +41,15 @@
 //
 // Every class says WHY (`reason`) and lists its evidence (`evidence`: the field
 // and the value it read). An unresolved row also carries a `suggestion`: what
-// it probably is, with the bill when the forecast names one. The server reads
+// it probably is, with the bill when the forecast names one.
+//
+// ⭐ (Task 6, A2) A SKIPPED OCCURRENCE NAMES A TARGET, NOT A REASON. When the
+// forecast's matcher pairs an unfiled row with an occurrence the household
+// SKIPPED (`suggestSkippedPlans`: a suggestion only, never off the curve), the
+// row keeps the reason its own evidence gives ("bank says loan payment") and its
+// suggestion gains that occurrence as its target, marked `skipped`, with the
+// plan's amount — "Looks like <plan>, planned $P on <day> (skipped)". The class
+// does not move: the row stays unresolved until the household answers. The server reads
 // `pfc_primary` / `pfc_detailed` as stored (and, for a posted row with none,
 // the pending row it replaced — `carriedPfc`), never a merchant name: the only
 // words read from a description are the person-to-person rail names above.
@@ -144,8 +152,24 @@ export interface EvidenceSuggestion {
    * `account` · `other` · `in`; null otherwise.
    */
   detail: string | null;
-  /** The bill the forecast suggests (`bill` only); null when none is named. */
-  target: { kind: "bill"; itemId: string; label: string; planKey: string; occurrenceDate: string } | null;
+  /**
+   * The bill the forecast suggests; null when none is named. A `bill`
+   * suggestion's own bill, or (Task 6, A2) a skipped occurrence the matcher
+   * pairs with an otherwise unresolved row (`skipped: true`).
+   */
+  target: EvidenceTarget | null;
+}
+
+/** (Task 6, A2) The occurrence a suggestion names. `planned` is signed (negative: money out); null when not known. */
+export interface EvidenceTarget {
+  kind: "bill";
+  itemId: string;
+  label: string;
+  planKey: string;
+  occurrenceDate: string;
+  planned: number | null;
+  /** The household skipped this occurrence: Match un-skips it and matches the row in one write. */
+  skipped: boolean;
 }
 
 export interface RowEvidence {
@@ -162,7 +186,21 @@ export interface BillSuggestionRef {
   itemId: string;
   label: string;
   occurrenceDate: string;
+  /** (Task 6, A2) The occurrence's planned amount, signed; null or absent when not known. */
+  planned?: number | null;
+  /** (Task 6, A2) A SKIPPED occurrence (`suggestSkippedPlans`): a target only, never a `bill_suggestion` reason. */
+  skipped?: boolean;
 }
+
+const targetOf = (b: BillSuggestionRef): EvidenceTarget => ({
+  kind: "bill",
+  itemId: b.itemId,
+  label: b.label,
+  planKey: b.planKey,
+  occurrenceDate: b.occurrenceDate,
+  planned: b.planned ?? null,
+  skipped: b.skipped === true,
+});
 
 /** The Plaid category a posted row borrows from the pending row it replaced, when it has none of its own. */
 export interface CarriedPfc {
@@ -356,23 +394,29 @@ function unfiledOutflow(
   pfc: { primary: string | null; detailed: string | null },
   ctx: EvidenceContext,
 ): RowEvidence {
-  const bill = ctx.billSuggestions.get(row.id);
+  const suggested = ctx.billSuggestions.get(row.id);
+  // (Task 6, A2) A skipped occurrence is a target for the row's own suggestion, never a reason.
+  const bill = suggested && !suggested.skipped ? suggested : null;
+  const skipped = suggested?.skipped ? suggested : null;
   const contrary = pfcContrary(pfc, row.description);
   if (bill) {
     return {
       class: "unresolved",
       reason: "bill_suggestion",
       evidence: [{ field: "bill_suggestion", value: bill.label }, ...pfcItems(pfc)],
-      suggestion: {
-        kind: "bill",
-        detail: null,
-        target: { kind: "bill", itemId: bill.itemId, label: bill.label, planKey: bill.planKey, occurrenceDate: bill.occurrenceDate },
-      },
+      suggestion: { kind: "bill", detail: null, target: targetOf(bill) },
     };
   }
   if (contrary === "atm") return known("atm_withdrawal", pfcItems(pfc));
   if (contrary === "p2p") return known("person_to_person", pfcItems(pfc));
-  if (contrary) return { class: "unresolved", reason: contrary.reason, evidence: pfcItems(pfc), suggestion: contrary.suggestion };
+  if (contrary) {
+    return {
+      class: "unresolved",
+      reason: contrary.reason,
+      evidence: pfcItems(pfc),
+      suggestion: skipped ? { ...contrary.suggestion, target: targetOf(skipped) } : contrary.suggestion,
+    };
+  }
   if (pfc.primary && PURCHASE_PFC_PRIMARIES.has(pfc.primary)) return known("purchase_category", pfcItems(pfc));
   return known("no_contrary_evidence", pfcItems(pfc));
 }

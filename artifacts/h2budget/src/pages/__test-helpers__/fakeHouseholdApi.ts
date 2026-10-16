@@ -106,6 +106,11 @@ export type FakeChecking = {
   /** The projected low point and its day. Default: the balance today, today. */
   lowPoint?: { value: string; date: string };
   cashBuffer?: string;
+  /**
+   * (Task 6) The week contract as ONE household answers it: GET /money/position, the spine's
+   * `position` and the Banking review's household block. Absent: nothing spent, no block.
+   */
+  week?: { start: string; end: string; known: string; unresolved: string; provisional: boolean; cap: string | null };
 };
 
 const json = (status: number, body: unknown) =>
@@ -231,16 +236,16 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
       account: signalAccount,
     },
     spentMonth: 0,
-    spentWeek: 0,
+    spentWeek: wk() ? Number(wk()!.spent) : 0,
     nextBill: null,
     billsDueCount: 0,
     forecast: { lowPoint: low().value, lowPointDate: low().date, runwayDays: null, cashBuffer: buffer(), status: cashSignal(90).status },
     debt: { payoffPct: null, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 },
     reviewCount: 0,
     position: {
-      safeToSpendNow: null, remainingWeek: null, availableUntilPayday: null, paydayDate: null, horizonKind: "week_end",
-      withinPlan: null, confidence: "firm", degraded: false, weekAdjustment: null, knownWeek: "0.00", unresolvedWeek: "0.00",
-      provisional: false, remainingWeekKnown: null,
+      safeToSpendNow: null, remainingWeek: wk()?.remaining ?? null, availableUntilPayday: null, paydayDate: null, horizonKind: "week_end",
+      withinPlan: wk()?.within ?? null, confidence: "firm", degraded: false, weekAdjustment: null, knownWeek: wk()?.known ?? "0.00", unresolvedWeek: wk()?.unresolved ?? "0.00",
+      provisional: wk()?.provisional ?? false, remainingWeekKnown: wk()?.remainingKnown ?? null,
     },
     monthAllowance: { plan: null, actual: "0.00", status: "not_set", remaining: null, over: null },
     bankConfidence: {
@@ -252,11 +257,23 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
       pendingCount: 0,
     },
   });
+  // (Task 6) The week contract, once: every reader below takes it from here.
+  const wk = () => {
+    const w = chk?.week;
+    if (!w) return null;
+    const c = (v: string) => Math.round(Number(v) * 100);
+    const spent = ((c(w.known) + c(w.unresolved)) / 100).toFixed(2);
+    const remaining = w.cap == null ? null : ((c(w.cap) - c(spent)) / 100).toFixed(2);
+    const remainingKnown = w.cap == null ? null : ((c(w.cap) - c(w.known)) / 100).toFixed(2);
+    const within = w.cap == null ? null : c(w.cap) - c(w.known) < 0 ? "over" : "yes";
+    return { ...w, spent, remaining, remainingKnown, within };
+  };
   const moneyPosition = () => ({
-    safeToSpendNow: null, remainingWeek: null, availableUntilPayday: null, paydayDate: null,
-    horizon: { kind: "week_end", endDate: opts.today, lastDay: opts.today }, withinPlan: null, confidence: "firm", degraded: false,
-    weekAdjustment: null, lowestUntilPayday: null, cashBuffer: buffer(), weekCap: null, spentWeekDiscretionary: "0.00",
-    weekStart: opts.today, weekEnd: opts.today, knownWeek: "0.00", unresolvedWeek: "0.00", provisional: false, remainingWeekKnown: null,
+    safeToSpendNow: null, remainingWeek: wk()?.remaining ?? null, availableUntilPayday: null, paydayDate: null,
+    horizon: { kind: "week_end", endDate: opts.today, lastDay: opts.today }, withinPlan: wk()?.within ?? null, confidence: "firm", degraded: false,
+    weekAdjustment: null, lowestUntilPayday: null, cashBuffer: buffer(), weekCap: wk()?.cap ?? null, spentWeekDiscretionary: wk()?.spent ?? "0.00",
+    weekStart: wk()?.start ?? opts.today, weekEnd: wk()?.end ?? opts.today, knownWeek: wk()?.known ?? "0.00", unresolvedWeek: wk()?.unresolved ?? "0.00",
+    provisional: wk()?.provisional ?? false, remainingWeekKnown: wk()?.remainingKnown ?? null,
   });
   const forecastBundle = () => ({
     dataAsOf: dataAsOf(),
@@ -298,7 +315,13 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
     reviewInbox: { unresolvedInRange: 0, unresolvedScope: "this account · this period", unresolvedFrom: from, unresolvedTo: to, badgeCount: 0, badgeScope: "this calendar month, forecast account" },
     balanceTie: { status: "not_checked", checkedAt: null, unexplained: null },
     balanceCheck: reviewCheck(),
-    household: null,
+    household: wk()
+      ? {
+          scope: "all accounts · this week", weekStart: wk()!.start, weekEnd: wk()!.end, spentWeek: wk()!.spent, weekPlan: wk()!.cap,
+          remainingWeek: wk()!.remaining, knownWeek: wk()!.known, unresolvedWeek: wk()!.unresolved, provisional: wk()!.provisional,
+          remainingWeekKnown: wk()!.remainingKnown,
+        }
+      : null,
     page: null,
   });
 

@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexCardPayoffMode, AmexSummary, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, BankingCheckExplain, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PlanUnsafe, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewProposals, ReviewRefusal, ReviewResolution, RunCategorizationInput, SetAmexCardPayoffModeBody, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexCardPayoffMode, AmexSummary, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, BankingCheckExplain, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, ForecastResolutionUndoInput, ForecastResolutionUndone, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PlanUnsafe, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewProposals, ReviewRefusal, ReviewResolution, RunCategorizationInput, SetAmexCardPayoffModeBody, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -371,6 +371,38 @@ export declare function useGetMappingRuleHistory<TData = Awaited<ReturnType<type
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * One transaction: deletes the answer and restores the answers POST /forecast/resolutions returned as `replaced` (same ids, statuses, dates, rows and times). Only answers that write could have deleted are accepted, so a Match made on a skipped occurrence un-does to the skip. 400 invalid_restore (not those answers; nothing written), 409 not_found / changed_since (nothing written).
+ * @summary (Task 6) Undo one answer exactly — delete it and put back the answers its write replaced
+ */
+export declare const getUndoForecastResolutionUrl: (id: string) => string;
+export declare const undoForecastResolution: (id: string, forecastResolutionUndoInput: ForecastResolutionUndoInput, options?: RequestInit) => Promise<ForecastResolutionUndone>;
+export declare const getUndoForecastResolutionMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoForecastResolution>>, TError, {
+        id: string;
+        data: BodyType<ForecastResolutionUndoInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof undoForecastResolution>>, TError, {
+    id: string;
+    data: BodyType<ForecastResolutionUndoInput>;
+}, TContext>;
+export type UndoForecastResolutionMutationResult = NonNullable<Awaited<ReturnType<typeof undoForecastResolution>>>;
+export type UndoForecastResolutionMutationBody = BodyType<ForecastResolutionUndoInput>;
+export type UndoForecastResolutionMutationError = ErrorType<void>;
+/**
+ * @summary (Task 6) Undo one answer exactly — delete it and put back the answers its write replaced
+ */
+export declare const useUndoForecastResolution: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoForecastResolution>>, TError, {
+        id: string;
+        data: BodyType<ForecastResolutionUndoInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof undoForecastResolution>>, TError, {
+    id: string;
+    data: BodyType<ForecastResolutionUndoInput>;
+}, TContext>;
 /**
  * Stored in settings.preferences.amexCardPayoffMode (server-owned: a settings save never writes or clears it). `null` clears the choice and the default from the card's debt row applies (no active debt → in_full; an active debt with an APR or a minimum → debt_plan). Answers the card's resolved mode.
  * @summary (F1) Say how one Amex card is paid — in full by the everyday hook, or on the debt plan (household owner only)

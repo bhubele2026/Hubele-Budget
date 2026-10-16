@@ -157,3 +157,75 @@ export async function restoreForecastResolutions(exec: Exec, rows: readonly Fore
     })),
   );
 }
+
+/**
+ * ⭐ (Task 6, A2) Would `writeForecastResolution(input)` delete `row`? The very
+ * conditions `neighbourConditions` sends to the database, read on one row — so
+ * an undo restores only answers that write could have replaced.
+ */
+export function isNeighbourOf(
+  input: ForecastResolutionInput,
+  row: Pick<ForecastResolutionRow, "householdId" | "recurringItemId" | "occurrenceDate" | "status" | "matchedTxnId">,
+): boolean {
+  if (row.householdId !== input.householdId) return false;
+  const { recurringItemId, occurrenceDate, status, matchedTxnId } = input;
+  const samePair =
+    !!recurringItemId &&
+    !!occurrenceDate &&
+    !!matchedTxnId &&
+    row.recurringItemId === recurringItemId &&
+    row.occurrenceDate === occurrenceDate &&
+    row.matchedTxnId === matchedTxnId;
+  if (status === "not_match") {
+    return samePair && ["not_match", "matched", "partial", "needs_review", "needs_review_partial"].includes(row.status);
+  }
+  if (recurringItemId && occurrenceDate && row.recurringItemId === recurringItemId && row.occurrenceDate === occurrenceDate && row.status !== "not_match") {
+    if (status === "partial" && row.status === "rescheduled") return false;
+    if (status === "rescheduled" && ["partial", "needs_review", "needs_review_partial"].includes(row.status)) return false;
+    return true;
+  }
+  if (matchedTxnId && row.matchedTxnId === matchedTxnId && row.status !== "not_match") return true;
+  return samePair && row.status === "not_match";
+}
+
+export type UndoResolutionRefusal = "not_found" | "invalid_restore" | "changed_since";
+
+/**
+ * ⭐ (Task 6, A2) UNDO ONE ANSWER EXACTLY: delete the answer a write inserted
+ * and put back the answers it replaced (the `deleted` it returned), with their
+ * own ids and fields — so a Match made on a SKIPPED occurrence un-does to the
+ * skip, not to an open bill. Refused, nothing written, when the answer is gone
+ * (`not_found`), a row to restore is not one that write could have deleted
+ * (`invalid_restore`), or its id is back in the table (`changed_since`). Pass a
+ * transaction: the delete and the restore are one unit.
+ */
+export async function undoForecastResolution(
+  exec: Exec,
+  householdId: string,
+  resolutionId: string,
+  restore: readonly ForecastResolutionRow[],
+): Promise<{ ok: true; restored: number } | { ok: false; code: UndoResolutionRefusal }> {
+  const t = forecastResolutionsTable;
+  const [answer] = await exec.select().from(t).where(and(eq(t.id, resolutionId), eq(t.householdId, householdId)));
+  if (!answer) return { ok: false, code: "not_found" };
+  const input: ForecastResolutionInput = {
+    userId: answer.userId,
+    householdId,
+    recurringItemId: answer.recurringItemId,
+    occurrenceDate: answer.occurrenceDate,
+    status: answer.status,
+    matchedTxnId: answer.matchedTxnId,
+    rescheduledTo: answer.rescheduledTo,
+  };
+  const ids = new Set(restore.map((r) => r.id));
+  if (ids.size !== restore.length || ids.has(resolutionId) || !restore.every((r) => isNeighbourOf(input, r))) {
+    return { ok: false, code: "invalid_restore" };
+  }
+  if (restore.length > 0) {
+    const taken = await exec.select({ id: t.id }).from(t).where(inArray(t.id, [...ids]));
+    if (taken.length > 0) return { ok: false, code: "changed_since" };
+  }
+  await exec.delete(t).where(and(eq(t.id, resolutionId), eq(t.householdId, householdId)));
+  await restoreForecastResolutions(exec, restore);
+  return { ok: true, restored: restore.length };
+}

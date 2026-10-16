@@ -10,5 +10,6 @@ export interface BankingReviewUncertainTotals {
     needs_review: BankingReviewTotals;
     suggested_match: BankingReviewTotals;
     not_compared: BankingReviewTotals;
+    evidence_unresolved: BankingReviewTotals;
 }
 //# sourceMappingURL=bankingReviewUncertainTotals.d.ts.map
