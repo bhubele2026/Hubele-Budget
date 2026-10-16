@@ -7,7 +7,7 @@
  */
 import type { RowEvidenceTargetKind } from "./rowEvidenceTargetKind";
 /**
- * The bill the forecast suggests (a recurring item's occurrence)
+ * The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.
  */
 export interface RowEvidenceTarget {
     kind: RowEvidenceTargetKind;
@@ -17,5 +17,12 @@ export interface RowEvidenceTarget {
     /** <itemId>|<occurrenceDate> */
     planKey: string;
     occurrenceDate: string;
+    /**
+     * (Task 6) The occurrence's planned amount, signed (negative: money out); null when not known
+     * @nullable
+     */
+    planned: string | null;
+    /** (Task 6) The household skipped this occurrence */
+    skipped: boolean;
 }
 //# sourceMappingURL=rowEvidenceTarget.d.ts.map

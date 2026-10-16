@@ -205,7 +205,7 @@ describe("classifyEvidence — unresolved: contrary evidence, no household confi
         { field: "pfc_primary", value: "GENERAL_SERVICES" },
         { field: "pfc_detailed", value: "GENERAL_SERVICES_INSURANCE" },
       ],
-      suggestion: { kind: "bill", detail: null, target: { kind: "bill", itemId: "bill-shield", label: "Shieldline Life", planKey: SHIELD.planKey, occurrenceDate: "2026-10-20" } },
+      suggestion: { kind: "bill", detail: null, target: { kind: "bill", itemId: "bill-shield", label: "Shieldline Life", planKey: SHIELD.planKey, occurrenceDate: "2026-10-20", planned: null, skipped: false } },
     });
     // A suggestion never overrules a household fact: a flagged or matched row is not unresolved.
     expect(said({ ...r, weeklyAllowance: true }, mctx(), new Map([["ins", SHIELD]]))).toBe("known_purchase household_flag");
@@ -235,6 +235,49 @@ describe("classifyEvidence — unresolved: contrary evidence, no household confi
     expect(said(row({ amount: "500.00", isTransfer: true, categoryId: "cat-dining" }))).toBe("none");
     expect(said(row({ amount: "100.00", description: "MOBILE DEPOSIT" }))).toBe("none");
     expect(said(row({ amount: "0.00" }))).toBe("none");
+  });
+});
+
+describe("(Task 6, A2) a SKIPPED occurrence names a target, never a reason", () => {
+  // Synthetic: a credit line on the 2nd, skipped this month; the row is a loan payment by the bank's category.
+  const SKIPPED: BillSuggestionRef = {
+    planKey: "bill-line|2026-05-02",
+    itemId: "bill-line",
+    label: "Credit Line (Northwind)",
+    occurrenceDate: "2026-05-02",
+    planned: -820,
+    skipped: true,
+  };
+  const loan = row({ id: "nwd", amount: "-861.37", description: "NWD LNS PMT", pfcPrimary: "LOAN_PAYMENTS", pfcDetailed: "LOAN_PAYMENTS_OTHER_PAYMENT" });
+
+  it("the row keeps its own reason and evidence; the suggestion gains the skipped occurrence as its target", () => {
+    const e = evidenceOf(loan, mctx(), new Map([["nwd", SKIPPED]]))!;
+    expect(e).toEqual({
+      class: "unresolved",
+      reason: "loan_payment",
+      evidence: [
+        { field: "pfc_primary", value: "LOAN_PAYMENTS" },
+        { field: "pfc_detailed", value: "LOAN_PAYMENTS_OTHER_PAYMENT" },
+      ],
+      suggestion: {
+        kind: "loan_payment",
+        detail: null,
+        target: { kind: "bill", itemId: "bill-line", label: "Credit Line (Northwind)", planKey: SKIPPED.planKey, occurrenceDate: "2026-05-02", planned: -820, skipped: true },
+      },
+    });
+  });
+
+  it("the class never moves: a purchase stays a purchase, a household fact stays the fact", () => {
+    const grocery = row({ id: "nwd", amount: "-861.37", description: "NWD MARKET", pfcPrimary: "FOOD_AND_DRINK" });
+    expect(said(grocery, mctx(), new Map([["nwd", SKIPPED]]))).toBe("known_purchase purchase_category");
+    expect(evidenceOf(grocery, mctx(), new Map([["nwd", SKIPPED]]))!.suggestion).toBeNull();
+    expect(said({ ...loan, weeklyAllowance: true }, mctx(), new Map([["nwd", SKIPPED]]))).toBe("known_purchase household_flag");
+    expect(said(loan, mctx({ matchedTxnIds: new Set(["nwd"]) }), new Map([["nwd", SKIPPED]]))).toBe("confirmed_payment bill_match");
+  });
+
+  it("an open occurrence is still a bill suggestion (unchanged)", () => {
+    const open = { ...SKIPPED, skipped: false };
+    expect(said(loan, mctx(), new Map([["nwd", open]]))).toBe("unresolved bill_suggestion");
   });
 });
 

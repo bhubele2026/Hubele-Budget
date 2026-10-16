@@ -132,6 +132,14 @@ const statOf = (testid: string): string =>
   screen.getByTestId(testid).textContent ?? "";
 
 describe("Forecast Overview — headline figures come from the spine", () => {
+  it("(S) names the place with one h1, for a screen reader; the tab and breadcrumb name it on screen", () => {
+    render(<ForecastOverviewPage />);
+    const h1 = screen.getAllByRole("heading", { level: 1 });
+    expect(h1).toHaveLength(1);
+    expect(h1[0].textContent).toBe("Forecast overview");
+    expect(h1[0].className).toContain("sr-only");
+  });
+
   it("renders bank today, the cash low point and runway as the spine's values", () => {
     render(<ForecastOverviewPage />);
 

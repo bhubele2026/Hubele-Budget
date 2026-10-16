@@ -6,6 +6,7 @@ import {
   rowInMatchWindow,
   rowWithinMatchAmount,
   rowPaysPlanInFull,
+  suggestSkippedPlans,
   type ConfirmedRow,
   type MatchItem,
   type MatchPlan,
@@ -801,5 +802,30 @@ describe("(F5) a row another card's ledger received never pays this debt's plan"
     // A plan with no debt (a plain bill) is not judged by the card ledger.
     const bill = plan("amex-bill", "2026-10-05", -45, "Amex");
     expect(match([bill], [{ ...exact, ledgerDebtIds: ["platinum"] }])[0]).toMatchObject({ tier: 2 });
+  });
+});
+
+describe("(Task 6, A2) suggestSkippedPlans — a skipped occurrence is a suggestion, never evidence", () => {
+  // Synthetic: the item's last confirmed row names the payee ("NWD LNS PMT"), the label does not.
+  const confirmed: ConfirmedRow[] = [{ description: "NWD LNS PMT", amount: -861.37 }];
+  const line = plan("line", "2026-05-02", -820, "Credit Line (Northwind)", { confirmedRows: confirmed });
+  const items: MatchItem[] = [{ itemId: "line", label: "Credit Line (Northwind)", categoryId: null, income: false }];
+  const r = row("nwd", "2026-05-12", -861.37, "NWD LNS PMT");
+
+  it("the matcher alone would take the occurrence off the curve (tier 2, confirmed descriptor)", () => {
+    const [m] = match([line], [r]);
+    expect(m).toMatchObject({ planKey: line.key, txnId: "nwd", tier: 2, offCurve: true });
+  });
+
+  it("as a skipped occurrence the same pair is tier 3, no evidence, never off the curve", () => {
+    const out = suggestSkippedPlans([line], [r], items);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ planKey: line.key, txnId: "nwd", tier: 3, evidence: null, offCurve: false, difference: 41.37, dayDelta: 10 });
+  });
+
+  it("'Not this' on the pair, a row out of the window or the wrong sign: no suggestion", () => {
+    expect(suggestSkippedPlans([line], [r], items, new Set([`${line.key}#nwd`]))).toEqual([]);
+    expect(suggestSkippedPlans([line], [row("late", "2026-05-20", -861.37, "NWD LNS PMT")], items)).toEqual([]);
+    expect(suggestSkippedPlans([line], [row("in", "2026-05-12", 861.37, "NWD LNS PMT")], items)).toEqual([]);
   });
 });

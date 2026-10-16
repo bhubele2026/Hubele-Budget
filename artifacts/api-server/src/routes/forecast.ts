@@ -11,6 +11,7 @@ import {
   plaidItemsTable,
   plaidAccountsTable,
   avalancheSettingsTable,
+  householdMembersTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -29,7 +30,11 @@ import {
   resolutionScheduleLookup,
 } from "../lib/debtMinSchedule";
 import { remapOrphanResolutions } from "../lib/resolutionRemap";
-import { writeForecastResolution } from "../lib/forecastResolutionWrite";
+import {
+  undoForecastResolution,
+  writeForecastResolution,
+  type ForecastResolutionRow,
+} from "../lib/forecastResolutionWrite";
 import { readPausedReview } from "../lib/oneTimeBillMove";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
@@ -1155,16 +1160,108 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
   // live in `writeForecastResolution` (lib/forecastResolutionWrite.ts), moved
   // there unchanged and run here on the pool exactly as before; it also returns
   // the rows it deleted, which a proposed fix keeps for its undo.
-  const { row } = await writeForecastResolution(db, {
-    userId,
-    householdId,
-    recurringItemId,
-    occurrenceDate,
-    status,
-    matchedTxnId,
-    rescheduledTo,
-  });
-  res.json(row);
+  // ⭐ (Task 6, A2) The deletes and the insert are one transaction now (the same
+  // statements, in the same order), and the answer names the rows it replaced
+  // (`replaced`), so an Undo can put them back exactly
+  // (`POST /forecast/resolutions/:id/undo`): a Match made on a SKIPPED occurrence
+  // un-does to the skip, not to an open bill.
+  const { row, deleted } = await db.transaction((tx) =>
+    writeForecastResolution(tx, {
+      userId,
+      householdId,
+      recurringItemId,
+      occurrenceDate,
+      status,
+      matchedTxnId,
+      rescheduledTo,
+    }),
+  );
+  res.json({ ...row, replaced: deleted.map(replacedView) });
+});
+
+/** (Task 6, A2) A replaced answer as POST /forecast/resolutions returns it (and its undo takes it back). */
+const replacedView = (r: ForecastResolutionRow) => ({
+  id: r.id,
+  userId: r.userId,
+  recurringItemId: r.recurringItemId,
+  occurrenceDate: r.occurrenceDate,
+  status: r.status,
+  matchedTxnId: r.matchedTxnId,
+  rescheduledTo: r.rescheduledTo,
+  createdAt: r.createdAt.toISOString(),
+});
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UNDO_WORDS: Record<string, string> = {
+  not_found: "This answer is no longer there. Nothing was changed.",
+  invalid_restore: "These answers are not the ones this answer replaced. Nothing was changed.",
+  changed_since: "These answers changed since. Nothing was changed.",
+};
+
+/**
+ * ⭐ (Task 6, A2) UNDO ONE ANSWER: delete it and put back, exactly, the answers
+ * its write replaced (`replaced` from POST /forecast/resolutions), in one
+ * transaction (`undoForecastResolution`). Only answers that write could have
+ * deleted are accepted; each keeps its id, status, dates, row and time, and its
+ * author when that person is in the household.
+ */
+router.post("/forecast/resolutions/:id/undo", requireAuth, async (req, res): Promise<void> => {
+  const householdId = req.householdId!;
+  const id = String(req.params.id);
+  const raw: unknown = (req.body ?? {}).restore;
+  if (!UUID_RE.test(id) || !Array.isArray(raw) || raw.length > 20) {
+    res.status(400).json({ error: "restore must be the list of answers this answer replaced", code: "invalid_restore" });
+    return;
+  }
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+  const parsed: ForecastResolutionRow[] = [];
+  for (const r of raw as Array<Record<string, unknown>>) {
+    const createdAt = new Date(String(r?.createdAt ?? ""));
+    const occurrenceDate = str(r?.occurrenceDate);
+    const rescheduledTo = str(r?.rescheduledTo);
+    const matchedTxnId = str(r?.matchedTxnId);
+    if (
+      !r ||
+      typeof r.id !== "string" ||
+      !UUID_RE.test(r.id) ||
+      typeof r.status !== "string" ||
+      typeof r.userId !== "string" ||
+      Number.isNaN(createdAt.getTime()) ||
+      (occurrenceDate !== null && !iso.test(occurrenceDate)) ||
+      (rescheduledTo !== null && !iso.test(rescheduledTo)) ||
+      (matchedTxnId !== null && !UUID_RE.test(matchedTxnId))
+    ) {
+      res.status(400).json({ error: UNDO_WORDS.invalid_restore, code: "invalid_restore" });
+      return;
+    }
+    parsed.push({
+      id: r.id,
+      userId: r.userId,
+      householdId,
+      recurringItemId: str(r.recurringItemId),
+      occurrenceDate,
+      status: r.status,
+      matchedTxnId,
+      rescheduledTo,
+      createdAt,
+    });
+  }
+  // The author stays when that person is in the household; else the person undoing.
+  const members = new Set(
+    (await db.select({ userId: householdMembersTable.userId }).from(householdMembersTable).where(eq(householdMembersTable.householdId, householdId))).map(
+      (m) => m.userId,
+    ),
+  );
+  members.add(req.householdOwnerId!);
+  members.add(req.userId!);
+  const rows = parsed.map((r) => (members.has(r.userId) ? r : { ...r, userId: req.userId! }));
+  const out = await db.transaction((tx) => undoForecastResolution(tx, householdId, id, rows));
+  if (!out.ok) {
+    res.status(out.code === "invalid_restore" ? 400 : 409).json({ error: UNDO_WORDS[out.code], code: out.code });
+    return;
+  }
+  res.json({ undone: id, restored: out.restored });
 });
 
 router.delete(

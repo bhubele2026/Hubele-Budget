@@ -76,7 +76,7 @@ export function AllowanceCard({
           <div className="text-micro text-neutral-400">Filed spend, by bucket</div>
         </div>
         <Help>
-          {`Spend you filed into a bucket yourself — unfiled spend counts in none of the three. The caps come from Settings; the weekly one is scaled to this month by ${allowance.weeksInMonth} weeks.`}
+          {`Spend you filed into a bucket yourself — unfiled spend counts in none of the three. The weekly and monthly caps are your plans (Unplanned is set in Settings); the weekly one is scaled to this month by ${allowance.weeksInMonth} weeks.`}
         </Help>
         <div className="text-right">
           <div

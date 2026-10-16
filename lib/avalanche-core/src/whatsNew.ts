@@ -52,6 +52,24 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-10-16.4",
+    headline: "Unclear bank rows, matching a skipped bill, honest failures",
+    items: [
+      {
+        title: "Unclear rows say why",
+        body: "A bank row the rules cannot place sits under Unclear on Banking with the bank's own words. When it looks like a bill you skipped, H2 names the bill and offers Match, with Undo.",
+      },
+      {
+        title: "Pages say when they could not load",
+        body: "Debts, reports, mapping rules and the forecast now say so and offer Try again instead of showing empty lists or zeros.",
+      },
+      {
+        title: "Owed beside the payoff plan",
+        body: "Each Amex card's Owed figure now sits beside the payoff plan's balance and says whether that balance came from the card or was typed in.",
+      },
+    ],
+  },
+  {
     id: "2026-10-16.3",
     headline: "The rows behind your balance, and clearer forecast rows",
     items: [

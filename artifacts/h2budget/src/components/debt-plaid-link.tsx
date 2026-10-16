@@ -45,6 +45,7 @@ import {
   plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
 import { formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
+import { btnLink, errorBanner } from "@/ui";
 
 function relTime(iso: string | null | undefined): string {
   if (!iso) return "never";
@@ -996,6 +997,23 @@ export function DebtReauthBanner({ debts }: { debts: Debt[] | null | undefined }
       >
         <X className="h-4 w-4" />
       </Button>
+    </div>
+  );
+}
+
+/**
+ * The debts read failed and nothing is cached: say so, with a way to try again.
+ * Neither "No debts recorded" nor zero tiles is true here. Lives with the other
+ * debt-page pieces both debt pages already load (a new shared module would cost
+ * the landing bundle, which has no room).
+ */
+export function DebtsLoadFailed({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div role="alert" className={errorBanner} data-testid="debts-load-failed">
+      Couldn't load your debts.{" "}
+      <button type="button" className={btnLink} onClick={onRetry}>
+        Try again
+      </button>
     </div>
   );
 }

@@ -56,7 +56,7 @@ import { buildMoneyPosition, POSITION_HORIZON_DAYS, tier2PairedTxnIdsOf } from "
 import { computeReviewCount } from "./reviewCount";
 import { loadMoneyContext } from "./moneyContext";
 import { carriedPfcEvidence, effectiveFiling } from "./pendingFiling";
-import { billSuggestionsOf, evidenceContextOf, rowEvidenceOf } from "./rowEvidence";
+import { billSuggestionsOf, evidenceContextOf, evidenceView, rowEvidenceOf } from "./rowEvidence";
 import { readPausedReview } from "./oneTimeBillMove";
 import { readBankBalanceCheck } from "./bankBalanceCheck";
 import { addDaysISO, householdTodayISO } from "./householdClock";
@@ -374,6 +374,13 @@ type ReviewRowOut = {
   classificationIssue: ClassificationIssue | null;
   reason: BankReviewRowPlacement["reason"];
   evidence: "confirmed" | "automatic" | null;
+  /**
+   * ⭐ (Task 6, A2) The evidence rule's answer for the row as it counts — the
+   * one Spending reads (`classifyEvidence`, this window's evidence context).
+   * An `evidence_unresolved` row says it in words ("bank says loan payment") and
+   * its suggestion may name an occurrence to Match (a skipped one included).
+   */
+  rowEvidence: ReturnType<typeof evidenceView>;
   plan: {
     key: string;
     label: string;
@@ -608,6 +615,16 @@ export async function buildBankingReview(
     const suggestion = comparisonAvailable ? (suggestionByTxn.get(r.id) ?? null) : null;
     const compared = comparisonAvailable && r.occurredOn >= rowsFrom && r.occurredOn <= today;
     const amountCents = toCents(r.amount);
+    // The kind: the one spending rule, on the row as it counts (a posted row
+    // takes the filing its replaced pending row carried).
+    const replacedPending = money2.supersede.replacedBy.get(r.id);
+    const asCounted = effectiveFiling(r, replacedPending, money2.filingCtx);
+    const m = classifyMovement(asCounted, money2, { explain: true });
+    const kind = bankReviewKindOf(m.coverage);
+    // (F2) The evidence rule, on the same row and classification. ⭐ (Task 6, A2)
+    // Read BEFORE the placement: an unresolved row is Unclear (rule 2u), as
+    // Spending counts it Unconfirmed — the same rule, never a second one.
+    const rowEvidence = rowEvidenceOf({ ...asCounted, carriedPfc: carriedPfcEvidence(r, replacedPending) }, m, evidenceCtx);
     const placement = placeBankReviewRow({
       occurredOn: r.occurredOn,
       amount: amountCents / 100,
@@ -615,15 +632,8 @@ export async function buildBankingReview(
       evidence,
       suggestion,
       compared,
+      evidenceClass: rowEvidence?.class ?? null,
     });
-    // The kind: the one spending rule, on the row as it counts (a posted row
-    // takes the filing its replaced pending row carried).
-    const replacedPending = money2.supersede.replacedBy.get(r.id);
-    const asCounted = effectiveFiling(r, replacedPending, money2.filingCtx);
-    const m = classifyMovement(asCounted, money2, { explain: true });
-    const kind = bankReviewKindOf(m.coverage);
-    // (F2) The evidence rule, on the same row and classification.
-    const rowEvidence = rowEvidenceOf({ ...asCounted, carriedPfc: carriedPfcEvidence(r, replacedPending) }, m, evidenceCtx);
     return { row: r, amountCents, abs: Math.abs(amountCents), kind, placement, rowEvidence };
   });
   const summary = summarizeBankReview(
@@ -678,6 +688,7 @@ export async function buildBankingReview(
       classificationIssue: classificationIssueOf(p.rowEvidence),
       reason: p.placement.reason,
       evidence: p.placement.evidence,
+      rowEvidence: evidenceView(p.rowEvidence),
       plan: plan
         ? {
             key: plan.key,
@@ -715,6 +726,7 @@ export async function buildBankingReview(
             needs_review: totalsOut(summary.uncertainByReason.needs_review),
             suggested_match: totalsOut(summary.uncertainByReason.suggested_match),
             not_compared: totalsOut(summary.uncertainByReason.not_compared),
+            evidence_unresolved: totalsOut(summary.uncertainByReason.evidence_unresolved),
           }
         : null,
   });

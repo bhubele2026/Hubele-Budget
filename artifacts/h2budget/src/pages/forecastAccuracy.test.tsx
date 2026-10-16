@@ -710,4 +710,13 @@ describe("Forecast — the error banner says load or refresh, truthfully", () =>
     renderPage();
     expect(alertsText()).toContain("Couldn't load the forecast.");
   });
+
+  it("(S) a failed first read still names the screen, and leaves no skeleton pulsing under the error", () => {
+    forecastData = undefined as unknown as typeof FORECAST_BASE;
+    forecastError = true;
+    const { container } = renderPage();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBeTruthy();
+    expect(container.querySelector(".h-96")).toBeNull();
+    expect(screen.getByRole("button", { name: "Retry forecast" })).toBeTruthy();
+  });
 });

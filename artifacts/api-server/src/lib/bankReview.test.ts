@@ -118,6 +118,42 @@ describe("placeBankReviewRow — first matching rule wins", () => {
   });
 });
 
+describe("(Task 6, A2) rule 2u — what the bank's evidence leaves open is Unclear, never 'not in the plan'", () => {
+  const unresolved = { evidenceClass: "unresolved" as const };
+  it("a row marked 'not a planned payment' whose evidence is unresolved is Unclear (evidence_unresolved), not Marked unplanned", () => {
+    expect(where(row({ resolutions: [{ status: "ignored_unforecasted", plan: null }] }))).toBe("confirmedUnplanned ignored_unforecasted -");
+    expect(where(row({ ...unresolved, resolutions: [{ status: "ignored_unforecasted", plan: null }] }))).toBe("uncertain evidence_unresolved -");
+    expect(where(row({ ...unresolved, resolutions: [{ status: "unplanned", plan: null }] }))).toBe("uncertain evidence_unresolved -");
+  });
+  it("an unanswered unresolved row is Unclear, never Unplanned activity", () => {
+    expect(where(row())).toBe("unmatched no_plan -");
+    expect(where(row(unresolved))).toBe("uncertain evidence_unresolved -");
+  });
+  it("a known purchase or a confirmed payment keeps its place", () => {
+    expect(where(row({ evidenceClass: "known_purchase" }))).toBe("unmatched no_plan -");
+    expect(where(row({ evidenceClass: "confirmed_payment", resolutions: [{ status: "ignored_unforecasted", plan: null }] }))).toBe(
+      "confirmedUnplanned ignored_unforecasted -",
+    );
+  });
+  it("the household's match, a pair under review, the ledger's pair, a suggestion and 'not compared' keep their place", () => {
+    expect(where(row({ ...unresolved, amount: -135.4, resolutions: [{ status: "matched", plan: plan(-120) }] }))).toBe("amountDifference amount confirmed");
+    expect(where(row({ ...unresolved, resolutions: [{ status: "needs_review", plan: plan(-120) }] }))).toBe("uncertain needs_review -");
+    expect(where(row({ ...unresolved, evidence: plan(-120) }))).toBe("asPlanned as_planned automatic");
+    expect(where(row({ ...unresolved, suggestion: plan(-120) }))).toBe("uncertain suggested_match -");
+    expect(where(row({ ...unresolved, compared: false }))).toBe("uncertain not_compared -");
+  });
+  it("the summary counts evidence_unresolved under its own reason, inside Unclear", () => {
+    const s = summarizeBankReview([
+      { amountCents: -86137, pending: false, kind: "spending", placement: placeBankReviewRow(row({ ...unresolved, amount: -861.37 })) },
+      { amountCents: -2000, pending: false, kind: "spending", placement: placeBankReviewRow(row({ amount: -20, compared: false })) },
+    ]);
+    expect(s.buckets.uncertain).toMatchObject({ count: 2, netCents: -88137 });
+    expect(s.uncertainByReason.evidence_unresolved).toMatchObject({ count: 1, netCents: -86137 });
+    expect(s.uncertainByReason.not_compared).toMatchObject({ count: 1, netCents: -2000 });
+    expect(s.buckets.unmatched.count).toBe(0);
+  });
+});
+
 describe("summarizeBankReview — every row once", () => {
   it("Σ buckets + as planned is every row, to the cent; kinds and reasons sub-total their bucket", () => {
     const rows = [

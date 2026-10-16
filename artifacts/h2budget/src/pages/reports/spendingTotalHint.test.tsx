@@ -22,14 +22,14 @@ vi.mock("recharts", async () => {
   };
 });
 
-const state = vi.hoisted(() => ({ facts: undefined as unknown }));
+const state = vi.hoisted(() => ({ facts: undefined as unknown, factsFailed: false }));
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@workspace/api-client-react")>()),
   useGetSpine: () => ({ data: undefined, isLoading: true, isLoadingError: false }),
   useListTransactions: () => ({ data: [], isLoading: false }),
   useListCategories: () => ({ data: [] }),
-  useGetReportsSpendingFacts: () => ({ data: state.facts, isLoading: false }),
+  useGetReportsSpendingFacts: () => ({ data: state.factsFailed ? undefined : state.facts, isLoading: false, isError: state.factsFailed, refetch: vi.fn() }),
   getGetReportsSpendingFactsQueryKey: (p: unknown) => ["/api/reports/spending-facts", p],
   useUpdateTransaction: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   getListTransactionsQueryKey: (p: unknown) => ["/api/transactions", p],
@@ -87,6 +87,7 @@ function renderPage() {
 
 beforeEach(() => {
   state.facts = baseFacts;
+  state.factsFailed = false;
 });
 afterEach(() => cleanup());
 
@@ -112,5 +113,14 @@ describe("Spending page — Total real spend", () => {
     renderPage();
     expect(screen.getByTestId("spending-total").textContent).not.toContain("uncategorized");
     expect(screen.queryByTestId("spending-total-uncategorized")).toBeNull();
+  });
+});
+
+describe("(S) Spending report — a failed read is not a skeleton that never ends", () => {
+  it("says it could not load the report, and offers Try again", () => {
+    state.factsFailed = true;
+    renderPage();
+    expect(screen.getByRole("alert").textContent).toContain("Couldn't load the spending report.");
+    expect(screen.queryByTestId("spending-total")).toBeNull();
   });
 });

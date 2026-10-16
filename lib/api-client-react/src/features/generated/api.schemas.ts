@@ -1912,7 +1912,7 @@ export const RowEvidenceTargetKind = {
 } as const;
 
 /**
- * The bill the forecast suggests (a recurring item's occurrence)
+ * The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.
  */
 export interface RowEvidenceTarget {
   kind: RowEvidenceTargetKind;
@@ -1922,6 +1922,13 @@ export interface RowEvidenceTarget {
   /** <itemId>|<occurrenceDate> */
   planKey: string;
   occurrenceDate: string;
+  /**
+   * (Task 6) The occurrence's planned amount, signed (negative: money out); null when not known
+   * @nullable
+   */
+  planned: string | null;
+  /** (Task 6) The household skipped this occurrence */
+  skipped: boolean;
 }
 
 export interface RowEvidenceSuggestion {
@@ -2520,7 +2527,7 @@ export const BankingReviewRowClassificationIssue = {
 } as const;
 
 /**
- * Why a row is where it is: partial / amount (amountDifference), timing (timingDifference), marked_unplanned / ignored_unforecasted (confirmedUnplanned), needs_review / suggested_match / not_compared (uncertain), no_plan (unmatched)
+ * Why a row is where it is: partial / amount (amountDifference), timing (timingDifference), marked_unplanned / ignored_unforecasted (confirmedUnplanned), needs_review / suggested_match / not_compared / evidence_unresolved (uncertain), no_plan (unmatched). (Task 6) evidence_unresolved: the evidence rule Spending reads calls the row unresolved (the bank says loan payment, transfer or income, or it is filed against its direction) — never "not in the plan"; the row's `rowEvidence` says why
  */
 export type BankingReviewReason =
   (typeof BankingReviewReason)[keyof typeof BankingReviewReason];
@@ -2536,6 +2543,7 @@ export const BankingReviewReason = {
   suggested_match: "suggested_match",
   not_compared: "not_compared",
   no_plan: "no_plan",
+  evidence_unresolved: "evidence_unresolved",
 } as const;
 
 /**
@@ -2607,6 +2615,8 @@ export interface BankingReviewRow {
    * @nullable
    */
   evidence: BankingReviewRowEvidence;
+  /** (Task 6) The evidence rule's answer for the row (the one Spending reads); null where it says nothing. An evidence_unresolved row's words, and the occurrence its suggestion names (a skipped one included) */
+  rowEvidence: RowEvidence | null;
   plan: BankingReviewRowPlan | null;
 }
 
@@ -2635,6 +2645,7 @@ export interface BankingReviewUncertainTotals {
   needs_review: BankingReviewTotals;
   suggested_match: BankingReviewTotals;
   not_compared: BankingReviewTotals;
+  evidence_unresolved: BankingReviewTotals;
 }
 
 export interface BankingReviewBucket {
@@ -6238,6 +6249,21 @@ export interface ForecastEvent {
   amount: number;
 }
 
+export interface ForecastResolutionReplaced {
+  id: string;
+  userId: string;
+  /** @nullable */
+  recurringItemId: string | null;
+  /** @nullable */
+  occurrenceDate: string | null;
+  status: string;
+  /** @nullable */
+  matchedTxnId: string | null;
+  /** @nullable */
+  rescheduledTo: string | null;
+  createdAt: string;
+}
+
 export interface ForecastResolution {
   id: string;
   /** @nullable */
@@ -6257,6 +6283,18 @@ export interface ForecastResolution {
   txnAmount?: string | null;
   /** @nullable */
   txnForecastFlag?: boolean | null;
+  /** (Task 6, POST only) The answers this write deleted (one per plan occurrence and one per bank row): what POST /forecast/resolutions/{id}/undo puts back */
+  replaced?: ForecastResolutionReplaced[];
+}
+
+export interface ForecastResolutionUndoInput {
+  /** @maxItems 20 */
+  restore: ForecastResolutionReplaced[];
+}
+
+export interface ForecastResolutionUndone {
+  undone: string;
+  restored: number;
 }
 
 export interface ForecastResolutionInput {
@@ -7638,6 +7676,31 @@ export interface AmexSummaryPeriod {
   timezone: string;
 }
 
+/**
+ * plaid = synced from the card; manual = typed, kept as typed
+ */
+export type AmexSummaryTrackedDebtSource =
+  (typeof AmexSummaryTrackedDebtSource)[keyof typeof AmexSummaryTrackedDebtSource];
+
+export const AmexSummaryTrackedDebtSource = {
+  plaid: "plaid",
+  manual: "manual",
+} as const;
+
+export interface AmexSummaryTrackedDebt {
+  debtId: string;
+  name: string;
+  /** The debt plan's balance for the card (positive dollars) */
+  balance: string;
+  /** plaid = synced from the card; manual = typed, kept as typed */
+  source: AmexSummaryTrackedDebtSource;
+  /**
+   * When the debt row's balance was last set (synced or typed)
+   * @nullable
+   */
+  asOf: string | null;
+}
+
 export type AmexSummaryOwedSource =
   (typeof AmexSummaryOwedSource)[keyof typeof AmexSummaryOwedSource];
 
@@ -7650,6 +7713,8 @@ export const AmexSummaryOwedSource = {
 } as const;
 
 export interface AmexSummaryOwed {
+  /** (Task 6) One debt-linked card on the payoff plan: the debt's balance as the debt plan counts it (the debt row, net of pending tagged payments — GET /debts's figure) and its source. A different measure from `current` (the card's own figure): a typed balance (`manual`) is kept as typed and no Sync overwrites it. Null for all cards, a card with no active debt */
+  tracked: AmexSummaryTrackedDebt | null;
   /**
    * GET /amex/anchor's balance; null = unknown, never 0
    * @nullable

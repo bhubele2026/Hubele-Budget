@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("@/components/plan/WeekPlanPanel", () => ({ WeekPlanPanel: () => null }));
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -713,5 +713,28 @@ describe("Allowances — a failed refresh keeps the figures (T4)", () => {
   it("no banner when nothing failed", () => {
     renderPage();
     expect(screen.queryByTestId("allowances-refresh-banner")).toBeNull();
+  });
+});
+
+describe("Allowances — S: the weekly figure names its two measures", () => {
+  it("a provisional week says what counts toward the plan and what is unconfirmed, and links the week", () => {
+    server = {
+      ...SERVER,
+      week: { ...SERVER.week, actual: "220.25", known: "196.00", provisional: true, unresolved: { amount: "24.25" } },
+    };
+    renderPage();
+    const line = screen.getByTestId("allowance-weekly-measure");
+    expect(line.textContent).toContain(`Counts toward plan ${usd(196)}`);
+    expect(line.textContent).toContain(`unconfirmed ${usd(24.25)}`);
+    expect(screen.getByTestId("allowance-weekly-measure-link").getAttribute("href")).toBe("/spending/week?start=2026-05-10");
+    // The bucket list under the card says its rows are only the filed ones, and where the rest is.
+    if (!screen.queryByTestId("allowance-weekly-rows-note")) fireEvent.click(screen.getByTestId("allowance-bucket-weekly"));
+    expect(screen.getByTestId("allowance-weekly-rows-note").textContent).toContain("Unfiled and unconfirmed rows");
+  });
+
+  it("says nothing extra when the week is not provisional", () => {
+    renderPage();
+    expect(screen.queryByTestId("allowance-weekly-measure")).toBeNull();
+    expect(screen.queryByTestId("allowance-weekly-rows-note")).toBeNull();
   });
 });

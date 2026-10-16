@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AmexSummaryOwedSource } from "./amexSummaryOwedSource";
+import type { AmexSummaryTrackedDebt } from "./amexSummaryTrackedDebt";
 export interface AmexSummaryOwed {
+    /** (Task 6) One debt-linked card on the payoff plan: the debt's balance as the debt plan counts it (the debt row, net of pending tagged payments — GET /debts's figure) and its source. A different measure from `current` (the card's own figure): a typed balance (`manual`) is kept as typed and no Sync overwrites it. Null for all cards, a card with no active debt */
+    tracked: AmexSummaryTrackedDebt | null;
     /**
      * GET /amex/anchor's balance; null = unknown, never 0
      * @nullable

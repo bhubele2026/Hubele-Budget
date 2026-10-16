@@ -13,6 +13,7 @@ import type { BankingReviewRowClassificationIssue } from "./bankingReviewRowClas
 import type { BankingReviewRowEvidence } from "./bankingReviewRowEvidence";
 import type { BankingReviewRowFlags } from "./bankingReviewRowFlags";
 import type { BankingReviewRowPlan } from "./bankingReviewRowPlan";
+import type { RowEvidence } from "./rowEvidence";
 export interface BankingReviewRow {
     id: string;
     date: string;
@@ -39,6 +40,8 @@ export interface BankingReviewRow {
      * @nullable
      */
     evidence: BankingReviewRowEvidence;
+    /** (Task 6) The evidence rule's answer for the row (the one Spending reads); null where it says nothing. An evidence_unresolved row's words, and the occurrence its suggestion names (a skipped one included) */
+    rowEvidence: RowEvidence | null;
     plan: BankingReviewRowPlan | null;
 }
 //# sourceMappingURL=bankingReviewRow.d.ts.map

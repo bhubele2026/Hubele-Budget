@@ -56,6 +56,19 @@ function countWord(n: number) {
   return n === 1 ? "1 row" : `${n} rows`;
 }
 
+/**
+ * ⭐ (Task 6, matrix) TWO MEASURES OF ONE CARD, BOTH SAID. "Owed" is the card's own figure (GET /amex/anchor);
+ * the payoff plan counts the card's DEBT ROW (`owed.tracked`), and a typed debt balance is kept as typed — no
+ * Sync overwrites it. When the two differ, the line names the plan's figure and where it came from; the link
+ * opens the payoff plan. Null when they agree, or there is no active debt for the card.
+ */
+export function trackedDebtWords(owed: Pick<AmexSummary["owed"], "current" | "tracked">): string | null {
+  const t = owed.tracked;
+  if (!t || owed.current == null) return null;
+  if (Math.round(Number(t.balance) * 100) === Math.round(Number(owed.current) * 100)) return null;
+  return `Payoff plan ${moneyFace(t.balance)} · ${t.source === "manual" ? "typed, not from the card" : "from the card's last sync"}`;
+}
+
 function Figure({
   testId, label, amount, sub, active, onClick, extra,
 }: {
@@ -171,6 +184,7 @@ export function AmexSummaryPanel({
           summary.owed.statement != null ? `Statement ${moneyFace(summary.owed.statement)}` : null,
         ].filter(Boolean).join(" · ") || null
     : null;
+  const tracked = summary ? trackedDebtWords(summary.owed) : null;
   return (
     <Panel title={title} titleRef={headingRef} span={12} accent="amex" variant="static" data-testid="amex-summary">
       {failed && !summary ? (
@@ -197,16 +211,26 @@ export function AmexSummaryPanel({
               amount={summary.owed.current}
               sub={owedSub}
               extra={
-                onOwedHistory && !allCards ? (
-                  <button
-                    type="button"
-                    className="press mt-0.5 self-start text-micro font-semibold text-brand-navy underline"
-                    onClick={onOwedHistory}
-                    data-testid="amex-owed-history-link"
-                  >
-                    Balance history
-                  </button>
-                ) : null
+                <>
+                  {tracked ? (
+                    <span className="text-micro text-neutral-700" data-testid="amex-owed-tracked">
+                      {tracked} ·{" "}
+                      <Link href="/avalanche" className="font-semibold text-brand-navy underline" data-testid="amex-owed-tracked-link">
+                        Payoff plan
+                      </Link>
+                    </span>
+                  ) : null}
+                  {onOwedHistory && !allCards ? (
+                    <button
+                      type="button"
+                      className="press mt-0.5 self-start text-micro font-semibold text-brand-navy underline"
+                      onClick={onOwedHistory}
+                      data-testid="amex-owed-history-link"
+                    >
+                      Balance history
+                    </button>
+                  ) : null}
+                </>
               }
             />
             <Figure

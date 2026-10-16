@@ -59,7 +59,7 @@ import {
 import { formatCurrency, cn } from "@/lib/utils";
 import { moneyFace } from "@/components/data-state";
 import { CHART } from "@/lib/chartTokens";
-import { emptyNote, fieldLabel, Help } from "@/ui";
+import { btnLink, emptyNote, errorBanner, fieldLabel, Help } from "@/ui";
 import { Panel, StatBlock, type PanelSpan } from "@/components/next";
 
 // Recharts ships these as class components, which TypeScript + React 19's
@@ -508,6 +508,22 @@ export function ReportShell({
         {controls}
       </div>
       {children}
+    </div>
+  );
+}
+
+/**
+ * A report's own read failed and nothing is cached: say so, with a way to try
+ * again. A failed read is not "Income $0.00", "0.0% paid off" or a skeleton that
+ * never ends.
+ */
+export function ReportLoadFailed({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className={errorBanner} data-testid="report-load-failed">
+      Couldn't load {what}.{" "}
+      <button type="button" className={btnLink} onClick={onRetry}>
+        Try again
+      </button>
     </div>
   );
 }

@@ -149,6 +149,8 @@ export default function ForecastOverviewPage() {
 
   return (
     <div className="space-y-4" data-testid="forecast-overview">
+      {/* The place's name for a screen reader; the tab and the breadcrumb name it on screen. */}
+      <h1 className="sr-only">Forecast overview</h1>
       {/* The spine's own state: its figures below are kept after a failed
           refresh, and fall back to em dashes after a failed first load. */}
       <RefreshBanner

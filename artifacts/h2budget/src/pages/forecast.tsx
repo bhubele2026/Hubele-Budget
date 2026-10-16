@@ -2008,8 +2008,10 @@ export default function ForecastPage({
   if (!data || !register) {
     return (
       <div className="space-y-4">
+        {/* The screen names itself while it loads and when it failed; a failed first read leaves no skeleton pulsing under the error. */}
+        <h1 className="text-title font-semibold text-brand-navy">{forecastTitle(mode)}</h1>
         {forecastError ? <div role="alert" className={errorBanner}>Couldn't load the forecast. <button type="button" className={btnLink} onClick={() => void refetchForecast()}>Retry forecast</button></div> : <Skeleton className="h-10 w-48" />}
-        <Skeleton className="h-96 w-full" />
+        {!forecastError && <Skeleton className="h-96 w-full" />}
       </div>
     );
   }

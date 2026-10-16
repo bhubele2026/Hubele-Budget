@@ -4569,6 +4569,23 @@ export const GetForecastResponse = zod.object({
       txnDescription: zod.string().nullish(),
       txnAmount: zod.string().nullish(),
       txnForecastFlag: zod.boolean().nullish(),
+      replaced: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            userId: zod.string(),
+            recurringItemId: zod.string().nullable(),
+            occurrenceDate: zod.string().nullable(),
+            status: zod.string(),
+            matchedTxnId: zod.string().nullable(),
+            rescheduledTo: zod.string().nullable(),
+            createdAt: zod.string(),
+          }),
+        )
+        .optional()
+        .describe(
+          "(Task 6, POST only) The answers this write deleted (one per plan occurrence and one per bank row): what POST \/forecast\/resolutions\/{id}\/undo puts back",
+        ),
     }),
   ),
   closedMonths: zod.array(zod.string()),
@@ -5111,10 +5128,59 @@ export const UpsertForecastResolutionResponse = zod.object({
   txnDescription: zod.string().nullish(),
   txnAmount: zod.string().nullish(),
   txnForecastFlag: zod.boolean().nullish(),
+  replaced: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        userId: zod.string(),
+        recurringItemId: zod.string().nullable(),
+        occurrenceDate: zod.string().nullable(),
+        status: zod.string(),
+        matchedTxnId: zod.string().nullable(),
+        rescheduledTo: zod.string().nullable(),
+        createdAt: zod.string(),
+      }),
+    )
+    .optional()
+    .describe(
+      "(Task 6, POST only) The answers this write deleted (one per plan occurrence and one per bank row): what POST \/forecast\/resolutions\/{id}\/undo puts back",
+    ),
 });
 
 export const DeleteForecastResolutionParams = zod.object({
   id: zod.coerce.string(),
+});
+
+/**
+ * One transaction: deletes the answer and restores the answers POST /forecast/resolutions returned as `replaced` (same ids, statuses, dates, rows and times). Only answers that write could have deleted are accepted, so a Match made on a skipped occurrence un-does to the skip. 400 invalid_restore (not those answers; nothing written), 409 not_found / changed_since (nothing written).
+ * @summary (Task 6) Undo one answer exactly — delete it and put back the answers its write replaced
+ */
+export const UndoForecastResolutionParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const undoForecastResolutionBodyRestoreMax = 20;
+
+export const UndoForecastResolutionBody = zod.object({
+  restore: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        userId: zod.string(),
+        recurringItemId: zod.string().nullable(),
+        occurrenceDate: zod.string().nullable(),
+        status: zod.string(),
+        matchedTxnId: zod.string().nullable(),
+        rescheduledTo: zod.string().nullable(),
+        createdAt: zod.string(),
+      }),
+    )
+    .max(undoForecastResolutionBodyRestoreMax),
+});
+
+export const UndoForecastResolutionResponse = zod.object({
+  undone: zod.string(),
+  restored: zod.number(),
 });
 
 export const SetForecastBankSnapshotBody = zod.object({
@@ -6918,6 +6984,33 @@ export const GetAmexSummaryResponse = zod.object({
     timezone: zod.string(),
   }),
   owed: zod.object({
+    tracked: zod
+      .union([
+        zod.object({
+          debtId: zod.string(),
+          name: zod.string(),
+          balance: zod
+            .string()
+            .describe(
+              "The debt plan's balance for the card (positive dollars)",
+            ),
+          source: zod
+            .enum(["plaid", "manual"])
+            .describe(
+              "plaid = synced from the card; manual = typed, kept as typed",
+            ),
+          asOf: zod
+            .string()
+            .nullable()
+            .describe(
+              "When the debt row's balance was last set (synced or typed)",
+            ),
+        }),
+        zod.null(),
+      ])
+      .describe(
+        "(Task 6) One debt-linked card on the payoff plan: the debt's balance as the debt plan counts it (the debt row, net of pending tagged payments — GET \/debts's figure) and its source. A different measure from `current` (the card's own figure): a typed balance (`manual`) is kept as typed and no Sync overwrites it. Null for all cards, a card with no active debt",
+      ),
     current: zod
       .string()
       .nullable()
@@ -10124,9 +10217,20 @@ export const GetPeriodBreakdownResponse = zod
                                     .string()
                                     .describe("<itemId>|<occurrenceDate>"),
                                   occurrenceDate: zod.string(),
+                                  planned: zod
+                                    .string()
+                                    .nullable()
+                                    .describe(
+                                      "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                    ),
+                                  skipped: zod
+                                    .boolean()
+                                    .describe(
+                                      "(Task 6) The household skipped this occurrence",
+                                    ),
                                 })
                                 .describe(
-                                  "The bill the forecast suggests (a recurring item's occurrence)",
+                                  "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
                                 ),
                               zod.null(),
                             ]),
@@ -10306,9 +10410,20 @@ export const GetPeriodBreakdownResponse = zod
                                 .string()
                                 .describe("<itemId>|<occurrenceDate>"),
                               occurrenceDate: zod.string(),
+                              planned: zod
+                                .string()
+                                .nullable()
+                                .describe(
+                                  "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                ),
+                              skipped: zod
+                                .boolean()
+                                .describe(
+                                  "(Task 6) The household skipped this occurrence",
+                                ),
                             })
                             .describe(
-                              "The bill the forecast suggests (a recurring item's occurrence)",
+                              "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
                             ),
                           zod.null(),
                         ]),
@@ -10497,9 +10612,20 @@ export const GetPeriodBreakdownResponse = zod
                                   .string()
                                   .describe("<itemId>|<occurrenceDate>"),
                                 occurrenceDate: zod.string(),
+                                planned: zod
+                                  .string()
+                                  .nullable()
+                                  .describe(
+                                    "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                  ),
+                                skipped: zod
+                                  .boolean()
+                                  .describe(
+                                    "(Task 6) The household skipped this occurrence",
+                                  ),
                               })
                               .describe(
-                                "The bill the forecast suggests (a recurring item's occurrence)",
+                                "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
                               ),
                             zod.null(),
                           ]),
@@ -10680,9 +10806,20 @@ export const GetPeriodBreakdownResponse = zod
                                 .string()
                                 .describe("<itemId>|<occurrenceDate>"),
                               occurrenceDate: zod.string(),
+                              planned: zod
+                                .string()
+                                .nullable()
+                                .describe(
+                                  "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                ),
+                              skipped: zod
+                                .boolean()
+                                .describe(
+                                  "(Task 6) The household skipped this occurrence",
+                                ),
                             })
                             .describe(
-                              "The bill the forecast suggests (a recurring item's occurrence)",
+                              "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
                             ),
                           zod.null(),
                         ]),
@@ -11202,9 +11339,10 @@ export const GetBankingReviewResponse = zod
                   "suggested_match",
                   "not_compared",
                   "no_plan",
+                  "evidence_unresolved",
                 ])
                 .describe(
-                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                  'Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared \/ evidence_unresolved (uncertain), no_plan (unmatched). (Task 6) evidence_unresolved: the evidence rule Spending reads calls the row unresolved (the bank says loan payment, transfer or income, or it is filed against its direction) — never \"not in the plan\"; the row\'s `rowEvidence` says why',
                 ),
               evidence: zod
                 .union([
@@ -11214,6 +11352,101 @@ export const GetBankingReviewResponse = zod
                 ])
                 .nullable()
                 .describe("Who tied the row to its plan"),
+              rowEvidence: zod
+                .union([
+                  zod
+                    .object({
+                      class: zod.enum([
+                        "known_purchase",
+                        "confirmed_payment",
+                        "unresolved",
+                      ]),
+                      reason: zod.enum([
+                        "household_flag",
+                        "purchase_category",
+                        "atm_withdrawal",
+                        "person_to_person",
+                        "no_contrary_evidence",
+                        "transfer",
+                        "bank_noise",
+                        "debt_payment",
+                        "card_payment",
+                        "excluded_category",
+                        "bill_match",
+                        "bill_suggestion",
+                        "loan_payment",
+                        "transfer_evidence",
+                        "income_evidence",
+                        "debit_in_income_category",
+                        "credit_in_expense_category",
+                      ]),
+                      items: zod.array(
+                        zod.object({
+                          field: zod.enum([
+                            "pfc_primary",
+                            "pfc_detailed",
+                            "bill_suggestion",
+                            "category",
+                            "household",
+                          ]),
+                          value: zod.string(),
+                        }),
+                      ),
+                      suggestion: zod.union([
+                        zod.object({
+                          kind: zod.enum([
+                            "loan_payment",
+                            "transfer",
+                            "income",
+                            "bill",
+                          ]),
+                          detail: zod
+                            .string()
+                            .nullable()
+                            .describe(
+                              "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                            ),
+                          target: zod.union([
+                            zod
+                              .object({
+                                kind: zod.enum(["bill"]),
+                                id: zod
+                                  .string()
+                                  .describe("The recurring item id"),
+                                label: zod.string(),
+                                planKey: zod
+                                  .string()
+                                  .describe("<itemId>|<occurrenceDate>"),
+                                occurrenceDate: zod.string(),
+                                planned: zod
+                                  .string()
+                                  .nullable()
+                                  .describe(
+                                    "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                  ),
+                                skipped: zod
+                                  .boolean()
+                                  .describe(
+                                    "(Task 6) The household skipped this occurrence",
+                                  ),
+                              })
+                              .describe(
+                                "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
+                              ),
+                            zod.null(),
+                          ]),
+                        }),
+                        zod.null(),
+                      ]),
+                    })
+                    .describe(
+                      "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                    ),
+                  zod.null(),
+                ])
+                .describe(
+                  "(Task 6) The evidence rule's answer for the row (the one Spending reads); null where it says nothing. An evidence_unresolved row's words, and the occurrence its suggestion names (a skipped one included)",
+                ),
               plan: zod.union([
                 zod.object({
                   key: zod.string(),
@@ -11355,6 +11588,13 @@ export const GetBankingReviewResponse = zod
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
+                pendingNet: zod.string(),
+              }),
+              evidence_unresolved: zod.object({
                 count: zod.number(),
                 moneyIn: zod.string().describe("(Q1) A positive magnitude"),
                 moneyOut: zod.string().describe("(Q1) A positive magnitude"),
@@ -11454,9 +11694,10 @@ export const GetBankingReviewResponse = zod
                   "suggested_match",
                   "not_compared",
                   "no_plan",
+                  "evidence_unresolved",
                 ])
                 .describe(
-                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                  'Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared \/ evidence_unresolved (uncertain), no_plan (unmatched). (Task 6) evidence_unresolved: the evidence rule Spending reads calls the row unresolved (the bank says loan payment, transfer or income, or it is filed against its direction) — never \"not in the plan\"; the row\'s `rowEvidence` says why',
                 ),
               evidence: zod
                 .union([
@@ -11466,6 +11707,101 @@ export const GetBankingReviewResponse = zod
                 ])
                 .nullable()
                 .describe("Who tied the row to its plan"),
+              rowEvidence: zod
+                .union([
+                  zod
+                    .object({
+                      class: zod.enum([
+                        "known_purchase",
+                        "confirmed_payment",
+                        "unresolved",
+                      ]),
+                      reason: zod.enum([
+                        "household_flag",
+                        "purchase_category",
+                        "atm_withdrawal",
+                        "person_to_person",
+                        "no_contrary_evidence",
+                        "transfer",
+                        "bank_noise",
+                        "debt_payment",
+                        "card_payment",
+                        "excluded_category",
+                        "bill_match",
+                        "bill_suggestion",
+                        "loan_payment",
+                        "transfer_evidence",
+                        "income_evidence",
+                        "debit_in_income_category",
+                        "credit_in_expense_category",
+                      ]),
+                      items: zod.array(
+                        zod.object({
+                          field: zod.enum([
+                            "pfc_primary",
+                            "pfc_detailed",
+                            "bill_suggestion",
+                            "category",
+                            "household",
+                          ]),
+                          value: zod.string(),
+                        }),
+                      ),
+                      suggestion: zod.union([
+                        zod.object({
+                          kind: zod.enum([
+                            "loan_payment",
+                            "transfer",
+                            "income",
+                            "bill",
+                          ]),
+                          detail: zod
+                            .string()
+                            .nullable()
+                            .describe(
+                              "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                            ),
+                          target: zod.union([
+                            zod
+                              .object({
+                                kind: zod.enum(["bill"]),
+                                id: zod
+                                  .string()
+                                  .describe("The recurring item id"),
+                                label: zod.string(),
+                                planKey: zod
+                                  .string()
+                                  .describe("<itemId>|<occurrenceDate>"),
+                                occurrenceDate: zod.string(),
+                                planned: zod
+                                  .string()
+                                  .nullable()
+                                  .describe(
+                                    "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                  ),
+                                skipped: zod
+                                  .boolean()
+                                  .describe(
+                                    "(Task 6) The household skipped this occurrence",
+                                  ),
+                              })
+                              .describe(
+                                "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
+                              ),
+                            zod.null(),
+                          ]),
+                        }),
+                        zod.null(),
+                      ]),
+                    })
+                    .describe(
+                      "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                    ),
+                  zod.null(),
+                ])
+                .describe(
+                  "(Task 6) The evidence rule's answer for the row (the one Spending reads); null where it says nothing. An evidence_unresolved row's words, and the occurrence its suggestion names (a skipped one included)",
+                ),
               plan: zod.union([
                 zod.object({
                   key: zod.string(),
@@ -11607,6 +11943,13 @@ export const GetBankingReviewResponse = zod
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
+                pendingNet: zod.string(),
+              }),
+              evidence_unresolved: zod.object({
                 count: zod.number(),
                 moneyIn: zod.string().describe("(Q1) A positive magnitude"),
                 moneyOut: zod.string().describe("(Q1) A positive magnitude"),
@@ -11706,9 +12049,10 @@ export const GetBankingReviewResponse = zod
                   "suggested_match",
                   "not_compared",
                   "no_plan",
+                  "evidence_unresolved",
                 ])
                 .describe(
-                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                  'Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared \/ evidence_unresolved (uncertain), no_plan (unmatched). (Task 6) evidence_unresolved: the evidence rule Spending reads calls the row unresolved (the bank says loan payment, transfer or income, or it is filed against its direction) — never \"not in the plan\"; the row\'s `rowEvidence` says why',
                 ),
               evidence: zod
                 .union([
@@ -11718,6 +12062,101 @@ export const GetBankingReviewResponse = zod
                 ])
                 .nullable()
                 .describe("Who tied the row to its plan"),
+              rowEvidence: zod
+                .union([
+                  zod
+                    .object({
+                      class: zod.enum([
+                        "known_purchase",
+                        "confirmed_payment",
+                        "unresolved",
+                      ]),
+                      reason: zod.enum([
+                        "household_flag",
+                        "purchase_category",
+                        "atm_withdrawal",
+                        "person_to_person",
+                        "no_contrary_evidence",
+                        "transfer",
+                        "bank_noise",
+                        "debt_payment",
+                        "card_payment",
+                        "excluded_category",
+                        "bill_match",
+                        "bill_suggestion",
+                        "loan_payment",
+                        "transfer_evidence",
+                        "income_evidence",
+                        "debit_in_income_category",
+                        "credit_in_expense_category",
+                      ]),
+                      items: zod.array(
+                        zod.object({
+                          field: zod.enum([
+                            "pfc_primary",
+                            "pfc_detailed",
+                            "bill_suggestion",
+                            "category",
+                            "household",
+                          ]),
+                          value: zod.string(),
+                        }),
+                      ),
+                      suggestion: zod.union([
+                        zod.object({
+                          kind: zod.enum([
+                            "loan_payment",
+                            "transfer",
+                            "income",
+                            "bill",
+                          ]),
+                          detail: zod
+                            .string()
+                            .nullable()
+                            .describe(
+                              "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                            ),
+                          target: zod.union([
+                            zod
+                              .object({
+                                kind: zod.enum(["bill"]),
+                                id: zod
+                                  .string()
+                                  .describe("The recurring item id"),
+                                label: zod.string(),
+                                planKey: zod
+                                  .string()
+                                  .describe("<itemId>|<occurrenceDate>"),
+                                occurrenceDate: zod.string(),
+                                planned: zod
+                                  .string()
+                                  .nullable()
+                                  .describe(
+                                    "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                  ),
+                                skipped: zod
+                                  .boolean()
+                                  .describe(
+                                    "(Task 6) The household skipped this occurrence",
+                                  ),
+                              })
+                              .describe(
+                                "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
+                              ),
+                            zod.null(),
+                          ]),
+                        }),
+                        zod.null(),
+                      ]),
+                    })
+                    .describe(
+                      "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                    ),
+                  zod.null(),
+                ])
+                .describe(
+                  "(Task 6) The evidence rule's answer for the row (the one Spending reads); null where it says nothing. An evidence_unresolved row's words, and the occurrence its suggestion names (a skipped one included)",
+                ),
               plan: zod.union([
                 zod.object({
                   key: zod.string(),
@@ -11859,6 +12298,13 @@ export const GetBankingReviewResponse = zod
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
+                pendingNet: zod.string(),
+              }),
+              evidence_unresolved: zod.object({
                 count: zod.number(),
                 moneyIn: zod.string().describe("(Q1) A positive magnitude"),
                 moneyOut: zod.string().describe("(Q1) A positive magnitude"),
@@ -11958,9 +12404,10 @@ export const GetBankingReviewResponse = zod
                   "suggested_match",
                   "not_compared",
                   "no_plan",
+                  "evidence_unresolved",
                 ])
                 .describe(
-                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                  'Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared \/ evidence_unresolved (uncertain), no_plan (unmatched). (Task 6) evidence_unresolved: the evidence rule Spending reads calls the row unresolved (the bank says loan payment, transfer or income, or it is filed against its direction) — never \"not in the plan\"; the row\'s `rowEvidence` says why',
                 ),
               evidence: zod
                 .union([
@@ -11970,6 +12417,101 @@ export const GetBankingReviewResponse = zod
                 ])
                 .nullable()
                 .describe("Who tied the row to its plan"),
+              rowEvidence: zod
+                .union([
+                  zod
+                    .object({
+                      class: zod.enum([
+                        "known_purchase",
+                        "confirmed_payment",
+                        "unresolved",
+                      ]),
+                      reason: zod.enum([
+                        "household_flag",
+                        "purchase_category",
+                        "atm_withdrawal",
+                        "person_to_person",
+                        "no_contrary_evidence",
+                        "transfer",
+                        "bank_noise",
+                        "debt_payment",
+                        "card_payment",
+                        "excluded_category",
+                        "bill_match",
+                        "bill_suggestion",
+                        "loan_payment",
+                        "transfer_evidence",
+                        "income_evidence",
+                        "debit_in_income_category",
+                        "credit_in_expense_category",
+                      ]),
+                      items: zod.array(
+                        zod.object({
+                          field: zod.enum([
+                            "pfc_primary",
+                            "pfc_detailed",
+                            "bill_suggestion",
+                            "category",
+                            "household",
+                          ]),
+                          value: zod.string(),
+                        }),
+                      ),
+                      suggestion: zod.union([
+                        zod.object({
+                          kind: zod.enum([
+                            "loan_payment",
+                            "transfer",
+                            "income",
+                            "bill",
+                          ]),
+                          detail: zod
+                            .string()
+                            .nullable()
+                            .describe(
+                              "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                            ),
+                          target: zod.union([
+                            zod
+                              .object({
+                                kind: zod.enum(["bill"]),
+                                id: zod
+                                  .string()
+                                  .describe("The recurring item id"),
+                                label: zod.string(),
+                                planKey: zod
+                                  .string()
+                                  .describe("<itemId>|<occurrenceDate>"),
+                                occurrenceDate: zod.string(),
+                                planned: zod
+                                  .string()
+                                  .nullable()
+                                  .describe(
+                                    "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                  ),
+                                skipped: zod
+                                  .boolean()
+                                  .describe(
+                                    "(Task 6) The household skipped this occurrence",
+                                  ),
+                              })
+                              .describe(
+                                "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
+                              ),
+                            zod.null(),
+                          ]),
+                        }),
+                        zod.null(),
+                      ]),
+                    })
+                    .describe(
+                      "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                    ),
+                  zod.null(),
+                ])
+                .describe(
+                  "(Task 6) The evidence rule's answer for the row (the one Spending reads); null where it says nothing. An evidence_unresolved row's words, and the occurrence its suggestion names (a skipped one included)",
+                ),
               plan: zod.union([
                 zod.object({
                   key: zod.string(),
@@ -12111,6 +12653,13 @@ export const GetBankingReviewResponse = zod
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
+                pendingNet: zod.string(),
+              }),
+              evidence_unresolved: zod.object({
                 count: zod.number(),
                 moneyIn: zod.string().describe("(Q1) A positive magnitude"),
                 moneyOut: zod.string().describe("(Q1) A positive magnitude"),
@@ -12210,9 +12759,10 @@ export const GetBankingReviewResponse = zod
                   "suggested_match",
                   "not_compared",
                   "no_plan",
+                  "evidence_unresolved",
                 ])
                 .describe(
-                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                  'Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared \/ evidence_unresolved (uncertain), no_plan (unmatched). (Task 6) evidence_unresolved: the evidence rule Spending reads calls the row unresolved (the bank says loan payment, transfer or income, or it is filed against its direction) — never \"not in the plan\"; the row\'s `rowEvidence` says why',
                 ),
               evidence: zod
                 .union([
@@ -12222,6 +12772,101 @@ export const GetBankingReviewResponse = zod
                 ])
                 .nullable()
                 .describe("Who tied the row to its plan"),
+              rowEvidence: zod
+                .union([
+                  zod
+                    .object({
+                      class: zod.enum([
+                        "known_purchase",
+                        "confirmed_payment",
+                        "unresolved",
+                      ]),
+                      reason: zod.enum([
+                        "household_flag",
+                        "purchase_category",
+                        "atm_withdrawal",
+                        "person_to_person",
+                        "no_contrary_evidence",
+                        "transfer",
+                        "bank_noise",
+                        "debt_payment",
+                        "card_payment",
+                        "excluded_category",
+                        "bill_match",
+                        "bill_suggestion",
+                        "loan_payment",
+                        "transfer_evidence",
+                        "income_evidence",
+                        "debit_in_income_category",
+                        "credit_in_expense_category",
+                      ]),
+                      items: zod.array(
+                        zod.object({
+                          field: zod.enum([
+                            "pfc_primary",
+                            "pfc_detailed",
+                            "bill_suggestion",
+                            "category",
+                            "household",
+                          ]),
+                          value: zod.string(),
+                        }),
+                      ),
+                      suggestion: zod.union([
+                        zod.object({
+                          kind: zod.enum([
+                            "loan_payment",
+                            "transfer",
+                            "income",
+                            "bill",
+                          ]),
+                          detail: zod
+                            .string()
+                            .nullable()
+                            .describe(
+                              "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                            ),
+                          target: zod.union([
+                            zod
+                              .object({
+                                kind: zod.enum(["bill"]),
+                                id: zod
+                                  .string()
+                                  .describe("The recurring item id"),
+                                label: zod.string(),
+                                planKey: zod
+                                  .string()
+                                  .describe("<itemId>|<occurrenceDate>"),
+                                occurrenceDate: zod.string(),
+                                planned: zod
+                                  .string()
+                                  .nullable()
+                                  .describe(
+                                    "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                  ),
+                                skipped: zod
+                                  .boolean()
+                                  .describe(
+                                    "(Task 6) The household skipped this occurrence",
+                                  ),
+                              })
+                              .describe(
+                                "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
+                              ),
+                            zod.null(),
+                          ]),
+                        }),
+                        zod.null(),
+                      ]),
+                    })
+                    .describe(
+                      "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                    ),
+                  zod.null(),
+                ])
+                .describe(
+                  "(Task 6) The evidence rule's answer for the row (the one Spending reads); null where it says nothing. An evidence_unresolved row's words, and the occurrence its suggestion names (a skipped one included)",
+                ),
               plan: zod.union([
                 zod.object({
                   key: zod.string(),
@@ -12363,6 +13008,13 @@ export const GetBankingReviewResponse = zod
                 pendingNet: zod.string(),
               }),
               not_compared: zod.object({
+                count: zod.number(),
+                moneyIn: zod.string().describe("(Q1) A positive magnitude"),
+                moneyOut: zod.string().describe("(Q1) A positive magnitude"),
+                net: zod.string().describe("moneyIn − moneyOut (signed)"),
+                pendingNet: zod.string(),
+              }),
+              evidence_unresolved: zod.object({
                 count: zod.number(),
                 moneyIn: zod.string().describe("(Q1) A positive magnitude"),
                 moneyOut: zod.string().describe("(Q1) A positive magnitude"),
@@ -12675,9 +13327,10 @@ export const GetBankingReviewResponse = zod
                   "suggested_match",
                   "not_compared",
                   "no_plan",
+                  "evidence_unresolved",
                 ])
                 .describe(
-                  "Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared (uncertain), no_plan (unmatched)",
+                  'Why a row is where it is: partial \/ amount (amountDifference), timing (timingDifference), marked_unplanned \/ ignored_unforecasted (confirmedUnplanned), needs_review \/ suggested_match \/ not_compared \/ evidence_unresolved (uncertain), no_plan (unmatched). (Task 6) evidence_unresolved: the evidence rule Spending reads calls the row unresolved (the bank says loan payment, transfer or income, or it is filed against its direction) — never \"not in the plan\"; the row\'s `rowEvidence` says why',
                 ),
               evidence: zod
                 .union([
@@ -12687,6 +13340,101 @@ export const GetBankingReviewResponse = zod
                 ])
                 .nullable()
                 .describe("Who tied the row to its plan"),
+              rowEvidence: zod
+                .union([
+                  zod
+                    .object({
+                      class: zod.enum([
+                        "known_purchase",
+                        "confirmed_payment",
+                        "unresolved",
+                      ]),
+                      reason: zod.enum([
+                        "household_flag",
+                        "purchase_category",
+                        "atm_withdrawal",
+                        "person_to_person",
+                        "no_contrary_evidence",
+                        "transfer",
+                        "bank_noise",
+                        "debt_payment",
+                        "card_payment",
+                        "excluded_category",
+                        "bill_match",
+                        "bill_suggestion",
+                        "loan_payment",
+                        "transfer_evidence",
+                        "income_evidence",
+                        "debit_in_income_category",
+                        "credit_in_expense_category",
+                      ]),
+                      items: zod.array(
+                        zod.object({
+                          field: zod.enum([
+                            "pfc_primary",
+                            "pfc_detailed",
+                            "bill_suggestion",
+                            "category",
+                            "household",
+                          ]),
+                          value: zod.string(),
+                        }),
+                      ),
+                      suggestion: zod.union([
+                        zod.object({
+                          kind: zod.enum([
+                            "loan_payment",
+                            "transfer",
+                            "income",
+                            "bill",
+                          ]),
+                          detail: zod
+                            .string()
+                            .nullable()
+                            .describe(
+                              "A transfer's kind: savings, investment, account, other, in; null otherwise",
+                            ),
+                          target: zod.union([
+                            zod
+                              .object({
+                                kind: zod.enum(["bill"]),
+                                id: zod
+                                  .string()
+                                  .describe("The recurring item id"),
+                                label: zod.string(),
+                                planKey: zod
+                                  .string()
+                                  .describe("<itemId>|<occurrenceDate>"),
+                                occurrenceDate: zod.string(),
+                                planned: zod
+                                  .string()
+                                  .nullable()
+                                  .describe(
+                                    "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known",
+                                  ),
+                                skipped: zod
+                                  .boolean()
+                                  .describe(
+                                    "(Task 6) The household skipped this occurrence",
+                                  ),
+                              })
+                              .describe(
+                                "The bill the forecast suggests (a recurring item's occurrence). (Task 6) It may be an occurrence the household SKIPPED (`skipped`): the matcher pairs it as a suggestion only, the row keeps its own reason, and a Match un-skips and matches in one write.",
+                              ),
+                            zod.null(),
+                          ]),
+                        }),
+                        zod.null(),
+                      ]),
+                    })
+                    .describe(
+                      "(F2) The evidence rule (classifyEvidence): every outflow is a known_purchase, a confirmed_payment or unresolved; a credit is unresolved only when filed under an expense category (otherwise the rule says nothing: null). `items` are the fields read and their values (Plaid categories as Plaid spells them, a bill's label, a category's name, a household flag). `suggestion` (unresolved only) is what the row probably is.",
+                    ),
+                  zod.null(),
+                ])
+                .describe(
+                  "(Task 6) The evidence rule's answer for the row (the one Spending reads); null where it says nothing. An evidence_unresolved row's words, and the occurrence its suggestion names (a skipped one included)",
+                ),
               plan: zod.union([
                 zod.object({
                   key: zod.string(),

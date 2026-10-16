@@ -285,3 +285,17 @@ describe("(PR-D) the allowance card says how much is still pending", () => {
     expect(screen.queryByTestId("actual-pending-cat-gro")).toBeNull();
   });
 });
+
+describe("(S) Budget drill — a credit on a spending line says it is not in the figure", () => {
+  it("labels the refund row, and only that row", async () => {
+    txns = [
+      ...txns,
+      { id: "tx-gro-refund", description: "HY-VEE 1502 REFUND", amount: "22.99", occurredOn: "2026-07-17", categoryId: "cat-gro", isTransfer: false, pending: false, source: "plaid:chase" },
+    ];
+    renderPage();
+    fireEvent.click(screen.getByTestId("button-actuals-cat-gro"));
+    await screen.findByTestId("actuals-list-cat-gro");
+    expect(screen.getByTestId("actuals-row-tx-gro-refund").textContent).toContain("credit, not in the figure");
+    expect(screen.getByTestId("actuals-row-tx-gro-posted").textContent).not.toContain("not in the figure");
+  });
+});
