@@ -5508,6 +5508,12 @@ export interface PlaidCheckingAccount {
     /** @nullable */
     institutionName?: string | null;
 }
+export interface CashSignalOpening {
+    date: string;
+    balance: string;
+    reading: SpineBankSnapshot | null;
+    since: SpineSinceSnapshot | null;
+}
 export type CashSignalStatus = (typeof CashSignalStatus)[keyof typeof CashSignalStatus];
 export declare const CashSignalStatus: {
     readonly ready: "ready";
@@ -5739,6 +5745,8 @@ export interface CashSignal {
     fromDate?: string;
     toDate?: string;
     startingBalance?: string;
+    /** (C2) The chart's first point in one place. `date` = `fromDate`; `balance` = `startingBalance` (the balance at the START of that day — the first plotted point `daily[0]` is that day's close); `reading` and `since` are bankBalanceParts(ledger).snapshot / .sinceSnapshot (the same halves as the spine's bank.snapshot / bank.sinceSnapshot). Additive: nothing else moves. */
+    opening?: CashSignalOpening;
     endingBalance?: string;
     /** @nullable */
     endingDate?: string | null;

@@ -183,6 +183,13 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
   };
   const low = () => chk!.lowPoint ?? { value: todayBal, date: opts.today };
   const buffer = () => chk!.cashBuffer ?? "0.00";
+  // What rolled on top of the reading (the fake's one stand-in row when today differs from it): the spine's
+  // `sinceSnapshot` and the cash signal's `opening.since` are the same halves of one ledger.
+  const sinceOf = () => ({
+    net: (Number(todayBal) - Number(chk!.reading.balance)).toFixed(2),
+    count: todayBal === chk!.reading.balance ? 0 : 1,
+    through: opts.today,
+  });
   const cashSignal = (horizonDays: number) => ({
     bankToday: todayBal,
     lowestProjected: low().value,
@@ -197,6 +204,7 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
     fromDate: opts.today,
     toDate: opts.today,
     startingBalance: todayBal,
+    opening: { date: opts.today, balance: todayBal, reading: { ...chk!.reading }, since: sinceOf() },
     endingBalance: todayBal,
     endingDate: opts.today,
     projectedIncome: "0.00",
@@ -219,11 +227,7 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
       staleReason: null,
       snapshot: { ...chk!.reading },
       // What rolled on top of the reading (the fake's one stand-in row when today differs from it).
-      sinceSnapshot: {
-        net: (Number(todayBal) - Number(chk!.reading.balance)).toFixed(2),
-        count: todayBal === chk!.reading.balance ? 0 : 1,
-        through: opts.today,
-      },
+      sinceSnapshot: sinceOf(),
       account: signalAccount,
     },
     spentMonth: 0,

@@ -45,11 +45,16 @@ const WORD: Record<PeriodView, { plan: string; noun: string }> = {
   month: { plan: "monthly", noun: "this month" },
 };
 
+/** "$450" for a round amount, "$451.20" otherwise — the forecast row's words ("Weekly Spend reserve $450"). */
+const roundMoney = (amount: string) => formatCurrency(amount).replace(/\.00$/, "");
+
 export function PlanPrompt({
   view,
   start,
   prefills,
   canSet,
+  openOnMount = false,
+  onDismiss,
 }: {
   view: PeriodView;
   /** The current period's first day: the plan's `effectiveFrom`. */
@@ -57,6 +62,13 @@ export function PlanPrompt({
   prefills: readonly AllowancePlanPrefill[];
   /** (Q4) true | false | "unknown": unknown shows a placeholder, never the denial. */
   canSet: Owner;
+  /**
+   * ⭐ (C5) `?plan=1` (the Forecast's "Set a weekly plan →"): the dialog opens on
+   * the same choices — nothing is picked, nothing is saved until Confirm.
+   */
+  openOnMount?: boolean;
+  /** (C5) The dialog opened by `openOnMount` closed (Cancel, Escape or a saved plan): the page drops `?plan=1`. */
+  onDismiss?: () => void;
 }) {
   const period = view === "week" ? "weekly" : "monthly";
   const w = WORD[view];
@@ -69,6 +81,8 @@ export function PlanPrompt({
   const [pick, setPick] = useState<Pick | null>(null);
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // (C5) The dialog's first step — the choices — when the page was opened to set a plan.
+  const [choosing, setChoosing] = useState(openOnMount);
 
   const typedAmount = pick?.custom ? parsePositiveDollars(typed) : pick ? pick.amount : null;
   useEffect(() => {
@@ -98,6 +112,13 @@ export function PlanPrompt({
   const primary = view === "week" ? mine.find((p) => p.source === "hook_stored") ?? null : null;
   const seen = new Set<string>(primary ? [primary.amount] : []);
   const others = mine.filter((p) => (seen.has(p.amount) ? false : (seen.add(p.amount), true)));
+  // ⭐ (C5) How the forecast's reserve and this plan relate, in one sentence: the
+  // hook item's stored amount (`hook_stored`, "Weekly Spend reserve") is what the
+  // forecast holds until a plan is set.
+  const hookStored = mine.find((p) => p.source === "hook_stored") ?? null;
+  const holds = hookStored
+    ? `Until a plan is set the forecast holds ${roundMoney(hookStored.amount)} a ${view} — the ${hookStored.label.replace(/ reserve$/, "")} item's amount. Pick the plan Spending should track.`
+    : null;
 
   if (canSet === "unknown") {
     return <div className="skeleton h-6 w-2/3 rounded" aria-busy="true" data-testid="plan-prompt-owner-unknown" />;
@@ -115,6 +136,10 @@ export function PlanPrompt({
     setPick(null);
     setTyped("");
     setError(null);
+    if (choosing) {
+      setChoosing(false);
+      onDismiss?.();
+    }
   };
 
   const checked = dry != null && dry.amount === typedAmount ? dry : null;
@@ -142,31 +167,53 @@ export function PlanPrompt({
     );
   };
 
+  // The choices, the same inline and in the dialog's first step (`prefix` keeps their test ids apart).
+  const choices = (prefix: string) => (
+    <div className="flex flex-wrap gap-2">
+      {primary ? (
+        <button type="button" className={btn} data-testid={`${prefix}use-primary`} onClick={() => setPick({ amount: primary.amount, custom: false })}>
+          Use {formatCurrency(primary.amount)} as the {w.plan} plan from {view === "week" ? "this week" : "this month"}
+        </button>
+      ) : null}
+      {others.map((p) => (
+        <button key={`${p.source}-${p.amount}`} type="button" className={btnSecondary} data-testid={`${prefix}use-${p.source}`} onClick={() => setPick({ amount: p.amount, custom: false })}>
+          Use {formatCurrency(p.amount)} · {p.label}
+        </button>
+      ))}
+      <button
+        type="button"
+        className={primary || others.length ? btnSecondary : btn}
+        data-testid={`${prefix}different`}
+        onClick={() => setPick({ amount: "", custom: true })}
+      >
+        Different amount
+      </button>
+    </div>
+  );
+
   return (
     <div className="space-y-2" data-testid="plan-prompt">
-      <div className="flex flex-wrap gap-2">
-        {primary ? (
-          <button type="button" className={btn} data-testid="plan-use-primary" onClick={() => setPick({ amount: primary.amount, custom: false })}>
-            Use {formatCurrency(primary.amount)} as the {w.plan} plan from {view === "week" ? "this week" : "this month"}
-          </button>
-        ) : null}
-        {others.map((p) => (
-          <button key={`${p.source}-${p.amount}`} type="button" className={btnSecondary} data-testid={`plan-use-${p.source}`} onClick={() => setPick({ amount: p.amount, custom: false })}>
-            Use {formatCurrency(p.amount)} · {p.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          className={primary || others.length ? btnSecondary : btn}
-          data-testid="plan-different"
-          onClick={() => setPick({ amount: "", custom: true })}
-        >
-          Different amount
-        </button>
-      </div>
-      {primary ? <p className="text-micro text-neutral-600">{primary.label}</p> : null}
+      {holds ? (
+        <p className="text-label text-neutral-700" data-testid="plan-prompt-holds">{holds}</p>
+      ) : null}
+      {choices("plan-")}
 
-      <Dialog open={pick != null} onOpenChange={(o) => (o ? null : close())}>
+      <Dialog open={pick != null || choosing} onOpenChange={(o) => (o ? null : close())}>
+        {pick == null ? (
+          <DialogContent data-testid="plan-choose">
+            <DialogHeader>
+              <DialogTitle>Set the {w.plan} plan</DialogTitle>
+              <DialogDescription>Nothing changes until you confirm.</DialogDescription>
+            </DialogHeader>
+            {holds ? (
+              <p className="text-label text-neutral-700" data-testid="plan-choose-holds">{holds}</p>
+            ) : null}
+            {choices("plan-choose-")}
+            <DialogFooter>
+              <button type="button" className={btnSecondary} onClick={close} data-testid="plan-choose-cancel">Cancel</button>
+            </DialogFooter>
+          </DialogContent>
+        ) : (
         <DialogContent data-testid="plan-confirm">
           <DialogHeader>
             <DialogTitle>Set the {w.plan} plan</DialogTitle>
@@ -227,6 +274,7 @@ export function PlanPrompt({
             </button>
           </DialogFooter>
         </DialogContent>
+        )}
       </Dialog>
     </div>
   );

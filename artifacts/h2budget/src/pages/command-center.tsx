@@ -19,7 +19,6 @@ import { buildEntries, accountViewOf } from "@/pages/next/accounts/entries";
 import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { Help, figLabel, input, toggle } from "@/ui";
 import { BalanceCheck } from "./banking/BalanceCheck";
-import { BankBalanceWhy } from "@/components/bank-balance-why";
 import { BucketRows } from "./banking/BucketRows";
 import { ProposedFixes } from "./banking/ProposedFixes";
 import { PRESETS, isDay, presetOf, presetRange, rangeWords, sanitizeRange } from "./banking/reviewDates";
@@ -29,7 +28,7 @@ import { WEEK_FIGURE_WORDS } from "@workspace/avalanche-core/glossary";
 import { bankFreshWords, freshKindOf } from "@/lib/bankFreshWords";
 import { useSpine } from "@/hooks/useSpine";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
-import { asOfWords, readingLine } from "@/lib/checkingWords";
+import { CheckingBalanceFull } from "@/components/checking-balance-note";
 import { useOlderSnapshot } from "@/lib/dataAsOf";
 
 /**
@@ -220,6 +219,8 @@ export default function BankingReviewPage() {
   // "N pending" is the account's, through today (the same figure the dashboard says), not the range's: the forecast account's
   // from the spine; another account's range count says its range.
   const spine = useSpine();
+  const sameReading =
+    !!d?.balance.asOf && !!spine.data?.bank?.snapshot && Date.parse(spine.data.bank.snapshot.at) === Date.parse(d.balance.asOf);
   const pendingWords = !d
     ? null
     : d.account.isForecastAccount
@@ -306,27 +307,30 @@ export default function BankingReviewPage() {
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="br-summary">
             <div className={CELL}>
-              <div className={CELL_LABEL}>H2 balance</div>
-              {/* ⭐ (T1) Checking today (the reading rolled forward), as of the reading, and the reading itself —
-                  all from THIS response (one moment), never the spine's. An answer on an older reading is grey and says so. */}
-              <div className={cn(CELL_VALUE, olderReading.older && "text-neutral-500")} data-testid="br-balance">{face(d.balance.today)}</div>
-              <div className="mt-1 text-micro text-neutral-500" data-testid="br-balance-asof">
-                {olderReading.words ??
-                  (d.balance.today != null && d.balance.asOf ? (asOfWords(d.balance.asOf) ?? "") : "Not tracked for this account")}
-              </div>
-              {d.balance.today != null ? (
-                <div className="text-micro text-neutral-500" data-testid="br-bank-today">
-                  {readingLine({ balance: d.balance.reading, at: d.balance.asOf, source: d.freshness?.source })}
-                </div>
-              ) : null}
-              {d.account.isForecastAccount && d.balance.today != null ? (
-                <div className="mt-1 text-micro">
-                  <BankBalanceWhy
-                    trigger={<button type="button" className="press font-semibold text-brand-navy underline" data-testid="br-why">Why this number?</button>}
-                    onReviewDifference={d.balanceCheck.status === "off_by" && !d.balanceCheck.stale ? () => setExplainOpen(true) : undefined}
-                  />
-                </div>
-              ) : null}
+              {/* ⭐ (C1) Checking today — the one presentation. Figure and reading are THIS response's (one moment);
+                  the rows since come from the spine only when it describes the same reading. An answer on an older
+                  reading is grey and says so. Account with no tracked balance: "—". */}
+              {d.balance.today == null ? (
+                <>
+                  <div className={CELL_LABEL}>Checking today</div>
+                  <div className={CELL_VALUE} data-testid="br-balance">—</div>
+                  <div className="mt-1 text-micro text-neutral-500" data-testid="br-balance-asof">Not tracked for this account</div>
+                </>
+              ) : (
+                <CheckingBalanceFull
+                  size="cell"
+                  figure={d.balance.today}
+                  reading={{ balance: d.balance.reading, at: d.balance.asOf, source: d.freshness?.source }}
+                  since={sameReading ? spine.data?.bank?.sinceSnapshot : null}
+                  older={olderReading.words}
+                  testids={{ figure: "br-balance", line: "br-balance-asof", details: "br-why" }}
+                  details={
+                    d.account.isForecastAccount
+                      ? { onReviewDifference: d.balanceCheck.status === "off_by" && !d.balanceCheck.stale ? () => setExplainOpen(true) : undefined }
+                      : false
+                  }
+                />
+              )}
             </div>
             <div className={CELL}>
               <div className={CELL_LABEL}>Money in</div>

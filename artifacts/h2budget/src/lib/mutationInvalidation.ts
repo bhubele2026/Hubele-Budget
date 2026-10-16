@@ -17,6 +17,10 @@ import {
  * - (T4) The period breakdown (Spending) and the Amex summary.
  * - (T1) The banking review (`/api/banking/review`, every account and range):
  *   it shows the same balance and check as the spine.
+ * - ⭐ (C5) The cash signal (`/api/forecast/cash-signal`, every horizon): a plan
+ *   set on Spending flips the Weekly / Monthly Spend reserve from the item's
+ *   stored amount to the plan, so the Forecast, its overview and the dashboard's
+ *   forecast panel read the new plan — not a cached reserve.
  *
  * `invalidateQueries` refetches only mounted queries; anything else is simply
  * marked stale for its next reader. `mutationInvalidation.test.ts` pins every
@@ -29,6 +33,8 @@ export const BANKING_REVIEW_KEY = ["/api/banking/review"] as const;
 /** (T4) Spending's period breakdown and the Amex summary: prefixes, so every param suffix is covered. */
 export const PERIOD_BREAKDOWN_KEY = ["/api/money/period-breakdown"] as const;
 export const AMEX_SUMMARY_KEY = ["/api/amex/summary"] as const;
+/** (C5) The cash signal: a prefix, so every horizon and dry run is covered. */
+export const CASH_SIGNAL_KEY = ["/api/forecast/cash-signal"] as const;
 
 export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
@@ -42,6 +48,8 @@ export function invalidateAfterWrite(queryClient: QueryClient): void {
   // (T4) Spending (every week and month, any account) and the Amex summary move with any write too.
   void queryClient.invalidateQueries({ queryKey: PERIOD_BREAKDOWN_KEY });
   void queryClient.invalidateQueries({ queryKey: AMEX_SUMMARY_KEY });
+  // (C5) The forecast's hook reserves move with a plan write (and with any spend).
+  void queryClient.invalidateQueries({ queryKey: CASH_SIGNAL_KEY });
   void queryClient.invalidateQueries({
     predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/"),
   });

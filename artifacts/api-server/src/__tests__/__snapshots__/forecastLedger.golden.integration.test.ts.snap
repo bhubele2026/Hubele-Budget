@@ -583,6 +583,20 @@ exports[`PR-B2 golden — the everyday hooks > a Weekly Spend hook: every occurr
   "lowestProjected": "-35.00",
   "matches": [],
   "maxSafeExtra": "0.00",
+  "opening": {
+    "balance": "1500.00",
+    "date": "2026-05-14",
+    "reading": {
+      "at": "2026-05-08T15:00:00.000Z",
+      "balance": "1500.00",
+      "source": "plaid",
+    },
+    "since": {
+      "count": 0,
+      "net": "0.00",
+      "through": "2026-05-14",
+    },
+  },
   "overdueAssumedPaid": [],
   "overdueOutsideForecast": [
     {
@@ -719,6 +733,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
     "lowestProjected": "860.00",
     "matches": [],
     "maxSafeExtra": "760.00",
+    "opening": {
+      "balance": "900.00",
+      "date": "2026-05-14",
+      "reading": null,
+      "since": null,
+    },
     "overdueAssumedPaid": [],
     "overdueOutsideForecast": [
       {
@@ -851,6 +871,16 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
     "lowestProjected": "650.00",
     "matches": [],
     "maxSafeExtra": "550.00",
+    "opening": {
+      "balance": "690.00",
+      "date": "2026-05-14",
+      "reading": null,
+      "since": {
+        "count": 1,
+        "net": "-10.00",
+        "through": "2026-05-14",
+      },
+    },
     "overdueAssumedPaid": [],
     "overdueOutsideForecast": [
       {
@@ -1256,6 +1286,20 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "540.00",
+  "opening": {
+    "balance": "2980.00",
+    "date": "2026-05-10",
+    "reading": {
+      "at": "2026-05-08T15:00:00.000Z",
+      "balance": "3000.00",
+      "source": "plaid",
+    },
+    "since": {
+      "count": 5,
+      "net": "-215.00",
+      "through": "2026-05-14",
+    },
+  },
   "overdueAssumedPaid": [
     {
       "confidence": "medium",
@@ -1455,6 +1499,20 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "2280.00",
+  "opening": {
+    "balance": "3000.00",
+    "date": "2026-05-01",
+    "reading": {
+      "at": "2026-05-08T15:00:00.000Z",
+      "balance": "3000.00",
+      "source": "plaid",
+    },
+    "since": {
+      "count": 5,
+      "net": "-215.00",
+      "through": "2026-05-14",
+    },
+  },
   "overdueAssumedPaid": [
     {
       "confidence": "medium",
@@ -1787,6 +1845,20 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "540.00",
+  "opening": {
+    "balance": "1040.00",
+    "date": "2026-05-20",
+    "reading": {
+      "at": "2026-05-08T15:00:00.000Z",
+      "balance": "3000.00",
+      "source": "plaid",
+    },
+    "since": {
+      "count": 5,
+      "net": "-215.00",
+      "through": "2026-05-14",
+    },
+  },
   "overdueAssumedPaid": [
     {
       "confidence": "medium",
@@ -2419,6 +2491,20 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "540.00",
+  "opening": {
+    "balance": "2785.00",
+    "date": "2026-05-14",
+    "reading": {
+      "at": "2026-05-08T15:00:00.000Z",
+      "balance": "3000.00",
+      "source": "plaid",
+    },
+    "since": {
+      "count": 5,
+      "net": "-215.00",
+      "through": "2026-05-14",
+    },
+  },
   "overdueAssumedPaid": [
     {
       "confidence": "medium",
@@ -3051,6 +3137,20 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "755.00",
+  "opening": {
+    "balance": "3000.00",
+    "date": "2026-05-14",
+    "reading": {
+      "at": "2026-05-20T15:00:00.000Z",
+      "balance": "3000.00",
+      "source": "plaid",
+    },
+    "since": {
+      "count": 0,
+      "net": "0.00",
+      "through": "2026-05-14",
+    },
+  },
   "overdueAssumedPaid": [
     {
       "confidence": "medium",
@@ -3287,6 +3387,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot, 
   "lowestProjected": "1735.00",
   "matches": [],
   "maxSafeExtra": "1535.00",
+  "opening": {
+    "balance": "1800.00",
+    "date": "2026-05-20",
+    "reading": null,
+    "since": null,
+  },
   "overdueAssumedPaid": [],
   "overdueOutsideForecast": [
     {
@@ -3593,6 +3699,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot: 
   "lowestProjected": "920.00",
   "matches": [],
   "maxSafeExtra": "620.00",
+  "opening": {
+    "balance": "2500.00",
+    "date": "2026-05-14",
+    "reading": null,
+    "since": null,
+  },
   "overdueAssumedPaid": [],
   "overdueOutsideForecast": [
     {
@@ -3755,6 +3867,20 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > snapshot with
   "lowestProjected": "1175.00",
   "matches": [],
   "maxSafeExtra": "1175.00",
+  "opening": {
+    "balance": "1175.00",
+    "date": "2026-05-14",
+    "reading": {
+      "at": "2026-05-12T16:00:00.000Z",
+      "balance": "1200.00",
+      "source": "manual",
+    },
+    "since": {
+      "count": 2,
+      "net": "275.00",
+      "through": "2026-05-14",
+    },
+  },
   "overdueAssumedPaid": [],
   "overdueOutsideForecast": [
     {
@@ -4083,6 +4209,20 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > ties and edge
   "lowestProjected": "1404.63",
   "matches": [],
   "maxSafeExtra": "1204.63",
+  "opening": {
+    "balance": "1880.00",
+    "date": "2026-05-14",
+    "reading": {
+      "at": "2026-05-08T15:00:00.000Z",
+      "balance": "2000.00",
+      "source": "plaid",
+    },
+    "since": {
+      "count": 1,
+      "net": "-120.00",
+      "through": "2026-05-14",
+    },
+  },
   "overdueAssumedPaid": [],
   "overdueOutsideForecast": [
     {
@@ -4690,6 +4830,20 @@ exports[`PR4b golden — the snapshot rule > counts rows shown to happen after t
     },
   ],
   "maxSafeExtra": "885.00",
+  "opening": {
+    "balance": "3220.00",
+    "date": "2026-05-14",
+    "reading": {
+      "at": "2026-05-08T15:00:00.000Z",
+      "balance": "3000.00",
+      "source": "plaid",
+    },
+    "since": {
+      "count": 10,
+      "net": "130.00",
+      "through": "2026-05-14",
+    },
+  },
   "overdueAssumedPaid": [
     {
       "confidence": "medium",

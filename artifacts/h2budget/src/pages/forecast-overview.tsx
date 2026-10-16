@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
 import {
   useGetForecastCashSignal,
   getGetForecastCashSignalQueryKey,
@@ -10,10 +11,19 @@ import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import { CHART } from "@/lib/chartTokens";
 import { card, cardHead, emptyNote, Foot, Help, Stat, errorBanner, btnLink } from "@/ui";
 import { formatCurrency } from "@/lib/utils";
+import { CheckingBalanceFull } from "@/components/checking-balance-note";
+import { bankBalanceView } from "@/lib/bankBalance";
+import { lowPointView } from "@/lib/lowPoint";
+import { HORIZON_CODEC, DEFAULT_HORIZON, forecastHref, storedHorizon } from "@/lib/forecastHorizon";
+import { replaceUrlParam, useUrlState } from "@/hooks/useUrlState";
 
 /**
  * ⭐ FORECAST → OVERVIEW. Where cash stands, where it bottoms out, how long it
  * lasts — four numbers and three quiet panels, on the kit.
+ *
+ * ⭐ (C3) ONE FORECAST. The horizon is the detail's (lib/forecastHorizon: `?horizon=`,
+ * then the saved choice, then 90), every figure names it, the low point is said with
+ * the detail's chip words, and each stat opens the detail on that horizon and day.
  *
  * ⚠️ THE SPINE RULE. Bank today, the cash low point (and its date) and runway
  * all come from `useSpine()` and are NEVER recomputed here — see
@@ -61,6 +71,9 @@ function shortDate(iso: string | null | undefined): string | undefined {
     : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/** The spine's forecast figures are a 90-day read (routes/spine.ts); any other horizon reads the cash signal's own. */
+const SPINE_HORIZON = 90;
+
 export default function ForecastOverviewPage() {
   const {
     data: spine,
@@ -68,29 +81,46 @@ export default function ForecastOverviewPage() {
     updatedAt: spineUpdatedAt,
     isFetching: spineFetching,
     refetch: refetchSpine,
+    olderWords,
   } = useSpine();
+  const [, navigate] = useLocation();
+  const [horizon] = useUrlState<number>("horizon", HORIZON_CODEC, () => storedHorizon() ?? DEFAULT_HORIZON);
+  // The address names the horizon on screen (written back, no history entry).
+  useEffect(() => {
+    replaceUrlParam("horizon", String(horizon));
+  }, [horizon]);
   const { data: signal, isError, refetch } = useGetForecastCashSignal(
-    { horizonDays: 90 },
+    { horizonDays: horizon },
     {
       query: {
-        queryKey: getGetForecastCashSignalQueryKey({ horizonDays: 90 }),
+        queryKey: getGetForecastCashSignalQueryKey({ horizonDays: horizon }),
         staleTime: 5 * 60_000,
       },
     },
   );
+  const days = `${horizon} days`;
 
-  // ── Headline figures: the spine owns these three. ──────────────────────────
+  // ── Headline figures: the spine owns these at its own 90-day read. ─────────
   const bankToday = spine?.bank?.balance ?? null;
-  const lowPoint = spine?.forecast?.lowPoint ?? null;
-  const lowPointDate = spine?.forecast?.lowPointDate ?? null;
+  const bank = spine?.bank ? bankBalanceView(spine.bank) : null;
+  const useSpineForecast = horizon === SPINE_HORIZON && !!spine?.forecast;
+  const lowSource = useSpineForecast
+    ? spine!.forecast
+    : signal && signal.status !== "no_data"
+      ? { lowPoint: signal.lowestProjected, lowPointDate: signal.lowestDate, status: signal.status, cashBuffer: signal.cashBuffer }
+      : null;
+  const lowPoint = lowSource?.lowPoint ?? null;
+  const lowPointDate = lowSource?.lowPointDate ?? null;
   const runwayDays = spine?.forecast?.runwayDays ?? null;
 
   // ── Detail figures: the spine does not carry these. ────────────────────────
-  const forecastReady = !!spine?.forecast && !!signal && signal.status !== "no_data";
+  const forecastReady = !!lowSource && !!signal && signal.status !== "no_data";
   const buffer = num(signal?.cashBuffer);
-  const ending = num(signal?.endingBalance);
   const income = num(signal?.projectedIncome);
   const expenses = num(signal?.projectedExpenses);
+  // The detail's own words for the low point (lib/lowPoint): rust only below zero.
+  const low = lowPointView(lowSource ? { ...lowSource, status: lowSource.status } : null);
+  const goDetail = () => navigate(forecastHref(horizon, lowPointDate));
 
   const daily = signal?.daily ?? [];
   const dailyValues = useMemo(() => daily.map((d) => num(d.balance)), [daily]);
@@ -116,11 +146,6 @@ export default function ForecastOverviewPage() {
         })),
     [signal],
   );
-
-  // The one comparison this page exists to make: does the projection dip under
-  // the buffer? Colour reinforces it; the chip's LABEL is what says it.
-  const lowNum = lowPoint == null ? null : Number(lowPoint);
-  const dipsBelowBuffer = lowNum != null && Number.isFinite(lowNum) && lowNum < buffer;
 
   return (
     <div className="space-y-4" data-testid="forecast-overview">
@@ -155,39 +180,44 @@ export default function ForecastOverviewPage() {
         data-testid="fo-spine-stats"
         className="grid grid-cols-2 gap-3 lg:grid-cols-4"
       >
-        <Stat
-          index={0}
+        <div
           data-testid="fo-stat-bank"
-          label="Bank today"
-          value={money(bankToday)}
-          hint="checking"
-        />
-        {/* ⚠️ The hint SAYS which side of the buffer this lands on. The tone
-            below only reinforces it — under this palette a reader who cannot
-            separate navy from deep orange must still get the answer. */}
+          className="surface tile-in min-w-[132px] rounded-card px-4 py-3 ring-1 ring-brand-line"
+          style={{ animationDelay: "0ms" }}
+        >
+          <CheckingBalanceFull
+            size="kpi"
+            figure={bankToday}
+            reading={bank?.snapshot}
+            since={bank?.since}
+            older={olderWords}
+            testids={{ figure: "fo-stat-bank-figure" }}
+          />
+        </div>
         <Stat
           index={1}
           data-testid="fo-stat-low-point"
           label="Cash low point"
           value={forecastReady ? money(lowPoint) : "—"}
-          tone={dipsBelowBuffer ? "bad" : "navy"}
-          hint={`${!forecastReady ? "Awaiting forecast" : dipsBelowBuffer ? "under buffer" : "above buffer"}${
-            lowPointDate ? ` · ${lowPointDate}` : ""
-          }`}
+          tone={forecastReady && low.chip?.tone === "bad" ? "bad" : "navy"}
+          hint={forecastReady && low.chip ? `${low.chip.word}${low.chip.tone !== "bad" && lowPointDate ? ` · ${shortDate(lowPointDate) ?? ""}` : ""}` : "—"}
+          onClick={forecastReady ? goDetail : undefined}
         />
         <Stat
           index={2}
           data-testid="fo-stat-runway"
           label="Runway"
-          value={!forecastReady ? "—" : runwayDays == null ? "Clear" : `${runwayDays} days`}
-          hint={!forecastReady ? "Awaiting forecast" : runwayDays == null ? "stays positive" : "until negative"}
+          value={!forecastReady || !spine?.forecast ? "—" : runwayDays == null ? "Clear" : `${runwayDays} days`}
+          hint={!forecastReady || !spine?.forecast ? "—" : `${runwayDays == null ? "stays positive" : "until negative"} · 90-day read`}
+          onClick={forecastReady ? goDetail : undefined}
         />
         <Stat
           index={3}
           data-testid="fo-stat-ending"
           label="Ending balance"
           value={forecastReady ? money(signal?.endingBalance) : "—"}
-          hint="at 90 days"
+          hint={`at ${days}`}
+          onClick={forecastReady ? goDetail : undefined}
         />
       </div>
 
@@ -195,13 +225,9 @@ export default function ForecastOverviewPage() {
       <section className={card} data-testid="fo-curve">
         <div className={cardHead}>
           <h2 className="text-title font-semibold text-brand-navy">
-            Projected balance
+            Projected balance · {days}
           </h2>
-          <Help>
-            Bank balance rolled forward through every planned bill and income
-            event for the next 90 days. Navy is the projection; it is not a
-            record of what happened.
-          </Help>
+          <Help>{`Checking today rolled forward through every planned bill and income event for the next ${days}. Navy is the projection; it is not a record of what happened.`}</Help>
           <span className="ml-auto font-mono text-label tabular-nums text-neutral-600">
             {money(bankToday)} → {money(signal?.endingBalance)}
           </span>
@@ -212,14 +238,12 @@ export default function ForecastOverviewPage() {
               <Sparkline
                 data={dailyValues}
                 variant="area"
-                color={dipsBelowBuffer ? CHART.orangeDeep : CHART.navy}
+                color={low.chip?.tone === "bad" ? CHART.orangeDeep : CHART.navy}
                 height={128}
               />
             </div>
             <Foot>
-              {dipsBelowBuffer
-                ? `Dips under the ${formatCurrency(buffer)} buffer on the way.`
-                : `Stays above the ${formatCurrency(buffer)} buffer throughout.`}
+              {low.chip ? `Lowest point: ${low.chip.word}${low.chip.tone !== "bad" && lowPointDate ? ` · ${shortDate(lowPointDate) ?? ""}` : ""}.` : "—"}
             </Foot>
           </>
         ) : (
@@ -232,14 +256,11 @@ export default function ForecastOverviewPage() {
         <section className={card} data-testid="fo-in-out">
           <div className={cardHead}>
             <h2 className="text-title font-semibold text-brand-navy">
-              Money in vs out
+              Money in vs out · {days}
             </h2>
-            <Help>
-              Totals of every projected income and expense event over the 90-day
-              window. Navy is money in, deep orange is money out.
-            </Help>
+            <Help>{`Totals of every projected income and expense event over the ${days}. Navy is money in, deep orange is money out.`}</Help>
             <span className="ml-auto text-micro uppercase tracking-wider text-neutral-400">
-              90 days
+              {days}
             </span>
           </div>
           <div className="px-4 py-4">
@@ -267,10 +288,7 @@ export default function ForecastOverviewPage() {
             <h2 className="text-title font-semibold text-brand-navy">
               Biggest bills ahead
             </h2>
-            <Help>
-              The six largest single expense events in the 90-day window,
-              largest first. Recurring bills appear once per occurrence.
-            </Help>
+            <Help>{`The six largest single expense events in the ${days}, largest first. Recurring bills appear once per occurrence.`}</Help>
           </div>
           {billRows.length ? (
             <>

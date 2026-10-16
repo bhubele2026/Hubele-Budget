@@ -417,16 +417,24 @@ export function buildLineRegister(opts: {
     pairedTxnIds.add(m.txnId);
   }
 
+  // ⭐ (C4) Every occurrence's own key: a decision on one of these belongs to that
+  // occurrence, never to another one moved onto its day (the server's rule,
+  // `closedAtMovedDate`: "unless that date is an occurrence of the item in its
+  // own right, whose resolution it is").
+  const ownKeys = new Set(events.map((ev) => `${ev.itemId}|${ev.date}`));
   const allPlan: PlanLine[] = events.flatMap((ev) => {
     const origKey = `${ev.itemId}|${ev.date}`;
     const moved = rescheduleByKey.get(origKey);
     const date = moved?.rescheduledTo ?? ev.date;
     // The decision on the occurrence's own key wins; a moved occurrence also
-    // honours a decision keyed on its new date (the pre-PR5 lookup); with no
-    // decision, the move itself is the stored resolution.
+    // honours a decision keyed on its new date (the pre-PR5 lookup) — (C4) unless
+    // that day is the item's own occurrence (October's Monthly Spend moved onto
+    // Nov 1 never takes November's partial); with no decision, the move itself is
+    // the stored resolution.
+    const movedKey = `${ev.itemId}|${date}`;
     const stored: Resolution | undefined =
       byEventKey.get(origKey) ??
-      (moved?.rescheduledTo ? byEventKey.get(`${ev.itemId}|${date}`) : undefined) ??
+      (moved?.rescheduledTo && !ownKeys.has(movedKey) ? byEventKey.get(movedKey) : undefined) ??
       moved;
     // (#480) "Skip" from the Missed bucket: drop the occurrence entirely.
     // The row should not appear in the register, the bucket, or the

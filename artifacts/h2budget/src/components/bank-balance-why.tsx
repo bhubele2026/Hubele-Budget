@@ -34,8 +34,8 @@ const Body = lazy(() => import("./bank-balance-why-body"));
 // Banking review's "Investigate"); the popover and its body are the same.
 // (T2) `onReviewDifference`: the check is off — the body offers "Review difference", which closes this
 // popover and opens the investigation (the caller's dialog). Absent: no link.
-export function BankBalanceWhy({ trigger, onReviewDifference }: { trigger?: ReactNode; onReviewDifference?: () => void } = {}) {
-  const [open, setOpen] = useState(false);
+export function BankBalanceWhy({ trigger, onReviewDifference, defaultOpen = false }: { trigger?: ReactNode; onReviewDifference?: () => void; defaultOpen?: boolean } = {}) {
+  const [open, setOpen] = useState(defaultOpen);
   const query = useGetForecastBankBalanceExplain({
     query: {
       queryKey: getGetForecastBankBalanceExplainQueryKey(),

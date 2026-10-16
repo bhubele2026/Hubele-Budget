@@ -230,6 +230,13 @@ export type CashSignal = {
   fromDate?: string;
   toDate?: string;
   startingBalance?: string;
+  /**
+   * (C2) The chart's first point in one place: the day the window opens
+   * (`fromDate`), the balance at the START of that day (= `startingBalance`; the
+   * first plotted point, `daily[0]`, is that day's CLOSE), and the two halves of
+   * "Checking today" it comes from (`bankBalanceParts`). Additive: no figure moves.
+   */
+  opening?: CashSignalOpening;
   endingBalance?: string;
   endingDate?: string | null;
   projectedIncome?: string;
@@ -583,6 +590,7 @@ async function buildCashSignalDetailed(
     (it): it is Extract<typeof it, { kind: "plan" }> => it.kind === "plan" && it.amount < 0,
   );
 
+  const parts = bankBalanceParts(ledger);
   const signal: CashSignal = {
     bankToday: ledger.snapshotBalance == null ? null : r2(ledger.bankToday),
     lowestProjected: r2(lowest),
@@ -604,6 +612,7 @@ async function buildCashSignalDetailed(
     fromDate: fromISO,
     toDate: toISO,
     startingBalance: r2(startingBalance),
+    opening: { date: fromISO, balance: r2(startingBalance), reading: parts.snapshot, since: parts.sinceSnapshot },
     endingBalance: r2(endingBalance),
     endingDate,
     projectedIncome: r2(projectedIncome),
@@ -732,6 +741,12 @@ export function hookReservesOf(payoffs: ReadonlyMap<string, HookPayoff>): CashSi
 }
 
 /** (WP1) The bank snapshot `bankToday` rolls forward from, as it was read. */
+export type CashSignalOpening = {
+  date: string;
+  balance: string;
+  reading: BankSnapshotPart | null;
+  since: SinceSnapshotPart | null;
+};
 export type BankSnapshotPart = { balance: string; at: string; source: "plaid" | "manual" };
 /** (WP1) What the roll-forward adds on top of it, through `through` (the household's today). */
 export type SinceSnapshotPart = { net: string; count: number; through: string };

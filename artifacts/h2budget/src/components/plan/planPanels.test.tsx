@@ -119,6 +119,28 @@ describe("Weekly plan panel", () => {
     expect(screen.getByTestId("limit-source-word").textContent).toBe("");
   });
 
+  it("⭐ (C5) no shared weekly plan: the owner gets 'Set a weekly plan →' (Spending's dialog), a member reads 'Plan not set'", () => {
+    m.plans = { plans: [plan("p3", "u2", "weekly", "40.00")], suggested: suggested() };
+    mount(<WeekPlanPanel />);
+    const link = screen.getByTestId("set-weekly-plan");
+    expect(link.textContent).toBe("Set a weekly plan →");
+    expect(link.getAttribute("href")).toBe("/spending/week?plan=1");
+    // The field that could only change a plan is gone; nothing here writes one.
+    expect(screen.queryByTestId("input-own")).toBeNull();
+    expect(screen.queryByText("There is no weekly plan to change yet.")).toBeNull();
+    expect(screen.getByTestId("plan-limit-figure").textContent).toBe("—");
+    cleanup();
+    m.isOwner = false;
+    mount(<WeekPlanPanel />);
+    expect(screen.queryByTestId("set-weekly-plan")).toBeNull();
+    expect(screen.getByTestId("read-only").textContent).toBe("Plan not set");
+    cleanup();
+    m.isOwner = undefined;
+    mount(<WeekPlanPanel />);
+    expect(screen.getByTestId("owner-unknown")).toBeTruthy();
+    expect(screen.queryByTestId("set-weekly-plan")).toBeNull();
+  });
+
   it("a derived plan reads 'suggested'", () => {
     m.plans = { plans: [plan("p1", null, "weekly", "350.00", "derived")], suggested: suggested() };
     mount(<WeekPlanPanel />);

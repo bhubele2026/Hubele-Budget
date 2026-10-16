@@ -222,6 +222,7 @@ beforeEach(() => {
   cleanup();
   sessionStorage.clear();
   localStorage.clear();
+  window.history.replaceState(null, "", "/");
   calls.params = [];
   calls.keys = [];
   calls.signal = undefined;
@@ -238,12 +239,24 @@ describe("Forecast page — its cash-signal request shares the one cache key (de
     }
   });
 
-  it("the default 30-day tab, look-back closed, sends no fromDate either", () => {
+  it("(C3) the default is 90 days (the Overview's and the tile's), look-back closed, sends no fromDate either", () => {
     renderPage();
     expect(calls.params.length).toBeGreaterThan(0);
     for (const params of calls.params) {
-      expect(params).toStrictEqual({ horizonDays: 30 });
+      expect(params).toStrictEqual({ horizonDays: 90 });
     }
+  });
+
+  it("(C3) a saved 30-day choice still opens on 30, and ?horizon= beats the saved choice", () => {
+    sessionStorage.setItem("h2budget:forecastHorizonDays", "30");
+    renderPage();
+    for (const params of calls.params) expect(params).toStrictEqual({ horizonDays: 30 });
+    cleanup();
+    calls.params = [];
+    window.history.replaceState(null, "", "/?horizon=120");
+    renderPage();
+    for (const params of calls.params) expect(params).toStrictEqual({ horizonDays: 120 });
+    window.history.replaceState(null, "", "/");
   });
 
   it("an open look-back still sends its start date", () => {
@@ -354,7 +367,7 @@ describe("Forecast page — its cash-signal request shares the one cache key (de
       overdueAssumedPaid: [],
     };
     renderPage();
-    expect(screen.getByTestId("adds-up-start").textContent).toContain("Starting balance · May 14");
+    expect(screen.getByTestId("adds-up-start").textContent).toContain("Opening · May 14");
     expect(screen.getByTestId("adds-up-start").textContent).toContain("$1,000.00");
   });
 });
@@ -376,8 +389,8 @@ describe("(PR-K follow-up, NIT) the ACTUAL query key, not just the params object
     }
   });
 
-  it("the default 30-day tab resolves to [\"/api/forecast/cash-signal\", { horizonDays: 30 }]", () => {
+  it("the default 90-day tab resolves to [\"/api/forecast/cash-signal\", { horizonDays: 90 }]", () => {
     renderPage();
-    expect(lastKey()).toStrictEqual(["/api/forecast/cash-signal", { horizonDays: 30 }]);
+    expect(lastKey()).toStrictEqual(["/api/forecast/cash-signal", { horizonDays: 90 }]);
   });
 });

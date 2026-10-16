@@ -1,5 +1,5 @@
 import React, { Suspense } from "react";
-import { render, screen, cleanup, waitFor, within } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, within, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -54,6 +54,7 @@ import BankingReviewPage from "../command-center";
 import NextAccountsPage from "./Accounts";
 import TransactionsPage from "../transactions";
 import ForecastPage from "../forecast";
+import ForecastOverviewPage from "../forecast-overview";
 
 class ResizeObserverStub {
   observe() {}
@@ -148,9 +149,9 @@ describe("⭐ (H1) the bank holds exactly $0.00 — every surface says $0.00, as
     const bal = await screen.findByTestId("br-balance");
     expect(bal.textContent).toBe("$0.00");
     expect(bal.className).not.toMatch(RUST);
-    expect(screen.getByTestId("br-balance-asof").textContent).toBe("as of Oct 15");
-    expect(screen.getByTestId("br-bank-today").textContent).toBe("Bank's last reading $0.00 · Oct 15, 7:02 AM");
-    expect(count(screen.getByTestId("br-summary").textContent ?? "", "Bank's last reading")).toBe(1);
+    expect(screen.getByTestId("br-balance-asof").textContent).toBe("Calculated · bank read $0.00 Oct 15, 7:02 AM · no rows since");
+    // (C1) "Bank's last reading" lives inside Details only, never on the face.
+    expect(count(screen.getByTestId("br-summary").textContent ?? "", "Bank's last reading")).toBe(0);
     expect(screen.getByTestId("br-tie").textContent).toBe("Balances match");
   });
 
@@ -177,11 +178,11 @@ describe("⭐ (H1) the bank holds exactly $0.00 — every surface says $0.00, as
     const card = await screen.findByTestId("text-bank-balance", undefined, { timeout: 3000 });
     expect(card.textContent).toBe("$0.00");
     expect(screen.getByTestId("card-bank-snapshot").textContent).toContain("Checking today");
-    expect(screen.getByTestId("text-bank-reading").textContent).toBe("Bank's last reading $0.00 · Everyday Checking ••0001 · Oct 15, 7:02 AM");
+    expect(screen.getByTestId("text-bank-calculated").textContent).toBe("Calculated · bank read $0.00 Oct 15, 7:02 AM · no rows since");
     const kpi = screen.getByTestId("kpi-bank-today");
     expect(kpi.textContent).toContain("Checking today");
     expect(kpi.textContent).toContain("$0.00");
-    expect(kpi.textContent).toContain("as of Oct 15");
+    expect(kpi.textContent).toContain("Calculated · bank read $0.00 Oct 15, 7:02 AM");
     // The typed-balance control is gone: the bank's reading is the only source.
     expect(screen.queryByTestId("button-set-bank-snapshot")).toBeNull();
     expect(screen.queryByText("Set manually")).toBeNull();
@@ -195,14 +196,14 @@ describe("(H5) today's balance differs from the reading (rows since): every surf
     serve(ROLLED);
     at("/banking", <BankingReviewPage />);
     expect((await screen.findByTestId("br-balance")).textContent).toBe("$84.50");
-    expect(screen.getByTestId("br-bank-today").textContent).toBe("Bank's last reading $120.00 · Oct 15, 7:02 AM");
+    expect(screen.getByTestId("br-balance-asof").textContent).toContain("Calculated · bank read $120.00 Oct 15, 7:02 AM");
     cleanup();
     qc.clear();
     at("/forecast", <ForecastPage />);
     expect((await screen.findByTestId("text-bank-balance", undefined, { timeout: 3000 })).textContent).toBe("$84.50");
     expect(screen.getByTestId("kpi-bank-today").textContent).toContain("$84.50");
     // The raw reading is never under the "today" title.
-    expect(screen.getByTestId("text-bank-reading").textContent).toContain("Bank's last reading $120.00");
+    expect(screen.getByTestId("text-bank-calculated").textContent).toContain("Calculated · bank read $120.00");
   });
 
   it("the Dashboard tile quotes $84.50 too", async () => {
@@ -251,15 +252,113 @@ describe("(H4) a typed $0.00 replaced an older bank reading", () => {
   it("Banking and Forecast say 'Typed balance (not from the bank)'; the check is out of date", async () => {
     serve(TYPED);
     at("/banking", <BankingReviewPage />);
-    expect((await screen.findByTestId("br-bank-today")).textContent).toBe("Typed balance $0.00 (not from the bank) · Oct 15");
+    expect((await screen.findByTestId("br-balance-asof")).textContent).toBe("Typed balance $0.00 (not from the bank) · Oct 15");
     expect(screen.getByTestId("br-tie").textContent).toBe("Check is out of date");
     expect(screen.getByTestId("br-check-line").textContent).toBe("A balance was typed in since the last check (Oct 14).");
     cleanup();
     qc.clear();
     at("/forecast", <ForecastPage />);
     await screen.findByTestId("text-bank-balance", undefined, { timeout: 3000 });
-    expect(screen.getByTestId("text-bank-reading").textContent).toBe("Typed balance $0.00 (not from the bank) · Everyday Checking ••0001 · Oct 15");
+    expect(screen.getByTestId("text-bank-calculated").textContent).toBe("Typed balance $0.00 (not from the bank) · Oct 15");
     // Never named as the bank's reading.
     expect(screen.getByTestId("card-bank-snapshot").textContent).not.toContain("Bank's last reading");
+  });
+});
+
+describe("⭐ (C1) one Checking today block — the same label, figure and calculated line on every surface", () => {
+  const ROLLED2: FakeChecking = { reading: { balance: "120.00", at: READ_AT, source: "plaid" }, today: "84.50", cashBuffer: "500.00" };
+  const LINE = "Calculated · bank read $120.00 Oct 15, 7:02 AM · +1 row since";
+
+  const read = (scope: HTMLElement) => ({
+    label: within(scope).getByTestId("checking-balance-label").textContent,
+    figure: (within(scope).getByTestId("checking-balance").querySelector("[data-testid$='-figure'], [data-testid='tile-banking-balance'], [data-testid='br-balance'], [data-testid='text-bank-balance'], [data-testid='kpi-bank-today-figure']") as HTMLElement).textContent,
+    line: scope.querySelector("[data-testid='checking-balance-line'], [data-testid='br-balance-asof'], [data-testid='text-bank-calculated'], [data-testid='kpi-bank-today-line']")!.textContent,
+  });
+
+  it("Dashboard tile, Banking cell, Forecast KPI, Forecast card and Overview stat agree; the bank's reading is inside Details only", async () => {
+    serve(ROLLED2);
+    const seen: Array<{ label: string | null; figure: string | null; line: string | null }> = [];
+
+    at("/", <Tiles />);
+    await waitFor(() => expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$84.50"));
+    // The tile's note (calculated line + Details) is its own chunk: wait for it. Its label/figure are the tile's Fig.
+    const tileLine = (await screen.findByTestId("checking-balance-line", undefined, { timeout: 3000 })).textContent;
+    seen.push({ label: within(screen.getByTestId("tile-banking")).getByText("Checking today").textContent, figure: screen.getByTestId("tile-banking-balance").textContent, line: tileLine });
+    expect(screen.getByTestId("tile-banking").textContent).not.toContain("Bank's last reading");
+    cleanup(); qc.clear();
+
+    at("/banking", <BankingReviewPage />);
+    await waitFor(() => expect(screen.getByTestId("br-balance").textContent).toBe("$84.50"));
+    await waitFor(() => expect(screen.getByTestId("br-balance-asof").textContent).toContain("+1 row since"));
+    seen.push(read(screen.getByTestId("br-summary").firstElementChild as HTMLElement));
+    expect(screen.getByTestId("br-summary").textContent).not.toContain("Bank's last reading");
+    cleanup(); qc.clear();
+
+    at("/forecast", <ForecastPage />);
+    await screen.findByTestId("text-bank-balance", undefined, { timeout: 3000 });
+    seen.push(read(screen.getByTestId("kpi-bank-today")));
+    seen.push(read(screen.getByTestId("card-bank-snapshot")));
+    expect(screen.getByTestId("card-bank-snapshot").textContent).not.toContain("Bank's last reading");
+    cleanup(); qc.clear();
+
+    at("/forecast/overview", <ForecastOverviewPage />);
+    await waitFor(() => expect(screen.getByTestId("fo-stat-bank-figure").textContent).toBe("$84.50"));
+    seen.push(read(screen.getByTestId("fo-stat-bank")));
+
+    cleanup(); qc.clear();
+    // Details opens the existing "Why this number?" — the one place the bank's reading is named.
+    at("/", <Tiles />);
+    await waitFor(() => expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$84.50"));
+    fireEvent.click(screen.getByTestId("tile-banking-details"));
+    // (The popover's own content is pinned in bankBalanceWhy.test.tsx; the fake serves no explain.)
+    await screen.findByTestId("bank-why", undefined, { timeout: 3000 });
+
+    expect(seen).toHaveLength(5);
+    for (const r of seen) expect(r).toStrictEqual({ label: "Checking today", figure: "$84.50", line: LINE });
+  });
+});
+
+describe("⭐ (C3) Overview and the detail tell one forecast: same ending, low point, low date and chip words at 90 days", () => {
+  const LOW: FakeChecking = {
+    reading: { balance: "120.00", at: READ_AT, source: "plaid" },
+    today: "84.50",
+    cashBuffer: "500.00",
+    lowPoint: { value: "-40.00", date: "2026-10-22" },
+  };
+
+  it("below zero: the same figure, date and 'Below zero on Oct 22' on both", async () => {
+    serve(LOW);
+    at("/forecast?horizon=90", <ForecastPage />);
+    const kpi = await screen.findByTestId("kpi-lowest-point", undefined, { timeout: 3000 });
+    const detailLow = kpi.textContent ?? "";
+    const detailEnd = screen.getByTestId("kpi-ending-balance").textContent ?? "";
+    cleanup(); qc.clear();
+
+    at("/forecast/overview?horizon=90", <ForecastOverviewPage />);
+    await waitFor(() => expect(screen.getByTestId("fo-stat-ending").textContent).toContain("$84.50"));
+    const ovLow = screen.getByTestId("fo-stat-low-point").textContent ?? "";
+    for (const text of [detailLow, ovLow]) {
+      expect(text).toContain("-$40.00");
+      expect(text).toContain("Below zero on Oct 22");
+    }
+    expect(detailEnd).toContain("$84.50");
+    expect(screen.getByTestId("fo-stat-ending").textContent).toContain("at 90 days");
+    // Rust only below zero, on both.
+    expect(screen.getByTestId("fo-stat-low-point").querySelector(".text-bad")).not.toBeNull();
+  });
+
+  it("under the buffer at or above $0: quiet 'Under the $500 buffer' on both, never rust", async () => {
+    serve({ ...LOW, lowPoint: { value: "0.00", date: "2026-10-22" } });
+    at("/forecast?horizon=90", <ForecastPage />);
+    const kpi = await screen.findByTestId("kpi-lowest-point", undefined, { timeout: 3000 });
+    expect(kpi.textContent).toContain("Under the $500 buffer");
+    expect(kpi.textContent).toContain("$0.00");
+    cleanup(); qc.clear();
+    at("/forecast/overview?horizon=90", <ForecastOverviewPage />);
+    await waitFor(() => expect(screen.getByTestId("fo-stat-ending").textContent).toContain("$84.50"));
+    const ov = screen.getByTestId("fo-stat-low-point");
+    expect(ov.textContent).toContain("Under the $500 buffer");
+    expect(ov.textContent).toContain("$0.00");
+    expect(ov.querySelector(".text-bad")).toBeNull();
   });
 });

@@ -77,7 +77,7 @@ describe("six tiles", () => {
   it("renders six whole-card links to their scoped destinations", () => {
     setup();
     const hrefs: Record<string, string> = {
-      banking: "/banking?account=c1", amex: "/amex", week: "/spending/week", month: "/spending/month", forecast: "/forecast", debt: "/avalanche",
+      banking: "/banking?account=c1", amex: "/amex", week: "/spending/week", month: "/spending/month", forecast: "/forecast?horizon=90", debt: "/avalanche",
     };
     for (const [k, href] of Object.entries(hrefs)) {
       const link = screen.getByTestId(`tile-${k}-link`);
@@ -104,7 +104,7 @@ describe("six tiles", () => {
     link.focus();
     expect(document.activeElement).toBe(link);
     fireEvent.click(link);
-    expect(mem.history?.at(-1)).toBe("/forecast");
+    expect(mem.history?.at(-1)).toBe("/forecast?horizon=90");
   });
   it("banking: checking once with identity, and charges to match or nothing to match", () => {
     setup();
@@ -165,7 +165,7 @@ describe("six tiles", () => {
     // (T2) Under the buffer at or above $0 is quiet, never rust; only below zero is the alarm.
     expect(screen.getByTestId("tile-forecast-status").textContent).toBe("Under the $500 buffer");
     expect(screen.getByTestId("tile-forecast-status").getAttribute("data-tone")).toBe("neutral");
-    expect(screen.getByTestId("tile-forecast-link").getAttribute("href")).toBe("/forecast");
+    expect(screen.getByTestId("tile-forecast-link").getAttribute("href")).toBe("/forecast?horizon=90");
     expect(screen.queryByTestId("tile-forecast-shortfall")).toBeNull();
     expect(screen.getByTestId("tile-forecast-next").textContent).toContain("Rent");
     expect(screen.getByTestId("tile-debt-pct").textContent).toBe("42%");
@@ -177,7 +177,7 @@ describe("six tiles", () => {
     expect(screen.getByTestId("tile-forecast-status").textContent).toBe("Below zero on Oct 20");
     expect(screen.getByTestId("tile-forecast-status").getAttribute("data-tone")).toBe("bad");
     expect(screen.getByTestId("tile-forecast-shortfall").textContent).toBe("Review shortfall →");
-    expect(screen.getByTestId("tile-forecast-link").getAttribute("href")).toBe("/forecast?day=2026-10-20");
+    expect(screen.getByTestId("tile-forecast-link").getAttribute("href")).toBe("/forecast?horizon=90&day=2026-10-20");
     cleanup();
     // Near the buffer is quiet; well above it is ok.
     setup({ forecast: { lowPoint: "620.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "tight" } });
@@ -189,13 +189,13 @@ describe("six tiles", () => {
     expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$0.00");
     expect(screen.getByTestId("tile-banking-balance").className).not.toContain("text-bad-ink");
   });
-  it("(T1, H2) a spine older than the newest reading seen: the figure stays, grey words say it is an earlier reading — never 'current'", () => {
+  it("(T1, H2) a spine older than the newest reading seen: the figure stays, grey words say it is an earlier reading — never 'current'", async () => {
     setup();
     h.spine = { ...h.spine, olderWords: "Earlier reading (Oct 7) — updating…" };
     cleanup();
     render(<QueryClientProvider client={new QueryClient()}><Router hook={memoryLocation({ path: "/home" }).hook}><Tiles /></Router></QueryClientProvider>);
     expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$4,200.50");
-    expect(screen.getByTestId("tile-banking-fresh").textContent).toBe("Earlier reading (Oct 7) — updating…");
+    expect((await screen.findByTestId("checking-balance-line")).textContent).toBe("Earlier reading (Oct 7) — updating…");
   });
   it("(H12) a failed refresh keeps the figures; the low point says it is from an out-of-date balance (no new rust)", () => {
     setup({ bank: { ...bank, stale: true, staleReason: "refresh_failed" } });

@@ -58,7 +58,7 @@ export function warmRoute(qc: QueryClient, rawHref: string): void {
     // A tile names its account (`?account=`); that is the account the page asks for.
     const account = query.get("account") ?? "";
     lazyWarm(async () => (await import("@/pages/banking/reviewParams")).warmBanking(qc, account));
-  } else if ([...query.keys()].length > 0) {
+  } else if ([...query.keys()].some((k) => !(href.startsWith("/forecast") && (k === "horizon" || k === "day")))) {
     // A link that names a month, card or period asks for a view the empty address does not: no guess.
     return;
   } else if (href === "/transactions") {

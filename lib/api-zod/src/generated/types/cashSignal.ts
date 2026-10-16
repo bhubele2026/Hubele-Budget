@@ -14,6 +14,7 @@ import type { CashSignalHookAmountIgnoredItem } from "./cashSignalHookAmountIgno
 import type { CashSignalHookReservesItem } from "./cashSignalHookReservesItem";
 import type { CashSignalListedPlan } from "./cashSignalListedPlan";
 import type { CashSignalMatchesItem } from "./cashSignalMatchesItem";
+import type { CashSignalOpening } from "./cashSignalOpening";
 import type { CashSignalStatus } from "./cashSignalStatus";
 import type { DataAsOf } from "./dataAsOf";
 
@@ -44,6 +45,8 @@ then, and `status` is `no_data`.
   fromDate?: string;
   toDate?: string;
   startingBalance?: string;
+  /** (C2) The chart's first point in one place. `date` = `fromDate`; `balance` = `startingBalance` (the balance at the START of that day — the first plotted point `daily[0]` is that day's close); `reading` and `since` are bankBalanceParts(ledger).snapshot / .sinceSnapshot (the same halves as the spine's bank.snapshot / bank.sinceSnapshot). Additive: nothing else moves. */
+  opening?: CashSignalOpening;
   endingBalance?: string;
   /** @nullable */
   endingDate?: string | null;

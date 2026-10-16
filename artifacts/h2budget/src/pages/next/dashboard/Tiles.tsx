@@ -28,6 +28,9 @@ import { Fig, Skel, Tile, Why, leftOver, type TileStatus } from "./tileParts";
 
 // ── Banking ─────────────────────────────────────────────────────────────────
 const BankConfidence = lazy(() => import("./BankConfidence"));
+// (C1) The calculated line + Details (the shared note of components/checking-balance): its own chunk, as the
+// balance check is — the landing keeps only the label and the figure.
+const CheckingNote = lazy(() => import("@/components/checking-balance-note"));
 
 function BankingTile({ s, older }: { s: Spine | undefined; older?: string | null }) {
   if (!s) return <Tile testid="banking" title="Banking" href="/banking" accent="checking" index={1}><Skel /></Tile>;
@@ -46,16 +49,20 @@ function BankingTile({ s, older }: { s: Spine | undefined; older?: string | null
       sub={identity ? <span data-testid="tile-banking-account">{identity.label}{identity.mask4 ? ` ••${identity.mask4}` : ""}</span> : "Checking"}
       status={{ word: n === 1 ? "1 charge to match" : n > 0 ? `${n} charges to match` : "Nothing to match", tone: n > 0 ? "bad" : "ok" }}
     >
+      {/* (C1) The one presentation: label, figure, calculated line, Details — halves from the spine's bank. */}
       <Fig
-        label="Checking" big testid="tile-banking-balance"
+        label="Checking today" big testid="tile-banking-balance"
         value={v.balance == null ? "—" : money(s.bank.balance)}
         tone={!older && Number.isFinite(bal) && bal < 0 ? "bad" : "neutral"}
       />
+      <Suspense fallback={<div className="h-[1lh]" aria-hidden />}>
+        <CheckingNote reading={v.snapshot} since={v.since} older={older} testids={{ details: "tile-banking-details" }} />
+      </Suspense>
       {/* Row A (data): when it was updated, and how many rows are pending. Row B (below): the check, apart. */}
       <div className="flex flex-wrap items-baseline gap-x-1 text-label text-neutral-600" data-testid="tile-banking-fresh">
         {v.balance == null ? "No bank balance yet." : (
           <>
-            {older ?? <FreshnessLine bank={s.bank} fetchedAt={s.bankConfidence?.fetchedAt} />}
+            {older ? null : <FreshnessLine bank={s.bank} fetchedAt={s.bankConfidence?.fetchedAt} />}
             {pending > 0 && !older ? <><span aria-hidden>{" · "}</span><span data-testid="tile-banking-pending">{pending} pending</span></> : null}
           </>
         )}
@@ -219,7 +226,7 @@ function ForecastTile({ s }: { s: Spine | undefined }) {
   return (
     <Tile
       testid="forecast" title="Forecast" accent="other" index={5} status={status}
-      href={short ? `/forecast?day=${encodeURIComponent(v.date!.slice(0, 10))}` : "/forecast"}
+      href={`/forecast?horizon=90${short ? `&day=${encodeURIComponent(v.date!.slice(0, 10))}` : ""}`}
     >
       <Fig
         label={`Lowest point${v.date ? ` · ${weekdayLabel(v.date) ?? dayLabel(v.date)}` : ""}`} big testid="tile-forecast-low"

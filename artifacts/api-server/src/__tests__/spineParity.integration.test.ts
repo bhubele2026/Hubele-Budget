@@ -796,6 +796,23 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     }
   });
 
+  it("⭐ (C2) cash signal `opening` carries the spine's two halves; opening.balance is the curve's start, and the walk's first close follows from it", async () => {
+    const spine = await get<Spine>("/spine");
+    const signal = await get<CashSignal & { fromDate: string; startingBalance: string; opening?: { date: string; balance: string; reading: unknown; since: unknown } }>(
+      "/forecast/cash-signal?horizonDays=90",
+    );
+    const opening = signal.opening;
+    expect(opening).toBeDefined();
+    // The same halves, from the same ledger.
+    expect(opening!.reading).toEqual(spine.bank.snapshot);
+    expect(opening!.since).toEqual(spine.bank.sinceSnapshot);
+    // The opening is the curve's start: the day the window opens and the balance before that day's items.
+    expect(opening!.date).toBe(signal.fromDate);
+    expect(opening!.balance).toBe(signal.startingBalance);
+    // Today's rolled balance never sits BEHIND the opening by more than what the rows add (both whole cents).
+    expect(cents(signal.startingBalance)).toBeLessThanOrEqual(cents(spine.bank.balance) + Math.abs(cents(spine.bank.sinceSnapshot!.net)));
+  });
+
   it("forecast low point + runway match /forecast/cash-signal", async () => {
     const spine = await get<Spine>("/spine");
     const signal = await get<CashSignal>("/forecast/cash-signal?horizonDays=90");

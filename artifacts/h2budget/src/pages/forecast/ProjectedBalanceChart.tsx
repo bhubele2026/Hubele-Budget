@@ -113,6 +113,7 @@ export function ProjectedBalanceChart({
   lowLabel = "full",
   monthTicks = false,
   startLabel = null,
+  openingBalance = null,
   sessionKey,
 }: {
   data: DailyPoint[];
@@ -153,10 +154,13 @@ export function ProjectedBalanceChart({
   /** Axis ticks as "Oct 9" instead of "10-09" (the expanded chart always does). */
   monthTicks?: boolean;
   /**
-   * (T1) Expanded only: "Starting at $0.00 · as of Oct 15", drawn at the curve's
-   * first point (`cashSignal.startingBalance`, the day the reading rolls to).
+   * (T1/C2) Expanded only: the caption drawn at the curve's first point, one or two short lines
+   * ("Oct 16 · opens $0.00 · closes $2,614.20" / "Bank read $0.00 Oct 15, 7:02 AM · +2 rows since").
+   * The first point is that day's CLOSE; the caption says both moments.
    */
-  startLabel?: string | null;
+  startLabel?: string | readonly string[] | null;
+  /** (C2) The balance at the START of the first day (`cashSignal.opening.balance`); the first-day tooltip says opening and close. */
+  openingBalance?: number | null;
   /**
    * Classic only: the chart sweeps in ONCE per session for this key (the dashboard's "dash-forecast"). A later
    * mount, or a new horizon's data on the mounted chart, appears without a re-sweep.
@@ -245,6 +249,7 @@ export function ProjectedBalanceChart({
   // (T2) The zero rule shows whenever the curve touches or crosses $0 (and when the axis goes below it).
   const touchesZero = series.some((d) => Number.isFinite(d.balance) && d.balance <= 0);
   const first = series[0];
+  const startLines: readonly string[] = startLabel == null ? [] : typeof startLabel === "string" ? [startLabel] : startLabel;
 
   return (
     // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
@@ -314,8 +319,16 @@ export function ProjectedBalanceChart({
                   <div className="font-semibold text-brand-navy">
                     {rawDate ? formatDate(rawDate) : ""}
                   </div>
+                  {openingBalance != null && Number.isFinite(openingBalance) && rawDate && rawDate === data[0]?.rawDate ? (
+                    <div className="mt-1 flex items-center justify-between gap-4" data-testid="tooltip-opening">
+                      <span className="text-neutral-500">Opening</span>
+                      <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(openingBalance)}</span>
+                    </div>
+                  ) : null}
                   <div className="mt-1 flex items-center justify-between gap-4">
-                    <span className="text-neutral-500">Balance</span>
+                    <span className="text-neutral-500">
+                      {openingBalance != null && rawDate && rawDate === data[0]?.rawDate ? "Close" : "Balance"}
+                    </span>
                     <span className="font-mono tabular-nums text-neutral-700">
                       {Number.isFinite(balance) ? formatCurrency(balance) : "—"}
                     </span>
@@ -569,7 +582,7 @@ export function ProjectedBalanceChart({
                 )}
               />
             ))}
-          {expanded && startLabel && first && Number.isFinite(first.balance) && (
+          {expanded && startLines.length > 0 && first && Number.isFinite(first.balance) && (
             <ReferenceDot
               x={first.rawDate}
               y={first.balance}
@@ -582,15 +595,19 @@ export function ProjectedBalanceChart({
               data-testid="ref-start-point"
             >
               <RechartsLabel
-                value={startLabel}
+                value={startLines.join(" ")}
                 content={(p: unknown) => {
                   const vb = (p as { viewBox?: { cx?: number; cy?: number; x?: number; y?: number } })?.viewBox ?? {};
                   const cx = vb.cx ?? vb.x ?? 0;
                   const cy = vb.cy ?? vb.y ?? 0;
                   // Anchored inward from the left edge; below the dot when the low point's label sits above it.
                   return (
-                    <text x={cx + 6} y={lowIdx === 0 ? cy + 20 : cy - 10} textAnchor="start" fill={CHART.navy} fontSize={11} fontWeight={600} data-testid="chart-start-label">
-                      {startLabel}
+                    <text x={cx + 6} y={lowIdx === 0 ? cy + 20 : cy - 10 - (startLines.length - 1) * 13} textAnchor="start" fill={CHART.navy} fontSize={11} fontWeight={600} data-testid="chart-start-label">
+                      {startLines.map((line, i) => (
+                        <tspan key={i} x={cx + 6} dy={i === 0 ? 0 : 13} fontWeight={i === 0 ? 600 : 500} data-testid={`chart-start-line-${i}`}>
+                          {line}
+                        </tspan>
+                      ))}
                     </text>
                   );
                 }}
