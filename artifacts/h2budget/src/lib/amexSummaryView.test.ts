@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amexPlanLine, amexRowKind, amexSummaryPeriod, householdLine, monthNameOf, overLinkView, rowInFigure, summaryTitle } from "./amexSummaryView";
+import { whyOverPath, amexPlanLine, amexRowKind, amexSummaryPeriod, householdLine, monthNameOf, overLinkView, rowInFigure, summaryTitle } from "./amexSummaryView";
 
 describe("amexSummaryPeriod (W4)", () => {
   // Wed 2026-10-14, noon Chicago.
@@ -111,5 +111,20 @@ describe("(P1) overLinkView — every row of the link table", () => {
   });
   it("a year views spending by month", () => {
     expect(overLinkView({ period: "year" })).toEqual({ text: "View spending by month →", state: "year" });
+  });
+});
+
+describe("whyOverPath (T4)", () => {
+  const month = { from: "2026-09-01", to: "2026-09-30" };
+  it("without a card the links are as they were", () => {
+    expect(whyOverPath("wk", true)).toBe("/spending/week");
+    expect(whyOverPath("mo", false, month)).toBe("/spending/month?start=2026-09-01");
+    expect(whyOverPath("mo", false)).toBe("/spending/month");
+  });
+  it("one card is carried as ?account= (the row id), on the week and on a month", () => {
+    expect(whyOverPath("wk", true, null, "row-1")).toBe("/spending/week?account=row-1");
+    expect(whyOverPath("mo", false, month, "row-1")).toBe("/spending/month?start=2026-09-01&account=row-1");
+    expect(whyOverPath("mo", false, null, "row-1")).toBe("/spending/month?account=row-1");
+    expect(whyOverPath("wk", true, null, null)).toBe("/spending/week");
   });
 });

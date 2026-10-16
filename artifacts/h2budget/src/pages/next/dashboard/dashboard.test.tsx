@@ -196,7 +196,7 @@ describe("header", () => {
     h.spine.data = spine({ position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00", remainingWeekKnown: "-25.00" } });
     const a = wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("short");
-    expect(screen.getByTestId("dash-runs-short").getAttribute("href")).toBe("/forecast");
+    expect(screen.getByTestId("dash-runs-short").getAttribute("href")).toBe("/forecast?day=2026-10-20");
     expect(screen.getByTestId("dash-runs-short").textContent).toBe("See where it runs short");
     expect(screen.getByTestId("afford-open")).toBeTruthy();
     a.unmount();
@@ -929,7 +929,7 @@ describe("spending pace", () => {
     expect(screen.getByTestId("dash-spent-week").textContent).toBe("$120.00");
     expect(screen.getByTestId("dash-spent-month").textContent).toBe("$900.00");
     expect(screen.getByTestId("dash-link-allowances").getAttribute("href")).toBe("/allowances");
-    expect(screen.getByTestId("dash-link-biggest").getAttribute("href")).toBe("/banking");
+    expect(screen.getByTestId("dash-link-biggest").getAttribute("href")).toBe("/spending/month?open=details");
     const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/budget");
   });
@@ -950,9 +950,9 @@ describe("(WP6) why the two month totals differ", () => {
   });
   it("one bridge line from the server's terms, and 'Why these differ' opens every term with its sign", async () => {
     wrap(<SpendingPanel />);
-    expect(screen.getByTestId("dash-spend-bridge-words").textContent).toBe(
-      "Budget counts $1,450.00 of card payments and $620.00 of debt payments that purchases leave out; refunds net $42.50",
-    );
+    // (T4) The sentence lives in the popover only: the page face carries the link, not the words.
+    expect(screen.queryByTestId("dash-spend-bridge-words")).toBeNull();
+    expect(screen.getByTestId("dash-spend-bridge").textContent).not.toContain("card payments and");
     fireEvent.click(screen.getByTestId("dash-spend-why"));
     const body = await screen.findByTestId("dash-spend-why-body");
     expect(body.textContent).toContain("Budget, Oct 1–end$5,511.84");
@@ -1024,7 +1024,7 @@ describe("needs attention", () => {
     const row = screen.getByTestId("dash-att-short");
     expect(row.textContent).toContain("The forecast runs short");
     expect(row.textContent).toContain("Low $350.00 on Oct 20 · below your $500 buffer");
-    expect(row.getAttribute("href")).toBe("/forecast");
+    expect(row.getAttribute("href")).toBe("/forecast?day=2026-10-20");
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("short");
     expect(screen.getByTestId("dash-runs-short").getAttribute("href")).toBe(row.getAttribute("href"));
   });

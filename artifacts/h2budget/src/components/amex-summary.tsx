@@ -108,6 +108,7 @@ export function AmexSummaryPanel({
   onRetry,
   allCards,
   linkPeriod,
+  accountRowId,
   byCard,
   payBlock,
   onOwedHistory,
@@ -129,6 +130,8 @@ export function AmexSummaryPanel({
   allCards: boolean;
   /** (P1) Where the household link reads the plan's state. */
   linkPeriod: AmexLinkPeriod;
+  /** (T4) The card's plaid_accounts row id when one card is chosen: the household link opens Spending for that card. */
+  accountRowId?: string;
   /** (P1) All cards: each card's line (`AmexCardBalances`). */
   byCard?: ReactNode;
   /** (P1) One card: "How this card is paid" (with Add to Avalanche). */
@@ -247,7 +250,7 @@ export function AmexSummaryPanel({
             <p data-testid="amex-household-line">
               {householdLine(summary.householdContribution, mode, isThisWeek)}
               {" · "}
-              <AmexOverLink href={whyOverPath(mode, isThisWeek, summary.period)} period={linkPeriod} />
+              <AmexOverLink href={whyOverPath(mode, isThisWeek, summary.period, accountRowId)} period={linkPeriod} />
             </p>
             <ToReview summary={summary} attention={attention ?? null} onAttention={onAttention} />
           </div>

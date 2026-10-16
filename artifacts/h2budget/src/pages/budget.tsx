@@ -1,3 +1,4 @@
+import { QueryRefreshBanner } from "@/components/query-refresh-banner";
 import { groupTxnsByCategory } from "@/lib/splitParts";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearch, useLocation, Link } from "wouter";
@@ -281,8 +282,8 @@ export default function BudgetPage() {
   // The "previous month stays on screen during refetch" behavior comes
   // from the global `placeholderData: keepPreviousData` default set on
   // the QueryClient in App.tsx — no per-call override needed here.
-  const { data: budgetData, isLoading: isLoadingBudget } =
-    useGetBudgetMonth(currentMonth);
+  const budgetQ = useGetBudgetMonth(currentMonth);
+  const { data: budgetData, isLoading: isLoadingBudget } = budgetQ;
   const { data: categories, isLoading: isLoadingCategories } =
     useListCategories();
 
@@ -821,11 +822,25 @@ export default function BudgetPage() {
         </div>
       </div>
 
+      <div className="span-12 empty:hidden">
+        <QueryRefreshBanner q={budgetQ} data-testid="budget-refresh-banner" />
+      </div>
+
       {/* ── The hero ─────────────────────────────────────────────────────────
           One figure, the sentence that qualifies it, and the same ratio drawn
           flush to the card's bottom edge — the avalanche hero's shape, which is
           the strongest anchor the app has. The old page's biggest type was a
           `Stat` inside a five-up grid, so nothing on it was the point. */}
+      {!plan && (
+        // (T4) No answer yet (the first load failed): a dash, never a $0 plan.
+        <section className="panel tile-in span-12" data-testid="budget-hero-missing">
+          <div className="px-5 pb-5 pt-4">
+            <div className={fieldLabel}>Planned this month</div>
+            <div className="mt-1 font-mono text-hero font-semibold leading-none tabular-nums text-neutral-600" data-testid="hero-planned">—</div>
+          </div>
+        </section>
+      )}
+
       {plan && (
         <section
           className={`panel tile-in ${allowance ? "span-8" : "span-12"}`}
@@ -900,7 +915,7 @@ export default function BudgetPage() {
       )}
 
       {/* ── The sections, by source ──────────────────────────────────────── */}
-      {PLAN_SECTIONS.map((section, i) => (
+      {budgetData && PLAN_SECTIONS.map((section, i) => (
         <PlanSection
           key={section.key}
           def={section}

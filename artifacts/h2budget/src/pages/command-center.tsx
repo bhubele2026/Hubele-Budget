@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-client-react/features";
 import { SyncButton } from "@/components/sync-button";
 import { scoped } from "@/lib/queryState";
+import { QueryRefreshBanner } from "@/components/query-refresh-banner";
 import { useUrlState, type UrlCodec } from "@/hooks/useUrlState";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { txnRoute } from "@/lib/accountRoute";
@@ -296,13 +297,9 @@ export default function BankingReviewPage() {
         </div>
       </header>
 
+      <QueryRefreshBanner q={q} data-testid="br-error" />
       {d === undefined ? (
-        q.isError ? (
-          <div className="surface rounded-card px-4 py-4 text-body text-neutral-700 ring-1 ring-brand-line" role="alert" data-testid="br-error">
-            The review did not load.{" "}
-            <button type="button" className="underline" onClick={() => void q.refetch()}>Try again</button>
-          </div>
-        ) : (
+        q.isError ? null : (
           <ReviewSkeleton />
         )
       ) : (
@@ -488,7 +485,7 @@ export default function BankingReviewPage() {
 
           {d.household ? (
             <section className="border-t border-brand-line pt-3" data-testid="br-household">
-              <h2 className="text-label font-semibold text-brand-navy">All accounts · this week</h2>
+              <h2 className="text-label font-semibold text-brand-navy">Household · this week</h2>
               <dl className="mt-1.5 flex flex-wrap gap-x-6 gap-y-1 text-label">
                 <div className="flex gap-2"><dt className="text-neutral-600">{WEEK_FIGURE_WORDS.known}</dt><dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-spent">{formatCurrency(d.household.knownWeek)}</dd></div>
                 {!isZeroMoney(d.household.unresolvedWeek) ? (
@@ -510,7 +507,7 @@ export default function BankingReviewPage() {
                   {WEEK_FIGURE_WORDS.cautious} <span className="font-mono tabular-nums">{formatCurrency(d.household.spentWeek)}</span>
                 </p>
               ) : null}
-              <Link href="/spending/week" className="press mt-1.5 inline-block text-label font-semibold text-brand-navy hover:underline">Open this week →</Link>
+              <Link href="/spending/week" className="press mt-1.5 inline-block text-label font-semibold text-brand-navy hover:underline">Open this week's plan →</Link>
             </section>
           ) : null}
         </>

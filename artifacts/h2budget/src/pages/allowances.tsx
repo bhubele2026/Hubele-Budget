@@ -18,8 +18,12 @@ import {
   getGetSettingsQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
+import { Link } from "wouter";
 import { useGetPeriodBreakdown } from "@workspace/api-client-react/features";
+import type { PeriodBreakdown } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { QueryRefreshBanner } from "@/components/query-refresh-banner";
+import { scoped } from "@/lib/queryState";
 import {
   Collapsible,
   CollapsibleContent,
@@ -135,80 +139,9 @@ function formatTxnDate(iso: string): string {
 // two surfaces always agree. Source-aware: Amex charges are stored positive,
 // bank/Chase charges negative — both count as spend.
 import { expenseMagnitude as expenseAmount } from "@/lib/bucketSpend";
-import { planRefusalReason } from "@/lib/planWords";
-import { countedSpendRows, isCountedSpend } from "@/lib/countedRows";
+import { planRefusalReason, planStatusWords } from "@/lib/planWords";
+import { isCountedSpend } from "@/lib/countedRows";
 import { ExpiredHoldLabel, ExpiredPairLabel } from "@/components/expired-hold-label";
-
-// How many COMPLETED weeks in a row, ending last week, did they blow the
-// weekly allowance? Walks back week-by-week from the last finished Sun–Sat
-// week and stops the first time a week came in at/under plan. This is the
-// deterministic spine of the over-budget streak chip.
-function weeklyOverStreak(
-  txns: Transaction[],
-  weeklyAmt: number,
-  overrides: Record<string, number>,
-  today: Date,
-): number {
-  if (weeklyAmt <= 0) return 0;
-  let weekSun = addDays(sundayOf(today), -7); // last fully-completed week
-  let streak = 0;
-  for (let i = 0; i < 26; i++) {
-    const start = fmtISO(weekSun);
-    const end = fmtISO(addDays(weekSun, 6));
-    let spend = 0;
-    let any = false;
-    for (const t of txns) {
-      if (effectiveBucket(t) !== "weekly") continue;
-      if (t.occurredOn >= start && t.occurredOn <= end) {
-        spend += expenseAmount(t);
-        any = true;
-      }
-    }
-    const planned = overrides[start] != null ? overrides[start] : weeklyAmt;
-    if (any && planned > 0 && spend > planned) {
-      streak++;
-      weekSun = addDays(weekSun, -7);
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
-
-// The positive counterpart to weeklyOverStreak — how many COMPLETED weeks in a
-// row, ending last week, they came in AT or UNDER the weekly allowance. Same
-// deterministic walk-back.
-function weeklyUnderStreak(
-  txns: Transaction[],
-  weeklyAmt: number,
-  overrides: Record<string, number>,
-  today: Date,
-): number {
-  if (weeklyAmt <= 0) return 0;
-  let weekSun = addDays(sundayOf(today), -7);
-  let streak = 0;
-  for (let i = 0; i < 26; i++) {
-    const start = fmtISO(weekSun);
-    const end = fmtISO(addDays(weekSun, 6));
-    let spend = 0;
-    let any = false;
-    for (const t of txns) {
-      if (effectiveBucket(t) !== "weekly") continue;
-      if (t.occurredOn >= start && t.occurredOn <= end) {
-        spend += expenseAmount(t);
-        any = true;
-      }
-    }
-    const planned = overrides[start] != null ? overrides[start] : weeklyAmt;
-    if (any && planned > 0 && spend <= planned) {
-      streak++;
-      weekSun = addDays(weekSun, -7);
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
 
 /**
  * A streak is only worth reporting once it is a PATTERN rather than a single
@@ -217,30 +150,55 @@ function weeklyUnderStreak(
  */
 const STREAK_MIN = 2;
 
-// Last N completed Sun–Sat weeks' over/under variance (spend − planned) for
-// the weekly allowance — the data behind the 8-week bars. Oldest first.
-function weeklyVarianceSeries(
-  txns: Transaction[],
-  weeklyAmt: number,
-  overrides: Record<string, number>,
-  today: Date,
-  weeks = 8,
-): { weekSun: Date; weekISO: string; variance: number }[] {
+/**
+ * (T4) The last completed Sun–Sat weeks, oldest first, from the SERVER's week
+ * breakdowns (`GET /money/period-breakdown`): the plan in force that week, what
+ * was left (negative = over) and whether it was within. A week with no plan is
+ * "No plan" (or "Plan set to $0"), never over. The page works out nothing.
+ */
+const HISTORY_WEEKS = 8;
+type WeekHistory = {
+  weekSun: Date;
+  weekISO: string;
+  /** "loading" until the server answers; "none" = no cap that week. */
+  state: "loading" | "plan" | "none";
+  words: string | null;
+  /** The server's `remaining` (money left; negative = over). */
+  left: number | null;
+  within: boolean | null;
+};
+
+function useWeekHistory(today: Date, enabled: boolean): WeekHistory[] {
   const last = addDays(sundayOf(today), -7);
-  const out: { weekSun: Date; weekISO: string; variance: number }[] = [];
-  for (let i = weeks - 1; i >= 0; i--) {
-    const ws = addDays(last, -7 * i);
-    const start = fmtISO(ws);
-    const end = fmtISO(addDays(ws, 6));
-    let spend = 0;
-    for (const t of txns) {
-      if (effectiveBucket(t) !== "weekly") continue;
-      if (t.occurredOn >= start && t.occurredOn <= end) spend += expenseAmount(t);
-    }
-    const planned = overrides[start] != null ? overrides[start] : weeklyAmt;
-    out.push({ weekSun: ws, weekISO: start, variance: spend - (planned || 0) });
+  const weeks = Array.from({ length: HISTORY_WEEKS }, (_, i) => addDays(last, -7 * (HISTORY_WEEKS - 1 - i)));
+  // A fixed number of reads (the loop length never changes), so the hook order is stable.
+  const results = weeks.map((ws) =>
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useGetPeriodBreakdown(
+      { period: "week", start: fmtISO(ws), rowsPerGroup: 1 },
+      { query: { staleTime: 5 * 60_000, enabled: enabled && fmtISO(addDays(ws, 6)) >= TRACKING_START } as never },
+    ),
+  );
+  return weeks.map((ws, i) => {
+    const d = results[i]?.data as PeriodBreakdown | undefined;
+    const base = { weekSun: ws, weekISO: fmtISO(ws) };
+    if (!d) return { ...base, state: "loading", words: null, left: null, within: null };
+    return d.plan.amount == null
+      ? { ...base, state: "none", words: planStatusWords(d.plan), left: null, within: null }
+      : { ...base, state: "plan", words: null, left: d.remaining == null ? null : Number(d.remaining), within: d.withinPlan };
+  });
+}
+
+/** Consecutive weeks, newest first, with a plan and `within === want`; 0 until every week has answered. */
+function historyStreak(history: readonly WeekHistory[], want: boolean): number {
+  if (history.some((h) => h.state === "loading")) return 0;
+  let n = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const h = history[i]!;
+    if (h.state === "plan" && h.within === want) n++;
+    else break;
   }
-  return out;
+  return n;
 }
 
 // ----- bucket config --------------------------------------------------
@@ -258,6 +216,9 @@ function hasBucketFlag(t: Transaction, key: BucketKey): boolean {
   if (key === "monthly") return !!t.monthlyAllowance;
   return !!t.unplannedAllowance;
 }
+
+/** (T4) A card's plan: undefined = not loaded; amount null = no cap, `words` says which kind of none. */
+type PlanFace = { amount: number | null; words: string } | undefined;
 
 type Group = {
   key: string;
@@ -445,10 +406,13 @@ function BucketCard({
   name,
   help,
   actual,
-  planned,
+  plan,
+  savedLabel,
+  noneLabel,
   expanded,
   onToggle,
   onSavePlanned,
+  setPlanHref,
   periodLabel,
   periodSub,
   onPrevPeriod,
@@ -460,7 +424,13 @@ function BucketCard({
   help: string;
   /** The server's figure (GET /money/period-breakdown); null while it loads or if it failed: shown as "—", never $0. */
   actual: number | null;
-  planned: number;
+  /** (T4) The plan this card is read against (see PlanFace). */
+  plan: PlanFace;
+  /** The unplanned card's amount is the household's saved one, said so. */
+  savedLabel?: boolean;
+  noneLabel: string;
+  /** Where to set a plan when there is none and the card cannot edit one. */
+  setPlanHref?: string;
   expanded: boolean;
   onToggle: () => void;
   onSavePlanned?: (amount: number) => void;
@@ -475,10 +445,13 @@ function BucketCard({
 }) {
   const known = actual != null;
   const spent = actual ?? 0;
+  // (T4) No plan (null) is never "over"; not loaded (undefined) is "—".
+  const hasPlan = plan?.amount != null && plan.amount > 0;
+  const planned = plan?.amount ?? 0;
   const variance = spent - planned;
-  const over = known && variance > 0;
-  const state = known ? bucketState(spent, planned) : { label: "—", chip: "gray" };
-  const pct = known && planned > 0 ? Math.round((spent / planned) * 100) : 0;
+  const over = known && hasPlan && variance > 0;
+  const state = !known || plan === undefined ? { label: "—", chip: "gray" } : !hasPlan ? { label: noneLabel, chip: "gray" } : bucketState(spent, planned);
+  const pct = known && hasPlan ? Math.round((spent / planned) * 100) : 0;
   const slug = name.split(" ")[0].toLowerCase();
   const [editOpen, setEditOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -548,7 +521,7 @@ function BucketCard({
             {known ? formatCurrency(spent) : "—"}
           </span>
           <span className="flex items-center gap-1.5">
-            {known && planned > 0 && (
+            {known && hasPlan && (
               <span className="font-mono text-micro tabular-nums text-neutral-400">
                 {pct}%
               </span>
@@ -563,15 +536,24 @@ function BucketCard({
         </button>
 
         <div className="mt-1 flex items-center gap-1.5">
-          <span className="font-mono text-micro tabular-nums text-neutral-500">
-            of {formatCurrency(planned)} planned
+          <span className="font-mono text-micro tabular-nums text-neutral-500" data-testid={`allowance-plan-${slug}`}>
+            {plan === undefined
+              ? "of — planned"
+              : !hasPlan
+                ? plan.words
+                : savedLabel
+                  ? `Saved amount ${formatCurrency(planned)}`
+                  : `of ${formatCurrency(planned)} planned`}
           </span>
+          {setPlanHref && plan !== undefined && !hasPlan ? (
+            <Link href={setPlanHref} className="text-micro font-semibold text-brand-navy underline" data-testid={`allowance-set-plan-${slug}`}>Set plan</Link>
+          ) : null}
           {onSavePlanned && (
             <Popover
               open={editOpen}
               onOpenChange={(o) => {
                 setEditOpen(o);
-                if (o) setDraft(planned > 0 ? planned.toFixed(2) : "");
+                if (o) setDraft(hasPlan ? planned.toFixed(2) : "");
               }}
             >
               <PopoverTrigger asChild>
@@ -631,13 +613,13 @@ function BucketCard({
           value={spent}
           ceiling={planned}
           className="mt-2.5"
-          title={known ? `${formatCurrency(spent)} of ${formatCurrency(planned)}` : undefined}
+          title={known && hasPlan ? `${formatCurrency(spent)} of ${formatCurrency(planned)}` : undefined}
         />
 
         <div
           className={cn(
             "mt-2 font-mono text-label tabular-nums",
-            planned <= 0
+            !hasPlan
               ? "text-neutral-400"
               : over
                 ? "text-bad"
@@ -645,8 +627,10 @@ function BucketCard({
           )}
           data-testid={`allowance-variance-${slug}`}
         >
-          {planned <= 0
-            ? "No allowance set"
+          {plan === undefined
+            ? "—"
+            : !hasPlan
+            ? plan.words
             : !known
               ? "—"
               : over
@@ -676,7 +660,6 @@ export default function AllowancesPage() {
   // Weekly card window (always the selected Sun–Sat week).
   const windowStart = fmtISO(weekStart);
   const windowEnd = fmtISO(addDays(weekStart, 6));
-  const windowDays = 7;
   // Monthly + Unplanned window (always the selected calendar month). Ties to the
   // Banking dashboard's Month/Unplanned, which also key off the calendar month.
   const monthScopeStartDate = firstOfMonth(monthStart);
@@ -719,16 +702,6 @@ export default function AllowancesPage() {
   // Stored HOUSEHOLD-SIDE in settings.preferences so an edit by one partner
   // shows up for the other (the old localStorage version only lived in the
   // editor's own browser).
-  const weeklyOverrides = useMemo<Record<string, number>>(() => {
-    const raw = settings?.preferences?.weeklyAllowanceOverrides ?? {};
-    const out: Record<string, number> = {};
-    for (const [k, v] of Object.entries(raw)) {
-      const n = Number(v);
-      if (Number.isFinite(n)) out[k] = n;
-    }
-    return out;
-  }, [settings]);
-
   // One-time lift of any legacy per-browser overrides up to the shared
   // household record, so values entered before this fix aren't lost. Server
   // values win on conflict; the local copy is cleared once pushed.
@@ -876,42 +849,11 @@ export default function AllowancesPage() {
     limit: 500,
   });
   const txns = txnsQ.data ?? [];
-  // ⭐ (F6 round 4, finding 2) Every sum below — the streaks, the 8-week bars,
-  // the drill-down groups — reads only the rows that count: an expired hold is
-  // listed (labelled) but adds nothing, as the server's totals above leave it out.
-  // (F6 round 5) Nor does a held hold or its reversal (`isCountedSpend`).
-  const countedTxns = useMemo(() => countedSpendRows(txns), [txns]);
-
-  const weekStartISO = fmtISO(weekStart);
-
   const catNameById = useMemo(() => {
     const m = new Map<string, string>();
     for (const c of categories ?? []) m.set(c.id, c.name);
     return m;
   }, [categories]);
-
-  // Planned allowance for the window. Each allowance is held at its native
-  // cadence (weekly vs monthly) and pro-rated by day count to the selected
-  // window, so a weekly card in WEEK mode reads the raw weekly allowance and
-  // a monthly card in MONTH mode reads the raw monthly allowance.
-  const planned = useMemo<Record<BucketKey, number>>(() => {
-    // A per-week override (set while viewing that week) wins over the global
-    // weekly default; other weeks keep using the default.
-    const weeklyOverride = weeklyOverrides[weekStartISO];
-    const weeklyAmt =
-      weeklyOverride != null
-        ? weeklyOverride
-        : Number(settings?.weeklyAllowanceAmount) || 0;
-    const monthlyAmt = Number(settings?.monthlyAllowanceAmount) || 0;
-    const unplannedAmt = Number(settings?.unplannedAllowanceAmount) || 0;
-    return {
-      // Weekly is prorated to its window; monthly/unplanned are the FULL
-      // month figure so the cards show whole-month progress.
-      weekly: (weeklyAmt / 7) * windowDays,
-      monthly: monthlyAmt,
-      unplanned: unplannedAmt,
-    };
-  }, [settings, windowDays, weeklyOverrides, weekStartISO]);
 
   // Window-scoped transactions (drives the week-scoped Weekly card).
   const windowTxns = useMemo(
@@ -937,14 +879,17 @@ export default function AllowancesPage() {
   // breakdown's "beside" line; all netted by the server's one spending rule.
   // They no longer come from the browser's pull of rows (`bucketSpend`). The
   // drill-downs below still list the rows this page fetched.
-  const weekBd = useGetPeriodBreakdown(
+  const weekRaw = useGetPeriodBreakdown(
     { period: "week", start: windowStart, rowsPerGroup: 1 },
     { query: { staleTime: 60_000, enabled: windowEnd >= TRACKING_START } as never },
   );
-  const monthBd = useGetPeriodBreakdown(
+  const monthRaw = useGetPeriodBreakdown(
     { period: "month", start: monthScopeStart, rowsPerGroup: 1 },
     { query: { staleTime: 60_000, enabled: monthScopeEnd >= TRACKING_START } as never },
   );
+  // (T4) Another week's or month's answer (kept while this one loads) is not this one's.
+  const weekBd = { ...weekRaw, data: scoped(weekRaw, (r) => r.start === windowStart && r.period === "week").data };
+  const monthBd = { ...monthRaw, data: scoped(monthRaw, (r) => r.start === monthScopeStart && r.period === "month").data };
   const actual = useMemo<Record<BucketKey, number | null>>(
     () => ({
       weekly: weekBd.data ? Number(weekBd.data.actual) : null,
@@ -954,68 +899,42 @@ export default function AllowancesPage() {
     [weekBd.data, monthBd.data],
   );
 
-  // The consecutive-weeks-over streak — drives the warning chip.
-  const overStreak = useMemo(
-    () =>
-      weeklyOverStreak(
-        countedTxns,
-        Number(settings?.weeklyAllowanceAmount) || 0,
-        weeklyOverrides,
-        today,
-      ),
-    [countedTxns, settings, weeklyOverrides, today],
-  );
+  // (T4) The plan each card is read against: the SERVER's for the weekly and monthly cards (the legacy settings
+  // amount is on no comparison), the saved amount for the unplanned card. undefined = not loaded yet.
+  const planned = useMemo<Record<BucketKey, PlanFace>>(() => {
+    const face = (bd: PeriodBreakdown | undefined): PlanFace =>
+      bd ? { amount: bd.plan.amount != null ? Number(bd.plan.amount) : null, words: planStatusWords(bd.plan) ?? "Plan not set" } : undefined;
+    const saved = settings ? Number(settings.unplannedAllowanceAmount) || 0 : null;
+    return {
+      weekly: face(weekBd.data),
+      monthly: face(monthBd.data),
+      unplanned: saved == null ? undefined : { amount: saved > 0 ? saved : null, words: "No allowance set" },
+    };
+  }, [weekBd.data, monthBd.data, settings]);
 
-  // The positive counterpart.
-  const underStreak = useMemo(
-    () =>
-      weeklyUnderStreak(
-        countedTxns,
-        Number(settings?.weeklyAllowanceAmount) || 0,
-        weeklyOverrides,
-        today,
-      ),
-    [countedTxns, settings, weeklyOverrides, today],
-  );
-
-  // Last 8 completed weeks' over/under — the variance bars.
-  const varianceSeries = useMemo(
-    () =>
-      weeklyVarianceSeries(
-        countedTxns,
-        Number(settings?.weeklyAllowanceAmount) || 0,
-        weeklyOverrides,
-        today,
-        8,
-      ),
-    [countedTxns, settings, weeklyOverrides, today],
-  );
+  // The last completed weeks, from the server; asked once the two reads above have answered.
+  const history = useWeekHistory(today, weekRaw.isSuccess || weekRaw.isError);
+  const overStreak = historyStreak(history, false);
+  const underStreak = historyStreak(history, true);
+  const bannerQ = weekRaw.isError ? weekRaw : monthRaw;
 
   /**
    * Stable row identities (the week's Sunday) so the CSS bars glide between
    * renders instead of tearing down and rebuilding.
    *
-   * ⚠️ THE SIGN IS FLIPPED ON PURPOSE, at the render boundary only.
-   * `weeklyVarianceSeries` returns spend − plan, so OVER is positive. But
-   * `CssBars` colours a delta by sign via `barColorForSign` — navy up, deep
-   * orange down — which would paint an under-budget week orange and an
-   * over-budget week navy: the palette law exactly inverted.
-   *
-   * So the bar encodes MONEY LEFT (plan − spend) instead. Same magnitudes,
-   * and now the signs line up with the palette: money left is navy and runs
-   * right of the zero line, overspending is deep orange and runs left. "Left"
-   * is also the word the Banking dashboard already uses for this quantity.
-   * The underlying series is untouched.
+   * ⚠️ The bar encodes MONEY LEFT (the server's `remaining`: negative = over),
+   * so the signs line up with the palette: money left is navy and runs right of
+   * the zero line, overspending is deep orange and runs left. A week with no
+   * plan has no bar; it is listed as "No plan" below them.
    */
   const varianceRows = useMemo<CssBarRow[]>(
     () =>
-      varianceSeries.map((s) => ({
-        id: s.weekISO,
-        label: formatWeekStamp(s.weekSun),
-        value: -s.variance,
-      })),
-    [varianceSeries],
+      history
+        .filter((h) => h.state === "plan" && h.left != null)
+        .map((h) => ({ id: h.weekISO, label: formatWeekStamp(h.weekSun), value: h.left as number })),
+    [history],
   );
+  const noPlanWeeks = history.filter((h) => h.state === "none");
 
   /**
    * Rank the bars CHRONOLOGICALLY, not by length.
@@ -1029,9 +948,9 @@ export default function AllowancesPage() {
    */
   const weekOrder = useMemo(() => {
     const m = new Map<string, number>();
-    varianceSeries.forEach((s, i) => m.set(s.weekISO, i));
+    history.forEach((h, i) => m.set(h.weekISO, i));
     return m;
-  }, [varianceSeries]);
+  }, [history]);
 
   // Per-bucket drill-down groups. Weekly groups by its sub-bucket enum
   // (all four shown); monthly/unplanned group by category.
@@ -1138,6 +1057,10 @@ export default function AllowancesPage() {
         )}
       </div>
 
+      <div className="span-12 empty:hidden">
+        <QueryRefreshBanner q={bannerQ} data-testid="allowances-refresh-banner" />
+      </div>
+
       {/* One card per bucket. There is deliberately no combined total: weekly
           is scoped to a week and monthly/unplanned to a calendar month, so a
           sum of the three would mix time windows. */}
@@ -1147,10 +1070,14 @@ export default function AllowancesPage() {
             name={b.name}
             help={helpFor(b.key)}
             actual={actual[b.key]}
-            planned={planned[b.key]}
+            plan={planned[b.key]}
+            savedLabel={b.key === "unplanned"}
+            noneLabel={b.key === "unplanned" ? "No target" : "No plan"}
+            setPlanHref={b.key === "monthly" ? "/spending/month" : undefined}
             expanded={expanded.has(b.key)}
             onToggle={() => toggle(b.key)}
-            onSavePlanned={(amount) => savePlanned(b.key, amount)}
+            // The monthly plan is a plan row (set under Spending / the plan panel below), not a saved amount.
+            onSavePlanned={b.key === "monthly" ? undefined : (amount) => savePlanned(b.key, amount)}
             periodLabel={b.key === "weekly" ? weeklyLabel : monthlyLabel}
             periodSub={
               b.key === "weekly"
@@ -1169,7 +1096,7 @@ export default function AllowancesPage() {
             extra={
               b.key === "weekly" ? (
                 <div className="mt-3 flex flex-col items-start gap-2">
-                  {weekIsCurrent && planned.weekly > 0 && actual.weekly != null && actual.weekly > planned.weekly ? (
+                  {weekIsCurrent && planned.weekly?.amount != null && planned.weekly.amount > 0 && actual.weekly != null && actual.weekly > planned.weekly.amount ? (
                     <WaysBackLauncher />
                   ) : null}
                   {carryLine ? (
@@ -1189,7 +1116,7 @@ export default function AllowancesPage() {
       <div className="panel tile-in span-6">
         <div className="panel-head">
           <span className={cn(fieldLabel, "flex-1")}>
-            Weekly money left · last {varianceRows.length} weeks
+            Weekly money left · last {HISTORY_WEEKS} weeks
           </span>
           <Help>
             The planned weekly allowance minus what was spent, for each
@@ -1198,9 +1125,9 @@ export default function AllowancesPage() {
           </Help>
         </div>
         <div className="px-4 py-3">
-          {varianceRows.length === 0 ? (
-            <div className={emptyNote}>No completed weeks yet</div>
-          ) : (
+          {varianceRows.length === 0 && noPlanWeeks.length === 0 ? (
+            <div className={emptyNote}>{history.some((h) => h.state === "loading") ? "—" : "No completed weeks yet"}</div>
+          ) : varianceRows.length === 0 ? null : (
             <CssBars
               rows={varianceRows}
               mode="delta"
@@ -1211,6 +1138,16 @@ export default function AllowancesPage() {
               ariaLabel="Weekly allowance money left or over plan, by week"
             />
           )}
+          {noPlanWeeks.length > 0 ? (
+            <ul className="mt-2 space-y-0.5 text-label text-neutral-600" data-testid="allowance-noplan-weeks">
+              {noPlanWeeks.map((h) => (
+                <li key={h.weekISO} className="flex justify-between gap-3" data-testid="allowance-noplan-week">
+                  <span>{formatWeekStamp(h.weekSun)}</span>
+                  <span>{h.words === "Plan set to $0" ? h.words : "No plan"}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
 
@@ -1305,9 +1242,15 @@ export default function AllowancesPage() {
             <tbody>
               {BUCKETS.map((b) => {
                 const a = actual[b.key];
-                const p = planned[b.key];
+                const face = planned[b.key];
+                const p = face?.amount != null && face.amount > 0 ? face.amount : 0;
                 const variance = (a ?? 0) - p;
-                const state = a == null ? { label: "—", chip: "gray" } : bucketState(a, p);
+                const state =
+                  a == null || face === undefined
+                    ? { label: "—", chip: "gray" }
+                    : p > 0
+                      ? bucketState(a, p)
+                      : { label: b.key === "unplanned" ? "No target" : "No plan", chip: "gray" };
                 return (
                   <tr key={b.key} data-testid={`allowance-summary-${b.key}`}>
                     <td className={cn(td, "font-medium")}>{b.name}</td>

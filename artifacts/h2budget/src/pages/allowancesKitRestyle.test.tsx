@@ -88,9 +88,10 @@ const SETTINGS = {
 // 220.25. Monthly and unplanned are the same by both rules.
 const BROWSER_WEEKLY = 195.75;
 const EXPECTED = { weekly: 220.25, monthly: 420.4, unplanned: 50.1 };
+const planOf = (amount: string | null, source = "plan") => ({ status: amount == null ? "not_set" : "set", amount, source, planId: null, effectiveFrom: null });
 const SERVER = {
-  week: { actual: "220.25", beside: { unplanned: "0.00" } },
-  month: { actual: "420.40", beside: { unplanned: "50.10" } },
+  week: { actual: "220.25", beside: { unplanned: "0.00" }, plan: planOf("450.00"), remaining: "229.75", withinPlan: true },
+  month: { actual: "420.40", beside: { unplanned: "50.10" }, plan: planOf("300.00"), remaining: "-120.40", withinPlan: false },
 };
 const PLANNED = { weekly: 450, monthly: 300, unplanned: 200 };
 
@@ -100,7 +101,13 @@ let server: Record<string, unknown> | undefined = SERVER;
 const asked: Array<Record<string, unknown>> = [];
 /** Server answers for a specific period (`week:2026-09-06`); anything else gets `server`. */
 let serverBy: Record<string, unknown> = {};
-const fig = (actual: string, unplanned = "0.00") => ({ actual, beside: { unplanned } });
+const fig = (actual: string, unplanned = "0.00") => ({ actual, beside: { unplanned }, plan: planOf("450.00"), remaining: "100.00", withinPlan: true });
+/** (T4) A completed week as the server answers it: its plan, what was left (negative = over) and whether within. */
+const wk = (left: string | null, plan: string | null = "450.00", source = "plan") => ({
+  actual: "0.00", beside: { unplanned: "0.00" }, plan: planOf(plan, source), remaining: left, withinPlan: left == null ? null : Number(left) >= 0,
+});
+/** (T4) 'refresh': the newest request failed and the last answer is kept. */
+let failMode: null | "refresh" | "load" = null;
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
@@ -132,7 +139,17 @@ vi.mock("@workspace/api-client-react", () => ({
 vi.mock("@workspace/api-client-react/features", () => ({
   useGetPeriodBreakdown: (params: Record<string, unknown>) => {
     asked.push(params);
-    return { data: serverBy[`${params.period}:${params.start}`] ?? server?.[String(params.period)] };
+    const base = (serverBy[`${params.period}:${params.start}`] ?? server?.[String(params.period)]) as Record<string, unknown> | undefined;
+    // The server echoes the period it read.
+    const data = failMode === "load" ? undefined : base && { ...base, period: params.period, start: params.start };
+    return {
+      data,
+      isError: failMode != null,
+      isLoadingError: failMode === "load",
+      isRefetchError: failMode === "refresh",
+      dataUpdatedAt: failMode ? Date.now() - 4 * 60_000 : 0,
+      refetch: vi.fn(),
+    };
   },
 }));
 
@@ -156,8 +173,10 @@ beforeEach(() => {
   txns = TXNS;
   settings = { ...SETTINGS };
   server = SERVER;
-  serverBy = {};
+  // (T4) Two completed weeks over the 450 plan (the streak), the rest of the history within.
+  serverBy = { "week:2026-05-03": wk("-50.00"), "week:2026-04-26": wk("-50.00") };
   asked.length = 0;
+  failMode = null;
 });
 
 afterEach(() => {
@@ -440,6 +459,7 @@ describe("Allowances — streaks and variance bars walk household weeks (PR2)", 
   it("Sat 9/12 at 8:30pm Central (a UTC browser's Sunday): last completed week is Aug 30", () => {
     vi.setSystemTime(new Date("2026-09-13T01:30:00Z"));
     txns = STREAK_TXNS;
+    serverBy = { "week:2026-08-23": wk("-20.00"), "week:2026-08-30": wk("-60.00") };
     renderPage();
     // A local-UTC walk would treat Sep 6 – 12 as completed: 3 weeks, bars to Sep 6.
     expect(screen.getByTestId("allowance-over-streak").textContent).toContain("2 weeks running");
@@ -452,6 +472,7 @@ describe("Allowances — streaks and variance bars walk household weeks (PR2)", 
   it("Sun 9/13 at 12:30am Central (a Pacific browser's Saturday): last completed week is Sep 6", () => {
     vi.setSystemTime(new Date("2026-09-13T05:30:00Z"));
     txns = STREAK_TXNS;
+    serverBy = { "week:2026-08-23": wk("-20.00"), "week:2026-08-30": wk("-60.00"), "week:2026-09-06": wk("-150.00") };
     renderPage();
     // A local-Pacific walk would still be inside Sep 6 – 12: 2 weeks, bars to Aug 30.
     expect(screen.getByTestId("allowance-over-streak").textContent).toContain("3 weeks running");
@@ -509,8 +530,10 @@ describe("Allowances — an expired hold counts nowhere on the page (F6 round 4)
     tx({ id: "r3", amount: "-49.37", occurredOn: "2026-05-07", monthlyAllowance: true }),
   ];
 
-  it("the streak reads the real weeks (30 and 20, under 450): 'Under budget · 2 weeks running' — it read 'Over budget · 2 weeks running'", () => {
+  it("the streak reads the server's weeks (30 and 20 spent, under 450): 'Under budget · 2 weeks running'", () => {
     txns = EXPIRED_TXNS;
+    // The server leaves the expired holds out of its week totals; the week before them was over.
+    serverBy = { "week:2026-05-03": wk("420.00"), "week:2026-04-26": wk("430.00"), "week:2026-04-19": wk("-10.00") };
     renderPage();
     expect(screen.queryByTestId("allowance-over-streak")).toBeNull();
     expect(screen.getByTestId("allowance-praise").textContent).toContain("2 weeks running");
@@ -534,10 +557,11 @@ describe("Allowances — an expired hold counts nowhere on the page (F6 round 4)
     expect(screen.queryByTestId("label-expired-hold-r3")).toBeNull();
   });
 
-  it("without the server's flag (an older response) every row counts, as before: over budget two weeks running", () => {
-    txns = EXPIRED_TXNS.map((t) => ({ ...t, expiredHold: false }) as Tx);
+  it("(T4) the streak and the bars are the server's weeks, not a sum of the rows the page holds", () => {
+    txns = [];
     renderPage();
     expect(screen.getByTestId("allowance-over-streak").textContent).toContain("2 weeks running");
+    expect(varianceBarLabels()).toHaveLength(8);
   });
 });
 
@@ -595,5 +619,98 @@ describe("Allowances — a held pair is labelled in the drill (F6 round 6)", () 
     const { all, unlabelled } = listed();
     expect(all.sort()).toEqual(["p2", "w1"]);
     expect(unlabelled.reduce((s, id) => s + amountOf(id), 0)).toBeCloseTo(120.25, 2);
+  });
+});
+
+
+// ⭐ (T4) NO PLAN IS NOT "OVER". The plan on every comparison is the server's for that
+// week or month; the legacy saved weekly amount is on none. A week with no cap is a
+// "No plan" row and ends a streak; a $0 plan says so.
+describe("Allowances — no plan, never over (T4)", () => {
+  it("a week with no plan: the card says 'Plan not set', its chip 'No plan', and nothing is over", () => {
+    serverBy = { "week:2026-05-10": { ...wk(null, null, "none"), actual: "220.25" } };
+    renderPage();
+    expect(screen.getByTestId("allowance-state-weekly").textContent).toBe("No plan");
+    expect(screen.getByTestId("allowance-plan-weekly").textContent).toBe("Plan not set");
+    expect(screen.getByTestId("allowance-variance-weekly").textContent).toBe("Plan not set");
+    expect(screen.getByTestId("allowance-card-weekly").textContent).not.toMatch(/over/i);
+    expect(screen.getByTestId("allowance-summary-weekly").textContent).not.toMatch(/Over/);
+  });
+
+  it("a $0 plan says 'Plan set to $0'", () => {
+    serverBy = { "week:2026-05-10": { ...wk(null, null, "override"), actual: "220.25" } };
+    renderPage();
+    expect(screen.getByTestId("allowance-plan-weekly").textContent).toBe("Plan set to $0");
+    expect(screen.getByTestId("allowance-state-weekly").textContent).toBe("No plan");
+  });
+
+  it("the legacy saved weekly amount is on no comparison: no server plan, no figure from settings", () => {
+    settings = { ...SETTINGS, weeklyAllowanceAmount: "999.00" };
+    serverBy = { "week:2026-05-10": wk(null, null, "none") };
+    renderPage();
+    expect(screen.queryByText(usd(999))).toBeNull();
+    expect(screen.getByTestId("allowance-plan-weekly").textContent).toBe("Plan not set");
+  });
+
+  it("the monthly plan is the server's, and the unplanned card says 'Saved amount'", () => {
+    server = { ...SERVER, month: { ...SERVER.month, plan: planOf("375.00") } };
+    renderPage();
+    expect(screen.getByTestId("allowance-plan-monthly").textContent).toBe("of $375.00 planned");
+    expect(screen.getByTestId("allowance-plan-unplanned").textContent).toBe("Saved amount $200.00");
+    expect(screen.queryByTestId("allowance-edit-planned-monthly")).toBeNull();
+  });
+
+  it("a monthly card with no plan offers 'Set plan' on Spending", () => {
+    server = { ...SERVER, month: { ...SERVER.month, plan: planOf(null, "none") } };
+    renderPage();
+    expect(screen.getByTestId("allowance-plan-monthly").textContent).toBe("Plan not set");
+    expect(screen.getByTestId("allowance-set-plan-monthly").getAttribute("href")).toBe("/spending/month");
+    expect(screen.getByTestId("allowance-state-monthly").textContent).toBe("No plan");
+  });
+
+  it("history: a no-plan week is a 'No plan' row with no bar, and it ends the streak", () => {
+    serverBy = {
+      "week:2026-05-03": wk("-50.00"),
+      "week:2026-04-26": wk(null, null, "none"),
+      "week:2026-04-19": wk("-50.00"),
+    };
+    renderPage();
+    // Newest first: one week over, then a week with no plan: a streak of 1 is not a pattern.
+    expect(screen.queryByTestId("allowance-over-streak")).toBeNull();
+    expect(screen.getAllByTestId("allowance-noplan-week")).toHaveLength(1);
+  });
+
+  it("history: a no-plan week is listed as 'No plan' and has no bar; a $0 week says so", () => {
+    serverBy = {
+      "week:2026-05-03": wk(null, null, "none"),
+      "week:2026-04-26": wk(null, null, "override"),
+    };
+    renderPage();
+    const rows = screen.getAllByTestId("allowance-noplan-week").map((r) => r.textContent);
+    expect(rows).toEqual(["Apr 26Plan set to $0", "May 3No plan"]);
+    expect(varianceBarLabels()).toHaveLength(6);
+    expect(screen.queryByTestId("allowance-over-streak")).toBeNull();
+  });
+});
+
+describe("Allowances — a failed refresh keeps the figures (T4)", () => {
+  it("shows the banner with the age and the last numbers", () => {
+    failMode = "refresh";
+    renderPage();
+    expect(screen.getByTestId("allowances-refresh-banner").textContent).toMatch(/^Couldn't refresh\. Showing numbers from /);
+    expect(screen.getByTestId("allowance-card-weekly").textContent).toContain(usd(EXPECTED.weekly));
+  });
+
+  it("a failed first load says so and the cards show a dash, never $0.00", () => {
+    failMode = "load";
+    renderPage();
+    expect(screen.getByTestId("allowances-refresh-banner").textContent).toContain("Couldn't load these numbers");
+    expect(screen.getByTestId("allowance-card-weekly").textContent).toContain("—");
+    expect(screen.getByTestId("allowance-card-weekly").textContent).not.toContain("$0.00");
+  });
+
+  it("no banner when nothing failed", () => {
+    renderPage();
+    expect(screen.queryByTestId("allowances-refresh-banner")).toBeNull();
   });
 });

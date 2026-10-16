@@ -19,6 +19,8 @@ import {
 import { LedgerChartSkeleton } from "@/components/account-page/account-page-skeleton";
 import { Panel } from "@/components/next/Panel";
 import { useNearViewport } from "@/hooks/useNearViewport";
+import { buildEntries } from "@/pages/next/accounts/entries";
+import { QueryRefreshBanner } from "@/components/query-refresh-banner";
 import { AMEX_MONTH_LIMIT, amexAllScope, amexMonthParams, amexSummaryParams } from "./amexQueries";
 import { displayAmount, formatDisplayAmount } from "@/lib/amountDisplay";
 import { SplitByCategoryHost } from "@/components/splits/SplitByCategoryHost";
@@ -889,6 +891,14 @@ export default function AmexPage({
   // the Plaid item(s) that own this page's data — Chase issues never
   // bleed onto the Amex page (and vice versa).
   const { data: plaidItemsForScope } = useListPlaidItems();
+  // (T4) The household link carries the card: Spending's `?account=` is the plaid_accounts row id, the Amex filter the external one. Omitted when unknown.
+  const whyAccountRowId = useMemo(
+    () =>
+      cardFilter === "all"
+        ? undefined
+        : buildEntries(plaidItemsForScope).find((e) => e.plaidAccountId === cardFilter)?.rowId,
+    [cardFilter, plaidItemsForScope],
+  );
   // Defense-in-depth scope signal: any debt that looks like Amex (by
   // name) and carries a `plaidAccountId` (internal row id) — covers
   // the freshly-linked-but-no-transactions case where the txn-derived
@@ -2361,6 +2371,9 @@ export default function AmexPage({
 
         {lead}
 
+        {!embedded && summaryQ.data ? (
+          <QueryRefreshBanner q={summaryRaw} data-testid="amex-summary-refresh" />
+        ) : null}
         {!embedded ? (
           <AmexSummaryPanel
             summary={summaryQ.data}
@@ -2375,6 +2388,7 @@ export default function AmexPage({
             attention={attn?.group ?? null}
             onAttention={chooseAttention}
             linkPeriod={linkPeriod}
+            accountRowId={whyAccountRowId}
             byCard={
               <AmexCardBalances
                 summary={summaryQ.data}

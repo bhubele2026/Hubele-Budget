@@ -158,10 +158,14 @@ export function whyOverPath(
   mode: RangeMode,
   isThisWeek: boolean,
   period?: { from: string; to: string } | null,
+  accountRowId?: string | null,
 ): string {
-  if (mode === "wk" && isThisWeek) return "/spending/week";
+  // (T4) One card: Spending reads `?account=<plaid_accounts.id>` and shows that card's part.
+  const acct = accountRowId ? `account=${encodeURIComponent(accountRowId)}` : "";
+  if (mode === "wk" && isThisWeek) return acct ? `/spending/week?${acct}` : "/spending/week";
   const day = period ? (mode === "yr" ? period.to : period.from) : null;
-  return day ? `/spending/month?start=${day}` : "/spending/month";
+  const qs = [day ? `start=${day}` : "", acct].filter(Boolean).join("&");
+  return `/spending/month${qs ? `?${qs}` : ""}`;
 }
 
 /**

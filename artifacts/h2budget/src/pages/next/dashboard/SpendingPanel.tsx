@@ -209,16 +209,12 @@ export default function SpendingPanel() {
                 // One bridge line between the two month totals, from the server's
                 // reconciliation of the same rows; the rest is one tap away.
                 <p className="text-micro text-neutral-600" data-testid="dash-spend-bridge">
-                  <span data-testid="dash-spend-bridge-words">
-                    Budget counts {formatCurrency(rec.terms.cardPayments)} of card payments and {formatCurrency(rec.terms.debtPayments)} of debt payments that purchases leave out; refunds net {formatCurrency(rec.terms.refundsNetted)}
-                  </span>
-                  {" · "}
                   <SpendingWhy r={rec} month={monthName} />
                 </p>
               ) : null}
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-label">
                 <Link href="/allowances" className={LINK} data-testid="dash-link-allowances">Allowances used</Link>
-                <Link href="/banking" className={LINK} data-testid="dash-link-biggest">Biggest charges</Link>
+                <Link href="/spending/month?open=details" className={LINK} data-testid="dash-link-biggest">Biggest charges</Link>
                 <Link href="/budget" className={LINK}>Budget</Link>
               </div>
             </div>

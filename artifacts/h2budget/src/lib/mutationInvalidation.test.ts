@@ -123,5 +123,21 @@ describe("invalidateAfterWrite — the money position and the ways back (F7)", (
     const { MONEY_POSITION_KEY, WAYS_BACK_KEY } = await import("./mutationInvalidation");
     expect([...MONEY_POSITION_KEY]).toEqual(f.getGetMoneyPositionQueryKey());
     expect([...WAYS_BACK_KEY]).toEqual(f.getGetWaysBackQueryKey());
+    const { PERIOD_BREAKDOWN_KEY, AMEX_SUMMARY_KEY } = await import("./mutationInvalidation");
+    expect([...PERIOD_BREAKDOWN_KEY]).toEqual(f.getGetPeriodBreakdownQueryKey());
+    expect([...AMEX_SUMMARY_KEY]).toEqual((await import("@workspace/api-client-react")).getGetAmexSummaryQueryKey());
+  });
+});
+
+describe("invalidateAfterWrite — Spending and the Amex summary (T4)", () => {
+  it("marks every period breakdown and every Amex summary stale, whatever their params", () => {
+    const qc = new QueryClient();
+    const wk = ["/api/money/period-breakdown", { period: "week", start: "2026-10-11", rowsPerGroup: 50 }];
+    const acct = ["/api/money/period-breakdown", { period: "month", start: "2026-10-01", account: "a1" }];
+    const amex = ["/api/amex/summary", { mode: "week" }];
+    for (const k of [wk, acct, amex, UNRELATED]) qc.setQueryData(k, { seeded: true });
+    invalidateAfterWrite(qc);
+    for (const k of [wk, acct, amex]) expect(invalidated(qc, k)).toBe(true);
+    expect(invalidated(qc, UNRELATED)).toBe(false);
   });
 });

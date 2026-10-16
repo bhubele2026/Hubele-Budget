@@ -156,6 +156,13 @@ export const FINDING_LINK: Partial<Record<AgentFinding["kind"], { href: string; 
   bank_stale: { href: "/settings", label: "Open settings" },
 };
 
+/** (T4) The finding's page; a shortfall opens the day it happens (`?day=`) when the finding names one. */
+export function findingLink(f: Pick<AgentFinding, "kind" | "payload">): { href: string; label: string } | undefined {
+  const l = FINDING_LINK[f.kind];
+  const d = f.kind === "shortfall_before_income" ? (f.payload as { lowestDate?: unknown } | null | undefined)?.lowestDate : null;
+  return l && typeof d === "string" && /^\d{4}-\d\d-\d\d$/.test(d) ? { ...l, href: `${l.href}?day=${d}` } : l;
+}
+
 export const SEVERITY_WORD: Record<AgentFinding["severity"], string> = { high: "Important", watch: "Watch", info: "Note" };
 
 export function isStatus(e: unknown, status: number): boolean {
