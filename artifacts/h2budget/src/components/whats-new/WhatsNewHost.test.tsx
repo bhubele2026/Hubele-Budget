@@ -49,8 +49,10 @@ import { _resetWhatsNewSignalForTests, requestWhatsNewOpen, useWhatsNewUnread } 
 import { onWriteSuccess } from "@/lib/mutationInvalidation";
 
 const NOTE = WHATS_NEW[0]!.id;
+// Every shipped note from the click date on: what greets a person who has read nothing.
+const ALL_IDS = WHATS_NEW.filter((u) => u.id >= READ_CLICK_FROM).map((u) => u.id);
 const UNREAD = { read: [] as string[], from: READ_CLICK_FROM };
-const READ = { read: [NOTE], from: READ_CLICK_FROM };
+const READ = { read: ALL_IDS, from: READ_CLICK_FROM };
 
 let qc: QueryClient;
 let signal: number | null | undefined;
@@ -124,7 +126,7 @@ describe("when it greets", () => {
     h.me.mockResolvedValue(UNREAD);
     mount();
     await advance(10);
-    expect(signal).toBe(1);
+    expect(signal).toBe(ALL_IDS.length);
     await advance(GREET_MIN_MS - 100);
     expect(screen.queryByTestId("whats-new-sheet")).toBeNull();
     await advance(GREET_AFTER);
@@ -183,7 +185,7 @@ describe("when it greets", () => {
     h.me.mockResolvedValueOnce(UNREAD).mockResolvedValue(READ);
     mount();
     await advance(10);
-    expect(signal).toBe(1);
+    expect(signal).toBe(ALL_IDS.length);
     await advance(GREET_AFTER + 500);
     expect(screen.queryByTestId("whats-new-sheet")).toBeNull();
     expect(signal).toBe(0);
@@ -208,18 +210,18 @@ describe("the press", () => {
 
   it("closes at once, POSTs the unread ids with OWN_INVALIDATION, and never refetches the dashboard", async () => {
     qc.setQueryData(["/api/spine"], { reviewCount: 1 });
-    h.mark.mockResolvedValue({ ids: [NOTE] });
+    h.mark.mockResolvedValue({ ids: ALL_IDS });
     await greeted();
     fireEvent.click(screen.getByTestId("whats-new-button"));
     expect(screen.queryByTestId("whats-new-sheet")).toBeNull();
     await advance(10);
-    expect(h.mark).toHaveBeenCalledWith({ ids: [NOTE] });
+    expect(h.mark).toHaveBeenCalledWith({ ids: ALL_IDS });
     const m = qc.getMutationCache().getAll()[0]!;
     expect(m.meta).toEqual({ invalidateAfterWrite: false });
     expect(m.state.status).toBe("success");
     expect(qc.getQueryState(["/api/spine"])!.isInvalidated).toBe(false);
     // The cache learns the read; the signal drops to 0; no second greeting.
-    expect((qc.getQueryData(["/api/whats-new/me"]) as { read: string[] }).read).toEqual([NOTE]);
+    expect((qc.getQueryData(["/api/whats-new/me"]) as { read: string[] }).read).toEqual(ALL_IDS);
     expect(signal).toBe(0);
     await advance(GREET_AFTER + 5000);
     expect(screen.queryByTestId("whats-new-sheet")).toBeNull();

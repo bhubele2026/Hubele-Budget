@@ -52,6 +52,28 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-10-16.2",
+    headline: "One checking balance and a clearer Forecast",
+    items: [
+      {
+        title: "One checking balance, everywhere",
+        body: "Every page shows the same Checking today figure and how it was worked out: the bank's last reading plus the rows since. Details shows the evidence behind it.",
+      },
+      {
+        title: "The forecast says where it starts",
+        body: "The chart names the day it opens on, what it opens and closes at, and the bank reading behind it. Overview and Forecast now share one view, and the lowest point uses the same words on every page.",
+      },
+      {
+        title: "Weekly and Monthly Spend rows explain themselves",
+        body: "Each row says what the forecast takes for it and why. When no weekly plan is set, the row says so and offers a way to set one.",
+      },
+      {
+        title: "The Forecast page, rearranged",
+        body: "The chart sits beside the selected day, so a shortfall opens right where you can read it. Items already settled fold away with a count.",
+      },
+    ],
+  },
+  {
     id: "2026-10-16",
     headline: "Clearer spending, bank checks and Amex",
     items: [
