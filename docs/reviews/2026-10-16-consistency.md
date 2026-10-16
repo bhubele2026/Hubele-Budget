@@ -62,7 +62,7 @@ Lead gates on the merged tip 511325f9 (fresh test DB, schema pushed first):
 | Build + entry graph | landing 622.0 KB raw of the 622.0 KB budget (190.0 KB gz) — met, zero headroom |
 | Codegen drift | 0 |
 | pnpm audit --prod | 1 high, the known ignored one |
-| journeys2 checks 1, 2, 4, 5, 11, 15 · chromium + webkit · 1280 + 390 | 20 pass / 0 fail / 4 skips (check 5 "cannot reach the Blue tile while Platinum loads" — a harness timing skip on the Amex page, untouched here) |
+| journeys2 checks 1, 2, 4, 5, 11, 15 · chromium + webkit · 1280 + 390 | 20 pass / 0 fail / 4 skips (check 5 "cannot reach the Blue tile while Platinum loads" — a harness timing skip on the Amex page, untouched here; it skips identically on the live d8da19c4 tree with the same fixture) |
 | axe wcag2a/aa · /home /banking /forecast ?day= landing /forecast/overview /review · 390 + 1280 | one serious hit per page, the same pre-existing shell chip (orange review count in the tab ribbon / nav, `bg-brand-orange/20`), untouched by this batch; nothing new |
 
 - Fixture states (git-ignored kit): `FIXTURE_BALANCE=zero-rows-today` (reading $0.00 yesterday 16:19, two posted rows
