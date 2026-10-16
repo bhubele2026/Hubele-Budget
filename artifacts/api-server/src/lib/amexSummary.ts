@@ -39,6 +39,13 @@
 //                  to an allowance · filed but with no category. Placed by the
 //                  allowance window's `classifyMovement` (effective filing: a
 //                  posted row carries its pending row's filing).
+//   reconciliation (Task 5) the period's purchases — the very rows
+//                  `purchases` counts — each in ONE group by the same window's
+//                  placement and the F2 evidence class
+//                  (`reconcileAmexPurchases`, ./amexReconciliation.ts): weekly
+//                  plan known / unresolved · monthly allowance known /
+//                  unresolved · bills · unplanned · reimbursable · not counted
+//                  · not placed. Σ groups = purchases; refunds beside.
 //
 // ⚠️ READ-ONLY. No write, no Plaid call, no AI.
 
@@ -62,6 +69,7 @@ import {
 import { CARD_OWED } from "./amexAnchor";
 import { resolveAmexAnchor, type AmexAnchorAnswer } from "./amexAnchorRead";
 import { discoverAmexCards, type AmexBrand, type AmexCardRow } from "./amexCardCadence";
+import { reconcileAmexPurchases } from "./amexReconciliation";
 import { avalancheRankOf } from "./avalancheSim";
 import { loadCardPayoffModes, type CardPayoffMode, type PaidAs, type DefaultMode, type PayDown, type PayoffModeReason, type PayoffModeSource } from "./cardPayoffMode";
 import { isCalendarDay } from "./bankLedger";
@@ -508,6 +516,30 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
   needsAttention.truncated =
     needsAttention.unplanned.truncated || needsAttention.unfiled.truncated || needsAttention.uncategorized.truncated;
 
+  // ── (Task 5) Every purchase in one group, by the window's own placement and
+  // the evidence class `evidenceSplitCents` read above (no rule of its own).
+  const splitById = new Map(windowRows.map(({ row }, i) => [row.id, splitRows[i]!] as const));
+  const reconciliation = reconcileAmexPurchases(
+    purchaseRows.map((t) => {
+      const w = placed.get(t.id);
+      const filed = w?.row ?? t;
+      const catId = filed.categoryId;
+      const card = cardById.get(t.plaidAccountId!)!;
+      return {
+        id: t.id,
+        date: t.occurredOn,
+        displayName: displayNameOf(filed.description, aliases),
+        cents: toCents(spendAmount(t)),
+        pending: t.pending,
+        card: { accountId: card.accountId, name: card.name, mask: card.mask },
+        hasCategory: !!(catId && !uncategorizedIds.has(catId) && ctx.categoriesById.get(catId)),
+        placed: w ? (splitById.get(t.id) ?? null) : null,
+      };
+    }),
+    { purchases, refunds },
+    rowsPerGroup,
+  );
+
   // ── The plan this card answers to.
   const hooks = readEverydayHooks(prefs);
   const hookLink = (cadence: HookCadence): PlanLinkView | null => {
@@ -586,6 +618,7 @@ export async function buildAmexSummary(householdId: string, ownerUserId: string,
     householdContribution,
     planLink,
     needsAttention,
+    reconciliation,
     limitations,
   };
 }

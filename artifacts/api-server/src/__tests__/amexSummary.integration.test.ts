@@ -440,6 +440,30 @@ describe("S5 · GET /amex/summary — one card's week", () => {
     expect([blue.monthlyPlan, blue.monthlyKnown, blue.monthlyUnresolved]).toEqual(["45.00", "45.00", "0.00"]);
   });
 
+  it("⭐ (Task 5) reconciliation: the Platinum week's purchases, each in one group, add up to purchases; the weekly plan's gap is the not-mine row and the refund", async () => {
+    for (const scope of [ext.plat!, "all"]) {
+      const s = await summary(scope);
+      const groups = s.reconciliation.groups as any[];
+      expect(s.reconciliation.ties, scope).toBe(true);
+      expect(groups.reduce((a, g) => a + cents(g.amount), 0), scope).toBe(cents(s.purchases.amount));
+      expect(s.reconciliation.refunds, scope).toEqual(s.refunds);
+      // Unresolved and monthly: the contribution's own figures.
+      const g = (k: string) => groups.find((x) => x.key === k)!;
+      const hc = s.householdContribution;
+      expect([g("weekly_unresolved").amount, g("monthly_known").amount, g("monthly_unresolved").amount], scope).toEqual([hc.weeklyUnresolved, hc.monthlyKnown, hc.monthlyUnresolved]);
+      // weeklyKnown also holds AIRLINE TICKET (not mine: the payoff leaves it out, the
+      // household window reads it) and nets the WHOLE FOODS refund: 300.00 − 15.00.
+      expect(cents(hc.weeklyKnown) - cents(g("weekly_known").amount), scope).toBe(30000 - 1500);
+    }
+    const plat = await summary(ext.plat!);
+    expect(Object.fromEntries((plat.reconciliation.groups as any[]).filter((x) => x.count > 0).map((x) => [x.key, ac(x)]))).toEqual({
+      weekly_known: "250.00/4",
+      weekly_unresolved: "25.00/1",
+      unplanned: "120.00/1",
+      reimbursable: "30.00/1",
+    });
+  });
+
   it("per card, purchases − reimbursable + not mine − refunds = what spending facts count; Σ = the week's household spend", async () => {
     const facts = await buildSpendingFacts(HH[OWNER]!.householdId, S5_WEEK.from, S5_WEEK.to);
     let total = 0;
