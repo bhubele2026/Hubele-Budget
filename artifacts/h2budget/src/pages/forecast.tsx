@@ -168,7 +168,7 @@ import {
   PlannedItemsList,
   type PlannedItem,
 } from "./forecast/PlannedItemsList";
-import { hookOwedStatus, hookPayoffWords, hookPayoffsOf } from "@/lib/forecastHooks";
+import { hookLineOf, hookOwedStatus, hookPayoffWords, hookPayoffsOf } from "@/lib/forecastHooks";
 import { ForecastBody, TAB_OF_MODE, forecastTitle } from "./forecast/ForecastBody";
 import { statusBadge, isPlanRowMatchEligible } from "./forecast/statusBadge";
 
@@ -1095,8 +1095,9 @@ export default function ForecastPage({
     const descriptionById = new Map(
       ((data?.transactions ?? []) as Array<{ id: string; description?: string | null }>).map((t) => [t.id, t.description ?? null]),
     );
-    return hookPayoffsOf(cashProjection, (id) => descriptionById.get(id) ?? null);
-  }, [cashProjection, data?.transactions]);
+    // (C4) The register's lines carry a partial answer's row: the words name it.
+    return hookPayoffsOf(cashProjection, (id) => descriptionById.get(id) ?? null, register?.allPlan);
+  }, [cashProjection, data?.transactions, register?.allPlan]);
   // ⭐ (F5 round 2) The everyday hooks' items (Weekly / Monthly Spend). A plain
   // click on one of their rows never marks it missed: a card week's purchases are
   // owed whatever the answer, so only the explicit "Mark missed" button answers it.
@@ -3040,7 +3041,7 @@ export default function ForecastPage({
               // still owed is listed (its Undo stays) but never counted missed:
               // it reads "Carried" or "Still owed", and its purchases are on the forecast.
               const owedOf = (b: (typeof bucket)[number]) =>
-                b.recurringItemId && b.occurrenceDate ? hookOwedStatus(hookPayoffs.get(`${b.recurringItemId}|${b.occurrenceDate}`)) : null;
+                b.recurringItemId && b.occurrenceDate ? hookOwedStatus(hookLineOf(hookPayoffs, { itemId: b.recurringItemId, date: b.occurrenceDate })) : null;
               const listed = bucket.filter((b) => b.status === "missed");
               if (listed.length === 0) return null;
               const missed = listed.filter((b) => !owedOf(b));
@@ -3071,7 +3072,7 @@ export default function ForecastPage({
                   >
                     {listed.map((b) => {
                       const owed = owedOf(b);
-                      const line = owed ? hookPayoffs.get(`${b.recurringItemId}|${b.occurrenceDate}`) : undefined;
+                      const line = owed && b.recurringItemId && b.occurrenceDate ? hookLineOf(hookPayoffs, { itemId: b.recurringItemId, date: b.occurrenceDate }) : undefined;
                       return (
                       <div
                         key={b.id}
@@ -3089,7 +3090,7 @@ export default function ForecastPage({
                             </div>
                             {line && (
                               <div className="text-micro text-neutral-500" data-testid={`missed-owed-${b.id}`}>
-                                {hookPayoffWords(line)}
+                                {hookPayoffWords(line, { face: Math.abs(b.amount) })}
                               </div>
                             )}
                           </div>

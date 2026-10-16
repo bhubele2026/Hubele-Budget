@@ -26,14 +26,26 @@
 //      onto the account that stays and the account_merge line names it; a
 //      removed account's reading is dropped, never moved onto a live account
 //      by name or by last four (Capital One 360 ••5526 never gets Chase's).
+//
+// ⭐ (C7) THE FIXTURE'S CLOCK IS THE HOUSEHOLD'S. The rows used to be dated
+// `new Date().toISOString().slice(0, 10)` — the UTC day. After 19:00 Central
+// that is already TOMORROW in household time, so the twin's ATM row was dated
+// tomorrow, the bank balance (rows through today) rightly left it out, and the
+// merge's "−$60" assertion failed every evening. A test-fixture clock defect;
+// production is right (a row dated tomorrow must not count today). The rows are
+// now dated `householdTodayISO()` and the snapshot two household days before;
+// the last test runs the merge at 20:30 Central, when the UTC day is already
+// tomorrow. `TWINS_TEST_NOW=<instant>` runs the whole file at that instant.
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
 import { and, asc, eq } from "drizzle-orm";
 
-const TEST_USER = `twins-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_USER = `twins-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 let TEST_HOUSEHOLD_ID = "";
+/** (C7) Every household the file seeds, for cleanup. */
+const USERS: string[] = [];
 
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (
@@ -84,7 +96,9 @@ import transactionsRouter from "../routes/transactions";
 import transactionsLedgerRouter from "../routes/transactionsLedger";
 import dashboardRouter from "../routes/dashboard";
 import { syncPlaidItem, _resetPlaidSyncChainForTests } from "../lib/plaidSync";
+import { addDaysISO, householdTodayISO } from "../lib/householdClock";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 
 const app = express();
 app.use(express.json());
@@ -109,13 +123,14 @@ let server: Server;
 let baseUrl = "";
 
 const ids = { chase: "", relink: "", capone: "", chk: "", twin: "", cap360: "" };
-const ext = {
+const newExt = () => ({
   chk: `acct-chk-${randomUUID()}`,
   twin: `acct-twin-${randomUUID()}`,
   cap360: `acct-cap-${randomUUID()}`,
   // (WP9b) An account whose plaid_accounts row is gone (a reconnect removed it).
   gone: `acct-gone-${randomUUID()}`,
-};
+});
+let ext = newExt();
 
 // (WP9b) Balance snapshots (forecast_settings.account_snapshots), keyed by
 // plaid_accounts.id. DEAD ids name accounts whose rows no longer exist.
@@ -127,21 +142,23 @@ const reading = (balance: string, hoursAgo: number, name: string) => ({
   name,
   mask: "5526",
 });
-const READINGS = {
+const readingsAt = () => ({
   chk: reading("4790.00", 120, "Chase Total Checking"),
   twin: reading("4812.37", 48, "Chase Total Checking"),
   // A removed account's reading with the main account's name and last four, newest of all.
   deadA: reading("999.99", 1, "Chase Total Checking"),
   // Added before the second sync: a removed account's reading that matches live accounts by last four only.
   deadB: reading("777.77", 0.5, "Everyday Checking"),
-};
+});
+// (C7) `let`: TWINS_TEST_NOW pins the clock before the file seeds (the readings read Date.now()).
+let READINGS = readingsAt();
 
-async function cleanup(): Promise<void> {
-  await db.delete(transactionsTable).where(eq(transactionsTable.userId, TEST_USER));
-  await db.delete(forecastSettingsTable).where(eq(forecastSettingsTable.userId, TEST_USER));
-  await db.delete(plaidSyncAttemptsTable).where(eq(plaidSyncAttemptsTable.userId, TEST_USER));
-  await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.userId, TEST_USER));
-  await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
+async function cleanup(user = TEST_USER): Promise<void> {
+  await db.delete(transactionsTable).where(eq(transactionsTable.userId, user));
+  await db.delete(forecastSettingsTable).where(eq(forecastSettingsTable.userId, user));
+  await db.delete(plaidSyncAttemptsTable).where(eq(plaidSyncAttemptsTable.userId, user));
+  await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.userId, user));
+  await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, user));
 }
 
 async function item(name: string, slug: string): Promise<string> {
@@ -179,17 +196,25 @@ async function account(itemId: string, accountId: string, name: string, createdA
   return row!.id;
 }
 
-beforeAll(async () => {
+/**
+ * The household the file reads: three ••5526 accounts, the snapshot two household
+ * days before today, and today's rows dated the household's today (C7).
+ */
+async function seedTwins(): Promise<void> {
   TEST_HOUSEHOLD_ID = (await createTestHousehold(TEST_USER)).householdId;
+  USERS.push(TEST_USER);
   await cleanup();
+  READINGS = readingsAt();
   ids.chase = await item("Chase", "chase");
   ids.relink = await item("Chase", "chase");
   ids.capone = await item("Capital One", "capital-one");
   ids.chk = await account(ids.chase, ext.chk, "Chase Total Checking", new Date(Date.now() - 86_400_000 * 30));
   ids.twin = await account(ids.relink, ext.twin, "Chase Total Checking", new Date(Date.now() - 86_400_000 * 2));
   ids.cap360 = await account(ids.capone, ext.cap360, "360 Checking", new Date(Date.now() - 86_400_000 * 10));
-  // The bank snapshot sits on the main Chase account, two days ago.
-  const snapAt = new Date(Date.now() - 2 * 86_400_000);
+  // (C7) The household's today, and the bank snapshot on the main Chase account at
+  // noon two household days before it.
+  const today = householdTodayISO();
+  const snapAt = new Date(createdAtStartOfHouseholdDay(addDaysISO(today, -2)).getTime() + 12 * 3_600_000);
   await db.insert(forecastSettingsTable).values({
     userId: TEST_USER,
     householdId: TEST_HOUSEHOLD_ID,
@@ -204,7 +229,6 @@ beforeAll(async () => {
     autoDedupeRanAt: null,
     accountSnapshots: { [ids.chk]: READINGS.chk, [ids.twin]: READINGS.twin, [DEAD.a]: READINGS.deadA },
   });
-  const today = new Date().toISOString().slice(0, 10);
   const row = (accountId: string, description: string, amount: string) => ({
     userId: TEST_USER,
     householdId: TEST_HOUSEHOLD_ID,
@@ -229,6 +253,15 @@ beforeAll(async () => {
     row(ext.cap360, "SPOTIFY USA", "-11.99"),
     row(ext.gone, "SPOTIFY USA", "-11.99"),
   ]);
+}
+
+beforeAll(async () => {
+  // (C7) `TWINS_TEST_NOW=2026-10-16T20:30:00-05:00` runs the whole file at that instant (Date only).
+  if (process.env.TWINS_TEST_NOW) {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["Date"] });
+    vi.setSystemTime(new Date(process.env.TWINS_TEST_NOW));
+  }
+  await seedTwins();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
   const addr = server.address();
@@ -237,7 +270,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await cleanup();
+  vi.useRealTimers();
+  for (const user of USERS) await cleanup(user);
   await new Promise<void>((res) => server.close(() => res()));
 });
 
@@ -397,5 +431,34 @@ describe("(WP9) twin accounts: merged on a sync, never on a page read", () => {
     expect((await accountState()).settings!.snapshots).toEqual({ [ids.chk]: READINGS.twin });
     const accounts = ((await get("/plaid/items")).json as ItemsJson).flatMap((i) => i.accounts);
     expect(accounts.find((a) => a.id === ids.cap360)?.snapshot ?? null).toBeNull();
+  });
+
+  // ⭐ (C7) The UTC/Chicago split, pinned: at 20:30 Central the UTC day is already
+  // tomorrow. A fresh household seeded at that instant: its rows are dated the
+  // household's today, so the merge moves the balance by the twin's −$60 — the
+  // same assertion as above, unwidened.
+  it("(C7) at 20:30 Central — the UTC day already tomorrow — a sync still merges the twin and the balance moves by its −$60", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-16T20:30:00-05:00"));
+      expect(new Date().toISOString().slice(0, 10)).toBe("2026-10-17");
+      expect(householdTodayISO()).toBe("2026-10-16");
+      TEST_USER = `twins-evening-${process.pid}-${randomUUID().slice(0, 8)}`;
+      ext = newExt();
+      await seedTwins();
+      const atm = (await allRows()).find((r) => r.description === "CHASE ATM WITHDRAWAL 1140")!;
+      expect(atm.occurredOn).toBe("2026-10-16");
+
+      _resetPlaidSyncChainForTests();
+      const balanceBefore = Number(await bankToday());
+      const result = await syncPlaidItem(TEST_USER, ids.relink);
+      expect(result.accountsMerged).toBe(1);
+      const after = await accountState();
+      expect(after.accounts.map((a) => a.id).sort()).toEqual([ids.chk, ids.cap360].sort());
+      expect(new Map(after.rows.map((r) => [r.amount, r.plaidAccountId])).get("-60.00")).toBe(ext.chk);
+      expect(Number(await bankToday())).toBeCloseTo(balanceBefore - 60, 2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

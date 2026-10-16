@@ -10,6 +10,14 @@ import { hookPayoffsOf } from "@/lib/forecastHooks";
 vi.mock("@dnd-kit/core", () => ({
   useDroppable: () => ({ setNodeRef: () => {}, isOver: false }),
 }));
+// (C5) Who is asking: the owner gets "Set a weekly plan →", a member reads who sets it.
+const ownerState: { v: true | false | "unknown" } = { v: true };
+vi.mock("@/hooks/useOwner", () => ({ useOwner: () => ownerState.v }));
+vi.mock("wouter", () => ({
+  Link: ({ href, children, ...rest }: { href: string; children?: React.ReactNode } & Record<string, unknown>) => (
+    <a href={href} data-testid={rest["data-testid"] as string}>{children}</a>
+  ),
+}));
 
 import { PlannedItemsList, type PlannedItem } from "./PlannedItemsList";
 
@@ -74,6 +82,82 @@ describe("PlannedItemsList — everyday hook words (WP8)", () => {
     show(hookPayoffsOf(noPlan as never), [plan("ws", "2026-10-10", "Weekly Spend", -380), plan("mort", "2026-10-12", "Mortgage", -1650)]);
     expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe("Weekly Spend reserve $380 · no weekly plan set");
     expect(screen.queryByTestId("plan-hook-mort-2026-10-12")).toBeNull();
+    // ⭐ (C5) The owner's way to a plan: Spending's dialog, nothing chosen or saved here.
+    const link = screen.getByTestId("plan-hook-set-plan");
+    expect(link.textContent).toBe("Set a weekly plan →");
+    expect(link.getAttribute("href")).toBe("/spending/week?plan=1");
+  });
+
+  it("(C5) a member reads who sets the plan; while /me is out, a placeholder — never the link nor the denial", () => {
+    const noPlan = {
+      hookReserves: [
+        { hook: "weekly", recurringItemId: "ws", planKey: "ws|2026-10-10", occurrenceDate: "2026-10-10", label: "Weekly Spend", amount: "380.00", basis: "stored_amount" },
+      ],
+      events: [{ date: "2026-10-10", label: "Weekly Spend", amount: "-380.00", itemId: "ws", occurrenceKey: "ws|2026-10-10" }],
+      overdueAssumedPaid: [],
+    };
+    try {
+      ownerState.v = false;
+      show(hookPayoffsOf(noPlan as never), [plan("ws", "2026-10-10", "Weekly Spend", -380)]);
+      expect(screen.getByTestId("plan-hook-set-plan-member").textContent).toBe("The owner sets the weekly plan");
+      expect(screen.queryByTestId("plan-hook-set-plan")).toBeNull();
+      cleanup();
+      ownerState.v = "unknown";
+      show(hookPayoffsOf(noPlan as never), [plan("ws", "2026-10-10", "Weekly Spend", -380)]);
+      expect(screen.getByTestId("plan-hook-set-plan-unknown")).toBeTruthy();
+      expect(screen.queryByTestId("plan-hook-set-plan")).toBeNull();
+      expect(screen.queryByTestId("plan-hook-set-plan-member")).toBeNull();
+    } finally {
+      ownerState.v = true;
+    }
+  });
+
+  it("(C5) a plan set: no link on the plan's rows", () => {
+    const planned = {
+      hookAmountIgnored: [{ itemId: "ws", cadence: "weekly" as const, storedAmount: "450.00" }],
+      hookReserves: [
+        { hook: "weekly", recurringItemId: "ws", planKey: "ws|2026-10-10", occurrenceDate: "2026-10-10", label: "Weekly Spend", amount: "240.00", basis: "plan", incurred: "120.00", carried: "0.00", allowanceLeft: "120.00" },
+      ],
+      events: [{ date: "2026-10-10", label: "Weekly Spend", amount: "-240.00", itemId: "ws", occurrenceKey: "ws|2026-10-10" }],
+      overdueAssumedPaid: [],
+    };
+    show(hookPayoffsOf(planned as never), [plan("ws", "2026-10-10", "Weekly Spend", -450)]);
+    expect(screen.queryByTestId("plan-hook-set-plan")).toBeNull();
+    // (C4) The row shows the stored $450; the words say what the forecast takes.
+    expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe(
+      "Weekly Spend: card purchases $120.00 + left to spend $120.00 = $240.00 on the forecast (item amount $450 not used)",
+    );
+  });
+
+  it("⭐ (C4) two rows on one day — a moved one and the day's own: each reads its own occurrence's reserve", () => {
+    const sig = {
+      hookAmountIgnored: [{ itemId: "ms", cadence: "monthly" as const, storedAmount: "400.00" }],
+      hookReserves: [
+        { hook: "monthly", recurringItemId: "ms", planKey: "ms|2026-10-01", occurrenceDate: "2026-10-01", label: "Monthly Spend", amount: "574.50", basis: "plan", incurred: "75.00", carried: "0.00", allowanceLeft: "499.50" },
+        { hook: "monthly", recurringItemId: "ms", planKey: "ms|2026-11-01", occurrenceDate: "2026-11-01", label: "Monthly Spend", amount: "620.00", basis: "plan", incurred: "0.00", carried: "0.00", allowanceLeft: "620.00" },
+      ],
+      events: [
+        { date: "2026-11-01", label: "Monthly Spend", amount: "-574.50", itemId: "ms", originalDate: "2026-11-01", occurrenceKey: "ms|2026-10-01", occurrenceDate: "2026-10-01" },
+        { date: "2026-11-01", label: "Monthly Spend", amount: "-620.00", itemId: "ms", originalDate: "2026-11-01", occurrenceKey: "ms|2026-11-01", occurrenceDate: "2026-11-01" },
+      ],
+      overdueAssumedPaid: [],
+    };
+    const moved: PlannedItem = {
+      kind: "plan",
+      key: "moved",
+      row: { kind: "plan", itemId: "ms", date: "2026-11-01", originalDate: "2026-10-01", label: "Monthly Spend", amount: -400, status: "future" } as unknown as PlanLine,
+    };
+    const own: PlannedItem = {
+      kind: "plan",
+      key: "own",
+      row: { kind: "plan", itemId: "ms", date: "2026-11-01", label: "Monthly Spend", amount: -400, status: "future" } as unknown as PlanLine,
+    };
+    show(hookPayoffsOf(sig as never), [moved, own]);
+    const words = screen.getAllByTestId("plan-hook-ms-2026-11-01").map((e) => e.textContent);
+    expect(words).toEqual([
+      "October's Monthly Spend, due Nov 1: card purchases $75.00 + left to spend $499.50 = $574.50 on the forecast (item amount $400 not used)",
+      "Monthly Spend: card purchases $0.00 + left to spend $620.00 = $620.00 on the forecast (item amount $400 not used)",
+    ]);
   });
 
   it("without hook payoffs the rows are unchanged", () => {
@@ -118,7 +202,8 @@ describe("PlannedItemsList — a carried card week is never 'Missed' (F5)", () =
     expect(screen.getByTestId("plan-hook-ws-2026-10-03").textContent).toBe("card purchases carried to Oct 15");
     const owed = screen.getByTestId("plan-row-ws-2026-10-10");
     expect(owed.textContent).toContain("Still owed");
-    expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe("card purchases $270.00 still owed");
+    // (C4) Dragged to Oct 15: it names its own week and the day the forecast takes it.
+    expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe("Weekly Spend of Oct 10, due Oct 15: card purchases $270.00 still owed");
     // Paid on evidence, nothing owed: the household's answer stands.
     expect(screen.getByTestId("plan-row-ws-2026-09-26").textContent).toContain("Missed");
   });

@@ -653,3 +653,71 @@ describe("(Q4) the owner gate on the plan prompt has three states", () => {
     expect(screen.queryByTestId("plan-prompt-owner-unknown")).toBeNull();
   });
 });
+
+// ⭐ (C5) The weekly plan and the forecast's reserve: one sentence says how they relate, and the
+// Forecast's "Set a weekly plan →" (`?plan=1`) opens the dialog on the same choices — nothing picked.
+describe("(C5) the plan ↔ the forecast's reserve", () => {
+  it("one sentence above the choices: the forecast holds the Weekly Spend item's amount until a plan is set", () => {
+    h.bd.week = notSet();
+    mount("/spending/week");
+    expect(screen.getByTestId("plan-prompt-holds").textContent).toBe(
+      "Until a plan is set the forecast holds $380 a week — the Weekly Spend item's amount. Pick the plan Spending should track.",
+    );
+    // The choices are the same; nothing opens by itself.
+    expect(screen.getByTestId("plan-use-primary").textContent).toBe("Use $380.00 as the weekly plan from this week");
+    expect(screen.getByTestId("plan-use-suggested")).toBeTruthy();
+    expect(screen.getByTestId("plan-different")).toBeTruthy();
+    expect(screen.queryByTestId("plan-choose")).toBeNull();
+    expect(screen.queryByTestId("plan-confirm")).toBeNull();
+  });
+
+  it("monthly: the Monthly Spend item's amount, a month", () => {
+    h.bd.month = bd({ period: "month", basis: "monthly_allowance", start: "2026-10-01", end: "2026-10-31", plan: { status: "not_set", amount: null, source: "none", planId: null, effectiveFrom: null }, remaining: null, over: null, withinPlan: null });
+    h.plans = { plans: [], prefills: [...prefills, { period: "monthly", amount: "425.50", source: "hook_stored", label: "Monthly Spend reserve" }] };
+    mount("/spending/month", "month");
+    expect(screen.getByTestId("plan-prompt-holds").textContent).toBe(
+      "Until a plan is set the forecast holds $425.50 a month — the Monthly Spend item's amount. Pick the plan Spending should track.",
+    );
+  });
+
+  it("?plan=1 opens the dialog on the choices: nothing picked, nothing sent; a pick runs the dry run, Confirm sends it", async () => {
+    h.bd.week = notSet();
+    mount("/spending/week?plan=1");
+    const choose = screen.getByTestId("plan-choose");
+    expect(within(choose).getByTestId("plan-choose-holds").textContent).toContain("the forecast holds $380 a week");
+    expect(within(choose).getByTestId("plan-choose-use-primary").textContent).toBe("Use $380.00 as the weekly plan from this week");
+    expect(within(choose).getByTestId("plan-choose-use-suggested")).toBeTruthy();
+    expect(within(choose).getByTestId("plan-choose-different")).toBeTruthy();
+    expect(screen.queryByTestId("plan-confirm")).toBeNull();
+    expect(h.create).not.toHaveBeenCalled();
+    fireEvent.click(within(choose).getByTestId("plan-choose-use-suggested"));
+    const dlg = screen.getByTestId("plan-confirm");
+    expect(within(dlg).getByTestId("plan-confirm-amount").textContent).toBe("$350.00");
+    await waitFor(() => expect(within(dlg).getByTestId("plan-dry-run")).toBeTruthy());
+    expect(posts()).toHaveLength(0);
+    fireEvent.click(within(dlg).getByTestId("plan-confirm-go"));
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0]![0]).toEqual({ data: { period: "weekly", amount: "350.00", effectiveFrom: "2026-10-11" } });
+  });
+
+  it("?plan=1, Cancel: nothing sent, the dialog closes and the address drops plan=1", () => {
+    h.bd.week = notSet();
+    mount("/spending/week?plan=1");
+    fireEvent.click(screen.getByTestId("plan-choose-cancel"));
+    expect(screen.queryByTestId("plan-choose")).toBeNull();
+    expect(posts()).toHaveLength(0);
+    expect(window.location.search).toBe("");
+  });
+
+  it("?plan=1 with a plan already set: nothing opens and the param goes; a member gets the denial, no dialog", () => {
+    mount("/spending/week?plan=1");
+    expect(screen.queryByTestId("plan-choose")).toBeNull();
+    expect(window.location.search).toBe("");
+    cleanup();
+    h.bd.week = notSet();
+    h.me = { isOwner: false };
+    mount("/spending/week?plan=1");
+    expect(screen.queryByTestId("plan-choose")).toBeNull();
+    expect(screen.getByTestId("plan-prompt-readonly").textContent).toContain("Only the household owner sets the weekly plan");
+  });
+});
