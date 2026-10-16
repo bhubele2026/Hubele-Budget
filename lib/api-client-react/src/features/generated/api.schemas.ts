@@ -836,11 +836,60 @@ export type BankBalanceExplainLedgerRecentRowsItem = {
   pending: boolean;
 };
 
+export type BankBalanceExplainRowReason =
+  (typeof BankBalanceExplainRowReason)[keyof typeof BankBalanceExplainRowReason];
+
+export const BankBalanceExplainRowReason = {
+  held: "held",
+  not_bank: "not_bank",
+  claim_confirmed: "claim_confirmed",
+  superseded: "superseded",
+  expired: "expired",
+  duplicate: "duplicate",
+  adjusted: "adjusted",
+  counted: "counted",
+} as const;
+
+/**
+ * (Task 4) One ledger row behind Checking today and what the cash rule made of it. `reason`: held (the bank's reading already holds it) · not_bank (another account) · claim_confirmed (a logged payment a bank row confirmed; that row counts) · superseded (a pending row its posted row replaced) · expired (an expired hold or its reversal) · duplicate (a repeated Plaid id) · adjusted (counted: the posted half of a pair whose pending charge was in the reading — adds posted − pending) · counted.
+ */
+export interface BankBalanceExplainRow {
+  id: string;
+  /** The row's household day (YYYY-MM-DD) */
+  date: string;
+  /** @nullable */
+  description: string | null;
+  /** Signed, as stored: negative is money out */
+  amount: string;
+  pending: boolean;
+  /**
+   * The row's Plaid account_id; null for a manual row
+   * @nullable
+   */
+  accountExternalId: string | null;
+  /** @nullable */
+  source: string | null;
+  /** On the reading's account by the rule's own `isBankRow` (a manual row is the account's own). The rule checks held first, so another account's row dated before the reading's day reads `held`. */
+  onAccount: boolean;
+  /** In Checking today (`counts`), even when it adds 0.00 */
+  counted: boolean;
+  /** What it adds to Checking today, signed; 0.00 unless counted */
+  contribution: string;
+  reason: BankBalanceExplainRowReason;
+  /**
+   * A posted row's pending half, when it replaced one
+   * @nullable
+   */
+  replacedId: string | null;
+}
+
 export type BankBalanceExplainLedger = {
   /** @nullable */
   anchorDay: string | null;
   /** What the bank balance adds on top of the snapshot, by the ledger's own rule (PR4e): rows the snapshot already held, rows off the account and the pending half of a replaced pair add nothing; manual rows on the account count. When the snapshot has a balance and both are read at the same moment, snapshot.balance + net equals displayed.bankToday to the cent; a row landing between the two reads, or a household midnight between them, can break that. rowCount is the rows that count, dated through today, including a posted row that adds 0.00. Null when the snapshot has no read time. */
   sinceAnchor: BankBalanceExplainLedgerSinceAnchor;
+  /** (Task 4) Every row the roll-forward read for today's figure (anchor day − 7 through today), newest first, each with the cash rule's own verdict (`classifyCashRows`): never a second rule. Σ contribution over the `counted` rows = sinceAnchor.net, and their number = sinceAnchor.rowCount. Null when the snapshot has no read time (nothing rolls forward); absent from an older server. */
+  rows?: BankBalanceExplainRow[] | null;
   recentRows: BankBalanceExplainLedgerRecentRowsItem[];
 };
 

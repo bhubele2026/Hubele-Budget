@@ -168,7 +168,7 @@ import {
   PlannedItemsList,
   type PlannedItem,
 } from "./forecast/PlannedItemsList";
-import { hookLineOf, hookOwedStatus, hookPayoffWords, hookPayoffsOf } from "@/lib/forecastHooks";
+import { hookCurveOf, hookLineOf, hookOwedStatus, hookPayoffWords, hookPayoffsOf } from "@/lib/forecastHooks";
 import { afterScrollSettles } from "@/lib/afterScrollSettles";
 import { ForecastBody, TAB_OF_MODE, forecastTitle } from "./forecast/ForecastBody";
 import { statusBadge, isPlanRowMatchEligible } from "./forecast/statusBadge";
@@ -839,6 +839,9 @@ export default function ForecastPage({
   // midnight. A fresh bundle after midnight moves the cutoff with it.
   const todayIso = data?.today ?? todayISO();
 
+  // ⭐ (Task 4, D) The signal the register's hook rows read their figures and words from: the
+  // projection the chart and the day panel draw, else (while it loads) the bundle's own.
+  const hookSignal = cashProjection ?? data?.cashSignal ?? null;
   const register = useMemo(() => {
     if (!data) return null;
     const rawEvents = (data.events ?? []) as CashEvent[];
@@ -880,6 +883,8 @@ export default function ForecastPage({
       // (PR5) Plans a bank row probably paid. They show as "Suggested" until
       // the user answers; only `offCurve` pairs are off the server's curve.
       matches: cashProjection?.matches ?? null,
+      // ⭐ (Task 4, D) A Weekly / Monthly Spend row is what the curve takes for it, not the item's stored amount.
+      hookCurve: hookCurveOf(hookSignal),
     });
   }, [
     data,
@@ -892,6 +897,7 @@ export default function ForecastPage({
     deferredForecastFromDate,
     mode,
     cashProjection?.matches,
+    hookSignal,
   ]);
 
   const bucket = useMemo(() => {
@@ -1096,15 +1102,14 @@ export default function ForecastPage({
   const bankLabel = useCallback((id: string) => bundleTxnById.get(id)?.description ?? null, [bundleTxnById]);
 
   // (WP8) Each everyday-hook occurrence's card payoff (or the bank row that
-  // paid it), for the register's words. Display only: the register's amounts
-  // and running balance still read the stored plan.
+  // paid it), for the register's words. (Task 4, D) The rows' amounts and the
+  // running balance read the same signal's figures (`hookCurveOf`, above).
   const hookPayoffs = useMemo(() => {
     const descriptionById = new Map(
       ((data?.transactions ?? []) as Array<{ id: string; description?: string | null }>).map((t) => [t.id, t.description ?? null]),
     );
-    // (C4) The register's lines carry a partial answer's row: the words name it.
-    return hookPayoffsOf(cashProjection, (id) => descriptionById.get(id) ?? null, register?.allPlan);
-  }, [cashProjection, data?.transactions, register?.allPlan]);
+    return hookPayoffsOf(hookSignal, (id) => descriptionById.get(id) ?? null);
+  }, [hookSignal, data?.transactions]);
   // ⭐ (F5 round 2) The everyday hooks' items (Weekly / Monthly Spend). A plain
   // click on one of their rows never marks it missed: a card week's purchases are
   // owed whatever the answer, so only the explicit "Mark missed" button answers it.

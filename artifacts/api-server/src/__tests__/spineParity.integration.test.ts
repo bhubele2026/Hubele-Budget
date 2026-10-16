@@ -653,7 +653,12 @@ type CashSignal = {
 type BankBalanceExplain = {
   displayed: { bankToday: string };
   snapshot: { balance: string | null; at: string | null; source: string | null };
-  ledger: { anchorDay: string | null; sinceAnchor: { rowCount: number; net: string } | null };
+  ledger: {
+    anchorDay: string | null;
+    sinceAnchor: { rowCount: number; net: string } | null;
+    /** (Task 4) Every row the roll-forward read, with the cash rule's verdict. */
+    rows?: Array<{ id: string; date: string; counted: boolean; contribution: string; reason: string }> | null;
+  };
 };
 
 /** Whole cents, so "to the cent" is integer arithmetic. */
@@ -794,6 +799,33 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     if (TODAY_ISO > MONTH_START_ISO) {
       expect(cents(balance)).not.toBe(cents(snapshot!.balance));
     }
+  });
+
+  it("⭐ (Task 4) the Details rows ARE the roll-forward: Σ contribution of the counted rows = sinceAnchor.net = bankToday − the reading, to the cent", async () => {
+    const [spine, signal, explain] = await Promise.all([
+      get<Spine>("/spine"),
+      get<CashSignal>("/forecast/cash-signal?horizonDays=90"),
+      get<BankBalanceExplain>("/forecast/bank-balance-explain"),
+    ]);
+    const rows = explain.ledger.rows;
+    expect(rows).toBeTruthy();
+    const counted = rows!.filter((r) => r.counted);
+    const sum = counted.reduce((t, r) => t + cents(r.contribution), 0);
+    expect(counted).toHaveLength(explain.ledger.sinceAnchor!.rowCount);
+    expect(sum).toBe(cents(explain.ledger.sinceAnchor!.net));
+    expect(sum).toBe(cents(explain.displayed.bankToday) - cents(explain.snapshot.balance!));
+    // …and that is the spine's and the cash signal's figure: one balance.
+    expect(sum).toBe(cents(spine.bank.balance) - cents(spine.bank.snapshot!.balance));
+    expect(explain.displayed.bankToday).toBe(signal.bankToday);
+    // Left-out rows add nothing; every verdict is the rule's own.
+    for (const r of rows!) {
+      expect(["held", "not_bank", "claim_confirmed", "superseded", "expired", "duplicate", "adjusted", "counted"], r.id).toContain(r.reason);
+      if (!r.counted) expect(r.contribution, r.id).toBe("0.00");
+      expect(r.date <= TODAY_ISO, r.id).toBe(true);
+    }
+    // Not vacuous: past the reading's day the fixture's checking rows roll on top of it, and a card row is read and left out.
+    if (TODAY_ISO > MONTH_START_ISO) expect(counted.length).toBeGreaterThan(0);
+    expect(rows!.some((r) => r.reason === "not_bank")).toBe(true);
   });
 
   it("⭐ (C2) cash signal `opening` carries the spine's two halves; opening.balance is the curve's start, and the walk's first close follows from it", async () => {

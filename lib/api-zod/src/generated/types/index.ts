@@ -144,6 +144,8 @@ export * from "./bankBalanceExplainLedger";
 export * from "./bankBalanceExplainLedgerRecentRowsItem";
 export * from "./bankBalanceExplainLedgerSinceAnchor";
 export * from "./bankBalanceExplainNextSync";
+export * from "./bankBalanceExplainRow";
+export * from "./bankBalanceExplainRowReason";
 export * from "./bankBalanceExplainSnapshot";
 export * from "./bankFreshness";
 export * from "./bankFreshnessSource";

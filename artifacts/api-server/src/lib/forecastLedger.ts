@@ -933,14 +933,27 @@ export async function buildForecastLedger(
     resolutionsAll.some((r) => (r.status === "matched" || r.status === "partial") && r.matchedTxnId === t.id),
   );
   const answerRead = await readAnsweredRows(householdId, answeredRows, db, { today: todayISO });
-  const resolutionsLive =
+  // ⭐ (Task 4, D) A PARTIAL ANSWER ON AN EVERYDAY HOOK IS READ AS NOT GIVEN.
+  // A Weekly / Monthly Spend occurrence is its card payment: what it holds is
+  // sized from the cards' purchases and the plan, and the payments that pay it
+  // come by evidence allocation (`loadHookPayoffs`). A `partial` answer named a
+  // checking row the balance already counts, and `planAmount = base − paid`
+  // (below) then took that row off the occurrence a second time — while the row,
+  // claimed by the answer, paid nothing by evidence. No screen writes one (the
+  // ledger never pairs a hook, so the register never offers Partial on one) and
+  // `POST /forecast/resolutions` refuses one; a legacy row stays stored, untouched,
+  // and decides nothing: its occurrence and its row read exactly as unanswered.
+  const isHookPartial = (r: { status: string; recurringItemId: string | null }): boolean =>
+    r.status === "partial" && !!r.recurringItemId && hookCadenceByItem.has(r.recurringItemId);
+  const resolutionsLive = (
     answerRead.expired.size === 0
       ? resolutionsAll
       : resolutionsAll.flatMap((r) => {
           if (!((r.status === "matched" || r.status === "partial") && r.matchedTxnId && answerRead.expired.has(r.matchedTxnId))) return [r];
           const twin = answerRead.postedTwinOf.get(r.matchedTxnId);
           return twin ? [{ ...r, matchedTxnId: twin.id }] : [];
-        });
+        })
+  ).filter((r) => !isHookPartial(r));
   // The rows the answers now name: the posted twins join the rows read above.
   const answerTxns = [
     ...namedTxns,

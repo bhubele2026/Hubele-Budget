@@ -4,8 +4,9 @@ import type { PlanLine } from "@/lib/forecastMatch";
 import { hookPayoffsOf } from "@/lib/forecastHooks";
 
 // (WP8) The register says what the curve takes for an everyday hook: the card
-// payoff beside the stored plan, or the row that paid it. Display only — the
-// row's amount stays the stored plan.
+// payoff beside the stored plan, or the row that paid it. (Task 4, D) The row's
+// own amount is the curve's figure (`buildLineRegister` with `hookCurveOf`); the
+// item's stored amount is said once, behind Details, as a template.
 
 vi.mock("@dnd-kit/core", () => ({
   useDroppable: () => ({ setNodeRef: () => {}, isOver: false }),
@@ -27,6 +28,12 @@ const plan = (itemId: string, date: string, label: string, amount: number): Plan
   kind: "plan",
   key: `${itemId}|${date}`,
   row: { kind: "plan", itemId, date, label, amount, status: "future" } as unknown as PlanLine,
+});
+/** (Task 4, D) A hook row as the register builds it: the curve's figure (0 off the curve), the item's stored amount beside it. */
+const hookRow = (itemId: string, date: string, label: string, curve: number | null, itemAmount: number, extra: Record<string, unknown> = {}): PlannedItem => ({
+  kind: "plan",
+  key: `${itemId}|${date}`,
+  row: { kind: "plan", itemId, date, label, amount: curve ?? 0, status: "future", hookCurve: { itemAmount, onCurve: curve !== null }, ...extra } as unknown as PlanLine,
 });
 
 const SIGNAL = {
@@ -61,14 +68,29 @@ function show(
 }
 
 describe("PlannedItemsList — everyday hook words (WP8)", () => {
-  it("a hook row says its card payoff beside the plan, a paid one names the row; the amount stays the stored plan; other rows say nothing", () => {
-    show(hookPayoffsOf(SIGNAL as never, (id) => (id === "tx-pay" ? "AMERICAN EXPRESS ACH PMT" : null)));
+  it("⭐ (Task 4) a hook row headlines the curve's figure, never the stored amount; one paid on evidence reads \"—\" and names the row; other rows say nothing", () => {
+    show(hookPayoffsOf(SIGNAL as never, (id) => (id === "tx-pay" ? "AMERICAN EXPRESS ACH PMT" : null)), [
+      hookRow("ws", "2026-10-03", "Weekly Spend", null, -450),
+      hookRow("ws", "2026-10-10", "Weekly Spend", -477.57, -450),
+      plan("mort", "2026-10-12", "Mortgage", -1650),
+    ]);
     expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe("card payoff $477.57 · plan $450");
     expect(screen.getByTestId("plan-hook-ws-2026-10-03").textContent).toBe("paid on evidence by AMERICAN EXPRESS ACH PMT · plan $450");
     expect(screen.queryByTestId("plan-hook-mort-2026-10-12")).toBeNull();
-    // Display only: the row's own amount is still the stored plan.
-    expect(screen.getByTestId("plan-row-ws-2026-10-10").textContent).toContain("-$450.00");
-    expect(screen.getByTestId("plan-row-ws-2026-10-10").textContent).not.toContain("-$477.57");
+    // The row's own amount is the forecast's: $477.57, never the item's $450.
+    expect(screen.getByTestId("plan-amount-ws-2026-10-10").textContent).toBe("-$477.57");
+    expect(screen.getByTestId("plan-row-ws-2026-10-10").textContent).not.toContain("$450.00");
+    // Off the curve (paid on evidence): the forecast takes nothing — "—", never "$0.00".
+    expect(screen.getByTestId("plan-amount-ws-2026-10-03").textContent).toBe("—");
+    expect(screen.getByTestId("plan-row-ws-2026-10-03").textContent).not.toContain("$0.00");
+    // Not a hook: its own amount, as before.
+    expect(screen.getByTestId("plan-amount-mort-2026-10-12").textContent).toBe("-$1,650.00");
+  });
+
+  it("(Task 4) a hook row off the curve with nothing to say still says it: \"—\" · Nothing on the forecast", () => {
+    show(hookPayoffsOf({ hookAmountIgnored: SIGNAL.hookAmountIgnored, events: [], overdueAssumedPaid: [] } as never), [hookRow("ws", "2026-10-17", "Weekly Spend", null, -450)]);
+    expect(screen.getByTestId("plan-amount-ws-2026-10-17").textContent).toBe("—");
+    expect(screen.getByTestId("plan-hook-ws-2026-10-17").textContent).toBe("Nothing on the forecast");
   });
 
   it("(S2) no weekly plan set: the hook row says it is the Weekly Spend reserve, not a plan", () => {
@@ -80,7 +102,7 @@ describe("PlannedItemsList — everyday hook words (WP8)", () => {
       overdueAssumedPaid: [],
     };
     show(hookPayoffsOf(noPlan as never), [plan("ws", "2026-10-10", "Weekly Spend", -380), plan("mort", "2026-10-12", "Mortgage", -1650)]);
-    expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe("Weekly Spend reserve $380 · no weekly plan set");
+    expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe("Assumed $380 · no weekly plan set");
     expect(screen.queryByTestId("plan-hook-mort-2026-10-12")).toBeNull();
     // ⭐ (C5) The owner's way to a plan: Spending's dialog, nothing chosen or saved here.
     const link = screen.getByTestId("plan-hook-set-plan");
@@ -121,12 +143,28 @@ describe("PlannedItemsList — everyday hook words (WP8)", () => {
       events: [{ date: "2026-10-10", label: "Weekly Spend", amount: "-240.00", itemId: "ws", occurrenceKey: "ws|2026-10-10" }],
       overdueAssumedPaid: [],
     };
-    show(hookPayoffsOf(planned as never), [plan("ws", "2026-10-10", "Weekly Spend", -450)]);
+    show(hookPayoffsOf(planned as never), [hookRow("ws", "2026-10-10", "Weekly Spend", -240, -450)]);
     expect(screen.queryByTestId("plan-hook-set-plan")).toBeNull();
-    // (C4) The row shows the stored $450; the words say what the forecast takes.
-    expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe(
-      "Weekly Spend: card purchases $120.00 + left to spend $120.00 = $240.00 on the forecast (item amount $450 not used)",
-    );
+    // (Task 4, D) The row shows the forecast's $240; the words are its parts.
+    expect(screen.getByTestId("plan-amount-ws-2026-10-10").textContent).toBe("-$240.00");
+    expect(screen.getByTestId("plan-hook-ws-2026-10-10").textContent).toBe("Weekly Spend: card purchases $120.00 + left to spend $120.00");
+    // ⭐ The item's stored amount, once, behind Details: a template the plan replaces. The saved item is untouched.
+    const details = screen.getByTestId("plan-hook-details-ws-2026-10-10");
+    expect(details.tagName).toBe("DETAILS");
+    expect(details.querySelector("summary")!.textContent).toBe("Details");
+    expect(screen.getByTestId("plan-hook-item-ws-2026-10-10").textContent).toBe("Item amount $450 — a template; the forecast uses the weekly plan");
+  });
+
+  it("(Task 4) no plan: the item's amount IS the reserve — no template note", () => {
+    const noPlan = {
+      hookReserves: [
+        { hook: "weekly", recurringItemId: "ws", planKey: "ws|2026-10-10", occurrenceDate: "2026-10-10", label: "Weekly Spend", amount: "380.00", basis: "stored_amount" },
+      ],
+      events: [{ date: "2026-10-10", label: "Weekly Spend", amount: "-380.00", itemId: "ws", occurrenceKey: "ws|2026-10-10" }],
+      overdueAssumedPaid: [],
+    };
+    show(hookPayoffsOf(noPlan as never), [hookRow("ws", "2026-10-10", "Weekly Spend", -380, -380)]);
+    expect(screen.queryByTestId("plan-hook-details-ws-2026-10-10")).toBeNull();
   });
 
   it("⭐ (C4) two rows on one day — a moved one and the day's own: each reads its own occurrence's reserve", () => {
@@ -142,22 +180,16 @@ describe("PlannedItemsList — everyday hook words (WP8)", () => {
       ],
       overdueAssumedPaid: [],
     };
-    const moved: PlannedItem = {
-      kind: "plan",
-      key: "moved",
-      row: { kind: "plan", itemId: "ms", date: "2026-11-01", originalDate: "2026-10-01", label: "Monthly Spend", amount: -400, status: "future" } as unknown as PlanLine,
-    };
-    const own: PlannedItem = {
-      kind: "plan",
-      key: "own",
-      row: { kind: "plan", itemId: "ms", date: "2026-11-01", label: "Monthly Spend", amount: -400, status: "future" } as unknown as PlanLine,
-    };
+    const moved = { ...hookRow("ms", "2026-11-01", "Monthly Spend", -574.5, -400, { originalDate: "2026-10-01" }), key: "moved" };
+    const own = { ...hookRow("ms", "2026-11-01", "Monthly Spend", -620, -400), key: "own" };
     show(hookPayoffsOf(sig as never), [moved, own]);
     const words = screen.getAllByTestId("plan-hook-ms-2026-11-01").map((e) => e.textContent);
     expect(words).toEqual([
-      "October's Monthly Spend, due Nov 1: card purchases $75.00 + left to spend $499.50 = $574.50 on the forecast (item amount $400 not used)",
-      "Monthly Spend: card purchases $0.00 + left to spend $620.00 = $620.00 on the forecast (item amount $400 not used)",
+      "October's Monthly Spend, due Nov 1: card purchases $75.00 + left to spend $499.50",
+      "Monthly Spend: card purchases $0.00 + left to spend $620.00",
     ]);
+    // (Task 4, D) Each row headlines its own occurrence's figure.
+    expect(screen.getAllByTestId("plan-amount-ms-2026-11-01").map((e) => e.textContent)).toEqual(["-$574.50", "-$620.00"]);
   });
 
   it("without hook payoffs the rows are unchanged", () => {
