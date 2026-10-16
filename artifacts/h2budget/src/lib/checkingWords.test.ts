@@ -37,11 +37,10 @@ describe("(C2) the chart's first point, in words", () => {
     expect(openingCaption({ dateLabel: "Oct 16", opens: "0.00", closes: "0.00", hasReading: false })).toBe("Oct 16 · opens — · closes —");
     expect(openingCaption({ dateLabel: null, opens: null, closes: undefined, hasReading: true })).toBe("opens — · closes —");
   });
-  it("the bank-read line: rows dated today, or since", () => {
-    expect(bankReadCaption(READ, { count: 2 }, "today")).toBe("Bank read $0.00 Oct 15, 4:19 PM · +2 rows today");
-    expect(bankReadCaption(READ, { count: 2 }, "since")).toBe("Bank read $0.00 Oct 15, 4:19 PM · +2 rows since");
-    expect(bankReadCaption(READ, { count: 0 }, "since")).toBe("Bank read $0.00 Oct 15, 4:19 PM · no rows since");
-    expect(bankReadCaption(null, null, "today")).toBe("No bank reading yet");
+  it('the bank-read line always says since', () => {
+    expect(bankReadCaption(READ, { count: 2 })).toBe("Bank read $0.00 Oct 15, 4:19 PM · +2 rows since");
+    expect(bankReadCaption(READ, { count: 0 })).toBe("Bank read $0.00 Oct 15, 4:19 PM · no rows since");
+    expect(bankReadCaption(null, null)).toBe("No bank reading yet");
   });
   it("rowsWords", () => {
     expect(rowsWords(null)).toBeNull();

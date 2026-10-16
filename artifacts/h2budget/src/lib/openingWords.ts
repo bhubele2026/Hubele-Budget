@@ -6,7 +6,7 @@ import { NO_READING_WORDS, readingLine, dayTimeOf, rowsWords, type ReadingLike, 
 /**
  * ⭐ (C2) The chart's first point, in two short lines:
  *   "Oct 16 · opens $0.00 · closes $3,812.39"
- *   "Bank read $0.00 Oct 15, 4:19 PM · +2 rows today"
+ *   "Bank read $0.00 Oct 15, 4:19 PM · +2 rows since"
  * Missing opening/close/reading are "—", never $0.00.
  */
 export function openingCaption(args: {
@@ -32,11 +32,10 @@ export function openingCaption(args: {
 export function bankReadCaption(
   reading: ReadingLike | null | undefined,
   since: SinceLike | null | undefined,
-  when: "since" | "today",
 ): string {
   if (!reading || reading.balance == null || reading.balance === "" || !reading.at) return NO_READING_WORDS;
   const n = Number(reading.balance);
   if (!Number.isFinite(n)) return NO_READING_WORDS;
   if (reading.source === "manual") return readingLine(reading) ?? NO_READING_WORDS;
-  return [`Bank read ${formatCurrency(n)} ${dayTimeOf(reading.at) ?? ""}`.trim(), rowsWords(since, when)].filter(Boolean).join(" · ");
+  return [`Bank read ${formatCurrency(n)} ${dayTimeOf(reading.at) ?? ""}`.trim(), rowsWords(since)].filter(Boolean).join(" · ");
 }

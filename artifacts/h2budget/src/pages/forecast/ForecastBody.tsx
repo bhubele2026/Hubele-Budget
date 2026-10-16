@@ -395,6 +395,21 @@ export function ForecastBody({
           onSelectDate={setSelectedDate}
         />
 
+        {/* (T3) `selected-day`: where "See <day>" / `?day=` bring the reader (scroll target, focusable). */}
+        <div id="selected-day" tabIndex={-1} className="span-4 min-w-0 space-y-4 scroll-mt-[var(--page-sticky-top,0px)] outline-none">
+          <Panel title="Selected day" variant="static" data-testid="selected-day-panel">
+            <DayPanel
+              ctx={ctx}
+              kinded={kinded}
+              bank={bank}
+              selectedDate={selectedDate}
+              onClear={() => setSelectedDate(null)}
+              onOpenRegister={openRegister}
+            />
+          </Panel>
+          {ctx.dateBalance}
+        </div>
+
         {/* ⚠️ STICKY-SAFE: the review inbox inside pins to <main> under the
             head (FC-44); an `overflow: hidden` panel would hold it in place.
             No entrance transform here — the register hosts the drag overlay. */}
@@ -404,7 +419,7 @@ export function ForecastBody({
             // the title — the selected tab's own words — is read, not shown.
             <span className="max-sm:sr-only">{tab === "register" ? "Register & review" : "Month & bank"}</span>
           }
-          span={8}
+          span={12}
           variant={["sticky-safe", "static"]}
           className="min-w-0"
           data-testid="register-panel"
@@ -470,21 +485,6 @@ export function ForecastBody({
             )}
           </div>
         </Panel>
-
-        {/* (T3) `selected-day`: where "See <day>" / `?day=` bring the reader (scroll target, focusable). */}
-        <div id="selected-day" tabIndex={-1} className="span-4 min-w-0 space-y-4 scroll-mt-[var(--page-sticky-top,0px)] outline-none">
-          <Panel title="Selected day" variant="static" data-testid="selected-day-panel">
-            <DayPanel
-              ctx={ctx}
-              kinded={kinded}
-              bank={bank}
-              selectedDate={selectedDate}
-              onClear={() => setSelectedDate(null)}
-              onOpenRegister={openRegister}
-            />
-          </Panel>
-          {ctx.dateBalance}
-        </div>
       </PageGrid>
     </div>
   );

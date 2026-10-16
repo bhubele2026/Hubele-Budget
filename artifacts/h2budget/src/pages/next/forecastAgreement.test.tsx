@@ -547,3 +547,89 @@ describe("T3 — the Forecast screen tells one story from the cash signal", () =
     expect(screen.getByTestId("link-open-chase").getAttribute("href")).toBe("/transactions?account=acct-row-1");
   });
 });
+
+describe("(C6) the Forecast screen puts the actions where the reader is", () => {
+  const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it("order: hero + figures, then the chart beside the selected day, then the register; the date balance stays under the day", () => {
+    mount(<ForecastPage mode="overall" />);
+    const hero = screen.getByTestId("card-forecast-hero");
+    const chart = screen.getByTestId("card-projected-balance-chart");
+    const day = document.getElementById("selected-day")!;
+    const reg = screen.getByTestId("register-panel");
+    expect(before(hero, chart)).toBe(true);
+    expect(before(chart, day)).toBe(true);
+    expect(before(day, reg)).toBe(true);
+    expect(chart.className).toContain("span-8");
+    expect(day.className).toContain("span-4");
+    expect(reg.className).toContain("span-12");
+    expect(within(day).getByTestId("forecast-date-balance")).toBeTruthy();
+    expect(before(within(day).getByTestId("selected-day-panel"), within(day).getByTestId("forecast-date-balance"))).toBe(true);
+  });
+
+  it("Planned items stays open; the Checking today card starts folded, says its figure, and is remembered once opened", async () => {
+    const first = mount(<ForecastPage mode="overall" />);
+    const panel = screen.getByTestId("register-panel");
+    expect(within(panel).getByRole("heading", { name: "Planned items" }).closest("details")).toBeNull();
+    const sec = screen.getByTestId("section-checking") as HTMLDetailsElement;
+    expect(sec.open).toBe(false);
+    const sum = screen.getByTestId("section-checking-summary");
+    expect(sum.getAttribute("aria-expanded")).toBe("false");
+    expect(sum.textContent).toContain("Checking today");
+    expect(sum.textContent).toContain("—"); // this signal carries no bankToday: a missing figure is "—", never $0.00
+    expect(sum.textContent).not.toContain("$0.00");
+    sec.open = true; // what the browser does on a summary click
+    await waitFor(() => expect(sessionStorage.getItem("forecast.section.checking")).toBe("1"));
+    expect(sum.getAttribute("aria-expanded")).toBe("true");
+    first.unmount();
+    mount(<ForecastPage mode="overall" />);
+    expect((screen.getByTestId("section-checking") as HTMLDetailsElement).open).toBe(true);
+    expect(screen.getByTestId("section-checking-summary").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("a section opens itself when a row inside it is targeted, and can be folded again", async () => {
+    const { CollapsibleSection } = await import("../forecast/CollapsibleSection");
+    const ui = (forceOpen: boolean) => (
+      <CollapsibleSection id="probe" title="Missed · 2026-06" count={1} total="$1.00" forceOpen={forceOpen}>
+        <div data-plan-key="a|2026-06-01">row</div>
+      </CollapsibleSection>
+    );
+    const r = render(ui(false));
+    const d = () => screen.getByTestId("section-probe") as HTMLDetailsElement;
+    expect(d().open).toBe(false);
+    r.rerender(ui(true));
+    expect(d().open).toBe(true);
+    expect(sessionStorage.getItem("forecast.section.probe")).toBeNull(); // auto-open is not the reader's choice
+    d().open = false;
+    await waitFor(() => expect(sessionStorage.getItem("forecast.section.probe")).toBe("0"));
+    expect(d().open).toBe(false);
+  });
+
+  it("a review deep link (?month=) opens 'From Chase' on its own", () => {
+    window.history.replaceState(null, "", "/review?month=2026-06");
+    mount(<ForecastPage mode="review" />);
+    const sec = screen.queryByTestId("section-from-bank") as HTMLDetailsElement | null;
+    expect(sec).not.toBeNull();
+    expect(sec!.open).toBe(true);
+  });
+
+  it("?day= lands on the day panel (one scroll to #selected-day), and a reduced-motion reader gets an instant one", async () => {
+    const calls: Array<{ id: string; behavior?: string }> = [];
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element, o?: boolean | ScrollIntoViewOptions) {
+      calls.push({ id: this.id, behavior: typeof o === "object" ? o.behavior : undefined });
+    };
+    const mm = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: /reduce/.test(q), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false })) as never;
+    try {
+      window.history.replaceState(null, "", "/forecast?day=2026-06-15&horizon=90");
+      mount(<ForecastPage mode="overall" />);
+      await waitFor(() => expect(calls.some((c) => c.id === "selected-day")).toBe(true));
+      expect(calls.filter((c) => c.id === "selected-day")).toHaveLength(1);
+      expect(calls.find((c) => c.id === "selected-day")!.behavior).toBe("auto");
+    } finally {
+      Element.prototype.scrollIntoView = orig;
+      window.matchMedia = mm;
+    }
+  });
+});

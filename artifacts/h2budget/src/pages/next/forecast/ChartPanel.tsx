@@ -68,12 +68,10 @@ export function ChartPanel({
   const noCurve = ctx.dailySeries.length === 0 || ctx.proj?.status === "no_data";
   // ⭐ (C2) Where the curve starts, in ONE moment: the day the window opens, the balance at the START of that
   // day (`cashSignal.opening.balance`), the first plotted point = that day's CLOSE (`daily[0]`), and the reading
-  // + rows it rolls from. "+N rows today" when the rows are dated the opening day (opening is then the bare
-  // reading, not Checking today); "+N rows since" when they are all dated before it.
+  // + rows it rolls from ("+N rows since", the one phrase everywhere). Drawn ONCE, in the panel head; the plot
+  // carries no copy of it (it covered the Today marker and the first points).
   const opening = ctx.proj?.opening ?? null;
   const firstClose = ctx.dailySeries[0]?.balance;
-  const rowsAreToday =
-    !!opening && ctx.bankBalance != null && Number(opening.balance) !== Number(ctx.bankBalance);
   const startLines: string[] | null =
     noCurve || !opening
       ? null
@@ -84,9 +82,8 @@ export function ChartPanel({
             closes: firstClose,
             hasReading: !!opening.reading,
           }),
-          bankReadCaption(opening.reading, opening.since, rowsAreToday ? "today" : "since"),
+          bankReadCaption(opening.reading, opening.since),
         ];
-  const startLabel = startLines;
 
   const chart = (
     <ProjectedBalanceChart
@@ -107,7 +104,6 @@ export function ChartPanel({
       onSelectDate={onSelectDate}
       hoverSelects
       horizonKey={ctx.horizonDays}
-      startLabel={startLabel}
       openingBalance={opening?.reading ? Number(opening.balance) : null}
     />
   );
@@ -126,7 +122,7 @@ export function ChartPanel({
     <Panel
       title={`Projected cash — ${label}`}
       sub={startLines ? `${startLines[0]} · ${ctx.horizonDays} days` : `${ctx.horizonDays} days`}
-      span={12}
+      span={8}
       data-testid="card-projected-balance-chart"
       actions={
         !noCurve ? (

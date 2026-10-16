@@ -39,6 +39,7 @@ import { Link, Redirect } from "wouter";
 import { hashTabRedirect } from "./forecast/hashTab";
 import { DAY_CODEC, horizonForDay, monthEnd } from "./forecast/dayParam";
 import { ListedPlans } from "./forecast/ListedPlans";
+import { CollapsibleSection } from "./forecast/CollapsibleSection";
 import { replaceUrlParam, useUrlState } from "@/hooks/useUrlState";
 import {
   DEFAULT_HORIZON,
@@ -2311,8 +2312,19 @@ export default function ForecastPage({
     />
   );
 
+  // (C6) A register section opens itself when a row inside it is targeted: the highlighted plan row, or a
+  // `?tx=` / `?month=` deep link into the review. Nothing here changes a handler or a figure.
+  const bucketHasHighlight = (rows: ReadonlyArray<{ recurringItemId?: string | null; occurrenceDate?: string | null }>) =>
+    !!highlightedPlanKey && rows.some((b) => b.recurringItemId && b.occurrenceDate && `${b.recurringItemId}|${b.occurrenceDate}` === highlightedPlanKey);
+  const registerDeepLinked = () => {
+    if (typeof window === "undefined") return false;
+    const q = new URLSearchParams(window.location.search);
+    return q.has("tx") || q.has("month");
+  };
+
   const bankGrid = (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CollapsibleSection id="checking" title="Checking today" total={data.cashSignal?.bankToday != null ? formatCurrency(Number(data.cashSignal.bankToday)) : "—"}>
         <section className={kitCard} data-testid="card-bank-snapshot">
           {/* ⭐ (T1/C1) CHECKING TODAY — the one balance every surface shows (cashSignal.bankToday: the bank's
               reading rolled forward through the counted rows, from THIS bundle, one moment), in the one
@@ -2391,6 +2403,7 @@ export default function ForecastPage({
             </div>
           </div>
         </section>
+        </CollapsibleSection>
         <AvalancheScheduleCard />
       </div>
   );
@@ -2526,13 +2539,14 @@ export default function ForecastPage({
         onDragCancel={() => setActiveDragId(null)}
       >
         {mode === "review" && !monthWindowPending && (
+          <CollapsibleSection id="from-bank" title={`From Chase · ${monthFilter}`} count={`${bankReconcile.pending} pending`} chipClass="chip warn" forceOpen={bankInbox.length > 0 || registerDeepLinked()}>
           <section className={kitCard} data-testid="card-from-bank">
               <div className={`${cardHead} flex-wrap`}>
                 <Landmark
                   className="h-4 w-4 text-neutral-400"
                   aria-hidden="true"
                 />
-                <h2 className="text-title font-semibold text-brand-navy">
+                <h2 className="sr-only text-title font-semibold text-brand-navy">
                   From Chase · {monthFilter}
                 </h2>
                 <span className="chip warn">{bankReconcile.pending} pending</span>
@@ -2734,6 +2748,7 @@ export default function ForecastPage({
                 )}
               </div>
             </section>
+          </CollapsibleSection>
         )}
 
         {mode === "review" && bankInbox.length > 0 && (() => {
@@ -3031,9 +3046,10 @@ export default function ForecastPage({
               const missed = listed.filter((b) => !owedOf(b));
               const missedTotal = missed.reduce((s, b) => s + b.amount, 0);
               return (
+                <CollapsibleSection id="missed" title={`Missed · ${monthFilter}`} count={missed.length} chipClass="chip bad" total={formatCurrency(missedTotal)} totalTone={missedTotal < 0 ? "bad" : undefined} forceOpen={bucketHasHighlight(listed)}>
                 <section className={kitCard} data-testid="missed-bucket-panel">
                   <div className={cardHead}>
-                    <h2 className="text-title font-semibold text-brand-navy">
+                    <h2 className="sr-only text-title font-semibold text-brand-navy">
                       Missed · {monthFilter}
                     </h2>
                     <span className="chip bad">{missed.length}</span>
@@ -3122,6 +3138,7 @@ export default function ForecastPage({
                     })}
                   </div>
                 </section>
+                </CollapsibleSection>
               );
             })()}
 
@@ -3130,13 +3147,14 @@ export default function ForecastPage({
               if (moved.length === 0) return null;
               const movedTotal = moved.reduce((s, b) => s + b.amount, 0);
               return (
+                <CollapsibleSection id="moved" title={`Moved · ${monthFilter}`} count={moved.length} chipClass="chip info" total={formatCurrency(movedTotal)} totalTone={movedTotal < 0 ? "bad" : undefined} forceOpen={bucketHasHighlight(moved)}>
                 <section className={kitCard} data-testid="rescheduled-bucket-panel">
                   <div className={cardHead}>
                     <CalendarDays
                       className="h-4 w-4 text-neutral-400"
                       aria-hidden="true"
                     />
-                    <h2 className="text-title font-semibold text-brand-navy">
+                    <h2 className="sr-only text-title font-semibold text-brand-navy">
                       Moved · {monthFilter}
                     </h2>
                     <span className="chip info">{moved.length}</span>
@@ -3192,6 +3210,7 @@ export default function ForecastPage({
                     ))}
                   </div>
                 </section>
+                </CollapsibleSection>
               );
             })()}
 
@@ -3250,12 +3269,13 @@ export default function ForecastPage({
             )}
           </div>
 
+          <CollapsibleSection id="review-bucket" title="Review bucket" count={bucket.length} total={formatCurrency(bucket.reduce((s, b) => s + b.amount, 0))} forceOpen={bucketHasHighlight(bucket)}>
           <section className={kitCard} data-testid="review-bucket-panel">
             {(() => {
               const bucketTotal = bucket.reduce((s, b) => s + b.amount, 0);
               return (
                 <div className={cardHead} data-testid="review-bucket-header">
-                  <h2 className="text-title font-semibold text-brand-navy">
+                  <h2 className="sr-only text-title font-semibold text-brand-navy">
                     Review bucket
                   </h2>
                   <span className="chip gray" data-testid="review-bucket-count">
@@ -3341,6 +3361,7 @@ export default function ForecastPage({
               </div>
             </div>
           </section>
+          </CollapsibleSection>
         </div>
       )}
 </>
