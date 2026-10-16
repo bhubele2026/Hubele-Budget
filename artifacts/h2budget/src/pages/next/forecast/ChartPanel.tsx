@@ -6,8 +6,9 @@ import { SyncButton } from "@/components/sync-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { householdToday } from "@/lib/householdDay";
-import { asOfWords } from "@/lib/checkingWords";
-import { moneyFace } from "@/components/data-state";
+import { bankReadCaption, openingCaption } from "@/lib/openingWords";
+import { BalanceDetails } from "@/components/checking-balance-note";
+import { shortDate } from "@/lib/dates";
 import { groupMarkers, kindDayItems, kindEvents, stepDate, type BankDayRow, type KindedEvent } from "@/lib/forecastEventKinds";
 import { ProjectedBalanceChart } from "../../forecast/ProjectedBalanceChart";
 import { ChartLegend } from "./ChartLegend";
@@ -65,10 +66,27 @@ export function ChartPanel({
   const [sheetOpen, setSheetOpen] = useState(false);
   const label = `${ctx.bankAccountName}${ctx.bankAccountMask ? ` ••${ctx.bankAccountMask}` : ""}`;
   const noCurve = ctx.dailySeries.length === 0 || ctx.proj?.status === "no_data";
-  // ⭐ (T1) Where the curve starts: the cash signal's own starting balance, as of the bank reading it rolls from.
-  const startAsOf = asOfWords(ctx.proj?.snapshotAt);
-  const startLabel =
-    !noCurve && ctx.proj?.startingBalance != null ? `Starting at ${moneyFace(ctx.proj.startingBalance)}${startAsOf ? ` · ${startAsOf}` : ""}` : null;
+  // ⭐ (C2) Where the curve starts, in ONE moment: the day the window opens, the balance at the START of that
+  // day (`cashSignal.opening.balance`), the first plotted point = that day's CLOSE (`daily[0]`), and the reading
+  // + rows it rolls from. "+N rows today" when the rows are dated the opening day (opening is then the bare
+  // reading, not Checking today); "+N rows since" when they are all dated before it.
+  const opening = ctx.proj?.opening ?? null;
+  const firstClose = ctx.dailySeries[0]?.balance;
+  const rowsAreToday =
+    !!opening && ctx.bankBalance != null && Number(opening.balance) !== Number(ctx.bankBalance);
+  const startLines: string[] | null =
+    noCurve || !opening
+      ? null
+      : [
+          openingCaption({
+            dateLabel: shortDate(opening.date),
+            opens: opening.balance,
+            closes: firstClose,
+            hasReading: !!opening.reading,
+          }),
+          bankReadCaption(opening.reading, opening.since, rowsAreToday ? "today" : "since"),
+        ];
+  const startLabel = startLines;
 
   const chart = (
     <ProjectedBalanceChart
@@ -90,6 +108,7 @@ export function ChartPanel({
       hoverSelects
       horizonKey={ctx.horizonDays}
       startLabel={startLabel}
+      openingBalance={opening?.reading ? Number(opening.balance) : null}
     />
   );
 
@@ -106,11 +125,18 @@ export function ChartPanel({
   return (
     <Panel
       title={`Projected cash — ${label}`}
-      sub={startLabel ? `${startLabel} · ${ctx.horizonDays} days` : `${ctx.horizonDays} days`}
+      sub={startLines ? `${startLines[0]} · ${ctx.horizonDays} days` : `${ctx.horizonDays} days`}
       span={12}
       data-testid="card-projected-balance-chart"
       actions={
         !noCurve ? (
+          <>
+            {startLines ? (
+              <span className="inline-flex items-center gap-2 text-micro" data-testid="chart-start-details">
+                <span className="hidden text-neutral-600 sm:inline" data-testid="chart-start-bankread">{startLines[1]}</span>
+                <BalanceDetails testid="chart-start-details-button" />
+              </span>
+            ) : null}
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
@@ -120,6 +146,7 @@ export function ChartPanel({
             <Maximize2 className="h-3 w-3" aria-hidden="true" />
             Expand
           </button>
+          </>
         ) : null
       }
     >

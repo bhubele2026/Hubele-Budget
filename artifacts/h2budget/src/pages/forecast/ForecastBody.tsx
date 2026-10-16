@@ -10,7 +10,7 @@ import { ChartPanel, useChartModel } from "../next/forecast/ChartPanel";
 import { DayPanel } from "../next/forecast/DayPanel";
 import type { ForecastNextCtx } from "../next/forecast/types";
 import { lowPointView } from "@/lib/lowPoint";
-import { asOfWords } from "@/lib/checkingWords";
+import { CheckingBalanceFull } from "@/components/checking-balance-note";
 import { scrollBehavior } from "@/lib/reducedMotion";
 import { shortDate } from "@/lib/dates";
 
@@ -102,7 +102,7 @@ function AddsUp({ ctx, onOpenList }: { ctx: ForecastNextCtx; onOpenList: ((key: 
         How this adds up
       </summary>
       <div className="mt-2 space-y-1">
-        <AddsUpLine label={`Starting balance · ${shortDate(proj.fromDate ?? ctx.fromDate)}`} value={moneyFace(proj.startingBalance)} testid="adds-up-start" />
+        <AddsUpLine label={`Opening · ${shortDate(proj.fromDate ?? ctx.fromDate)}`} value={moneyFace(proj.startingBalance)} testid="adds-up-start" />
         <AddsUpLine label="+ Money in" value={moneyFace(proj.projectedIncome)} testid="adds-up-in" />
         <AddsUpLine label="− Money out" value={moneyFace(proj.projectedExpenses)} testid="adds-up-out" />
         {ties && (
@@ -198,18 +198,22 @@ function SummaryStrip({ ctx, onSeeDay }: { ctx: ForecastNextCtx; onSeeDay: (date
     proj ? { lowPoint: proj.lowestProjected, lowPointDate: proj.lowestDate, status: proj.status, cashBuffer: proj.cashBuffer } : null,
   );
   const account = `${ctx.bankAccountName}${ctx.bankAccountMask ? ` ••${ctx.bankAccountMask}` : ""}`;
-  const readAsOf = asOfWords(ctx.bankReadAt);
   return (
     <Panel title="Where the money lands" span={8} variant="static" data-testid="forecast-kpis">
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-3">
         {/* ⭐ (T1) Checking today = the dashboard's figure (cashSignal.bankToday), never the raw reading;
             no reading is a dash, never $0.00. An older answer says so instead of "as of". */}
-        <StatBlock
-          data-testid="kpi-bank-today"
-          label="Checking today"
-          value={moneyFace(ctx.bankBalance)}
-          hint={ctx.bankOlder ?? [account, readAsOf].filter(Boolean).join(" · ")}
-        />
+        <div data-testid="kpi-bank-today">
+          <CheckingBalanceFull
+            size="kpi"
+            figure={ctx.bankBalance}
+            reading={ctx.bankReading}
+            since={ctx.bankSince}
+            older={ctx.bankOlder}
+            testids={{ figure: "kpi-bank-today-figure", line: "kpi-bank-today-line", details: "kpi-bank-today-details" }}
+          />
+          <div className="mt-0.5 text-micro text-neutral-600" data-testid="kpi-bank-today-account">{account}</div>
+        </div>
         <StatBlock
           data-testid="kpi-cash-buffer"
           label="Cash buffer"

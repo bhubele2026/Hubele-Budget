@@ -211,6 +211,8 @@ beforeEach(() => {
   // 90-day tab — exactly the precondition this test exercises (the data
   // hook seeded from 90, then a click switches it to 365).
   sessionStorage.setItem("h2budget:forecastHorizonDays", "90");
+  // (C3) The horizon is also URL state (`?horizon=`): each test starts on a clean address.
+  window.history.replaceState(null, "", "/");
   // Anchor "today" inside May 2026. The plan register is filtered by
   // `monthFilter`, which defaults to `currentMonth` derived from
   // `useMemo(() => new Date(), [])`. The stored from-date only moves the

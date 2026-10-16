@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
 import React from "react";
 
 /**
@@ -25,6 +25,7 @@ const state = vi.hoisted(() => ({
   spineUpdatedAt: null as string | null,
   refetchSpine: vi.fn(),
   cashSignal: undefined as unknown,
+  lastParams: undefined as unknown,
   // The forecast query's own error flag: true after a failed load or refresh.
   cashSignalError: false,
   refetchSignal: vi.fn(),
@@ -41,8 +42,8 @@ vi.mock("@/hooks/useSpine", () => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
-  useGetForecastCashSignal: () => ({
-    data: state.cashSignal,
+  useGetForecastCashSignal: (params: unknown) => ({
+    data: (state.lastParams = params, state.cashSignal),
     isError: state.cashSignalError,
     refetch: state.refetchSignal,
   }),
@@ -75,6 +76,8 @@ const SPINE = {
     lowPoint: "-612.90",
     lowPointDate: "2026-09-27",
     runwayDays: 12,
+    status: "not_yet",
+    cashBuffer: "500.00",
   },
   debt: { payoffPct: 39.7 },
   reviewCount: 4,
@@ -143,9 +146,8 @@ describe("Forecast Overview — headline figures come from the spine", () => {
     expect(statOf("fo-stat-low-point")).not.toContain(
       usd(CASH_SIGNAL.lowestProjected),
     );
-    expect(statOf("fo-stat-low-point")).toContain(
-      SPINE.forecast.lowPointDate,
-    );
+    // (C3) The date is said with the detail's chip words: "Below zero on Sep 27".
+    expect(statOf("fo-stat-low-point")).toContain("Below zero on Sep 27");
 
     // Runway === spine.forecast.runwayDays. The daily series would give 3.
     expect(statOf("fo-stat-runway")).toContain(
@@ -169,23 +171,68 @@ describe("Forecast Overview — headline figures come from the spine", () => {
     expect(statOf("fo-stat-runway")).toContain("stays positive");
   });
 
-  it("flags the low point as under buffer, in words and not by colour alone", () => {
+  it("(C3) below zero is the only rust, said in the detail's words; under the buffer is quiet", () => {
     render(<ForecastOverviewPage />);
-    // -612.90 is below the 500.00 buffer.
-    expect(statOf("fo-stat-low-point")).toContain("under buffer");
-    // The tone is a reinforcement; the label above is the actual signal.
-    expect(
-      screen.getByTestId("fo-stat-low-point").querySelector(".text-bad"),
-    ).not.toBeNull();
+    // -612.90 is below $0: "Below zero on <date>", rust.
+    expect(statOf("fo-stat-low-point")).toContain("Below zero on Sep 27");
+    expect(screen.getByTestId("fo-stat-low-point").querySelector(".text-bad")).not.toBeNull();
+    cleanup();
+    // $300 is at or above $0 but under the $500 buffer: quiet words, no rust.
+    state.spine = { ...SPINE, forecast: { ...SPINE.forecast, lowPoint: "300.00" } };
+    render(<ForecastOverviewPage />);
+    expect(statOf("fo-stat-low-point")).toContain("Under the $500 buffer");
+    expect(screen.getByTestId("fo-stat-low-point").querySelector(".text-bad")).toBeNull();
+    expect(statOf("fo-stat-low-point")).not.toMatch(/under buffer|above buffer|Awaiting forecast/);
   });
 
-  it("says above buffer when the low point clears it", () => {
+  it("an intentional $0.00 low point is '$0.00', plain, never rust", () => {
+    state.spine = { ...SPINE, forecast: { ...SPINE.forecast, lowPoint: "0.00" } };
+    render(<ForecastOverviewPage />);
+    expect(statOf("fo-stat-low-point")).toContain("$0.00");
+    expect(screen.getByTestId("fo-stat-low-point").querySelector(".text-bad")).toBeNull();
+  });
+
+  it("says Above buffer when the low point clears it", () => {
     state.spine = {
       ...SPINE,
-      forecast: { ...SPINE.forecast, lowPoint: "900.00" },
+      forecast: { ...SPINE.forecast, lowPoint: "900.00", status: "ready" },
     };
     render(<ForecastOverviewPage />);
-    expect(statOf("fo-stat-low-point")).toContain("above buffer");
+    expect(statOf("fo-stat-low-point")).toContain("Above buffer");
+  });
+
+  it("(C3) names its horizon on every figure; the horizon is the detail's (default 90, ?horizon= wins)", () => {
+    render(<ForecastOverviewPage />);
+    expect(state.lastParams).toStrictEqual({ horizonDays: 90 });
+    expect(statOf("fo-stat-ending")).toContain("at 90 days");
+    expect(statOf("fo-in-out")).toContain("90 days");
+    expect(statOf("fo-curve")).toContain("90 days");
+    cleanup();
+    window.history.replaceState(null, "", "/forecast/overview?horizon=120");
+    render(<ForecastOverviewPage />);
+    expect(state.lastParams).toStrictEqual({ horizonDays: 120 });
+    expect(statOf("fo-stat-ending")).toContain("at 120 days");
+    expect(statOf("fo-in-out")).toContain("120 days");
+    // At another horizon the low point is the cash signal's own (the spine's is a 90-day read).
+    expect(statOf("fo-stat-low-point")).toContain(usd(CASH_SIGNAL.lowestProjected));
+    expect(window.location.search).toContain("horizon=120");
+  });
+
+  it("(C3) each stat opens the detail on the same horizon and the low day", () => {
+    window.history.replaceState(null, "", "/forecast/overview");
+    render(<ForecastOverviewPage />);
+    fireEvent.click(screen.getByTestId("fo-stat-low-point"));
+    expect(window.location.pathname + window.location.search).toBe("/forecast?horizon=90&day=2026-09-27");
+  });
+
+  it("(C1) stat 1 is the one Checking today block: same label, figure and calculated line", () => {
+    state.spine = {
+      ...SPINE,
+      bank: { ...SPINE.bank, snapshot: { balance: "0.00", at: "2026-08-14T21:19:00.000Z", source: "plaid" }, sinceSnapshot: { net: "3374.60", count: 2, through: "2026-08-15" } },
+    };
+    render(<ForecastOverviewPage />);
+    expect(statOf("fo-stat-bank")).toContain("Checking today");
+    expect(screen.getByTestId("checking-balance-line").textContent).toBe("Calculated · bank read $0.00 Aug 14, 4:19 PM · +2 rows since");
   });
 
   it("renders an em dash rather than $0 while the spine is still loading", () => {
@@ -211,7 +258,7 @@ it("never reports safe runway or an above-buffer forecast before data exists", (
   render(<ForecastOverviewPage />);
   expect(statOf("fo-stat-runway")).not.toContain("Clear");
   expect(statOf("fo-stat-runway")).not.toContain("stays positive");
-  expect(statOf("fo-stat-low-point")).not.toContain("above buffer");
+  expect(statOf("fo-stat-low-point")).not.toContain("Above buffer");
 });
 it("does not show a fallback starting balance as a validated projection", () => {
   state.cashSignal = { ...CASH_SIGNAL, status: "no_data" };

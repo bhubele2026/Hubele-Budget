@@ -1,18 +1,57 @@
 # Contract — the checking balance
 
-One balance, one name, one moment, on every surface. Added 2026-10-15 (T1/T2).
+One balance, one name, one moment, on every surface. Added 2026-10-15 (T1/T2); one presentation 2026-10-16 (C1–C3).
 
-## The three quantities
+## The terms (one table, the same words on every screen)
 
 | Term | What it is | Server field (one function) | On screen |
 |---|---|---|---|
-| **Checking today** (authoritative) | The bank's reading rolled forward through the ledger's counted rows (manual rows included) to the household's today | `computeCashSignal().bankToday` = `spine.bank.balance` = `/banking/review balance.today` = `/transactions/balances anchor.todayBalance` = `/forecast .cashSignal.bankToday` = `/forecast/bank-balance-explain displayed.bankToday` | "Checking today $X" · "as of Oct 15" |
-| **Bank's last reading** (evidence) | `forecast_settings.bank_snapshot_balance` at `bank_snapshot_at`, with its source | `spine.bank.snapshot`, `spine.bankConfidence.bankBalance/bankAsOf`, `/forecast .bankSnapshot`, explain `.snapshot`, `/banking/review balance.reading` + `balance.asOf` | Plaid: "Bank's last reading $X · Oct 15, 7:02 AM" · typed: "Typed balance $X (not from the bank) · Oct 15" |
-| **Forecast start** | Checking today rolled to the curve's first day (`fromDate`) | `cashSignal.startingBalance`; the chart's `cashSignal.daily[0]` | "Starting at $X · as of Oct 15" |
+| **Checking today** (authoritative) | The bank's reading rolled forward through the ledger's counted rows (manual rows included) to the household's today | `computeCashSignal().bankToday` = `spine.bank.balance` = `/banking/review balance.today` = `/transactions/balances anchor.todayBalance` = `/forecast .cashSignal.bankToday` = `/forecast/bank-balance-explain displayed.bankToday` | label "Checking today", the figure, and the calculated line (below) |
+| **Bank's last reading** (evidence) | `forecast_settings.bank_snapshot_balance` at `bank_snapshot_at`, with its source | `spine.bank.snapshot`, `spine.bankConfidence.bankBalance/bankAsOf`, `/forecast .bankSnapshot`, explain `.snapshot`, `/banking/review balance.reading` + `balance.asOf`, `cashSignal.opening.reading` | named in full only inside **Details** ("Why this number?"); on the face it is "bank read $X <time>" inside the calculated line |
+| **Opening** | Checking today rolled to the START of the curve's first day (`fromDate`): the reading plus rows dated before that day | `cashSignal.startingBalance` = `cashSignal.opening.balance` (with `opening.date`, `opening.reading`, `opening.since`) | "Opening · Oct 16" (hero adds-up), "opens $X" (chart caption, first-day tooltip) |
+| **Close** | That first day's balance AFTER its items — the first plotted point | `cashSignal.daily[0].balance` | "closes $X" (chart caption), "Close" (first-day tooltip) |
 
+- On the day the rows are dated today, Opening is the bare reading and Close is Checking today (e.g. "Oct 16 · opens $0.00 · closes $3,374.60"). Both are right; the words name the moment.
+- When every row is dated before the opening day, Opening = Checking today.
 - No surface prints the raw reading under a "today" label.
-- No surface prints `settings.startingBalance` as a balance: it is the curve's fallback when there is no reading, and says so ("No bank reading yet — the curve starts from your starting balance $X").
+- No surface prints `settings.startingBalance` as a balance: it is the curve's fallback when there is no reading, and says so ("The curve starts from your starting balance $X").
 - No reading → "—", never "$0.00". A real reading of $0.00 → "$0.00", plain, dated, never rust.
+
+## The block (one presentation, five places)
+
+`components/checking-balance.tsx` (face) + `checking-balance-note.tsx` (note + Details), mounted on the Dashboard
+Banking tile, the Banking cell, the Forecast KPI, the Forecast "Checking today" card and the Overview stat:
+
+```
+Checking today
+$3,374.60
+Calculated · bank read $0.00 Oct 15, 4:19 PM · +2 rows since
+Details
+```
+
+**The Calculated line** (`checkingWords.calculatedLine(reading, since)`):
+
+| Case | Line |
+|---|---|
+| Bank reading, rows counted | `Calculated · bank read $0.00 Oct 15, 4:19 PM · +2 rows since` (`+1 row since` for one) |
+| Bank reading, none counted | `Calculated · bank read $0.00 Oct 15, 4:19 PM · no rows since` |
+| Bank reading, the response did not carry the rows | `Calculated · bank read $0.00 Oct 15, 4:19 PM` (says nothing about rows) |
+| Typed balance | `Typed balance $120.00 (not from the bank) · Oct 15` |
+| No reading | `No bank reading yet` (the figure is "—") |
+| Answer older than the newest reading seen | `Earlier reading (Oct 14) — updating…` replaces the line; the figure is grey |
+
+Each surface passes the halves from ITS OWN response when it carries them (`/banking/review balance`,
+`cashSignal.opening`), else the spine's `bank.snapshot` / `bank.sinceSnapshot` (same ledger). The Dashboard tile
+loads the note as its own chunk (the landing keeps the label and the figure).
+
+## One forecast, one horizon (C3)
+
+`lib/forecastHorizon.ts`: `?horizon=` in the address wins, then the one sessionStorage key, then **90** — on the
+Forecast detail, the Overview and the tile link. 30 days stays one tab away. `/forecast` carries `?horizon=` and
+`?day=` as URL state (Back/Forward restore both). Every Overview figure names its horizon ("Ending balance · at 90
+days"); its low point is said with the detail's chip words (`lowPointView`): "Below zero on <date>" (rust, the only
+alarm) · "Under the $N buffer" (quiet) · "Near buffer" · "Above buffer". The spine's forecast figures are a 90-day
+read: the Overview uses them at 90 and the cash signal's own low point at any other horizon.
 
 ## Which reading is this answer built on? (`dataAsOf`)
 

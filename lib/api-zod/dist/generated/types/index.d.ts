@@ -308,6 +308,7 @@ export * from "./cashSignalHookReservesItemHook";
 export * from "./cashSignalListedPlan";
 export * from "./cashSignalMatchesItem";
 export * from "./cashSignalMatchesItemTier";
+export * from "./cashSignalOpening";
 export * from "./cashSignalStatus";
 export * from "./categorizationAccuracyWindow";
 export * from "./categorizationBacklog";

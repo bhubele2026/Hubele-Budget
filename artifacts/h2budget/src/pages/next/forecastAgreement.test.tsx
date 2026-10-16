@@ -125,6 +125,8 @@ const SIGNAL_T3 = {
   fromDate: "2026-06-10", acceptedImpact: "50.50", projectedIncome: "2050.50", projectedExpenses: "825.00",
   lowestProjected: "225.50", lowestDate: "2026-06-15", cashBuffer: "500.00", horizonDays: 30, bankToday: "1000.00",
   snapshotAt: "2026-06-10T12:00:00.000Z",
+  // (C2) The chart's first point in one place: opens at the START of 06-10, closes at daily[0].
+  opening: { date: "2026-06-10", balance: "1000.00", reading: { balance: "1000.00", at: "2026-06-10T12:00:00.000Z", source: "plaid" }, since: { net: "0.00", count: 0, through: "2026-06-10" } },
   account: { rowId: "acct-row-1", externalId: "ext-1", name: "Test Checking", mask: "0000", subtype: "checking", via: "pointer" },
   daily: [
     { date: "2026-06-10", balance: "975.00" },
@@ -381,7 +383,7 @@ describe("T3 — the Forecast screen tells one story from the cash signal", () =
     const box = screen.getByTestId("hero-adds-up");
     expect(box.tagName).toBe("DETAILS");
     expect(within(box).getByText("How this adds up").tagName).toBe("SUMMARY");
-    expect(screen.getByTestId("adds-up-start").textContent).toBe("Starting balance · Jun 10$1,000.00");
+    expect(screen.getByTestId("adds-up-start").textContent).toBe("Opening · Jun 10$1,000.00");
     expect(screen.getByTestId("adds-up-in").textContent).toBe("+ Money in$2,050.50");
     expect(screen.getByTestId("adds-up-out").textContent).toBe("− Money out$825.00");
     expect(screen.getByTestId("adds-up-end").textContent).toBe("= Ending Jun 20$2,225.50");
@@ -488,18 +490,39 @@ describe("T3 — the Forecast screen tells one story from the cash signal", () =
     expect(screen.getByTestId("day-panel-date").textContent).toContain("Jun 15");
     expect(screen.getByTestId("day-close").textContent).toBe("$225.50");
     fireEvent.click(screen.getByTestId("tap-2026-06-20"));
-    await waitFor(() => expect(window.location.search).toBe("?day=2026-06-20"));
+    await waitFor(() => expect(window.location.search).toBe("?day=2026-06-20&horizon=90"));
     fireEvent.keyDown(screen.getByTestId("chart-surface"), { key: "Escape" });
-    await waitFor(() => expect(window.location.search).toBe(""));
+    await waitFor(() => expect(window.location.search).toBe("?horizon=90"));
+  });
+
+  it("(C3) ?horizon= and ?day= are both the address: a link lands on both; a pick keeps the other; Back/Forward restore both", async () => {
+    window.history.replaceState(null, "", "/forecast?horizon=120&day=2026-06-15");
+    mount(<ForecastPage mode="overall" />);
+    expect(screen.getByTestId("horizon-120").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("day-panel-date").textContent).toContain("Jun 15");
+    // A horizon pick rewrites its own param and leaves the day alone.
+    fireEvent.click(screen.getByTestId("horizon-365"));
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("horizon")).toBe("365"));
+    expect(new URLSearchParams(window.location.search).get("day")).toBe("2026-06-15");
+    // Back/Forward onto an address with another horizon and day re-reads both.
+    window.history.pushState(null, "", "/forecast?horizon=30&day=2026-06-20");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(screen.getByTestId("horizon-30").getAttribute("aria-pressed")).toBe("true"));
+    await waitFor(() => expect(screen.getByTestId("day-panel-date").textContent).toContain("Jun 20"));
+    // An unknown horizon is no choice: it falls back to the saved one (30, just picked).
+    window.history.pushState(null, "", "/forecast?horizon=45");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(screen.getByTestId("horizon-30").getAttribute("aria-pressed")).toBe("true"));
   });
 
   it("?day= beyond the saved horizon opens a horizon wide enough for it, without saving that horizon", () => {
     const [y, m, d] = householdToday().split("-").map(Number);
     const day = new Date(Date.UTC(y!, m! - 1, d! + 60)).toISOString().slice(0, 10);
+    sessionStorage.setItem("h2budget:forecastHorizonDays", "30");
     window.history.replaceState(null, "", `/forecast?day=${day}`);
     mount(<ForecastPage mode="overall" />);
     expect(screen.getByTestId("horizon-90").getAttribute("aria-pressed")).toBe("true");
-    expect(sessionStorage.getItem("h2budget:forecastHorizonDays")).not.toBe("90");
+    expect(sessionStorage.getItem("h2budget:forecastHorizonDays")).toBe("30");
     // A horizon the person picks is saved as before.
     fireEvent.click(screen.getByTestId("horizon-120"));
     expect(sessionStorage.getItem("h2budget:forecastHorizonDays")).toBe("120");
@@ -512,7 +535,8 @@ describe("T3 — the Forecast screen tells one story from the cash signal", () =
     expect(shades.length).toBeGreaterThan(0);
     for (const sh of shades) expect(panel.contains(sh)).toBe(true);
     expect(within(panel).getByTestId("chart-legend")).toBeTruthy();
-    expect(panel.textContent).toMatch(/Starting at \$1,000\.00 · as of Jun 10 · 30 days/);
+    // (C2) Opening and close are two moments, said as two: opens = startingBalance, closes = daily[0].
+    expect(panel.textContent).toMatch(/Jun 10 · opens \$1,000\.00 · closes \$975\.00 · 90 days/);
   });
 
   it("words: the empty day panel is one short line; the review links carry the account and the month", () => {

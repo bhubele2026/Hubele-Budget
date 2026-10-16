@@ -39,7 +39,15 @@ import { Link, Redirect } from "wouter";
 import { hashTabRedirect } from "./forecast/hashTab";
 import { DAY_CODEC, horizonForDay, monthEnd } from "./forecast/dayParam";
 import { ListedPlans } from "./forecast/ListedPlans";
-import { useUrlState } from "@/hooks/useUrlState";
+import { replaceUrlParam, useUrlState } from "@/hooks/useUrlState";
+import {
+  DEFAULT_HORIZON,
+  HORIZON_CODEC,
+  HORIZON_DAYS,
+  hasHorizonParam,
+  saveHorizon,
+  storedHorizon,
+} from "@/lib/forecastHorizon";
 import { AvalancheScheduleCard } from "@/components/avalanche-schedule-card";
 import {
   card as kitCard,
@@ -87,7 +95,7 @@ import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { FreshnessLine, moneyFace } from "@/components/data-state";
 import { useOlderSnapshot } from "@/lib/dataAsOf";
-import { readingLine } from "@/lib/checkingWords";
+import { CheckingBalanceFull } from "@/components/checking-balance-note";
 import { dataState, scoped } from "@/lib/queryState";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { householdDayOfAt, householdToday } from "@/lib/householdDay";
@@ -187,10 +195,17 @@ function writeReconciledMap(map: Record<string, boolean>) {
   }
 }
 
+/** (C1) The two halves of "Checking today" from the forecast bundle's own cash signal (one moment). */
+function checkingHalves(data: { cashSignal?: { opening?: { reading: { balance: string; at: string; source: string } | null; since: { count: number } | null } | null } | null; bankSnapshot?: { balance: string; at: string; source: string } | null }) {
+  const o = data.cashSignal?.opening ?? null;
+  const reading = o?.reading ?? (data.bankSnapshot ? { balance: data.bankSnapshot.balance, at: data.bankSnapshot.at, source: data.bankSnapshot.source } : null);
+  return { reading, since: o?.since ?? null };
+}
+
 type HorizonOpt = { label: string; days: number };
 const HORIZON_OPTS: HorizonOpt[] = [
-  // Opens on a 30-day horizon; longer horizons stay one click away. (The old
-  // 7-day "THIS WEEK" tab was removed at the owner's request.)
+  // (C3) Opens on 90 days like the Overview and the dashboard tile (lib/forecastHorizon); 30 stays one click
+  // away. (The old 7-day "THIS WEEK" tab was removed at the owner's request.)
   { label: "30 DAYS", days: 30 },
   { label: "90 DAYS", days: 90 },
   { label: "120 DAYS", days: 120 },
@@ -199,7 +214,6 @@ const HORIZON_OPTS: HorizonOpt[] = [
 ];
 
 const FORECAST_FROM_KEY = "h2budget:forecastFromDate";
-const FORECAST_HORIZON_KEY = "h2budget:forecastHorizonDays";
 const FORECAST_LOOKBACK_OPEN_KEY = "h2budget:forecastLookbackOpen";
 // (PR-K follow-up round 2, L1) `FORECAST_FROM_KEY` gets written on EVERY
 // mount regardless of whether a date was picked (see the effect below), so
@@ -260,28 +274,26 @@ export default function ForecastPage({
 } = {}) {
   // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
   // charges — banks sync only on the manual Sync button now.
-  const storedHorizon = (): number => {
-    try {
-      const v = sessionStorage.getItem(FORECAST_HORIZON_KEY);
-      const n = v ? Number(v) : NaN;
-      return Number.isFinite(n) && HORIZON_OPTS.some((h) => h.days === n)
-        ? n
-        : 30;
-    } catch {
-      return 30;
-    }
-  };
-  // ⭐ (T3) A deep link `?day=<date>` ("Review shortfall") opens on a horizon
-  // wide enough to hold that day — never narrower than the one already chosen.
-  // The widened horizon is the link's, not a choice: it is not saved, so the
-  // next plain visit opens on the saved one.
-  const [horizonDays, setHorizonDays] = useState<number>(() => {
-    const stored = storedHorizon();
-    const day =
-      typeof window === "undefined" ? null : DAY_CODEC.read(new URLSearchParams(window.location.search).get("day"));
-    return horizonForDay(day, householdToday(), HORIZON_OPTS.map((h) => h.days), stored);
-  });
-  const horizonFromDayLink = useRef(horizonDays !== storedHorizon());
+  // ⭐ (C3) ONE HORIZON (lib/forecastHorizon): `?horizon=` in the address wins, then the saved choice, then 90.
+  // A deep link `?day=<date>` ("Review shortfall") opens on a horizon wide enough to hold that day — never
+  // narrower than the one already chosen. A widened horizon is the link's, not a choice: it is not saved.
+  // Back/Forward re-read both `?horizon=` and `?day=` (useUrlState).
+  const [horizonDays, setHorizonUrl] = useUrlState<number>(
+    "horizon",
+    HORIZON_CODEC,
+    () => {
+      const day =
+        typeof window === "undefined" ? null : DAY_CODEC.read(new URLSearchParams(window.location.search).get("day"));
+      return horizonForDay(day, householdToday(), HORIZON_DAYS, storedHorizon() ?? DEFAULT_HORIZON);
+    },
+    { url: !renderNext },
+  );
+  const setHorizonDays = (n: number) => setHorizonUrl(n);
+  const horizonFromDayLink = useRef(horizonDays !== (storedHorizon() ?? DEFAULT_HORIZON) && !hasHorizonParam());
+  // The address always names the horizon on screen (written back, no history entry).
+  useEffect(() => {
+    if (!renderNext) replaceUrlParam("horizon", String(horizonDays));
+  }, [horizonDays, renderNext]);
   // (#650 follow-up) Default the chart to start at TODAY so the
   // projected line keeps moving forward as the calendar advances —
   // pre-today bills (which have either already posted or are stale
@@ -359,11 +371,7 @@ export default function ForecastPage({
   }, [fromDatePicked]);
   useEffect(() => {
     if (horizonFromDayLink.current) return;
-    try {
-      sessionStorage.setItem(FORECAST_HORIZON_KEY, String(horizonDays));
-    } catch {
-      /* no-op */
-    }
+    saveHorizon(horizonDays);
   }, [horizonDays]);
   // (#618) Defer the horizon value used for the (expensive) data fetch
   // and downstream recomputation so a tab click can flip the active button
@@ -2306,14 +2314,11 @@ export default function ForecastPage({
   const bankGrid = (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <section className={kitCard} data-testid="card-bank-snapshot">
-          {/* ⭐ (T1) CHECKING TODAY — the one balance every surface shows (cashSignal.bankToday: the bank's
-              reading rolled forward through the counted rows, from THIS bundle, one moment), with the
-              bank's own reading as evidence under it. Never the raw reading under a "today" title. */}
+          {/* ⭐ (T1/C1) CHECKING TODAY — the one balance every surface shows (cashSignal.bankToday: the bank's
+              reading rolled forward through the counted rows, from THIS bundle, one moment), in the one
+              presentation; the bank's own reading is inside Details. */}
           <div className={cardHead}>
             <Landmark className="h-4 w-4 text-neutral-400" aria-hidden="true" />
-            <h2 className="text-title font-semibold text-brand-navy">
-              Checking today
-            </h2>
             {data.bankSnapshot && data.bankSnapshot.source === "plaid" && (
               <button
                 type="button"
@@ -2330,43 +2335,37 @@ export default function ForecastPage({
             )}
           </div>
           <div className="space-y-2 px-4 py-3">
-            <div
-              className={`font-mono text-title font-semibold tabular-nums ${forecastOlder.older ? "text-neutral-500" : "text-brand-navy"}`}
-              data-testid="text-bank-balance"
-            >
-              {/* No reading: a dash, never the starting balance dressed as a bank balance. */}
-              {moneyFace(data.cashSignal?.bankToday)}
-            </div>
+            <CheckingBalanceFull
+              size="kpi"
+              figure={data.cashSignal?.bankToday}
+              reading={checkingHalves(data).reading}
+              since={checkingHalves(data).since}
+              older={forecastOlder.words}
+              testids={{ figure: "text-bank-balance", line: "text-bank-calculated", details: "text-bank-details" }}
+            />
             <div
               className="space-y-0.5 text-micro text-neutral-500"
               data-testid="text-bank-snapshot-meta"
             >
-              {forecastOlder.older ? (
-                <div data-testid="text-bank-older">{forecastOlder.words}</div>
-              ) : data.bankSnapshot ? (
-                <>
-                  {/* The server's verdict when the spine describes this same reading; until it answers, or if
-                      the two ever disagree on which reading is current, the plain timestamp label. */}
-                  {spineData?.bank?.source &&
-                  spineData.bank.asOfDate &&
-                  Date.parse(spineData.bank.asOfDate) === Date.parse(data.bankSnapshot.at) ? (
-                    <FreshnessLine bank={spineData.bank} fetchedAt={spineData.bankConfidence?.fetchedAt} />
-                  ) : (
-                    <BankSnapshotFreshness
-                      source={data.bankSnapshot.source}
-                      at={data.bankSnapshot.at}
-                    />
-                  )}
-                  <div data-testid="text-bank-reading">
-                    {readingLine(
-                      { balance: data.bankSnapshot.balance, at: data.bankSnapshot.at, source: data.bankSnapshot.source },
-                      `${bankAccountName}${bankAccountMask ? ` ••${bankAccountMask}` : ""}`,
-                    )}
-                  </div>
-                </>
+              {data.bankSnapshot ? (
+                <div data-testid="text-bank-account">{`${bankAccountName}${bankAccountMask ? ` ••${bankAccountMask}` : ""}`}</div>
+              ) : null}
+              {forecastOlder.older ? null : data.bankSnapshot ? (
+                // The server's verdict when the spine describes this same reading; until it answers, or if
+                // the two ever disagree on which reading is current, the plain timestamp label.
+                spineData?.bank?.source &&
+                spineData.bank.asOfDate &&
+                Date.parse(spineData.bank.asOfDate) === Date.parse(data.bankSnapshot.at) ? (
+                  <FreshnessLine bank={spineData.bank} fetchedAt={spineData.bankConfidence?.fetchedAt} />
+                ) : (
+                  <BankSnapshotFreshness
+                    source={data.bankSnapshot.source}
+                    at={data.bankSnapshot.at}
+                  />
+                )
               ) : (
                 <div data-testid="text-bank-no-reading">
-                  No bank reading yet — the curve starts from your starting balance {formatCurrency(data.settings.startingBalance)}
+                  The curve starts from your starting balance {formatCurrency(data.settings.startingBalance)}
                 </div>
               )}
             </div>
@@ -3686,6 +3685,8 @@ export default function ForecastPage({
         // ⭐ (T1) "Checking today": the cash signal's roll-forward from THIS bundle (null with no reading — a
         // dash, never the starting balance), and the reading it is built on.
         bankBalance: data.cashSignal?.bankToday ?? null,
+        bankReading: checkingHalves(data).reading,
+        bankSince: checkingHalves(data).since,
         bankReadAt: data.cashSignal?.snapshotAt ?? null,
         bankOlder: forecastOlder.words,
         hasCheckingLink: data.plaidCheckingAccounts.length > 0 || !!data.bankSnapshot?.accountId,

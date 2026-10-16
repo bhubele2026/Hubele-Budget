@@ -8842,6 +8842,20 @@ components:
         mask: { type: ["string", "null"] }
         subtype: { type: ["string", "null"] }
         institutionName: { type: ["string", "null"] }
+    CashSignalOpening:
+      type: object
+      required: [date, balance, reading, since]
+      properties:
+        date: { type: string }
+        balance: { type: string }
+        reading:
+          oneOf:
+            - $ref: "#/components/schemas/SpineBankSnapshot"
+            - type: "null"
+        since:
+          oneOf:
+            - $ref: "#/components/schemas/SpineSinceSnapshot"
+            - type: "null"
     CashSignal:
       type: object
       required: [bankToday, lowestProjected, lowestDate, cashBuffer, status, maxSafeExtra, account]
@@ -8869,6 +8883,14 @@ components:
         fromDate: { type: string }
         toDate: { type: string }
         startingBalance: { type: string }
+        opening:
+          description: >-
+            (C2) The chart's first point in one place. `date` = `fromDate`; `balance` = `startingBalance`
+            (the balance at the START of that day — the first plotted point `daily[0]` is that day's close);
+            `reading` and `since` are bankBalanceParts(ledger).snapshot / .sinceSnapshot (the same halves
+            as the spine's bank.snapshot / bank.sinceSnapshot). Additive: nothing else moves.
+          allOf:
+            - $ref: "#/components/schemas/CashSignalOpening"
         endingBalance: { type: string }
         endingDate: { type: ["string", "null"] }
         projectedIncome: { type: string }

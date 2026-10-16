@@ -4653,6 +4653,57 @@ export const GetForecastResponse = zod.object({
         fromDate: zod.string().optional(),
         toDate: zod.string().optional(),
         startingBalance: zod.string().optional(),
+        opening: zod
+          .object({
+            date: zod.string(),
+            balance: zod.string(),
+            reading: zod.union([
+              zod
+                .object({
+                  balance: zod
+                    .string()
+                    .describe("The snapshot balance, two decimals"),
+                  at: zod
+                    .string()
+                    .describe(
+                      "When it was read (ISO instant); its household day is the snapshot day",
+                    ),
+                  source: zod
+                    .enum(["plaid", "manual"])
+                    .describe(
+                      "Same as bank.source: anything not from Plaid was typed in",
+                    ),
+                })
+                .describe(
+                  "(WP1) The bank snapshot as it was read: the balance the bank (or the household, for a typed-in one) reported at `at`. Not the balance today — the spine's `bank.balance` is this rolled forward. A different figure from `balance` whenever rows landed since.",
+                ),
+              zod.null(),
+            ]),
+            since: zod.union([
+              zod
+                .object({
+                  net: zod
+                    .string()
+                    .describe(
+                      "Signed two-decimal dollars (negative = money out since the snapshot)",
+                    ),
+                  count: zod.number(),
+                  through: zod
+                    .string()
+                    .describe(
+                      "The household day (YYYY-MM-DD) the roll runs through: today",
+                    ),
+                })
+                .describe(
+                  "(WP1) What the roll-forward adds on top of the snapshot. `count` is the rows that count, dated through `through`, including a posted row that adds 0.00 because its pending half was already in the balance; held, other-account and replaced pending rows are not counted.",
+                ),
+              zod.null(),
+            ]),
+          })
+          .optional()
+          .describe(
+            "(C2) The chart's first point in one place. `date` = `fromDate`; `balance` = `startingBalance` (the balance at the START of that day — the first plotted point `daily[0]` is that day's close); `reading` and `since` are bankBalanceParts(ledger).snapshot \/ .sinceSnapshot (the same halves as the spine's bank.snapshot \/ bank.sinceSnapshot). Additive: nothing else moves.",
+          ),
         endingBalance: zod.string().optional(),
         endingDate: zod.string().nullish(),
         projectedIncome: zod.string().optional(),
@@ -5177,6 +5228,57 @@ export const GetForecastCashSignalResponse = zod.object({
   fromDate: zod.string().optional(),
   toDate: zod.string().optional(),
   startingBalance: zod.string().optional(),
+  opening: zod
+    .object({
+      date: zod.string(),
+      balance: zod.string(),
+      reading: zod.union([
+        zod
+          .object({
+            balance: zod
+              .string()
+              .describe("The snapshot balance, two decimals"),
+            at: zod
+              .string()
+              .describe(
+                "When it was read (ISO instant); its household day is the snapshot day",
+              ),
+            source: zod
+              .enum(["plaid", "manual"])
+              .describe(
+                "Same as bank.source: anything not from Plaid was typed in",
+              ),
+          })
+          .describe(
+            "(WP1) The bank snapshot as it was read: the balance the bank (or the household, for a typed-in one) reported at `at`. Not the balance today — the spine's `bank.balance` is this rolled forward. A different figure from `balance` whenever rows landed since.",
+          ),
+        zod.null(),
+      ]),
+      since: zod.union([
+        zod
+          .object({
+            net: zod
+              .string()
+              .describe(
+                "Signed two-decimal dollars (negative = money out since the snapshot)",
+              ),
+            count: zod.number(),
+            through: zod
+              .string()
+              .describe(
+                "The household day (YYYY-MM-DD) the roll runs through: today",
+              ),
+          })
+          .describe(
+            "(WP1) What the roll-forward adds on top of the snapshot. `count` is the rows that count, dated through `through`, including a posted row that adds 0.00 because its pending half was already in the balance; held, other-account and replaced pending rows are not counted.",
+          ),
+        zod.null(),
+      ]),
+    })
+    .optional()
+    .describe(
+      "(C2) The chart's first point in one place. `date` = `fromDate`; `balance` = `startingBalance` (the balance at the START of that day — the first plotted point `daily[0]` is that day's close); `reading` and `since` are bankBalanceParts(ledger).snapshot \/ .sinceSnapshot (the same halves as the spine's bank.snapshot \/ bank.sinceSnapshot). Additive: nothing else moves.",
+    ),
   endingBalance: zod.string().optional(),
   endingDate: zod.string().nullish(),
   projectedIncome: zod.string().optional(),

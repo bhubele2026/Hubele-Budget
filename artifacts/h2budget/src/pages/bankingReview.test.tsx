@@ -761,7 +761,7 @@ describe("(F4, Q5, T2) Balance check — one state machine: one chip, one line, 
     // Today's figures are not one reading here: no "agree" line.
     expect(screen.queryByTestId("br-check-agree")).toBeNull();
     // (T1) The bank's own reading under the balance is THIS response's, named as a reading, never "Bank $X".
-    expect(text("br-bank-today")).toBe("Bank's last reading $3,170.00 · Oct 14, 8:00 AM");
+    expect(text("br-balance-asof")).toBe("Calculated · bank read $3,170.00 Oct 14, 8:00 AM");
     expect(screen.getByTestId("br-review-difference").textContent).toBe("Review difference");
     expect(screen.getByTestId("br-check-register").getAttribute("href")).toBe("/transactions?account=acct-chk&month=2026-10-01");
   });
@@ -774,8 +774,7 @@ describe("(F4, Q5, T2) Balance check — one state machine: one chip, one line, 
       { balance: { today: "0.00", asOf: at, reading: "0.00", start: "0.00", end: "0.00", unavailableReason: null } },
     );
     expect(text("br-balance")).toBe("$0.00");
-    expect(text("br-balance-asof")).toBe("as of Oct 14");
-    expect(text("br-bank-today")).toBe("Bank's last reading $0.00 · Oct 14, 7:02 AM");
+    expect(text("br-balance-asof")).toBe("Calculated · bank read $0.00 Oct 14, 7:02 AM");
     expect(text("br-tie")).toBe("Difference needs review");
     expect(text("br-check-agree")).toBe("Today H2 $0.00 and the bank $0.00 agree.");
     expect(text("br-check-line")).toBe("At the last check (Oct 14) the bank was $432.00 lower than H2 expected.");
@@ -839,7 +838,7 @@ describe("(F4, Q5, T2) Balance check — one state machine: one chip, one line, 
     );
     expect(text("br-tie")).toBe("Check is out of date");
     expect(text("br-check-line")).toBe("A balance was typed in since the last check (Oct 13).");
-    expect(text("br-bank-today")).toBe("Typed balance $0.00 (not from the bank) · Oct 14");
+    expect(text("br-balance-asof")).toBe("Typed balance $0.00 (not from the bank) · Oct 14");
   });
 
   it.each([

@@ -33,6 +33,9 @@ export type ForecastNextCtx = {
   bankBalance: string | null;
   /** (T1) The bank reading it rolls forward from (`cashSignal.snapshotAt`). */
   bankReadAt: string | null;
+  /** (C1) The reading `bankBalance` rolls forward from, and the rows counted since — from the same bundle. */
+  bankReading?: { balance: string; at: string; source: string } | null;
+  bankSince?: { net?: string; count: number } | null;
   /** (T1) "Earlier reading (Oct 14) — updating…" while the bundle is older than the newest reading seen. */
   bankOlder?: string | null;
   /** (T1) A checking account is linked (the empty chart offers Sync, else "Link a bank"). */

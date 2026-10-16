@@ -8076,6 +8076,62 @@ export declare const GetForecastResponse: zod.ZodObject<{
         fromDate: zod.ZodOptional<zod.ZodString>;
         toDate: zod.ZodOptional<zod.ZodString>;
         startingBalance: zod.ZodOptional<zod.ZodString>;
+        opening: zod.ZodOptional<zod.ZodObject<{
+            date: zod.ZodString;
+            balance: zod.ZodString;
+            reading: zod.ZodUnion<[zod.ZodObject<{
+                balance: zod.ZodString;
+                at: zod.ZodString;
+                source: zod.ZodEnum<["plaid", "manual"]>;
+            }, "strip", zod.ZodTypeAny, {
+                at: string;
+                source: "plaid" | "manual";
+                balance: string;
+            }, {
+                at: string;
+                source: "plaid" | "manual";
+                balance: string;
+            }>, zod.ZodNull]>;
+            since: zod.ZodUnion<[zod.ZodObject<{
+                net: zod.ZodString;
+                count: zod.ZodNumber;
+                through: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                count: number;
+                net: string;
+                through: string;
+            }, {
+                count: number;
+                net: string;
+                through: string;
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            balance: string;
+            reading: {
+                at: string;
+                source: "plaid" | "manual";
+                balance: string;
+            } | null;
+            since: {
+                count: number;
+                net: string;
+                through: string;
+            } | null;
+        }, {
+            date: string;
+            balance: string;
+            reading: {
+                at: string;
+                source: "plaid" | "manual";
+                balance: string;
+            } | null;
+            since: {
+                count: number;
+                net: string;
+                through: string;
+            } | null;
+        }>>;
         endingBalance: zod.ZodOptional<zod.ZodString>;
         endingDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         projectedIncome: zod.ZodOptional<zod.ZodString>;
@@ -8456,6 +8512,20 @@ export declare const GetForecastResponse: zod.ZodObject<{
         startingBalance?: string | undefined;
         snapshotSource?: string | null | undefined;
         horizonDays?: number | undefined;
+        opening?: {
+            date: string;
+            balance: string;
+            reading: {
+                at: string;
+                source: "plaid" | "manual";
+                balance: string;
+            } | null;
+            since: {
+                count: number;
+                net: string;
+                through: string;
+            } | null;
+        } | undefined;
         endingBalance?: string | undefined;
         endingDate?: string | null | undefined;
         projectedIncome?: string | undefined;
@@ -8593,6 +8663,20 @@ export declare const GetForecastResponse: zod.ZodObject<{
         startingBalance?: string | undefined;
         snapshotSource?: string | null | undefined;
         horizonDays?: number | undefined;
+        opening?: {
+            date: string;
+            balance: string;
+            reading: {
+                at: string;
+                source: "plaid" | "manual";
+                balance: string;
+            } | null;
+            since: {
+                count: number;
+                net: string;
+                through: string;
+            } | null;
+        } | undefined;
         endingBalance?: string | undefined;
         endingDate?: string | null | undefined;
         projectedIncome?: string | undefined;
@@ -8893,6 +8977,20 @@ export declare const GetForecastResponse: zod.ZodObject<{
         startingBalance?: string | undefined;
         snapshotSource?: string | null | undefined;
         horizonDays?: number | undefined;
+        opening?: {
+            date: string;
+            balance: string;
+            reading: {
+                at: string;
+                source: "plaid" | "manual";
+                balance: string;
+            } | null;
+            since: {
+                count: number;
+                net: string;
+                through: string;
+            } | null;
+        } | undefined;
         endingBalance?: string | undefined;
         endingDate?: string | null | undefined;
         projectedIncome?: string | undefined;
@@ -9140,6 +9238,20 @@ export declare const GetForecastResponse: zod.ZodObject<{
         startingBalance?: string | undefined;
         snapshotSource?: string | null | undefined;
         horizonDays?: number | undefined;
+        opening?: {
+            date: string;
+            balance: string;
+            reading: {
+                at: string;
+                source: "plaid" | "manual";
+                balance: string;
+            } | null;
+            since: {
+                count: number;
+                net: string;
+                through: string;
+            } | null;
+        } | undefined;
         endingBalance?: string | undefined;
         endingDate?: string | null | undefined;
         projectedIncome?: string | undefined;
@@ -9495,6 +9607,62 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     fromDate: zod.ZodOptional<zod.ZodString>;
     toDate: zod.ZodOptional<zod.ZodString>;
     startingBalance: zod.ZodOptional<zod.ZodString>;
+    opening: zod.ZodOptional<zod.ZodObject<{
+        date: zod.ZodString;
+        balance: zod.ZodString;
+        reading: zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            source: zod.ZodEnum<["plaid", "manual"]>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }>, zod.ZodNull]>;
+        since: zod.ZodUnion<[zod.ZodObject<{
+            net: zod.ZodString;
+            count: zod.ZodNumber;
+            through: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            net: string;
+            through: string;
+        }, {
+            count: number;
+            net: string;
+            through: string;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        balance: string;
+        reading: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null;
+        since: {
+            count: number;
+            net: string;
+            through: string;
+        } | null;
+    }, {
+        date: string;
+        balance: string;
+        reading: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null;
+        since: {
+            count: number;
+            net: string;
+            through: string;
+        } | null;
+    }>>;
     endingBalance: zod.ZodOptional<zod.ZodString>;
     endingDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     projectedIncome: zod.ZodOptional<zod.ZodString>;
@@ -9875,6 +10043,20 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     startingBalance?: string | undefined;
     snapshotSource?: string | null | undefined;
     horizonDays?: number | undefined;
+    opening?: {
+        date: string;
+        balance: string;
+        reading: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null;
+        since: {
+            count: number;
+            net: string;
+            through: string;
+        } | null;
+    } | undefined;
     endingBalance?: string | undefined;
     endingDate?: string | null | undefined;
     projectedIncome?: string | undefined;
@@ -10012,6 +10194,20 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     startingBalance?: string | undefined;
     snapshotSource?: string | null | undefined;
     horizonDays?: number | undefined;
+    opening?: {
+        date: string;
+        balance: string;
+        reading: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null;
+        since: {
+            count: number;
+            net: string;
+            through: string;
+        } | null;
+    } | undefined;
     endingBalance?: string | undefined;
     endingDate?: string | null | undefined;
     projectedIncome?: string | undefined;
@@ -33302,11 +33498,11 @@ export declare const RunCategorizationBody: zod.ZodObject<{
     since: zod.ZodOptional<zod.ZodDate>;
     scope: zod.ZodOptional<zod.ZodEnum<["all"]>>;
 }, "strip", zod.ZodTypeAny, {
-    scope?: "all" | undefined;
     since?: Date | undefined;
+    scope?: "all" | undefined;
 }, {
-    scope?: "all" | undefined;
     since?: Date | undefined;
+    scope?: "all" | undefined;
 }>;
 export declare const RunCategorizationResponse: zod.ZodObject<{
     decided: zod.ZodNumber;
