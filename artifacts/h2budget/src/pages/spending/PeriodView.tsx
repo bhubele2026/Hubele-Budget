@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
@@ -44,6 +44,8 @@ const openCodec: UrlCodec<string[]> = {
   write: (v) => (v.length ? v.join(",") : null),
 };
 const accountCodec: UrlCodec<string> = { read: (raw) => raw || null, write: (v) => v || null };
+/** (C5) `?plan=1`: opened from the Forecast's "Set a weekly plan →" — the plan dialog opens on its choices. */
+const planCodec: UrlCodec<boolean> = { read: (raw) => (raw === "1" ? true : null), write: (v) => (v ? "1" : null) };
 const NONE: string[] = [];
 const MIN = PERIOD_MIN;
 
@@ -57,6 +59,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
   const [open, setOpen] = useUrlState<string[]>("open", openCodec, NONE);
   // (T4) `?account=` (a card's "Why over?"): that account's contribution; the plan stays the household's.
   const [account, setAccount] = useUrlState<string>("account", accountCodec, "");
+  const [planParam, setPlanParam] = useUrlState<boolean>("plan", planCodec, false);
   const start = resolveStart(view, startParam, today);
   const currentStart = resolveStart(view, "", today);
 
@@ -84,6 +87,11 @@ export function PeriodView({ view }: { view: PeriodView }) {
   const needsPrompt = d != null && d.isCurrent && d.plan.status === "not_set";
   const plans = useListAllowancePlans({ query: { staleTime: 5 * MIN, enabled: needsPrompt } as never });
   const canSet = useOwner();
+  // (C5) A plan already set (or another period on screen): nothing to open; the param goes.
+  const promptShown = d != null && d.plan.status === "not_set" && d.isCurrent;
+  useEffect(() => {
+    if (planParam && d != null && !promptShown) setPlanParam(false);
+  }, [planParam, d, promptShown, setPlanParam]);
 
   const budgetMonth = view === "month" ? start : "";
   const budgetQ = useGetBudgetMonth(budgetMonth || start, { query: { enabled: view === "month", staleTime: 5 * MIN } as never });
@@ -174,7 +182,14 @@ export function PeriodView({ view }: { view: PeriodView }) {
           ) : null}
 
           {d.plan.status === "not_set" && d.isCurrent ? (
-            <PlanPrompt view={view} start={d.start} prefills={plans.data?.prefills ?? []} canSet={canSet} />
+            <PlanPrompt
+              view={view}
+              start={d.start}
+              prefills={plans.data?.prefills ?? []}
+              canSet={canSet}
+              openOnMount={planParam}
+              onDismiss={() => setPlanParam(false)}
+            />
           ) : null}
 
           <Breakdown data={d} open={open} onToggle={toggle} routeOf={routeOf} />

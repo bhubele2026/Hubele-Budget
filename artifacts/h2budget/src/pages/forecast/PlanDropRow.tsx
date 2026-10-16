@@ -1,5 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
+import { Link } from "wouter";
 import { btnLink } from "@/ui";
+import { useOwner } from "@/hooks/useOwner";
 import {
   Tooltip,
   TooltipContent,
@@ -21,6 +23,38 @@ import {
   RemainderNote,
   type SuggestionAnswer,
 } from "./probablyPaidText";
+
+/**
+ * ⭐ (C5) "Set a weekly plan →" on a hook row the forecast holds at the item's
+ * stored amount because no plan is set: it opens Spending's plan dialog
+ * (`?plan=1`), where the owner picks the plan and confirms it — nothing is
+ * chosen or saved here. A member reads who sets it; while `/me` has not
+ * answered, a same-height placeholder (the Amex overage link's rule).
+ */
+function SetPlanLink({ view }: { view: "week" | "month" }) {
+  const owner = useOwner();
+  const word = view === "week" ? "weekly" : "monthly";
+  if (owner === "unknown") {
+    return <span className="skeleton inline-block h-3 w-28 rounded align-middle" aria-busy="true" data-testid="plan-hook-set-plan-unknown" />;
+  }
+  if (owner === false) {
+    return (
+      <span className="text-micro text-neutral-500" data-testid="plan-hook-set-plan-member">
+        The owner sets the {word} plan
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={`/spending/${view}?plan=1`}
+      className="text-micro font-semibold text-brand-navy underline"
+      onClick={(e: { stopPropagation: () => void }) => e.stopPropagation()}
+      data-testid="plan-hook-set-plan"
+    >
+      Set a {word} plan →
+    </Link>
+  );
+}
 
 export function PlanDropRow({
   row,
@@ -213,7 +247,13 @@ export function PlanDropRow({
           </div>
           {hook && (
             <div className="text-micro text-neutral-500" data-testid={`plan-hook-${testKey}`}>
-              {hookPayoffWords(hook)}
+              {/* (C4) The row's own figure: the words say what the forecast takes when it differs. */}
+              {hookPayoffWords(hook, { face: Math.abs(displayAmount) })}
+            </div>
+          )}
+          {hook?.planLink && hook.basis === "stored_amount" && (row.status === "future" || row.status === "pending_plan") && (
+            <div className="text-micro">
+              <SetPlanLink view={hook.planLink} />
             </div>
           )}
           {pp && (

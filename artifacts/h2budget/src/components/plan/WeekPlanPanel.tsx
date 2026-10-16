@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetMe, useListMembers } from "@workspace/api-client-react";
 import { ownerOf } from "@/hooks/useOwner";
@@ -178,7 +179,8 @@ export function WeekPlanPanel() {
   const saveOwn = () => {
     const amount = parsePositiveDollars(own);
     if (!amount) return setOwnError(ENTRY_HINT);
-    if (!shared) return setOwnError("There is no weekly plan to change yet.");
+    // (C5) With no plan the panel offers "Set a weekly plan →" instead of this field.
+    if (!shared) return;
     setOwnError(null);
     save(shared.id, amount, "Weekly limit saved.");
     setOwn("");
@@ -236,6 +238,18 @@ export function WeekPlanPanel() {
           <div className="mt-4">
             {owner === "unknown" ? (
               <div className="skeleton h-14 w-full rounded-control" aria-busy="true" data-testid="owner-unknown" />
+            ) : !shared ? (
+              // ⭐ (C5) No shared weekly plan: this panel only changes one, so it points to
+              // Spending's plan dialog (the choices, the dry run, Confirm) — nothing set here.
+              canSet ? (
+                <Link href="/spending/week?plan=1" className="text-body font-semibold text-brand-navy underline" data-testid="set-weekly-plan">
+                  Set a weekly plan →
+                </Link>
+              ) : (
+                <p className="text-body text-neutral-600" data-testid="read-only">
+                  Plan not set
+                </p>
+              )
             ) : canSet ? (
               <div className="flex items-end gap-3">
                 <label className="min-w-0 flex-1">

@@ -30,10 +30,13 @@ const LEDGER_PAGES = getGetTransactionsLedgerInfiniteQueryKey({ from: "2026-09-0
 const LEDGER_BALANCES = getGetTransactionsBalancesQueryKey({ dates: "2026-09-05,2026-09-11" });
 // (T1) The banking review, as `getGetBankingReviewQueryKey(params)` builds it (literal: the features module stays off the entry path).
 const REVIEW = ["/api/banking/review", { from: "2026-10-01", to: "2026-10-15", rowsPerBucket: 10 }];
+// (C5) The cash signal, as `getGetForecastCashSignalQueryKey(params)` builds it, at two horizons.
+const SIGNAL_30 = ["/api/forecast/cash-signal", { horizonDays: 30 }];
+const SIGNAL_90 = ["/api/forecast/cash-signal", { horizonDays: 90 }];
 
 function seeded() {
   const qc = new QueryClient();
-  for (const key of [SPINE, EXPLAIN, REPORTS, UNRELATED, LEDGER_PAGES, LEDGER_BALANCES, REVIEW]) {
+  for (const key of [SPINE, EXPLAIN, REPORTS, UNRELATED, LEDGER_PAGES, LEDGER_BALANCES, REVIEW, SIGNAL_30, SIGNAL_90]) {
     qc.setQueryData(key, { seeded: true });
   }
   return qc;
@@ -72,6 +75,13 @@ describe("invalidateAfterWrite", () => {
     const qc = seeded();
     invalidateAfterWrite(qc);
     expect(invalidated(qc, REVIEW)).toBe(true);
+  });
+
+  it("(C5) marks the cash signal stale at every horizon: a plan set on Spending flips the Forecast's reserve", () => {
+    const qc = seeded();
+    invalidateAfterWrite(qc);
+    expect(invalidated(qc, SIGNAL_30)).toBe(true);
+    expect(invalidated(qc, SIGNAL_90)).toBe(true);
   });
 
   it("leaves unrelated queries alone", () => {
@@ -126,6 +136,8 @@ describe("invalidateAfterWrite — the money position and the ways back (F7)", (
     const { PERIOD_BREAKDOWN_KEY, AMEX_SUMMARY_KEY } = await import("./mutationInvalidation");
     expect([...PERIOD_BREAKDOWN_KEY]).toEqual(f.getGetPeriodBreakdownQueryKey());
     expect([...AMEX_SUMMARY_KEY]).toEqual((await import("@workspace/api-client-react")).getGetAmexSummaryQueryKey());
+    const { CASH_SIGNAL_KEY } = await import("./mutationInvalidation");
+    expect([...CASH_SIGNAL_KEY]).toEqual((await import("@workspace/api-client-react")).getGetForecastCashSignalQueryKey());
   });
 });
 

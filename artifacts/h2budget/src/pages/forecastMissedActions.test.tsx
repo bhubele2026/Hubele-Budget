@@ -45,6 +45,9 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/forecast", () => {}],
 }));
 
+// (C5) The Weekly Spend row's "Set a weekly plan →" asks who is signed in.
+vi.mock("@/hooks/useOwner", () => ({ useOwner: () => true }));
+
 vi.mock("@/components/plaid-reauth-banner", () => ({
   PlaidReauthBanner: () => null,
 }));
@@ -544,7 +547,8 @@ describe("Forecast — everyday hook weeks are never 'missed' while owed (F5)", 
     expect(screen.getByTestId("missed-owed-res-ws-16").textContent).toBe("card purchases carried to Jun 1");
     const owed = screen.getByTestId("missed-row-res-ws-23");
     expect(owed.textContent).toContain("Still owed");
-    expect(screen.getByTestId("missed-owed-res-ws-23").textContent).toBe("card purchases $180.00 still owed");
+    // (C4) Dragged to Jun 1: it names its own week and the day the forecast takes it.
+    expect(screen.getByTestId("missed-owed-res-ws-23").textContent).toBe("Weekly Spend of May 23, due Jun 1: card purchases $180.00 still owed");
     expect(screen.getByTestId("missed-undo-res-ws-16")).toBeTruthy();
     // Only Gym is missed: its −$40.00, never the card weeks' stored $300s.
     expect(screen.getByTestId("missed-bucket-total").textContent).toBe("-$40.00");

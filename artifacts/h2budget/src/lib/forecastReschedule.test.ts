@@ -392,3 +392,35 @@ describe("Reschedule → match suppresses the original event exactly once", () =
     expect(allBank[0].status).toBe("matched");
   });
 });
+
+// ⭐ (C4) A moved occurrence never takes the answer of the occurrence whose own day it moved onto:
+// October's Monthly Spend moved onto Nov 1 must not read November's partial (the server's
+// `closedAtMovedDate` exception). Before C4 the October row showed "Paid $85.00 of $400.00",
+// "Partly paid" and −$315.00 — November's answer — while the curve kept October whole.
+describe("(C4) a moved occurrence and the occurrence that owns its new day", () => {
+  const events = [ev("ms", "2026-10-01", -400, "Monthly Spend"), ev("ms", "2026-11-01", -400, "Monthly Spend")];
+  const res = (o: Partial<Resolution>): Resolution =>
+    ({ id: `r-${o.occurrenceDate}-${o.status}`, recurringItemId: "ms", matchedTxnId: null, rescheduledTo: null, ...o }) as Resolution;
+  const opts = { ...baseOpts, fromISO: "2026-09-01", toISO: "2026-12-31", today: new Date("2026-10-14T12:00:00") };
+
+  it("each row keeps its own answer: October moved and open; November partial", () => {
+    const resolutions = [
+      res({ occurrenceDate: "2026-10-01", status: "rescheduled", rescheduledTo: "2026-11-01" }),
+      res({ occurrenceDate: "2026-11-01", status: "partial", matchedTxnId: "tx-85", txnAmount: "-85.00" }),
+    ];
+    const { allPlan } = buildLineRegister({ ...opts, events, resolutions });
+    const october = allPlan.find((p) => p.originalDate === "2026-10-01")!;
+    const november = allPlan.find((p) => p.date === "2026-11-01" && !p.originalDate)!;
+    expect([october.date, october.status, october.amount, october.resolutionId]).toEqual(["2026-11-01", "future", -400, "r-2026-10-01-rescheduled"]);
+    expect([november.status, november.amount, november.plannedAmount, november.paidAmount]).toEqual(["partial", -315, -400, -85]);
+  });
+
+  it("a decision on a day the item has no occurrence of its own still closes the moved one (the pre-PR5 lookup)", () => {
+    const resolutions = [
+      res({ occurrenceDate: "2026-10-01", status: "rescheduled", rescheduledTo: "2026-10-20" }),
+      res({ occurrenceDate: "2026-10-20", status: "missed" }),
+    ];
+    const { allPlan } = buildLineRegister({ ...opts, events, resolutions });
+    expect(allPlan.find((p) => p.originalDate === "2026-10-01")!.status).toBe("missed");
+  });
+});
