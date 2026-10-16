@@ -336,7 +336,7 @@ describe("(Task 4) Why this number? — the counted rows, the sum, what was left
   const zeroRowsToday = (rows: unknown[], net = "3374.60", bankToday = "3374.60") =>
     explain({
       displayed: { bankToday },
-      snapshot: { ...explain().snapshot, balance: "0.00", at: "2026-09-10T21:19:00.000Z" },
+      snapshot: { ...explain().snapshot, balance: "0.00", at: "2026-09-10T12:02:00.000Z" },
       ledger: {
         anchorDay: "2026-09-10",
         sinceAnchor: { rowCount: (rows as Array<{ counted: boolean }>).filter((r) => r.counted).length, net },

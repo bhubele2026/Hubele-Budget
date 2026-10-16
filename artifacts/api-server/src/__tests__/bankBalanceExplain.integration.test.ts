@@ -452,7 +452,7 @@ describe("(Task 4) GET /forecast/bank-balance-explain — ledger.rows", () => {
   }
   const base = () => ({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, plaidAccountId: "chase-5526", source: "plaid:chase" });
 
-  it("⭐ (zero-rows-today) a $0.00 reading yesterday at 4:19 PM and two PENDING rows dated today: both counted, flagged pending; Σ = Checking today − the reading", async () => {
+  it("⭐ (zero-rows-today) a $0.00 reading yesterday at 7:02 AM and two PENDING rows dated today: both counted, flagged pending; Σ = Checking today − the reading", async () => {
     await reset();
     const today = householdTodayISO();
     const yesterday = addDaysISO(today, -1);
