@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { BUCKETS, bucketAria, bucketNote, classificationNote, fateWords, inOutWords, kindChipWords, planLine, plannedFateWords, sideShort, sideWords, varianceWords } from "./words";
+import { evidenceWords } from "@/lib/evidenceWords";
+import { BUCKETS, bucketAria, bucketNote, classificationNote, evidenceLine, fateWords, inOutWords, kindChipWords, planLine, plannedFateWords, REASON_WORDS, sideShort, sideWords, suggestionTarget, suggestionTargetLine, varianceWords } from "./words";
 
 /** (F4) Direction-aware words: income is 'less / more than expected', an expense is 'over / under'. */
 const plan = (o: Record<string, unknown>) => ({ key: "k", label: "L", scheduledDate: "2026-10-09", planned: null, difference: null, dayDelta: 0, eventKind: "bill", direction: "out", expected: null, actual: null, variance: null, varianceKind: null, ...o });
@@ -128,5 +129,54 @@ describe("(Q5) planned outcomes in the direction of the money", () => {
     expect(p("missed", "out")).toBe("Missed");
     // the card-week special cases still win
     expect(plannedFateWords({ fate: "carried", carriedTo: "2026-10-15", onCurve: false, remainder: null, outcome: "carried", direction: "out" } as never)).toBe("Carried to Oct 15");
+  });
+});
+
+describe("(Task 6, A2) an Unclear row the bank's evidence leaves open", () => {
+  const target = { kind: "bill", id: "line", label: "Credit Line (Northwind)", planKey: "line|2026-10-02", occurrenceDate: "2026-10-02", planned: "-820.00", skipped: true };
+  const ev = (o: Record<string, unknown> = {}) => ({
+    rowEvidence: {
+      class: "unresolved",
+      reason: "loan_payment",
+      items: [{ field: "pfc_primary", value: "LOAN_PAYMENTS" }],
+      suggestion: { kind: "loan_payment", detail: null, target },
+      ...o,
+    },
+  }) as never;
+  it("says why in Spending's words, and Spending's word on the chip", () => {
+    expect(evidenceLine(ev())).toBe("Bank says loan payment");
+    expect(evidenceLine(ev({ reason: "transfer_evidence", suggestion: { kind: "transfer", detail: "savings", target: null } }))).toBe("Bank says a transfer to savings");
+    expect(evidenceLine({ rowEvidence: null } as never)).toBeNull();
+    expect(evidenceLine(ev({ class: "known_purchase", reason: "purchase_category" }))).toBeNull();
+    expect(REASON_WORDS.evidence_unresolved).toBe("Unconfirmed");
+  });
+  it("the words ARE Spending's (`evidenceWords`), capitalised, for every unresolved reason", () => {
+    const cases: Array<Record<string, unknown>> = [
+      { reason: "loan_payment" },
+      ...["savings", "investment", "account", "in", "other", null].map((detail) => ({ reason: "transfer_evidence", suggestion: { kind: "transfer", detail, target: null } })),
+      { reason: "income_evidence" },
+      { reason: "bill_suggestion", suggestion: { kind: "bill", detail: null, target } },
+      { reason: "bill_suggestion", suggestion: { kind: "bill", detail: null, target: null } },
+      { reason: "debit_in_income_category" },
+      { reason: "credit_in_expense_category" },
+    ];
+    for (const c of cases) {
+      const e = { class: "unresolved", items: [], suggestion: null, ...c };
+      const spending = evidenceWords(e as never);
+      expect(spending).not.toBe("");
+      expect(evidenceLine({ rowEvidence: e } as never)).toBe(spending[0]!.toUpperCase() + spending.slice(1));
+    }
+  });
+  it("names the occurrence it may be: plan, planned amount, day, and (skipped)", () => {
+    expect(suggestionTarget(ev())).toEqual(target);
+    expect(suggestionTargetLine(target as never)).toBe("Looks like Credit Line (Northwind), planned $820.00 on Oct 2 (skipped)");
+    expect(suggestionTargetLine({ ...target, skipped: false } as never)).toBe("Looks like Credit Line (Northwind), planned $820.00 on Oct 2");
+    expect(suggestionTargetLine({ ...target, planned: null } as never)).toBe("Looks like Credit Line (Northwind) on Oct 2 (skipped)");
+    expect(suggestionTarget(ev({ suggestion: { kind: "loan_payment", detail: null, target: null } }))).toBeNull();
+  });
+  it("the Unclear note counts them as unconfirmed", () => {
+    const side = (o: Record<string, unknown>) => ({ varianceIn: null, varianceOut: null, byReason: null, ...o }) as never;
+    const byReason = { needs_review: { count: 0 }, suggested_match: { count: 1 }, not_compared: { count: 0 }, evidence_unresolved: { count: 1 } };
+    expect(bucketNote("uncertain", side({ byReason }))).toBe("1 suggested match · 1 unconfirmed");
   });
 });

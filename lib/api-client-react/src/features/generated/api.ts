@@ -59,6 +59,8 @@ import type {
   CreateWishlistItemBody,
   DebtPlan,
   EvaluateAffordBody,
+  ForecastResolutionUndoInput,
+  ForecastResolutionUndone,
   GetAmexSummaryParams,
   GetBankingReviewParams,
   GetPeriodBreakdownParams,
@@ -1341,6 +1343,98 @@ export function useGetMappingRuleHistory<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * One transaction: deletes the answer and restores the answers POST /forecast/resolutions returned as `replaced` (same ids, statuses, dates, rows and times). Only answers that write could have deleted are accepted, so a Match made on a skipped occurrence un-does to the skip. 400 invalid_restore (not those answers; nothing written), 409 not_found / changed_since (nothing written).
+ * @summary (Task 6) Undo one answer exactly — delete it and put back the answers its write replaced
+ */
+export const getUndoForecastResolutionUrl = (id: string) => {
+  return `/api/forecast/resolutions/${id}/undo`;
+};
+
+export const undoForecastResolution = async (
+  id: string,
+  forecastResolutionUndoInput: ForecastResolutionUndoInput,
+  options?: RequestInit,
+): Promise<ForecastResolutionUndone> => {
+  return customFetch<ForecastResolutionUndone>(
+    getUndoForecastResolutionUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(forecastResolutionUndoInput),
+    },
+  );
+};
+
+export const getUndoForecastResolutionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoForecastResolution>>,
+    TError,
+    { id: string; data: BodyType<ForecastResolutionUndoInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof undoForecastResolution>>,
+  TError,
+  { id: string; data: BodyType<ForecastResolutionUndoInput> },
+  TContext
+> => {
+  const mutationKey = ["undoForecastResolution"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof undoForecastResolution>>,
+    { id: string; data: BodyType<ForecastResolutionUndoInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return undoForecastResolution(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UndoForecastResolutionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof undoForecastResolution>>
+>;
+export type UndoForecastResolutionMutationBody =
+  BodyType<ForecastResolutionUndoInput>;
+export type UndoForecastResolutionMutationError = ErrorType<void>;
+
+/**
+ * @summary (Task 6) Undo one answer exactly — delete it and put back the answers its write replaced
+ */
+export const useUndoForecastResolution = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoForecastResolution>>,
+    TError,
+    { id: string; data: BodyType<ForecastResolutionUndoInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof undoForecastResolution>>,
+  TError,
+  { id: string; data: BodyType<ForecastResolutionUndoInput> },
+  TContext
+> => {
+  return useMutation(getUndoForecastResolutionMutationOptions(options));
+};
 
 /**
  * Stored in settings.preferences.amexCardPayoffMode (server-owned: a settings save never writes or clears it). `null` clears the choice and the default from the card's debt row applies (no active debt → in_full; an active debt with an APR or a minimum → debt_plan). Answers the card's resolved mode.

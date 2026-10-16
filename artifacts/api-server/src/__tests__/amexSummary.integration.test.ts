@@ -306,7 +306,7 @@ describe("S5 · GET /amex/summary — one card's week", () => {
     ]);
     expect(ac(s.scope.cards[0].purchases)).toBe(e.purchases);
     expect(s.period).toEqual({ from: S5_WEEK.from, to: S5_WEEK.to, timezone: "America/Chicago" });
-    expect(s.owed).toEqual({ current: e.owed, statement: null, asOf: LIABILITY_AT.toISOString(), source: "plaid" });
+    expect(s.owed).toEqual({ current: e.owed, statement: null, asOf: LIABILITY_AT.toISOString(), source: "plaid", tracked: null });
     expect({
       purchases: ac(s.purchases),
       reimbursable: ac(s.purchases.reimbursable),
@@ -481,7 +481,9 @@ describe("S5 · the debt-linked card and every card", () => {
     const s = await summary(ext.gold!);
     const e = S5_EXPECTED.gold;
     expect(s.scope.cards[0]).toMatchObject({ accountId: ext.gold, name: "Platinum", mask: "2002", debtLinked: true, debtId: debtId.gold, owed: e.owed });
-    expect(s.owed).toEqual({ current: e.owed, statement: e.statement, asOf: LIABILITY_AT.toISOString(), source: "plaid" });
+    expect(s.owed).toMatchObject({ current: e.owed, statement: e.statement, asOf: LIABILITY_AT.toISOString(), source: "plaid" });
+    // (Task 6, matrix) The payoff plan's own figure for the card: the debt row, synced from the card (= Owed here).
+    expect(s.owed.tracked).toMatchObject({ debtId: debtId.gold, name: S5_DEBTS.gold.name, balance: e.owed, source: "plaid" });
     expect(ac(s.payments)).toBe(e.payments);
     expect(s.planLink).toEqual({ ...e.plan, debtId: debtId.gold, payoff: null, payoffDate: null, basis: null });
     // Its purchases still count toward the household week — said, not hidden.
@@ -497,9 +499,24 @@ describe("S5 · the debt-linked card and every card", () => {
     });
   });
 
+  it("⭐ (Task 6, matrix) a TYPED debt balance is a second measure: Owed stays the card's figure, `tracked` says the plan's, typed", async () => {
+    // A balance edit in the debt dialog makes the row manual; no Sync overwrites it after that.
+    await db.update(debtsTable).set({ balance: "2875.40", balanceSource: "manual", lastBalanceUpdate: new Date("2026-09-01T15:00:00Z") }).where(eq(debtsTable.id, debtId.gold!));
+    try {
+      const s = await summary(ext.gold!);
+      expect(s.owed.current).toBe(S5_EXPECTED.gold.owed);
+      expect(s.owed.source).toBe("plaid");
+      expect(s.owed.tracked).toEqual({ debtId: debtId.gold, name: S5_DEBTS.gold.name, balance: "2875.40", source: "manual", asOf: "2026-09-01T15:00:00.000Z" });
+      // "All cards" has no single debt: nothing tracked.
+      expect((await summary("all")).owed.tracked).toBeNull();
+    } finally {
+      await db.update(debtsTable).set({ balance: S5_DEBTS.gold.balance, balanceSource: "plaid" }).where(eq(debtsTable.id, debtId.gold!));
+    }
+  });
+
   it("⭐ owed is null when the anchor does not know it — never 0.00 (Blue: no Plaid balance, no debt)", async () => {
     const s = await summary(ext.blue!, "2026-10-01", "2026-10-31");
-    expect(s.owed).toEqual({ current: null, statement: null, asOf: null, source: "missing" });
+    expect(s.owed).toEqual({ current: null, statement: null, asOf: null, source: "missing", tracked: null });
     expect(s.scope.cards[0].owed).toBeNull();
     expect(ac(s.purchases)).toBe(S5_EXPECTED.blueMonth.purchases);
     // The Monthly Spend hook pays the Blue card; with no monthly plan it keeps its stored amount, and says so.
@@ -578,7 +595,7 @@ describe("S5 · the debt-linked card and every card", () => {
   it("a household with no Amex card: \"all\" is empty and owed unknown, never 0", async () => {
     const s = (await call(`/amex/summary?accountId=all&from=${S5_WEEK.from}&to=${S5_WEEK.to}`, EMPTY)).body;
     expect(s.scope.cards).toEqual([]);
-    expect(s.owed).toEqual({ current: null, statement: null, asOf: null, source: "missing" });
+    expect(s.owed).toEqual({ current: null, statement: null, asOf: null, source: "missing", tracked: null });
     expect([s.purchases, s.refunds, s.payments].map(ac)).toEqual(["0.00/0", "0.00/0", "0.00/0"]);
     expect(s.planLink.kind).toBe("none");
     const p = (await call(`/amex/weekly-payoff?weekStart=${S5_WEEK.from}`, EMPTY)).body;

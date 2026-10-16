@@ -54,6 +54,7 @@ export {
   type PlanRowMatch,
 } from "./planMatch";
 export { plansPaidInFullByName, type PaidInFull } from "./planMatch";
+export { suggestSkippedPlans } from "./planMatch";
 export { pairDayDelta, pairDifference, withinStrictTolerance } from "./planMatch";
 export {
   bankLineStatusOf,
@@ -72,6 +73,8 @@ export {
   emptyBankReviewTotals,
   placeBankReviewRow,
   summarizeBankReview,
+  UNCERTAIN_REASONS,
+  type UncertainReason,
   type BankReviewBucket,
   type BankReviewKind,
   type BankReviewPlacement,
@@ -308,6 +311,7 @@ export {
   type EvidenceReason,
   type EvidenceRow,
   type EvidenceSuggestion,
+  type EvidenceTarget,
   type RowEvidence,
   type SuggestionKind,
 } from "./evidenceRule";

@@ -1646,6 +1646,36 @@ paths:
           schema: { type: string }
       responses:
         "204": { description: Deleted }
+  /forecast/resolutions/{id}/undo:
+    post:
+      operationId: undoForecastResolution
+      tags: [forecast, features]
+      summary: (Task 6) Undo one answer exactly — delete it and put back the answers its write replaced
+      description: >-
+        One transaction: deletes the answer and restores the answers POST
+        /forecast/resolutions returned as `replaced` (same ids, statuses,
+        dates, rows and times). Only answers that write could have deleted
+        are accepted, so a Match made on a skipped occurrence un-does to the
+        skip. 400 invalid_restore (not those answers; nothing written), 409
+        not_found / changed_since (nothing written).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ForecastResolutionUndoInput" }
+      responses:
+        "200":
+          description: Undone
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ForecastResolutionUndone" }
+        "400": { description: Not the answers this answer replaced; nothing written }
+        "409": { description: The answer is gone or the answers changed since; nothing written }
 
   /forecast/bank-snapshot:
     post:
@@ -5407,14 +5437,20 @@ components:
 
     RowEvidenceTarget:
       type: object
-      description: The bill the forecast suggests (a recurring item's occurrence)
-      required: [kind, id, label, planKey, occurrenceDate]
+      description: >-
+        The bill the forecast suggests (a recurring item's occurrence). (Task 6)
+        It may be an occurrence the household SKIPPED (`skipped`): the matcher
+        pairs it as a suggestion only, the row keeps its own reason, and a Match
+        un-skips and matches in one write.
+      required: [kind, id, label, planKey, occurrenceDate, planned, skipped]
       properties:
         kind: { type: string, enum: [bill] }
         id: { type: string, description: The recurring item id }
         label: { type: string }
         planKey: { type: string, description: "<itemId>|<occurrenceDate>" }
         occurrenceDate: { type: string }
+        planned: { type: ["string", "null"], description: "(Task 6) The occurrence's planned amount, signed (negative: money out); null when not known" }
+        skipped: { type: boolean, description: "(Task 6) The household skipped this occurrence" }
 
     PeriodBreakdownRow:
       type: object
@@ -5712,11 +5748,15 @@ components:
       description: >-
         Why a row is where it is: partial / amount (amountDifference), timing
         (timingDifference), marked_unplanned / ignored_unforecasted
-        (confirmedUnplanned), needs_review / suggested_match / not_compared
-        (uncertain), no_plan (unmatched)
+        (confirmedUnplanned), needs_review / suggested_match / not_compared /
+        evidence_unresolved (uncertain), no_plan (unmatched). (Task 6)
+        evidence_unresolved: the evidence rule Spending reads calls the row
+        unresolved (the bank says loan payment, transfer or income, or it is
+        filed against its direction) — never "not in the plan"; the row's
+        `rowEvidence` says why
       enum:
         [partial, amount, timing, as_planned, marked_unplanned, ignored_unforecasted, needs_review,
-         suggested_match, not_compared, no_plan]
+         suggested_match, not_compared, no_plan, evidence_unresolved]
 
     BankingReviewTotals:
       type: object
@@ -5742,11 +5782,12 @@ components:
 
     BankingReviewUncertainTotals:
       type: object
-      required: [needs_review, suggested_match, not_compared]
+      required: [needs_review, suggested_match, not_compared, evidence_unresolved]
       properties:
         needs_review: { $ref: "#/components/schemas/BankingReviewTotals" }
         suggested_match: { $ref: "#/components/schemas/BankingReviewTotals" }
         not_compared: { $ref: "#/components/schemas/BankingReviewTotals" }
+        evidence_unresolved: { $ref: "#/components/schemas/BankingReviewTotals" }
 
     BankingReviewBucket:
       type: object
@@ -5784,7 +5825,7 @@ components:
 
     BankingReviewRow:
       type: object
-      required: [id, date, displayName, description, amount, pending, manual, category, flags, kind, direction, classificationIssue, reason, evidence, plan]
+      required: [id, date, displayName, description, amount, pending, manual, category, flags, kind, direction, classificationIssue, reason, evidence, rowEvidence, plan]
       properties:
         id: { type: string }
         date: { type: string }
@@ -5809,6 +5850,14 @@ components:
           enum: [inflow_into_expense, outflow_into_income, null]
         reason: { $ref: "#/components/schemas/BankingReviewReason" }
         evidence: { type: ["string", "null"], enum: [confirmed, automatic, null], description: Who tied the row to its plan }
+        rowEvidence:
+          description: >-
+            (Task 6) The evidence rule's answer for the row (the one Spending
+            reads); null where it says nothing. An evidence_unresolved row's
+            words, and the occurrence its suggestion names (a skipped one included)
+          oneOf:
+            - $ref: "#/components/schemas/RowEvidence"
+            - type: "null"
         plan:
           oneOf:
             - $ref: "#/components/schemas/BankingReviewRowPlan"
@@ -8829,6 +8878,39 @@ components:
         txnDescription: { type: ["string", "null"] }
         txnAmount: { type: ["string", "null"] }
         txnForecastFlag: { type: ["boolean", "null"] }
+        replaced:
+          type: array
+          description: >-
+            (Task 6, POST only) The answers this write deleted (one per plan
+            occurrence and one per bank row): what POST
+            /forecast/resolutions/{id}/undo puts back
+          items: { $ref: "#/components/schemas/ForecastResolutionReplaced" }
+    ForecastResolutionReplaced:
+      type: object
+      required: [id, userId, recurringItemId, occurrenceDate, status, matchedTxnId, rescheduledTo, createdAt]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        recurringItemId: { type: ["string", "null"] }
+        occurrenceDate: { type: ["string", "null"] }
+        status: { type: string }
+        matchedTxnId: { type: ["string", "null"] }
+        rescheduledTo: { type: ["string", "null"] }
+        createdAt: { type: string }
+    ForecastResolutionUndoInput:
+      type: object
+      required: [restore]
+      properties:
+        restore:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/ForecastResolutionReplaced" }
+    ForecastResolutionUndone:
+      type: object
+      required: [undone, restored]
+      properties:
+        undone: { type: string }
+        restored: { type: integer }
     ForecastResolutionInput:
       type: object
       required: [status]
@@ -10212,8 +10294,19 @@ components:
 
     AmexSummaryOwed:
       type: object
-      required: [current, statement, asOf, source]
+      required: [current, statement, asOf, source, tracked]
       properties:
+        tracked:
+          description: >-
+            (Task 6) One debt-linked card on the payoff plan: the debt's balance
+            as the debt plan counts it (the debt row, net of pending tagged
+            payments — GET /debts's figure) and its source. A different measure
+            from `current` (the card's own figure): a typed balance (`manual`)
+            is kept as typed and no Sync overwrites it. Null for all cards, a
+            card with no active debt
+          oneOf:
+            - $ref: "#/components/schemas/AmexSummaryTrackedDebt"
+            - type: "null"
         current: { type: ["string", "null"], description: "GET /amex/anchor's balance; null = unknown, never 0" }
         statement:
           type: ["string", "null"]
@@ -10224,6 +10317,16 @@ components:
             As GET /amex/anchor's asOf (an ISO instant, or a bare YYYY-MM-DD
             for source "computed"); null when the balance is unknown.
         source: { type: string, enum: [plaid, debt, anchor, computed, missing] }
+
+    AmexSummaryTrackedDebt:
+      type: object
+      required: [debtId, name, balance, source, asOf]
+      properties:
+        debtId: { type: string }
+        name: { type: string }
+        balance: { type: string, description: "The debt plan's balance for the card (positive dollars)" }
+        source: { type: string, enum: [plaid, manual], description: "plaid = synced from the card; manual = typed, kept as typed" }
+        asOf: { type: ["string", "null"], description: "When the debt row's balance was last set (synced or typed)" }
 
     AmexSummaryTotal:
       type: object

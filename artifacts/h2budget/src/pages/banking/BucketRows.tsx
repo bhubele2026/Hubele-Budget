@@ -4,14 +4,34 @@ import type {
   BankingReviewBucketName,
   BankingReviewKind,
   BankingReviewRow,
+  ForecastResolutionReplaced,
   GetBankingReviewParams,
 } from "@workspace/api-client-react/features";
 import { useQueryClient } from "@tanstack/react-query";
-import { getBankingReview, getGetBankingReviewQueryKey, useGetBankingReview } from "@workspace/api-client-react/features";
-import { emptyNote } from "@/ui";
+import { useUpsertForecastResolution } from "@workspace/api-client-react";
+import {
+  getBankingReview,
+  getGetBankingReviewQueryKey,
+  undoForecastResolution,
+  useGetBankingReview,
+} from "@workspace/api-client-react/features";
+import { btnSecondarySm, btnSm, emptyNote } from "@/ui";
+import { toastWithActions } from "@/components/ui/action-toast";
+import { toast } from "@/hooks/use-toast";
+import { useOwner } from "@/hooks/useOwner";
 import { formatDisplayAmount } from "@/lib/amountDisplay";
 import { BANKING_MIN as MIN, BANKING_PAGE as PAGE } from "./reviewParams";
-import { classificationNote, dayWords, planLine, REASON_WORDS, varianceShort, variancePinches } from "./words";
+import {
+  classificationNote,
+  dayWords,
+  evidenceLine,
+  planLine,
+  REASON_WORDS,
+  suggestionTarget,
+  suggestionTargetLine,
+  varianceShort,
+  variancePinches,
+} from "./words";
 
 /**
  * (W3) One bucket's rows, paged by the server (`bucket` + `cursor`). Each page
@@ -60,11 +80,76 @@ function MoreButton({ load, onHover }: { load: () => Promise<void>; onHover?: ()
   );
 }
 
+type Target = NonNullable<ReturnType<typeof suggestionTarget>>;
+
+/**
+ * ⭐ (Task 6, A2) THE HOUSEHOLD'S ANSWER TO A SUGGESTION, on the row. Match writes
+ * ONE answer (POST /forecast/resolutions, status matched — on a skipped
+ * occurrence that write replaces the skip); "Not this" writes the pair's
+ * rejection and leaves the skip. Each offers Undo, which puts back exactly the
+ * answers the write replaced (`replaced` → POST /forecast/resolutions/:id/undo):
+ * a Match on a skipped bill un-does to the skip. The owner answers; a member reads.
+ */
+function SuggestionAnswer({ row, target }: { row: BankingReviewRow; target: Target }) {
+  const owner = useOwner();
+  const qc = useQueryClient();
+  const write = useUpsertForecastResolution();
+  const [busy, setBusy] = useState(false);
+  if (owner !== true) return null;
+  const day = dayWords(target.occurrenceDate);
+  const undo = async (id: string, replaced: ForecastResolutionReplaced[]) => {
+    try {
+      await undoForecastResolution(id, { restore: replaced });
+      toast({ title: "Undone" });
+    } catch {
+      toast({ title: "Could not undo", description: "Nothing was changed.", variant: "destructive" });
+    }
+    // An answer moves rows on many screens: everything is marked stale, what is on screen refetches.
+    void qc.invalidateQueries();
+  };
+  // `mutateAsync`, not `mutate(…, { onSuccess })`: the answer moves the row out of Unclear, this row
+  // unmounts while the write's refetch runs, and a per-call callback never fires once its row is gone.
+  const answer = async (status: "matched" | "not_match") => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await write.mutateAsync({
+        data: { recurringItemId: target.id, occurrenceDate: target.occurrenceDate, status, matchedTxnId: row.id },
+      });
+      const title =
+        status === "matched" ? `Matched to ${target.label} · ${day}` : `Not ${target.label}${target.skipped ? ` · ${day} stays skipped` : ""}`;
+      toastWithActions({
+        title,
+        duration: 15_000,
+        actions: [{ label: "Undo", altText: `Undo: ${title}`, onClick: () => void undo(r.id, r.replaced ?? []), "data-testid": "br-answer-undo" }],
+      });
+    } catch (e) {
+      toast({ title: "Couldn't save", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-2">
+      <button type="button" className={btnSm} disabled={busy} onClick={() => void answer("matched")} aria-label={`Match to ${target.label}, ${day}`} data-testid={`br-match-${row.id}`}>
+        Match
+      </button>
+      <button type="button" className={btnSecondarySm} disabled={busy} onClick={() => void answer("not_match")} aria-label={`Not ${target.label}`} data-testid={`br-notthis-${row.id}`}>
+        Not this
+      </button>
+    </div>
+  );
+}
+
 function RowLine({ row, href, bucket, first }: { row: BankingReviewRow; href: string | null; bucket: BankingReviewBucketName; first?: React.RefObject<HTMLLIElement | null> }) {
   const plan = planLine(row);
   const flags = row.flags;
   const name = row.displayName || row.description;
   const note = classificationNote(row);
+  // (Task 6, A2) An Unclear row the bank's evidence leaves open: why, in Spending's words, and what it may be.
+  const unresolved = row.reason === "evidence_unresolved";
+  const why = unresolved ? evidenceLine(row) : null;
+  const target = unresolved ? suggestionTarget(row) : null;
   // (F4) A row that compares with its plan leads with the DIFFERENCE; the full amount is secondary.
   const variance = row.plan ? varianceShort(row.plan) : null;
   const pinches = row.plan?.varianceKind ? variancePinches(row.plan.varianceKind) : false;
@@ -90,6 +175,13 @@ function RowLine({ row, href, bucket, first }: { row: BankingReviewRow; href: st
             {flags.reimbursable ? <span className={chip}>Reimbursable</span> : null}
           </div>
           {plan ? <div className="mt-1 text-micro text-neutral-600" data-testid={`br-plan-${row.id}`}>{plan}</div> : null}
+          {why ? <div className="mt-1 text-micro text-neutral-700" data-testid={`br-evidence-${row.id}`}>{why}</div> : null}
+          {target ? (
+            <>
+              <div className="mt-1 text-micro text-neutral-700" data-testid={`br-suggestion-${row.id}`}>{suggestionTargetLine(target)}</div>
+              <SuggestionAnswer row={row} target={target} />
+            </>
+          ) : null}
           {note ? (
             <div className="mt-1 text-micro text-neutral-700" data-testid={`br-issue-${row.id}`}>
               {note} ·{" "}

@@ -31,6 +31,11 @@ const h = vi.hoisted(() => ({
   /** (T2) GET /banking/check-explain's answer, and how often it was asked (only while the dialog is open). */
   explain: undefined as unknown,
   explainCalls: 0,
+  /** (Task 6) The answers written from a row, the server's answer to them, the undos asked, the toasts shown. */
+  writes: [] as Array<Record<string, unknown>>,
+  writeAnswer: null as Record<string, unknown> | null,
+  undos: [] as Array<{ id: string; body: unknown }>,
+  toasts: [] as Array<{ title: string; actions?: Array<{ label: string; onClick: () => void }> }>,
 }));
 
 function withFirstPages(r: Record<string, unknown>, pages: Record<string, unknown>) {
@@ -46,6 +51,16 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react")>()),
   useListPlaidItems: () => ({ data: h.items, isError: false, isLoading: false }),
   useGetMe: () => ({ data: { isOwner: h.owner }, isError: false, isLoading: false }),
+  useUpsertForecastResolution: () => ({
+    isPending: false,
+    mutateAsync: async (vars: Record<string, unknown>) => {
+      h.writes.push(vars);
+      return h.writeAnswer;
+    },
+  }),
+}));
+vi.mock("@/components/ui/action-toast", () => ({
+  toastWithActions: (t: { title: string; actions?: Array<{ label: string; onClick: () => void }> }) => h.toasts.push(t),
 }));
 vi.mock("@workspace/api-client-react/features", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react/features")>()),
@@ -58,6 +73,10 @@ vi.mock("@workspace/api-client-react/features", async (orig) => ({
     }
     const key = `${params.bucket}|${params.kind ?? ""}|${params.cursor ?? ""}`;
     return { ...h.review, page: h.pages[key] ?? { bucket: params.bucket, kind: params.kind ?? null, rows: [], nextCursor: null, limit: 25 } };
+  },
+  undoForecastResolution: async (id: string, body: unknown) => {
+    h.undos.push({ id, body });
+    return { undone: id, restored: 0 };
   },
   getGetReviewProposalsQueryKey: () => ["/api/review/proposals"],
   getListAppliedReviewProposalsQueryKey: () => ["/api/review/proposals/applied"],
@@ -229,6 +248,10 @@ beforeEach(() => {
   h.owner = true;
   h.explain = undefined;
   h.explainCalls = 0;
+  h.writes = [];
+  h.writeAnswer = null;
+  h.undos = [];
+  h.toasts = [];
   h.spine = { bankConfidence: { fetchedAt: "2026-10-14T16:00:00.000Z", bankBalance: "3205.81", bankAsOf: "2026-10-14T13:00:00.000Z", h2Balance: "3205.81", pendingCount: 1, check: {} } };
 });
 afterEach(() => {
@@ -590,6 +613,85 @@ describe("Banking review — Not in the plan", () => {
     });
     mount();
     expect(text("br-no-compare")).toContain("Unclear");
+  });
+});
+
+describe("(Task 6, A2) an unresolved row in Unclear: the bank's words, the skipped bill, Match and Undo", () => {
+  // Synthetic: a credit line on the 2nd the household skipped; the row is a loan payment by the bank's category.
+  const target = { kind: "bill", id: "line", label: "Credit Line (Northwind)", planKey: "line|2026-10-02", occurrenceDate: "2026-10-02", planned: "-820.00", skipped: true };
+  const loanRow = (t: unknown = target) =>
+    rowOf("u9", {
+      displayName: "NWD LNS PMT",
+      amount: "-861.37",
+      date: "2026-10-12",
+      reason: "evidence_unresolved",
+      rowEvidence: {
+        class: "unresolved",
+        reason: "loan_payment",
+        items: [{ field: "pfc_primary", value: "LOAN_PAYMENTS" }, { field: "pfc_detailed", value: "LOAN_PAYMENTS_OTHER_PAYMENT" }],
+        suggestion: { kind: "loan_payment", detail: null, target: t },
+      },
+    });
+  const show = (t?: unknown) => {
+    h.pages["uncertain||"] = { bucket: "uncertain", kind: null, limit: 25, nextCursor: null, rows: [loanRow(t)] };
+    mount("/banking?bucket=uncertain");
+  };
+  const replaced = [
+    { id: "r-skip", userId: "owner", recurringItemId: "line", occurrenceDate: "2026-10-02", status: "skipped", matchedTxnId: null, rescheduledTo: null, createdAt: "2026-10-05T14:00:00.000Z" },
+    { id: "r-not", userId: "owner", recurringItemId: null, occurrenceDate: null, status: "ignored_unforecasted", matchedTxnId: "u9", rescheduledTo: null, createdAt: "2026-10-13T14:00:00.000Z" },
+  ];
+
+  it("the row says Unconfirmed, why in Spending's words, and which occurrence it may be", () => {
+    show();
+    const r = screen.getByTestId("br-row-u9").textContent ?? "";
+    expect(r).toContain("Unconfirmed");
+    expect(text("br-evidence-u9")).toBe("Bank says loan payment");
+    expect(text("br-suggestion-u9")).toBe("Looks like Credit Line (Northwind), planned $820.00 on Oct 2 (skipped)");
+    expect(screen.getByTestId("br-match-u9").getAttribute("aria-label")).toBe("Match to Credit Line (Northwind), Oct 2");
+    // Nothing is written until the owner answers.
+    expect(h.writes).toEqual([]);
+  });
+
+  it("Match writes ONE answer (matched, the occurrence and the row); its Undo hands back exactly what it replaced", async () => {
+    h.writeAnswer = { id: "res-new", status: "matched", recurringItemId: "line", occurrenceDate: "2026-10-02", matchedTxnId: "u9", replaced };
+    show();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("br-match-u9"));
+    });
+    expect(h.writes).toEqual([{ data: { recurringItemId: "line", occurrenceDate: "2026-10-02", status: "matched", matchedTxnId: "u9" } }]);
+    expect(h.toasts.map((t) => t.title)).toEqual(["Matched to Credit Line (Northwind) · Oct 2"]);
+    await act(async () => {
+      h.toasts[0]!.actions![0]!.onClick();
+    });
+    expect(h.undos).toEqual([{ id: "res-new", body: { restore: replaced } }]);
+  });
+
+  it("'Not this' writes the pair's rejection and says the bill stays skipped; Undo removes only it", async () => {
+    h.writeAnswer = { id: "res-no", status: "not_match", recurringItemId: "line", occurrenceDate: "2026-10-02", matchedTxnId: "u9", replaced: [] };
+    show();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("br-notthis-u9"));
+    });
+    expect(h.writes).toEqual([{ data: { recurringItemId: "line", occurrenceDate: "2026-10-02", status: "not_match", matchedTxnId: "u9" } }]);
+    expect(h.toasts.map((t) => t.title)).toEqual(["Not Credit Line (Northwind) · Oct 2 stays skipped"]);
+    await act(async () => {
+      h.toasts[0]!.actions![0]!.onClick();
+    });
+    expect(h.undos).toEqual([{ id: "res-no", body: { restore: [] } }]);
+  });
+
+  it("a member reads the words but has no answer buttons; with no occurrence named there is nothing to Match", () => {
+    h.owner = false;
+    show();
+    expect(text("br-evidence-u9")).toBe("Bank says loan payment");
+    expect(text("br-suggestion-u9")).toContain("(skipped)");
+    expect(screen.queryByTestId("br-match-u9")).toBeNull();
+    cleanup();
+    h.owner = true;
+    show(null);
+    expect(text("br-evidence-u9")).toBe("Bank says loan payment");
+    expect(screen.queryByTestId("br-suggestion-u9")).toBeNull();
+    expect(screen.queryByTestId("br-match-u9")).toBeNull();
   });
 });
 

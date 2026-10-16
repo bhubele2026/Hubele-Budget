@@ -16,14 +16,14 @@ vi.mock("@/components/amex-over-link", () => ({
   },
 }));
 
-import { AmexSummaryPanel, whyOverPath } from "./amex-summary";
+import { AmexSummaryPanel, trackedDebtWords, whyOverPath } from "./amex-summary";
 
 const total = (amount: string, count: number) => ({ amount, count });
 const summary = (over: Record<string, unknown> = {}) =>
   ({
     scope: { kind: "all", accountId: null, name: null, mask: null, institution: null, cards: [] },
     period: { from: "2026-09-01", to: "2026-09-30", timezone: "America/Chicago" },
-    owed: { current: "100.00", statement: null, asOf: null, source: "plaid" },
+    owed: { current: "100.00", statement: null, asOf: null, source: "plaid", tracked: null },
     purchases: { amount: "10.00", count: 1, reimbursable: total("0.00", 0) },
     refunds: total("0.00", 0), payments: total("0.00", 0), otherCredits: total("0.00", 0), otherCharges: total("0.00", 0), notMine: total("0.00", 0),
     householdContribution: { weeklyPlan: "0.00", weeklyKnown: "0.00", weeklyUnresolved: "0.00", monthlyPlan: "0.00", monthlyKnown: "0.00", monthlyUnresolved: "0.00", unfiled: "0.00", link: "/spending/week" },
@@ -101,6 +101,26 @@ describe("(P1) the title is the period; the card is named in the page's header",
     const owed = screen.getByTestId("amex-fig-owed");
     expect(owed.querySelector(".text-kpi")!.textContent).toBe("$100.00");
     expect(within(owed).getByText("Owed").className).toContain("text-label");
+  });
+});
+
+describe("(Task 6, matrix) Owed is the card's figure; the payoff plan's own figure is said beside it when they differ", () => {
+  const tracked = (balance: string, source: "plaid" | "manual") => ({ debtId: "d1", name: "Sample Card", balance, source, asOf: "2026-09-01T15:00:00.000Z" });
+  it("a typed debt balance: both figures, where each comes from, and a link to the payoff plan", () => {
+    const owed = { current: "1240.10", statement: null, asOf: null, source: "plaid", tracked: tracked("2875.40", "manual") };
+    expect(trackedDebtWords(owed as never)).toBe("Payoff plan $2,875.40 · typed, not from the card");
+    render(<AmexSummaryPanel summary={summary({ owed })} {...BASE} allCards={false} />);
+    expect(screen.getByTestId("amex-fig-owed").textContent).toContain("$1,240.10");
+    expect(screen.getByTestId("amex-owed-tracked").textContent).toBe("Payoff plan $2,875.40 · typed, not from the card · Payoff plan");
+    expect(screen.getByTestId("amex-owed-tracked-link").getAttribute("href")).toBe("/avalanche");
+  });
+  it("the same figure, no debt, or an unknown Owed: nothing more is said", () => {
+    expect(trackedDebtWords({ current: "1240.10", tracked: tracked("1240.10", "plaid") } as never)).toBeNull();
+    expect(trackedDebtWords({ current: "1240.10", tracked: null } as never)).toBeNull();
+    expect(trackedDebtWords({ current: null, tracked: tracked("10.00", "manual") } as never)).toBeNull();
+    expect(trackedDebtWords({ current: "10.00", tracked: tracked("12.00", "plaid") } as never)).toBe("Payoff plan $12.00 · from the card's last sync");
+    panel();
+    expect(screen.queryByTestId("amex-owed-tracked")).toBeNull();
   });
 });
 

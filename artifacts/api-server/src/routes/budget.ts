@@ -56,6 +56,8 @@ import { addDaysISO, householdTodayISO } from "../lib/householdClock";
 import { logger } from "../lib/logger";
 import { planSourceOf, rollUpPlanBySource } from "../lib/budgetPlanSource";
 import { buildAllowanceRollup } from "../lib/budgetAllowance";
+import { loadAllowancePlans, planRowsOf } from "../lib/allowancePlans";
+import { allowancePlanInEffect, weekBounds } from "@workspace/avalanche-core";
 import { monthEndExclusive, daysInMonth } from "../lib/monthBounds";
 import { syncAutoDebtCategories } from "../lib/budgetDebtSync";
 import { loadCardAccountIds } from "../lib/cardAccounts";
@@ -2255,20 +2257,38 @@ export async function buildBudgetMonthView(
     // docs/reviews/2026-09-11-budget-pending-once.md).
     const allowanceRows = monthSpend.allowanceRows;
 
-    const [allowanceSettings] = await db
-      .select({
-        weekly: settingsTable.weeklyAllowanceAmount,
-        monthly: settingsTable.monthlyAllowanceAmount,
-        unplanned: settingsTable.unplannedAllowanceAmount,
-      })
-      .from(settingsTable)
-      .where(eq(settingsTable.userId, householdOwnerId));
+    const [[allowanceSettings], allowancePlanRows] = await Promise.all([
+      db
+        .select({
+          weekly: settingsTable.weeklyAllowanceAmount,
+          monthly: settingsTable.monthlyAllowanceAmount,
+          unplanned: settingsTable.unplannedAllowanceAmount,
+        })
+        .from(settingsTable)
+        .where(eq(settingsTable.userId, householdOwnerId)),
+      loadAllowancePlans(householdId),
+    ]);
 
+    // ⭐ (Task 6, A1) THE CAPS ARE THE PLANS. The weekly and monthly caps are the
+    // household's plans (`loadAllowancePlans`, read only) in force for this month — the week
+    // that holds today for this month, the month's last week for a past one,
+    // its first week for a later one — so a plan set with "Set a weekly plan →"
+    // (which never writes `settings`) reaches this card as it reaches the tile,
+    // Spending and Allowances. A plan row of $0 is that plan ($0 → "—"). Only
+    // where no plan row has started yet does the card keep the classic setting
+    // (the history before plans existed; the 0040 backfill and the Settings
+    // mirror keep the two equal otherwise). Unplanned has no plan: its setting.
+    const monthLastDay = addDaysISO(monthEndStr, -1);
+    const capToday = fmtISO(todayDate());
+    const capWeek = weekBounds(capToday < monthStart ? monthStart : capToday < monthLastDay ? capToday : monthLastDay).start;
+    const planRows = planRowsOf(allowancePlanRows);
+    const weeklyPlan = allowancePlanInEffect(capWeek, planRows, "weekly");
+    const monthlyPlan = allowancePlanInEffect(capWeek, planRows, "monthly");
     const allowance = buildAllowanceRollup(
       allowanceRows,
       {
-        weekly: allowanceSettings?.weekly ?? "0",
-        monthly: allowanceSettings?.monthly ?? "0",
+        weekly: weeklyPlan ? weeklyPlan.amount : (allowanceSettings?.weekly ?? "0"),
+        monthly: monthlyPlan ? monthlyPlan.amount : (allowanceSettings?.monthly ?? "0"),
         unplanned: allowanceSettings?.unplanned ?? "0",
       },
       daysInMonth(monthStart),

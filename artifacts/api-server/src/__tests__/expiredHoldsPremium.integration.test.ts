@@ -435,13 +435,19 @@ describe("⭐ F6 ⇄ premium · expired holds count nowhere in the premium reade
   it("⭐ Q1 Banking review — buckets' money in / out, the inbox, the planned outcome and the household block = CONTROL; City Water's answer named a hold that never posted: not paid yet (base: paid)", async () => {
     const b = await threeWays(banking);
     expect(b.control.planned).toEqual(["City Water 2026-10-02 on_curve not_paid_yet"]);
-    expect(b.control.buckets.unmatched).toEqual({ count: 4, moneyIn: "1500.00", moneyOut: "62.00", net: "1438.00" });
+    // (Task 6, A2) Rule 2u: the pending PEAR −20.00 (Plaid "transfer out", filed under Subscriptions) is
+    // Unconfirmed on Spending (`unresolvedWeek` 20.00), so Banking lists it under Unclear, not Unplanned
+    // activity — before: count 4, out 62.00.
+    expect(b.control.buckets.unmatched).toEqual({ count: 3, moneyIn: "1500.00", moneyOut: "42.00", net: "1458.00" });
     expect(b.control).toMatchObject({ unresolvedInRange: 4, badgeCount: 4, balanceToday: "3438.00", reconciliation: { rowsUnexplained: 0, unexplained: "0.00" } });
     expect(b.control.money).toEqual({ moneyIn: "1500.00", moneyOut: "62.00", net: "1438.00", pendingNet: "-32.00", pendingCount: 2 });
     expect(b.on).toEqual(b.control);
     // Base: the answer paid City Water; the holds sat in "Not on the plan" and the inbox.
     expect(b.off.planned).toEqual(["City Water 2026-10-02 matched paid"]);
-    expect(b.off.buckets.unmatched).toEqual({ count: 7, moneyIn: "1564.18", moneyOut: "146.18", net: "1418.00" });
+    // (Task 6, A2) Rule 2u in the base reading too: the two PEAR holds (−20.00 each, "transfer out") and the
+    // +64.18 credit filed under an expense category are unresolved by the evidence rule → Unclear — before:
+    // count 7, in 1564.18, out 146.18.
+    expect(b.off.buckets.unmatched).toEqual({ count: 4, moneyIn: "1500.00", moneyOut: "106.18", net: "1393.82" });
     expect(b.off).toMatchObject({ unresolvedInRange: 7, badgeCount: 7, balanceToday: "3318.00", asPlanned: { count: 1, net: "-100.00" } });
     expect(b.off.money).toMatchObject({ pendingCount: 6, pendingNet: "-152.00" });
     // The household block is the position's own week contract.

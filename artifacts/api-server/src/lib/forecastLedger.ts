@@ -22,6 +22,7 @@ import {
   MATCH_CONFIRMED_DESCRIPTORS,
   MATCH_EARLY_DAYS,
   matchPlansToRows,
+  suggestSkippedPlans,
   minimumStatementCloseISO,
   minimumsPaidByCardLedger,
   paymentNamesCardIssuer,
@@ -312,6 +313,19 @@ export type ForecastLedger = {
    * took its plan off the curve (`items`); the row itself still counts.
    */
   matches: PlanRowMatch[];
+  /**
+   * ⭐ (Task 6, A2) A SKIPPED occurrence the matcher pairs with a bank row the
+   * main pass left free (`suggestSkippedPlans`): SUGGESTIONS ONLY — tier 3, never
+   * `offCurve`, never evidence. Nothing in the ledger reads them: the occurrence
+   * stays skipped (its fate, its absence from the curve), the row stays free.
+   * The evidence rule (`billSuggestionsOf`, `skipped: true`) names the occurrence
+   * as the target of an unresolved row's suggestion, so the household can Match
+   * it (one write: the skip becomes the match) or answer "Not this". A row only
+   * a "not a planned payment" answer claims is still a candidate here (that
+   * answer says nothing about what the row is). Internal (not in
+   * `computeCashSignal`'s output).
+   */
+  skippedSuggestions: PlanRowMatch[];
   /**
    * (Decision 13, round 3) `matches`' `planKey` → what is still assumed unpaid
    * after this pair (signed like the plan; 0 when paid in full) — set only for
@@ -1106,6 +1120,9 @@ export async function buildForecastLedger(
   const notMatchPairs = new Set<string>();
   const partialTxnByKey = new Map<string, string>();
   const claimedTxnIds = new Set<string>();
+  // (Task 6, A2) Rows some answer other than "not a planned payment" claims: only
+  // the rest may be offered to a SKIPPED occurrence as a suggestion (below).
+  const claimedByDecisionTxnIds = new Set<string>();
   for (const r of resolutionsLive) {
     if (r.status === "not_match") {
       if (r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
@@ -1113,6 +1130,7 @@ export async function buildForecastLedger(
       }
       continue;
     }
+    if (r.matchedTxnId && r.status !== "ignored_unforecasted" && r.status !== "unplanned") claimedByDecisionTxnIds.add(r.matchedTxnId);
     // (One-time bill move) A `needs_review` / `needs_review_partial` pair is in none of the key sets above,
     // so its plan is unresolved and weighs on the curve by the usual rules. It
     // still holds its row: that row waits for the user's answer on the pair and is
@@ -1240,10 +1258,33 @@ export async function buildForecastLedger(
   const listingPlans: MatchPlan[] = [];
   const listRowFromISO = addDaysISO(listFromISO, -MATCH_EARLY_DAYS);
   const rowReadFromISO = listRowFromISO < rowMatchFromISO ? listRowFromISO : rowMatchFromISO;
+  // ⭐ (Task 6, A2) The SKIPPED occurrences in the matching window: suggestion candidates only.
+  const skippedMatchPlans: MatchPlan[] = [];
   for (const ev of events) {
     // (PR-B2) A hook is a date, not a bill: it never competes for a row.
     if (hookCadenceByItem.has(ev.itemId)) continue;
     const key = `${ev.itemId}|${ev.date}`;
+    if (skippedPlanKeys.has(key) && !matchedPlanKeys.has(key) && !missedPlanKeys.has(key) && !partialTxnByKey.has(key)) {
+      const skippedDate = rescheduledByKey.get(key) ?? ev.date;
+      if (
+        skippedDate >= planMatchFromISO &&
+        skippedDate <= planMatchToISO &&
+        !closedAtMovedDate(ev, skippedDate) &&
+        !(skippedDate <= dragCutoffISO && beforeItemExisted(ev))
+      ) {
+        skippedMatchPlans.push({
+          key,
+          itemId: ev.itemId,
+          occurrenceDate: ev.date,
+          date: skippedDate,
+          amount: ev.amount,
+          label: ev.label,
+          categoryId: recurringById.get(ev.itemId)?.categoryId ?? null,
+          debtId: planDebtId(ev.itemId),
+          confirmedRows: confirmedRowsByItem.get(ev.itemId) ?? [],
+        });
+      }
+    }
     if (
       matchedPlanKeys.has(key) ||
       skippedPlanKeys.has(key) ||
@@ -1279,6 +1320,7 @@ export async function buildForecastLedger(
   }
   let matches: PlanRowMatch[] = [];
   let listingMatches: PlanRowMatch[] = [];
+  let skippedSuggestions: PlanRowMatch[] = [];
   let cardPayments: PaidInFull[] = [];
   // ⭐ (F5) The one pairing of card payment credits with the checking rows that sent
   // them (`pairCardPaymentCredits`): the matcher, the minimum rules and the hooks all
@@ -1295,7 +1337,13 @@ export async function buildForecastLedger(
   // checking half of a card's own payment credit (one payment, never two).
   const hookCheckingOutflows: HookCheckingOutflow[] = [];
   const pendingTxnIds = new Set<string>();
-  if (matchPlans.length > 0 || listingPlans.length > 0 || hookCadenceByItem.size > 0 || ledgerMinimumEvents.length > 0) {
+  if (
+    matchPlans.length > 0 ||
+    listingPlans.length > 0 ||
+    hookCadenceByItem.size > 0 ||
+    ledgerMinimumEvents.length > 0 ||
+    skippedMatchPlans.length > 0
+  ) {
     const candidateRowsAll = patchRows(
       await db
         .select()
@@ -1321,6 +1369,8 @@ export async function buildForecastLedger(
     });
     const matchRows: MatchRow[] = [];
     const listingRows: MatchRow[] = [];
+    // (Task 6, A2) The rows a skipped occurrence may be suggested for: the match window's, less any a decision claims.
+    const skippedRows: MatchRow[] = [];
     // (F5 round 2) Pending checking rows: a payment still pending cannot be in a card's balance yet.
     for (const r of candidateRowsAll) if (r.pending === true) pendingTxnIds.add(r.id);
     classified.rows.forEach((o, i) => {
@@ -1339,7 +1389,10 @@ export async function buildForecastLedger(
           pending: tagged.pending === true,
         });
       }
-      if (claimedTxnIds.has(row.id) || (o.replacedId && claimedTxnIds.has(o.replacedId))) return;
+      const claimed = claimedTxnIds.has(row.id) || (!!o.replacedId && claimedTxnIds.has(o.replacedId));
+      // (Task 6, A2) Claimed by "not a planned payment" alone: still a candidate for a skipped occurrence.
+      const decided = claimedByDecisionTxnIds.has(row.id) || (!!o.replacedId && claimedByDecisionTxnIds.has(o.replacedId));
+      if (claimed && decided) return;
       // (PR6 second review) PR7's card-payment signals travel with the row, for
       // `plansPaidInFullByName`: only a real card payment pays a card's minimum.
       // (Debt tag) So does the user's debt tag (PR7 rule 2) — ⚠️ (review M2) only on
@@ -1370,6 +1423,8 @@ export async function buildForecastLedger(
         onChecking,
         plaidChecking,
       };
+      if (row.occurredOn >= rowMatchFromISO) skippedRows.push(candidate);
+      if (claimed) return;
       if (row.occurredOn >= listRowFromISO) listingRows.push(candidate);
       if (row.occurredOn >= rowMatchFromISO) matchRows.push(candidate);
     });
@@ -1536,6 +1591,18 @@ export async function buildForecastLedger(
     hookPaymentRows = matchRows
       .filter((r) => r.onChecking && !usedRows.has(r.txnId) && !cardPaymentTxnIds.has(r.txnId))
       .map((r) => ({ txnId: r.txnId, occurredOn: r.occurredOn, amount: r.amount, description: r.description, debtId: r.debtId ?? null, pending: pendingTxnIds.has(r.txnId) }));
+    // ⭐ (Task 6, A2) A SKIPPED OCCURRENCE AS A SUGGESTION, after every rule above
+    // took its rows: only a row no pair, no card rule and no decision holds. Tier 3,
+    // never off the curve; the fates and the curve below never read these.
+    if (skippedMatchPlans.length > 0) {
+      const takenTxnIds = new Set([...matches, ...listingMatches].map((m) => m.txnId));
+      skippedSuggestions = suggestSkippedPlans(
+        skippedMatchPlans,
+        skippedRows.filter((r) => !takenTxnIds.has(r.txnId) && !usedRows.has(r.txnId) && !cardPaymentTxnIds.has(r.txnId)),
+        matchItems,
+        notMatchPairs,
+      );
+    }
   }
 
   // ⭐ (PR-B2, decision 7) EACH HOOK OCCURRENCE IS ITS CARD PAYMENT. Sized after the
@@ -2110,6 +2177,7 @@ export async function buildForecastLedger(
     cashThroughToday: snapshotISO ? { ...cash.throughToday } : { rowCount: 0, net: 0 },
     items,
     matches,
+    skippedSuggestions,
     remainderByPlanKey,
     overdueOutsideForecast,
     incomeNotArrived,

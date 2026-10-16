@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { ForecastResolutionReplaced } from "./forecastResolutionReplaced";
 
 export interface ForecastResolution {
   id: string;
@@ -25,4 +26,6 @@ export interface ForecastResolution {
   txnAmount?: string | null;
   /** @nullable */
   txnForecastFlag?: boolean | null;
+  /** (Task 6, POST only) The answers this write deleted (one per plan occurrence and one per bank row): what POST /forecast/resolutions/{id}/undo puts back */
+  replaced?: ForecastResolutionReplaced[];
 }

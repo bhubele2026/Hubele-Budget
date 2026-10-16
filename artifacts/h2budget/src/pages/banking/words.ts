@@ -51,6 +51,8 @@ export function bucketNote(name: BankingReviewBucketName, b: Pick<BankingReviewB
       const parts: string[] = [];
       if (r && r.needs_review.count > 0) parts.push(`${r.needs_review.count} needs review`);
       if (r && r.suggested_match.count > 0) parts.push(`${r.suggested_match.count} suggested ${r.suggested_match.count === 1 ? "match" : "matches"}`);
+      // (Task 6) Spending's own word for the same rows: the bank's evidence leaves them open.
+      if (r?.evidence_unresolved && r.evidence_unresolved.count > 0) parts.push(`${r.evidence_unresolved.count} unconfirmed`);
       return parts.length ? parts.join(" · ") : null;
     }
     default:
@@ -107,7 +109,63 @@ export const REASON_WORDS: Partial<Record<BankingReviewReason, string>> = {
   needs_review: "Needs review",
   suggested_match: "Suggested match",
   not_compared: "Not compared",
+  // (Task 6) The word Spending uses for the same row ("Unconfirmed").
+  evidence_unresolved: "Unconfirmed",
 };
+
+const TRANSFER_TO: Record<string, string> = {
+  savings: "a transfer to savings",
+  investment: "a transfer to investments",
+  account: "a transfer between accounts",
+  in: "a transfer in",
+  other: "a transfer",
+};
+
+/**
+ * ⭐ (Task 6, A2) Why an Unclear row is unclear, in the evidence rule's own words
+ * — the very words Spending prints (`@/lib/evidenceWords` `evidenceWords`),
+ * capitalised: "Bank says loan payment". Null when the row is not unresolved.
+ * ⚠️ Kept here, not imported: importing that module from a second lazy page
+ * splits it into a chunk of its own, and the new chunk's name in the landing's
+ * preload map costs 44 bytes the landing cap does not have. `words.test.ts`
+ * pins these equal to `evidenceWords` for every reason.
+ */
+export function evidenceLine(row: Pick<BankingReviewRow, "rowEvidence">): string | null {
+  const e = row.rowEvidence;
+  if (!e || e.class !== "unresolved") return null;
+  switch (e.reason) {
+    case "loan_payment":
+      return "Bank says loan payment";
+    case "transfer_evidence":
+      return `Bank says ${TRANSFER_TO[e.suggestion?.detail ?? "other"] ?? "a transfer"}`;
+    case "income_evidence":
+      return "Bank says income";
+    case "bill_suggestion":
+      return e.suggestion?.target?.label ? `May be the ${e.suggestion.target.label} bill` : "May be a bill";
+    case "debit_in_income_category":
+      return "Money out filed under an income category";
+    case "credit_in_expense_category":
+      return "Money in filed under an expense category";
+    default:
+      return null;
+  }
+}
+
+/** The occurrence an unresolved row's suggestion names, when there is one (a skipped one included). */
+export function suggestionTarget(row: Pick<BankingReviewRow, "rowEvidence">) {
+  const e = row.rowEvidence;
+  if (!e || e.class !== "unresolved") return null;
+  return e.suggestion?.target ?? null;
+}
+
+/**
+ * (Task 6, A2) "Looks like Credit Line (Northwind), planned $820.00 on May 2 (skipped)".
+ * The plan, its planned amount and its day — and "(skipped)" when the household skipped it.
+ */
+export function suggestionTargetLine(t: { label: string; planned: string | null; occurrenceDate: string; skipped: boolean }): string {
+  const planned = t.planned != null ? `, planned ${unsigned(t.planned)} on ${dayWords(t.occurrenceDate)}` : ` on ${dayWords(t.occurrenceDate)}`;
+  return `Looks like ${t.label}${planned}${t.skipped ? " (skipped)" : ""}`;
+}
 
 /** How a planned item fared, in plain words. */
 export function fateWords(fate: BankingReviewPlanFate): string {
