@@ -6810,6 +6810,64 @@ export interface AmexSummaryNeedsAttention {
     /** Some group lists fewer rows than it counts */
     truncated: boolean;
 }
+export type AmexSummaryReconciliationGroupKey = (typeof AmexSummaryReconciliationGroupKey)[keyof typeof AmexSummaryReconciliationGroupKey];
+export declare const AmexSummaryReconciliationGroupKey: {
+    readonly weekly_known: "weekly_known";
+    readonly weekly_unresolved: "weekly_unresolved";
+    readonly monthly_known: "monthly_known";
+    readonly monthly_unresolved: "monthly_unresolved";
+    readonly bills: "bills";
+    readonly unplanned: "unplanned";
+    readonly reimbursable: "reimbursable";
+    readonly not_counted: "not_counted";
+    readonly no_bucket: "no_bucket";
+};
+export type AmexSummaryReconciliationRowNotesItem = (typeof AmexSummaryReconciliationRowNotesItem)[keyof typeof AmexSummaryReconciliationRowNotesItem];
+export declare const AmexSummaryReconciliationRowNotesItem: {
+    readonly not_filed: "not_filed";
+    readonly no_category: "no_category";
+    readonly pending: "pending";
+};
+export interface AmexSummaryReconciliationRow {
+    id: string;
+    date: string;
+    /** The household's merchant alias */
+    displayName: string;
+    /** The purchase */
+    amount: string;
+    pending: boolean;
+    card: AmexSummaryRowCard;
+    /** What is true of the row beside its group: not filed to an allowance yet, no category, pending */
+    notes: AmexSummaryReconciliationRowNotesItem[];
+}
+export interface AmexSummaryReconciliationGroup {
+    key: AmexSummaryReconciliationGroupKey;
+    /** The group's words ("This week's plan", "Monthly allowance", …) */
+    label: string;
+    /** Σ the group's purchases (every row, not only those listed); "0.00" when none */
+    amount: string;
+    count: number;
+    /** At most rowsPerGroup, largest first */
+    rows: AmexSummaryReconciliationRow[];
+    truncated: boolean;
+}
+/**
+ * (Task 5) The period's purchases — exactly the rows `purchases` counts — each in ONE group, by the placement the household window already gave it (`classifyMovement`, the read householdContribution sums) and, inside the weekly plan and the monthly allowance, the F2 evidence class (the known / unresolved test `evidenceSplitCents` uses). No rule of its own. Σ groups = purchases (`ties`). Refunds are beside the groups, never in them (`net` = purchases − refunds). A plan group equals its householdContribution figure while that plan holds only these purchases: householdContribution also nets the card's refunds into the plan they belong to and reads rows the payoff leaves out ("not mine").
+ */
+export interface AmexSummaryReconciliation {
+    /** The top-level purchases (the same rows) */
+    purchases: AmexSummaryTotal;
+    /** The top-level refunds — credits, in no group */
+    refunds: AmexSummaryTotal;
+    /** purchases − refunds; negative when the refunds are larger */
+    net: string;
+    /** weekly_unresolved + monthly_unresolved — awaiting a decision */
+    unresolved: AmexSummaryTotal;
+    /** Σ the groups' amounts and counts = purchases, to the cent */
+    ties: boolean;
+    /** Always all nine, in this order: weekly_known, weekly_unresolved, monthly_known, monthly_unresolved, bills, unplanned, reimbursable, not_counted (a transfer, an excluded category, any placement outside the plans), no_bucket (a purchase the window did not place). */
+    groups: AmexSummaryReconciliationGroup[];
+}
 export interface AmexSummary {
     scope: AmexSummaryScope;
     period: AmexSummaryPeriod;
@@ -6823,6 +6881,7 @@ export interface AmexSummary {
     householdContribution: AmexSummaryHouseholdContribution;
     planLink: AmexSummaryPlanLink;
     needsAttention: AmexSummaryNeedsAttention;
+    reconciliation: AmexSummaryReconciliation;
     /** What the answer cannot see, e.g. "tracking_start:2026-05-01" when `from` was clamped. */
     limitations: string[];
 }
@@ -8827,7 +8886,7 @@ export type GetAmexSummaryParams = {
      */
     to: string;
     /**
-     * Rows listed in each needsAttention group, largest first (each group's amount and count still cover every row).
+     * Rows listed in each needsAttention and reconciliation group, largest first (each group's amount and count still cover every row).
      * @minimum 1
      * @maximum 50
      */

@@ -11,6 +11,7 @@ import type { AmexSummaryOwed } from "./amexSummaryOwed";
 import type { AmexSummaryPeriod } from "./amexSummaryPeriod";
 import type { AmexSummaryPlanLink } from "./amexSummaryPlanLink";
 import type { AmexSummaryPurchases } from "./amexSummaryPurchases";
+import type { AmexSummaryReconciliation } from "./amexSummaryReconciliation";
 import type { AmexSummaryScope } from "./amexSummaryScope";
 import type { AmexSummaryTotal } from "./amexSummaryTotal";
 export interface AmexSummary {
@@ -26,6 +27,7 @@ export interface AmexSummary {
     householdContribution: AmexSummaryHouseholdContribution;
     planLink: AmexSummaryPlanLink;
     needsAttention: AmexSummaryNeedsAttention;
+    reconciliation: AmexSummaryReconciliation;
     /** What the answer cannot see, e.g. "tracking_start:2026-05-01" when `from` was clamped. */
     limitations: string[];
 }

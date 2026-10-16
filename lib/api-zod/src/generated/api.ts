@@ -6727,7 +6727,7 @@ export const SetAmexCardPayoffModeResponse = zod.object({
 });
 
 /**
- * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. Read-only.
+ * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. reconciliation puts every purchase in one group (the weekly plan, the monthly allowance, bills, unplanned, reimbursable, not counted, not placed): the groups add up to purchases. Read-only.
  * @summary One Amex card's period (or every Amex card's) — owed, purchases, payments and credits apart, and what was not in the plan
  */
 export const getAmexSummaryQueryAccountIdMax = 128;
@@ -6765,7 +6765,7 @@ export const GetAmexSummaryQueryParams = zod.object({
     .max(getAmexSummaryQueryRowsPerGroupMax)
     .default(getAmexSummaryQueryRowsPerGroupDefault)
     .describe(
-      "Rows listed in each needsAttention group, largest first (each group's amount and count still cover every row).",
+      "Rows listed in each needsAttention and reconciliation group, largest first (each group's amount and count still cover every row).",
     ),
 });
 
@@ -7153,6 +7153,98 @@ export const GetAmexSummaryResponse = zod.object({
       .boolean()
       .describe("Some group lists fewer rows than it counts"),
   }),
+  reconciliation: zod
+    .object({
+      purchases: zod
+        .object({
+          amount: zod
+            .string()
+            .describe("Positive dollars (notMine is charges less credits)"),
+          count: zod.number(),
+        })
+        .describe("The top-level purchases (the same rows)"),
+      refunds: zod
+        .object({
+          amount: zod
+            .string()
+            .describe("Positive dollars (notMine is charges less credits)"),
+          count: zod.number(),
+        })
+        .describe("The top-level refunds — credits, in no group"),
+      net: zod
+        .string()
+        .describe("purchases − refunds; negative when the refunds are larger"),
+      unresolved: zod
+        .object({
+          amount: zod
+            .string()
+            .describe("Positive dollars (notMine is charges less credits)"),
+          count: zod.number(),
+        })
+        .describe(
+          "weekly_unresolved + monthly_unresolved — awaiting a decision",
+        ),
+      ties: zod
+        .boolean()
+        .describe("Σ the groups' amounts and counts = purchases, to the cent"),
+      groups: zod
+        .array(
+          zod.object({
+            key: zod.enum([
+              "weekly_known",
+              "weekly_unresolved",
+              "monthly_known",
+              "monthly_unresolved",
+              "bills",
+              "unplanned",
+              "reimbursable",
+              "not_counted",
+              "no_bucket",
+            ]),
+            label: zod
+              .string()
+              .describe(
+                'The group\'s words (\"This week\'s plan\", \"Monthly allowance\", …)',
+              ),
+            amount: zod
+              .string()
+              .describe(
+                'Σ the group\'s purchases (every row, not only those listed); \"0.00\" when none',
+              ),
+            count: zod.number(),
+            rows: zod
+              .array(
+                zod.object({
+                  id: zod.string(),
+                  date: zod.string(),
+                  displayName: zod
+                    .string()
+                    .describe("The household's merchant alias"),
+                  amount: zod.string().describe("The purchase"),
+                  pending: zod.boolean(),
+                  card: zod.object({
+                    accountId: zod.string(),
+                    name: zod.string(),
+                    mask: zod.string().nullable(),
+                  }),
+                  notes: zod
+                    .array(zod.enum(["not_filed", "no_category", "pending"]))
+                    .describe(
+                      "What is true of the row beside its group: not filed to an allowance yet, no category, pending",
+                    ),
+                }),
+              )
+              .describe("At most rowsPerGroup, largest first"),
+            truncated: zod.boolean(),
+          }),
+        )
+        .describe(
+          "Always all nine, in this order: weekly_known, weekly_unresolved, monthly_known, monthly_unresolved, bills, unplanned, reimbursable, not_counted (a transfer, an excluded category, any placement outside the plans), no_bucket (a purchase the window did not place).",
+        ),
+    })
+    .describe(
+      "(Task 5) The period's purchases — exactly the rows `purchases` counts — each in ONE group, by the placement the household window already gave it (`classifyMovement`, the read householdContribution sums) and, inside the weekly plan and the monthly allowance, the F2 evidence class (the known \/ unresolved test `evidenceSplitCents` uses). No rule of its own. Σ groups = purchases (`ties`). Refunds are beside the groups, never in them (`net` = purchases − refunds). A plan group equals its householdContribution figure while that plan holds only these purchases: householdContribution also nets the card's refunds into the plan they belong to and reads rows the payoff leaves out (\"not mine\").",
+    ),
   limitations: zod
     .array(zod.string())
     .describe(

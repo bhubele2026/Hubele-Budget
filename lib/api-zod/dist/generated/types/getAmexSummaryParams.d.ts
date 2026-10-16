@@ -23,7 +23,7 @@ export type GetAmexSummaryParams = {
      */
     to: string;
     /**
-     * Rows listed in each needsAttention group, largest first (each group's amount and count still cover every row).
+     * Rows listed in each needsAttention and reconciliation group, largest first (each group's amount and count still cover every row).
      * @minimum 1
      * @maximum 50
      */

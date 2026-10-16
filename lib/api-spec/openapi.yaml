@@ -1993,7 +1993,9 @@ paths:
         pays it (its payoff for the period holding `to`), or none.
         needsAttention lists the purchases still to resolve, each in one group,
         first wins: marked unplanned · not filed to an allowance · filed with no
-        category. Read-only.
+        category. reconciliation puts every purchase in one group (the weekly
+        plan, the monthly allowance, bills, unplanned, reimbursable, not
+        counted, not placed): the groups add up to purchases. Read-only.
       parameters:
         - in: query
           name: accountId
@@ -2013,7 +2015,7 @@ paths:
         - in: query
           name: rowsPerGroup
           required: false
-          description: Rows listed in each needsAttention group, largest first (each group's amount and count still cover every row).
+          description: Rows listed in each needsAttention and reconciliation group, largest first (each group's amount and count still cover every row).
           schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
       responses:
         "200":
@@ -10119,7 +10121,7 @@ components:
     AmexSummary:
       type: object
       required:
-        [scope, period, owed, purchases, refunds, payments, otherCredits, otherCharges, notMine, householdContribution, planLink, needsAttention, limitations]
+        [scope, period, owed, purchases, refunds, payments, otherCredits, otherCharges, notMine, householdContribution, planLink, needsAttention, reconciliation, limitations]
       properties:
         scope: { $ref: "#/components/schemas/AmexSummaryScope" }
         period: { $ref: "#/components/schemas/AmexSummaryPeriod" }
@@ -10133,6 +10135,7 @@ components:
         householdContribution: { $ref: "#/components/schemas/AmexSummaryHouseholdContribution" }
         planLink: { $ref: "#/components/schemas/AmexSummaryPlanLink" }
         needsAttention: { $ref: "#/components/schemas/AmexSummaryNeedsAttention" }
+        reconciliation: { $ref: "#/components/schemas/AmexSummaryReconciliation" }
         limitations:
           type: array
           description: What the answer cannot see, e.g. "tracking_start:2026-05-01" when `from` was clamped.
@@ -10335,6 +10338,74 @@ components:
         accountId: { type: string }
         name: { type: string }
         mask: { type: ["string", "null"] }
+
+    AmexSummaryReconciliation:
+      type: object
+      description: >-
+        (Task 5) The period's purchases — exactly the rows `purchases` counts —
+        each in ONE group, by the placement the household window already gave
+        it (`classifyMovement`, the read householdContribution sums) and, inside
+        the weekly plan and the monthly allowance, the F2 evidence class (the
+        known / unresolved test `evidenceSplitCents` uses). No rule of its own.
+        Σ groups = purchases (`ties`). Refunds are beside the groups, never in
+        them (`net` = purchases − refunds). A plan group equals its
+        householdContribution figure while that plan holds only these
+        purchases: householdContribution also nets the card's refunds into the
+        plan they belong to and reads rows the payoff leaves out ("not mine").
+      required: [purchases, refunds, net, unresolved, ties, groups]
+      properties:
+        purchases:
+          $ref: "#/components/schemas/AmexSummaryTotal"
+          description: The top-level purchases (the same rows)
+        refunds:
+          $ref: "#/components/schemas/AmexSummaryTotal"
+          description: The top-level refunds — credits, in no group
+        net: { type: string, description: "purchases − refunds; negative when the refunds are larger" }
+        unresolved:
+          $ref: "#/components/schemas/AmexSummaryTotal"
+          description: weekly_unresolved + monthly_unresolved — awaiting a decision
+        ties: { type: boolean, description: "Σ the groups' amounts and counts = purchases, to the cent" }
+        groups:
+          type: array
+          description: >-
+            Always all nine, in this order: weekly_known, weekly_unresolved,
+            monthly_known, monthly_unresolved, bills, unplanned, reimbursable,
+            not_counted (a transfer, an excluded category, any placement outside
+            the plans), no_bucket (a purchase the window did not place).
+          items: { $ref: "#/components/schemas/AmexSummaryReconciliationGroup" }
+
+    AmexSummaryReconciliationGroup:
+      type: object
+      required: [key, label, amount, count, rows, truncated]
+      properties:
+        key:
+          type: string
+          enum: [weekly_known, weekly_unresolved, monthly_known, monthly_unresolved, bills, unplanned, reimbursable, not_counted, no_bucket]
+        label: { type: string, description: "The group's words (\"This week's plan\", \"Monthly allowance\", …)" }
+        amount: { type: string, description: "Σ the group's purchases (every row, not only those listed); \"0.00\" when none" }
+        count: { type: integer }
+        rows:
+          type: array
+          description: At most rowsPerGroup, largest first
+          items: { $ref: "#/components/schemas/AmexSummaryReconciliationRow" }
+        truncated: { type: boolean }
+
+    AmexSummaryReconciliationRow:
+      type: object
+      required: [id, date, displayName, amount, pending, card, notes]
+      properties:
+        id: { type: string }
+        date: { type: string }
+        displayName: { type: string, description: The household's merchant alias, else the cleaned bank description }
+        amount: { type: string, description: The purchase, positive dollars }
+        pending: { type: boolean }
+        card: { $ref: "#/components/schemas/AmexSummaryRowCard" }
+        notes:
+          type: array
+          description: "What is true of the row beside its group: not filed to an allowance yet, no category, pending"
+          items:
+            type: string
+            enum: [not_filed, no_category, pending]
 
     DashboardBudget:
       type: object

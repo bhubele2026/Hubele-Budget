@@ -11,6 +11,7 @@ import {
   getGetPeriodBreakdownQueryKey,
   useGetPeriodBreakdown,
   useListAllowancePlans,
+  type AmexSummaryReconciliationRow,
 } from "@workspace/api-client-react/features";
 import { useUrlState, type UrlCodec } from "@/hooks/useUrlState";
 import { useOwner } from "@/hooks/useOwner";
@@ -83,6 +84,9 @@ export function PeriodView({ view }: { view: PeriodView }) {
       entries,
       { entriesKnown },
     );
+  // (Task 5) An Amex purchase opens the Amex page on that row (the one route rule).
+  const amexRouteOf = (r: AmexSummaryReconciliationRow) =>
+    txnRoute({ id: r.id, occurredOn: r.date, plaidAccountId: r.card.accountId, source: null }, entries, { entriesKnown });
 
   // Only the current period can be given a plan, and only when none is set.
   const needsPrompt = d != null && d.isCurrent && d.plan.status === "not_set";
@@ -183,14 +187,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
           ) : null}
 
           {view === "week" && !account ? (
-            <AmexWeekLine
-              start={d.start}
-              end={d.end}
-              onOpen={() => {
-                const el = document.getElementById("sp-breakdown");
-                if (el && "scrollIntoView" in el) el.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-              }}
-            />
+            <AmexWeekLine start={d.start} end={d.end} isCurrent={d.isCurrent} open={open} onToggle={toggle} routeOf={amexRouteOf} />
           ) : null}
 
           {d.plan.status === "not_set" && d.isCurrent ? (

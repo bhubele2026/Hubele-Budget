@@ -23,6 +23,9 @@ const h = vi.hoisted(() => ({
   dryFails: false,
   /** (T4) 'refresh': the newest request failed, the last answer is kept; 'load': nothing to show. */
   fail: null as null | "refresh" | "load",
+  /** (Task 5) GET /amex/summary's answer for the Amex line; undefined = none (the line draws nothing). */
+  amex: undefined as unknown,
+  amexCalls: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("@workspace/api-client-react", async (orig) => ({
@@ -34,6 +37,10 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
 }));
 vi.mock("@workspace/api-client-react/features", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react/features")>()),
+  useGetAmexSummary: (p: Record<string, unknown>) => {
+    h.amexCalls.push(p);
+    return { data: h.amex };
+  },
   useListAllowancePlans: () => ({ data: h.plans, isLoading: false }),
   useCreateAllowancePlan: (o?: unknown) => {
     h.createOpts.push(o);
@@ -122,6 +129,8 @@ beforeEach(() => {
     },
   ];
   h.me = { isOwner: true };
+  h.amex = undefined;
+  h.amexCalls = [];
   h.placeholder = false;
   h.budget = undefined;
   h.create.mockReset();
@@ -448,6 +457,48 @@ describe("This week", () => {
     // the whole-week usual sits under Details when the headline usual is read to today
     expect(screen.getByTestId("sp-d-fullusual").textContent).toMatch(/A full week is usually/);
     expect(screen.getByTestId("sp-d-fullusual").textContent).toContain("$90.00");
+  });
+});
+
+describe("(Task 5) the Amex line on the week", () => {
+  const amexRow = (id: string, amount: string) => ({ id, date: "2026-10-06", displayName: `Card shop ${id}`, amount, pending: false, card: { accountId: "p-r-1", name: "Platinum", mask: "1001" }, notes: [] });
+  const amexGroup = (key: string, label: string, amount: string, rows: unknown[]) => ({ key, label, amount, count: rows.length, rows, truncated: false });
+  const amexAnswer = () => ({
+    purchases: { amount: "88.00", count: 2 },
+    reconciliation: {
+      purchases: { amount: "88.00", count: 2 }, refunds: { amount: "0.00", count: 0 }, net: "88.00", unresolved: { amount: "0.00", count: 0 }, ties: true,
+      groups: [amexGroup("weekly_known", "This week's plan", "60.00", [amexRow("x1", "60.00")]), amexGroup("monthly_known", "Monthly allowance", "28.00", [amexRow("x2", "28.00")])],
+    },
+  });
+
+  it("Breakdown opens in place: ?open=amex joins the address, the week (?start=) stays; a group adds amex:<key>; a row opens its Amex row; a remount (Back) lands open", async () => {
+    h.amex = amexAnswer();
+    const { unmount, ui } = mount("/spending/week?start=2026-10-04");
+    expect(h.amexCalls.at(-1)).toMatchObject({ accountId: "all", from: "2026-10-04" });
+    expect(screen.getByTestId("sp-amex-week-words").textContent).toBe("Amex purchases $88.00 · this week's plan $60.00 · monthly allowance $28.00");
+    fireEvent.click(screen.getByTestId("sp-amex-week-link"));
+    expect(new URLSearchParams(window.location.search).get("open")).toBe("amex");
+    expect(window.location.search).toContain("start=2026-10-04");
+    const panel = await screen.findByTestId("sp-amex-breakdown");
+    fireEvent.click(within(panel).getByText("This week's plan"));
+    expect(new URLSearchParams(window.location.search).get("open")).toBe("amex,amex:weekly_known");
+    expect(screen.getByTestId("sp-amex-row-link").getAttribute("href")).toBe("/amex?card=p-r-1&month=2026-10-01&tx=x1");
+    // The household categories panel keeps its own heading and place.
+    expect(screen.getByTestId("sp-breakdown").querySelector("h2")!.textContent).toBe("Why over?");
+    unmount();
+    render(ui);
+    expect((await screen.findAllByTestId("sp-amex-row")).map((el) => el.textContent)).toEqual(["Oct 6Card shop x1$60.00Platinum ••1001"]);
+    expect(screen.getByTestId("sp-title").textContent).toBe("Week · Sun Oct 4 – Sat Oct 10");
+  });
+
+  it("another week resets it closed (the arrows clear ?open=); an account's view has no Amex line", () => {
+    h.amex = amexAnswer();
+    mount("/spending/week?start=2026-10-04&open=amex");
+    fireEvent.click(screen.getByTestId("sp-next"));
+    expect(window.location.search).not.toContain("open=");
+    cleanup();
+    mount("/spending/week?account=r-1");
+    expect(screen.queryByTestId("sp-amex-week")).toBeNull();
   });
 });
 

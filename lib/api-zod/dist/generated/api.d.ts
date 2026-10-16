@@ -13226,7 +13226,7 @@ export declare const SetAmexCardPayoffModeResponse: zod.ZodObject<{
     };
 }>;
 /**
- * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. Read-only.
+ * (S5) One Amex card (`accountId` = its Plaid account_id) or every Amex card ("all", debt-linked cards included) over [from, to] (household America/Chicago days). `owed` is GET /amex/anchor's own answer (with ?accountId= for one card; the combined anchor for "all") — null when unknown, never 0. Every row on the card(s) dated in the period is in exactly one bucket (`classifyCardCredit`, the rule the weekly payoff bills with): purchases (filed or not; reimbursable ones still count and are flagged), otherCharges, refunds, payments, otherCredits, or notMine (rows the owner marked "not mine", which the payoff leaves out). A pending row its posted row replaced is counted once, on the posted row. For a card's billing window, purchases − refunds = that card's `weekCharges` on GET /amex/weekly-payoff. householdContribution is what the card(s) added to the household's allowances — the read GET /money/period-breakdown uses with `account=` (for a week, weeklyPlan = that breakdown's `actual`); it is the household's plan, not the card's. planLink: the card's debt on the payoff plan, or the everyday hook that pays it (its payoff for the period holding `to`), or none. needsAttention lists the purchases still to resolve, each in one group, first wins: marked unplanned · not filed to an allowance · filed with no category. reconciliation puts every purchase in one group (the weekly plan, the monthly allowance, bills, unplanned, reimbursable, not counted, not placed): the groups add up to purchases. Read-only.
  * @summary One Amex card's period (or every Amex card's) — owed, purchases, payments and credits apart, and what was not in the plan
  */
 export declare const getAmexSummaryQueryAccountIdMax = 128;
@@ -14095,6 +14095,200 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             truncated: boolean;
         };
     }>;
+    reconciliation: zod.ZodObject<{
+        purchases: zod.ZodObject<{
+            amount: zod.ZodString;
+            count: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            amount: string;
+        }, {
+            count: number;
+            amount: string;
+        }>;
+        refunds: zod.ZodObject<{
+            amount: zod.ZodString;
+            count: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            amount: string;
+        }, {
+            count: number;
+            amount: string;
+        }>;
+        net: zod.ZodString;
+        unresolved: zod.ZodObject<{
+            amount: zod.ZodString;
+            count: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            amount: string;
+        }, {
+            count: number;
+            amount: string;
+        }>;
+        ties: zod.ZodBoolean;
+        groups: zod.ZodArray<zod.ZodObject<{
+            key: zod.ZodEnum<["weekly_known", "weekly_unresolved", "monthly_known", "monthly_unresolved", "bills", "unplanned", "reimbursable", "not_counted", "no_bucket"]>;
+            label: zod.ZodString;
+            amount: zod.ZodString;
+            count: zod.ZodNumber;
+            rows: zod.ZodArray<zod.ZodObject<{
+                id: zod.ZodString;
+                date: zod.ZodString;
+                displayName: zod.ZodString;
+                amount: zod.ZodString;
+                pending: zod.ZodBoolean;
+                card: zod.ZodObject<{
+                    accountId: zod.ZodString;
+                    name: zod.ZodString;
+                    mask: zod.ZodNullable<zod.ZodString>;
+                }, "strip", zod.ZodTypeAny, {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                }, {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                }>;
+                notes: zod.ZodArray<zod.ZodEnum<["not_filed", "no_category", "pending"]>, "many">;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                id: string;
+                amount: string;
+                notes: ("pending" | "not_filed" | "no_category")[];
+                pending: boolean;
+                displayName: string;
+                card: {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                };
+            }, {
+                date: string;
+                id: string;
+                amount: string;
+                notes: ("pending" | "not_filed" | "no_category")[];
+                pending: boolean;
+                displayName: string;
+                card: {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                };
+            }>, "many">;
+            truncated: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            amount: string;
+            rows: {
+                date: string;
+                id: string;
+                amount: string;
+                notes: ("pending" | "not_filed" | "no_category")[];
+                pending: boolean;
+                displayName: string;
+                card: {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                };
+            }[];
+            truncated: boolean;
+            label: string;
+            key: "reimbursable" | "bills" | "unplanned" | "weekly_known" | "weekly_unresolved" | "monthly_known" | "monthly_unresolved" | "not_counted" | "no_bucket";
+        }, {
+            count: number;
+            amount: string;
+            rows: {
+                date: string;
+                id: string;
+                amount: string;
+                notes: ("pending" | "not_filed" | "no_category")[];
+                pending: boolean;
+                displayName: string;
+                card: {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                };
+            }[];
+            truncated: boolean;
+            label: string;
+            key: "reimbursable" | "bills" | "unplanned" | "weekly_known" | "weekly_unresolved" | "monthly_known" | "monthly_unresolved" | "not_counted" | "no_bucket";
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        net: string;
+        groups: {
+            count: number;
+            amount: string;
+            rows: {
+                date: string;
+                id: string;
+                amount: string;
+                notes: ("pending" | "not_filed" | "no_category")[];
+                pending: boolean;
+                displayName: string;
+                card: {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                };
+            }[];
+            truncated: boolean;
+            label: string;
+            key: "reimbursable" | "bills" | "unplanned" | "weekly_known" | "weekly_unresolved" | "monthly_known" | "monthly_unresolved" | "not_counted" | "no_bucket";
+        }[];
+        unresolved: {
+            count: number;
+            amount: string;
+        };
+        refunds: {
+            count: number;
+            amount: string;
+        };
+        purchases: {
+            count: number;
+            amount: string;
+        };
+        ties: boolean;
+    }, {
+        net: string;
+        groups: {
+            count: number;
+            amount: string;
+            rows: {
+                date: string;
+                id: string;
+                amount: string;
+                notes: ("pending" | "not_filed" | "no_category")[];
+                pending: boolean;
+                displayName: string;
+                card: {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                };
+            }[];
+            truncated: boolean;
+            label: string;
+            key: "reimbursable" | "bills" | "unplanned" | "weekly_known" | "weekly_unresolved" | "monthly_known" | "monthly_unresolved" | "not_counted" | "no_bucket";
+        }[];
+        unresolved: {
+            count: number;
+            amount: string;
+        };
+        refunds: {
+            count: number;
+            amount: string;
+        };
+        purchases: {
+            count: number;
+            amount: string;
+        };
+        ties: boolean;
+    }>;
     limitations: zod.ZodArray<zod.ZodString, "many">;
 }, "strip", zod.ZodTypeAny, {
     refunds: {
@@ -14265,6 +14459,42 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             truncated: boolean;
         };
     };
+    reconciliation: {
+        net: string;
+        groups: {
+            count: number;
+            amount: string;
+            rows: {
+                date: string;
+                id: string;
+                amount: string;
+                notes: ("pending" | "not_filed" | "no_category")[];
+                pending: boolean;
+                displayName: string;
+                card: {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                };
+            }[];
+            truncated: boolean;
+            label: string;
+            key: "reimbursable" | "bills" | "unplanned" | "weekly_known" | "weekly_unresolved" | "monthly_known" | "monthly_unresolved" | "not_counted" | "no_bucket";
+        }[];
+        unresolved: {
+            count: number;
+            amount: string;
+        };
+        refunds: {
+            count: number;
+            amount: string;
+        };
+        purchases: {
+            count: number;
+            amount: string;
+        };
+        ties: boolean;
+    };
     limitations: string[];
 }, {
     refunds: {
@@ -14434,6 +14664,42 @@ export declare const GetAmexSummaryResponse: zod.ZodObject<{
             }[];
             truncated: boolean;
         };
+    };
+    reconciliation: {
+        net: string;
+        groups: {
+            count: number;
+            amount: string;
+            rows: {
+                date: string;
+                id: string;
+                amount: string;
+                notes: ("pending" | "not_filed" | "no_category")[];
+                pending: boolean;
+                displayName: string;
+                card: {
+                    name: string;
+                    mask: string | null;
+                    accountId: string;
+                };
+            }[];
+            truncated: boolean;
+            label: string;
+            key: "reimbursable" | "bills" | "unplanned" | "weekly_known" | "weekly_unresolved" | "monthly_known" | "monthly_unresolved" | "not_counted" | "no_bucket";
+        }[];
+        unresolved: {
+            count: number;
+            amount: string;
+        };
+        refunds: {
+            count: number;
+            amount: string;
+        };
+        purchases: {
+            count: number;
+            amount: string;
+        };
+        ties: boolean;
     };
     limitations: string[];
 }>;
@@ -17317,13 +17583,13 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
             debtFreeMonth: zod.ZodNullable<zod.ZodString>;
             totalInterest: zod.ZodNullable<zod.ZodNumber>;
         }, "strip", zod.ZodTypeAny, {
+            key: "base" | "half_extra" | "new_charges";
             debtFreeMonth: string | null;
             totalInterest: number | null;
-            key: "base" | "half_extra" | "new_charges";
         }, {
+            key: "base" | "half_extra" | "new_charges";
             debtFreeMonth: string | null;
             totalInterest: number | null;
-            key: "base" | "half_extra" | "new_charges";
         }>, "many">;
         assumptions: zod.ZodArray<zod.ZodObject<{
             key: zod.ZodString;
@@ -17342,9 +17608,9 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
         interestHigh: number | null;
         newChargesPerMonth: number;
         runs: {
+            key: "base" | "half_extra" | "new_charges";
             debtFreeMonth: string | null;
             totalInterest: number | null;
-            key: "base" | "half_extra" | "new_charges";
         }[];
         assumptions: {
             text: string;
@@ -17357,9 +17623,9 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
         interestHigh: number | null;
         newChargesPerMonth: number;
         runs: {
+            key: "base" | "half_extra" | "new_charges";
             debtFreeMonth: string | null;
             totalInterest: number | null;
-            key: "base" | "half_extra" | "new_charges";
         }[];
         assumptions: {
             text: string;
@@ -17501,9 +17767,9 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
         interestHigh: number | null;
         newChargesPerMonth: number;
         runs: {
+            key: "base" | "half_extra" | "new_charges";
             debtFreeMonth: string | null;
             totalInterest: number | null;
-            key: "base" | "half_extra" | "new_charges";
         }[];
         assumptions: {
             text: string;
@@ -17595,9 +17861,9 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
         interestHigh: number | null;
         newChargesPerMonth: number;
         runs: {
+            key: "base" | "half_extra" | "new_charges";
             debtFreeMonth: string | null;
             totalInterest: number | null;
-            key: "base" | "half_extra" | "new_charges";
         }[];
         assumptions: {
             text: string;
@@ -27622,11 +27888,11 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         checkedAt: zod.ZodNullable<zod.ZodString>;
         unexplained: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
-        status: "not_checked" | "ties" | "drift";
+        status: "ties" | "not_checked" | "drift";
         unexplained: string | null;
         checkedAt: string | null;
     }, {
-        status: "not_checked" | "ties" | "drift";
+        status: "ties" | "not_checked" | "drift";
         unexplained: string | null;
         checkedAt: string | null;
     }>;
@@ -28065,6 +28331,11 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         to: string;
         today: string;
     };
+    reconciliation: {
+        unexplained: string;
+        rowsPlaced: number;
+        rowsUnexplained: number;
+    };
     household: {
         weekStart: string;
         weekEnd: string;
@@ -28729,11 +29000,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         varianceOut: string | null;
         withoutPlanDetail: number;
     };
-    reconciliation: {
-        unexplained: string;
-        rowsPlaced: number;
-        rowsUnexplained: number;
-    };
     reviewInbox: {
         unresolvedInRange: number;
         unresolvedScope: "this account · this period";
@@ -28743,7 +29009,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         badgeScope: "this calendar month, forecast account";
     };
     balanceTie: {
-        status: "not_checked" | "ties" | "drift";
+        status: "ties" | "not_checked" | "drift";
         unexplained: string | null;
         checkedAt: string | null;
     };
@@ -28876,6 +29142,11 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         to: string;
         today: string;
     };
+    reconciliation: {
+        unexplained: string;
+        rowsPlaced: number;
+        rowsUnexplained: number;
+    };
     household: {
         weekStart: string;
         weekEnd: string;
@@ -29540,11 +29811,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         varianceOut: string | null;
         withoutPlanDetail: number;
     };
-    reconciliation: {
-        unexplained: string;
-        rowsPlaced: number;
-        rowsUnexplained: number;
-    };
     reviewInbox: {
         unresolvedInRange: number;
         unresolvedScope: "this account · this period";
@@ -29554,7 +29820,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         badgeScope: "this calendar month, forecast account";
     };
     balanceTie: {
-        status: "not_checked" | "ties" | "drift";
+        status: "ties" | "not_checked" | "drift";
         unexplained: string | null;
         checkedAt: string | null;
     };
@@ -29793,7 +30059,7 @@ export declare const GetBankingCheckExplainResponse: zod.ZodObject<{
         unexplained: zod.ZodNullable<zod.ZodString>;
         fieldChanged: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
-        status: "not_checked" | "ties" | "drift";
+        status: "ties" | "not_checked" | "drift";
         anchor: {
             at: string;
             balance: string;
@@ -29815,7 +30081,7 @@ export declare const GetBankingCheckExplainResponse: zod.ZodObject<{
         predicted: string | null;
         fieldChanged: boolean;
     }, {
-        status: "not_checked" | "ties" | "drift";
+        status: "ties" | "not_checked" | "drift";
         anchor: {
             at: string;
             balance: string;
@@ -30165,7 +30431,7 @@ export declare const GetBankingCheckExplainResponse: zod.ZodObject<{
     };
     verdict: "unknown" | "late_rows_tie" | "manual_rows_match" | null;
     record: {
-        status: "not_checked" | "ties" | "drift";
+        status: "ties" | "not_checked" | "drift";
         anchor: {
             at: string;
             balance: string;
@@ -30286,7 +30552,7 @@ export declare const GetBankingCheckExplainResponse: zod.ZodObject<{
     };
     verdict: "unknown" | "late_rows_tie" | "manual_rows_match" | null;
     record: {
-        status: "not_checked" | "ties" | "drift";
+        status: "ties" | "not_checked" | "drift";
         anchor: {
             at: string;
             balance: string;
