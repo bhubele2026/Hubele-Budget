@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hookLineOf, hookOwedStatus, hookPayoffsOf, hookPayoffWords, type HookPayoffLine } from "./forecastHooks";
+import { hookCurveOf, hookLineOf, hookOwedStatus, hookPayoffsOf, hookPayoffWords, itemAmountWords, type HookPayoffLine } from "./forecastHooks";
 
 // (WP8) The register's words for an everyday hook: display only.
 const signal = {
@@ -84,7 +84,7 @@ const mixedSignal = {
 };
 
 describe("(S2) the reserve when no plan is set", () => {
-  it("no plan: every occurrence reads 'Weekly Spend reserve $380 · no weekly plan set' — never 'plan $380'", () => {
+  it("no plan: every occurrence reads 'Assumed $380 · no weekly plan set' — never 'plan $380'", () => {
     const m = hookPayoffsOf(noPlanSignal as never);
     expect([...m.keys()].sort()).toEqual(["ws|2026-10-10", "ws|2026-10-17"]);
     expect(m.get("ws|2026-10-17")).toEqual({
@@ -92,9 +92,9 @@ describe("(S2) the reserve when no plan is set", () => {
       // (C5) No plan for this week or a later one: the row may offer "Set a weekly plan →".
       planLink: "week",
     });
-    expect(hookPayoffWords(m.get("ws|2026-10-17")!)).toBe("Weekly Spend reserve $380 · no weekly plan set");
+    expect(hookPayoffWords(m.get("ws|2026-10-17")!)).toBe("Assumed $380 · no weekly plan set");
     // (C4) Dragged to the next business day: it names its own week and the day the forecast takes it.
-    expect(hookPayoffWords(m.get("ws|2026-10-10")!)).toBe("Weekly Spend of Oct 10, due Oct 15: reserve $380 · no weekly plan set");
+    expect(hookPayoffWords(m.get("ws|2026-10-10")!)).toBe("Weekly Spend of Oct 10, due Oct 15: assumed $380 · no weekly plan set");
     for (const k of ["ws|2026-10-10", "ws|2026-10-17"]) expect(hookPayoffWords(m.get(k)!)).not.toContain("plan $");
     expect(m.has("mort|2026-10-12")).toBe(false);
   });
@@ -102,7 +102,7 @@ describe("(S2) the reserve when no plan is set", () => {
   it("a plan from this week: this week keeps 'card payoff $X · plan $Y'; last week still says the reserve", () => {
     const m = hookPayoffsOf(mixedSignal as never);
     expect(hookPayoffWords(m.get("ws|2026-10-17")!)).toBe("card payoff $355.00 · plan $380");
-    expect(hookPayoffWords(m.get("ws|2026-10-10")!)).toBe("Weekly Spend of Oct 10, due Oct 15: reserve $380 · no weekly plan set");
+    expect(hookPayoffWords(m.get("ws|2026-10-10")!)).toBe("Weekly Spend of Oct 10, due Oct 15: assumed $380 · no weekly plan set");
     // (C5) A plan is set from this week: last week's reserve offers no "Set a weekly plan".
     expect(m.get("ws|2026-10-10")!.planLink).toBeUndefined();
   });
@@ -110,7 +110,7 @@ describe("(S2) the reserve when no plan is set", () => {
   it("a monthly hook says 'no monthly plan set'; one paid on evidence names the row and that no plan is set", () => {
     expect(
       hookPayoffWords({ planKey: "ms|2026-10-31", cadence: "monthly", plan: 900, payoff: 900, paidOnEvidence: null, basis: "stored_amount", label: "Monthly Spend", parts: null }),
-    ).toBe("Monthly Spend reserve $900 · no monthly plan set");
+    ).toBe("Assumed $900 · no monthly plan set");
     expect(
       hookPayoffWords({
         planKey: "ws|2026-10-03", cadence: "weekly", plan: 380, payoff: null, basis: "stored_amount", label: "Weekly Spend", parts: null,
@@ -176,7 +176,7 @@ describe("(F5) a carried or part-paid week says so", () => {
   it("a closed (or answered) week with nothing left to spend holds card purchases, never 'reserve $300'", () => {
     expect(hookPayoffWords({ ...base, planKey: "ws|2026-10-10", payoff: 180, paidOnEvidence: null, left: 0 })).toBe("card purchases $180.00 still owed");
     // The open week keeps the reserve words.
-    expect(hookPayoffWords({ ...base, planKey: "ws|2026-10-17", payoff: 300, paidOnEvidence: null, left: 210 })).toBe("Weekly Spend reserve $300 · no weekly plan set");
+    expect(hookPayoffWords({ ...base, planKey: "ws|2026-10-17", payoff: 300, paidOnEvidence: null, left: 210 })).toBe("Assumed $300 · no weekly plan set");
     expect(hookOwedStatus(null)).toBe(null);
     expect(hookOwedStatus({ ...base, planKey: "k", payoff: null, paidOnEvidence: null })).toBe(null);
   });
@@ -197,8 +197,10 @@ describe("(F5) a carried or part-paid week says so", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // ⭐ (C4) THE MONTHLY SPEND ROW'S WORDS TIE TO ITS AMOUNT. Synthetic figures.
 // A monthly hook on the 1st, a $620 monthly plan, the item's stored amount $400.
-// Every occurrence's curve event = card purchases + carried + left to spend
-// (− a partial answer's row): the words print exactly those parts.
+// Every occurrence's curve event = card purchases + carried + left to spend:
+// the words print exactly those parts. (Task 4, D) A partial answer on a hook is
+// read as not given (the ledger's rule), so November's curve event is its whole
+// reserve and the words name no partial; the register's row shows the curve's figure.
 const MS = "ms";
 const reserveOf = (date: string, r: Record<string, string | null>) => ({
   hook: "monthly" as const, recurringItemId: MS, planKey: `${MS}|${date}`, occurrenceDate: date, label: "Monthly Spend",
@@ -210,45 +212,46 @@ const novGap = {
   hookReserves: [
     // October's: moved by the household to Nov 1 (rescheduled); its own month's parts.
     reserveOf("2026-10-01", { amount: "574.50", incurred: "75.00", allowanceLeft: "499.50" }),
-    // November's own: answered "partial" with a $85.00 checking row.
+    // November's own (a legacy "partial" answer on it is read as not given).
     reserveOf("2026-11-01", { amount: "620.00", incurred: "0.00", allowanceLeft: "620.00" }),
   ],
   events: [
     { date: "2026-11-01", label: "Monthly Spend", amount: "-574.50", itemId: MS, originalDate: "2026-11-01", occurrenceKey: `${MS}|2026-10-01`, occurrenceDate: "2026-10-01" },
-    { date: "2026-11-01", label: "Monthly Spend", amount: "-535.00", itemId: MS, originalDate: "2026-11-01", occurrenceKey: `${MS}|2026-11-01`, occurrenceDate: "2026-11-01" },
+    { date: "2026-11-01", label: "Monthly Spend", amount: "-620.00", itemId: MS, originalDate: "2026-11-01", occurrenceKey: `${MS}|2026-11-01`, occurrenceDate: "2026-11-01" },
   ],
   overdueAssumedPaid: [],
 };
-// The register's two rows on Nov 1, as `buildLineRegister` builds them from the bundle.
+// The register's two rows on Nov 1, as `buildLineRegister` builds them with `hookCurveOf`: the curve's figures.
 const novRows = [
-  { itemId: MS, date: "2026-11-01", originalDate: "2026-10-01", status: "future", amount: -400 },
-  { itemId: MS, date: "2026-11-01", status: "partial", amount: -315, plannedAmount: -400, paidAmount: -85, matchedTxnId: "tx-part" },
+  { itemId: MS, date: "2026-11-01", originalDate: "2026-10-01", status: "future", amount: -574.5 },
+  { itemId: MS, date: "2026-11-01", status: "future", amount: -620 },
 ];
-const describeRow = (id: string) => (id === "tx-part" ? "AMEX EPAYMENT ACH PMT" : null);
 
 describe("(C4) the Nov 1 Monthly Spend rows: words = amount", () => {
   it("(b) a moved row reads ITS OWN occurrence's reserve and names its period — never the reserve of the day it is shown on", () => {
-    const m = hookPayoffsOf(novGap as never, describeRow, novRows);
+    const m = hookPayoffsOf(novGap as never);
     const october = hookLineOf(m, novRows[0]!)!;
     expect(october.planKey).toBe(`${MS}|2026-10-01`);
     expect(october.payoff).toBe(574.5);
+    // (Task 4, D) The row shows the forecast's $574.50: the words are its parts, nothing more.
+    expect(hookPayoffWords(october, { face: 574.5 })).toBe(
+      "October's Monthly Spend, due Nov 1: card purchases $75.00 + left to spend $499.50",
+    );
+    // A caller that shows another figure (the Missed list's record) still hears what the forecast takes — never "(item amount … not used)".
     expect(hookPayoffWords(october, { face: 400 })).toBe(
-      "October's Monthly Spend, due Nov 1: card purchases $75.00 + left to spend $499.50 = $574.50 on the forecast (item amount $400 not used)",
+      "October's Monthly Spend, due Nov 1: card purchases $75.00 + left to spend $499.50 = $574.50 on the forecast",
     );
     // Before C4 the row was looked up by its shown day — November's reserve: "$0.00 + $620.00" over October's −$574.50.
     expect(hookPayoffWords(m.get(`${MS}|2026-11-01`)!)).not.toContain("$574.50");
   });
 
-  it("(a) a partial answer: the words name the row that paid part of it and what is still owed — the curve's remainder", () => {
-    const m = hookPayoffsOf(novGap as never, describeRow, novRows);
+  it("(a, Task 4) a legacy partial answer is never named: November's words are its whole reserve — the curve's figure", () => {
+    const m = hookPayoffsOf(novGap as never, () => "AMEX EPAYMENT ACH PMT");
     const november = hookLineOf(m, novRows[1]!)!;
-    expect(november).toMatchObject({ payoff: 535, partial: { paid: 85, description: "AMEX EPAYMENT ACH PMT" } });
-    expect(hookPayoffWords(november, { face: 315 })).toBe(
-      "Monthly Spend: card purchases $0.00 + left to spend $620.00 · $85.00 paid by AMEX EPAYMENT ACH PMT · $535.00 still owed (item amount $400 not used)",
-    );
-    // An unknown paid amount never prints a sum that does not add up.
-    const unknown = hookPayoffsOf(novGap as never, describeRow, [novRows[0]!, { ...novRows[1]!, paidAmount: null }]);
-    expect(hookPayoffWords(hookLineOf(unknown, novRows[1]!)!)).toBe("Monthly Spend: part paid by AMEX EPAYMENT ACH PMT · $535.00 still owed");
+    expect(november.payoff).toBe(620);
+    expect(november).not.toHaveProperty("partial");
+    expect(hookPayoffWords(november, { face: 620 })).toBe("Monthly Spend: card purchases $0.00 + left to spend $620.00");
+    expect(hookPayoffWords(november, { face: 620 })).not.toMatch(/paid by|still owed|item amount/);
   });
 
   it("(c) no plan: paid, carried and the card's balance are named; the parts add up to the curve event, never 'reserve $300' over $260", () => {
@@ -267,15 +270,20 @@ describe("(C4) the Nov 1 Monthly Spend rows: words = amount", () => {
       overdueAssumedPaid: [],
     };
     const m = hookPayoffsOf(sig as never);
+    // (Task 4, D) The row shows the curve's $260 / $335 — the parts and the named payments, no "= … on the forecast".
+    expect(hookPayoffWords(m.get("ws|2026-10-17")!, { face: 260 })).toBe(
+      "Weekly Spend reserve: card purchases $50.00 + left to spend $210.00 · $40.00 already paid · no weekly plan set",
+    );
+    expect(hookPayoffWords(m.get("ws|2026-10-24")!, { face: 335 })).toBe(
+      "Weekly Spend reserve: card purchases $0.00 (+ carried $35.00) + left to spend $300.00 · $12.00 paid per the card's balance · no weekly plan set",
+    );
+    // Shown at the stored $300, the words add what the forecast takes.
     expect(hookPayoffWords(m.get("ws|2026-10-17")!, { face: 300 })).toBe(
       "Weekly Spend reserve: card purchases $50.00 + left to spend $210.00 = $260.00 on the forecast · $40.00 already paid · no weekly plan set",
     );
-    expect(hookPayoffWords(m.get("ws|2026-10-24")!, { face: 300 })).toBe(
-      "Weekly Spend reserve: card purchases $0.00 (+ carried $35.00) + left to spend $300.00 = $335.00 on the forecast · $12.00 paid per the card's balance · no weekly plan set",
-    );
   });
 
-  it("(d) the row shows the item's stored amount while the forecast takes the payoff: the words say what the forecast takes", () => {
+  it("(d, Task 4) the item's stored amount is never in the words; it is said once, behind the row's Details, as a template", () => {
     const sig = {
       hookAmountIgnored: [{ itemId: MS, cadence: "monthly", storedAmount: "400.00" }],
       hookReserves: [reserveOf("2026-10-28", { amount: "30.80", incurred: "0.00", allowanceLeft: "30.80" })],
@@ -283,9 +291,14 @@ describe("(C4) the Nov 1 Monthly Spend rows: words = amount", () => {
       overdueAssumedPaid: [],
     };
     const line = hookPayoffsOf(sig as never).get(`${MS}|2026-10-28`)!;
-    expect(hookPayoffWords(line, { face: 400 })).toBe("Monthly Spend: card purchases $0.00 + left to spend $30.80 = $30.80 on the forecast (item amount $400 not used)");
-    // The row's amount is the forecast's: the F4 words, unchanged.
     expect(hookPayoffWords(line, { face: 30.8 })).toBe("Monthly Spend: card purchases $0.00 + left to spend $30.80");
+    expect(hookPayoffWords(line, { face: 400 })).toBe("Monthly Spend: card purchases $0.00 + left to spend $30.80 = $30.80 on the forecast");
+    expect(itemAmountWords(line, -400)).toBe("Item amount $400 — a template; the forecast uses the monthly plan");
+    expect(itemAmountWords(line, -437.15)).toBe("Item amount $437.15 — a template; the forecast uses the monthly plan");
+    // No plan: the item's amount IS the reserve — no template note.
+    const noPlan = hookPayoffsOf({ ...sig, hookAmountIgnored: undefined, hookReserves: [reserveOf("2026-10-28", { amount: "400.00", basis: "stored_amount", incurred: "0.00", allowanceLeft: "400.00" })], events: [{ ...sig.events[0]!, amount: "-400.00" }] } as never).get(`${MS}|2026-10-28`)!;
+    expect(itemAmountWords(noPlan, -400)).toBeNull();
+    expect(itemAmountWords(undefined, -400)).toBeNull();
   });
 
   it("the guard: server parts that do not add up to the curve event are never printed", () => {
@@ -293,14 +306,57 @@ describe("(C4) the Nov 1 Monthly Spend rows: words = amount", () => {
       planKey: `${MS}|2026-11-01`, cadence: "monthly", plan: 400, payoff: 440, paidOnEvidence: null, basis: "plan", label: "Monthly Spend",
       parts: { incurred: "0.00", carried: "0.00", left: "500.00" },
     };
-    expect(hookPayoffWords(line, { face: 400 })).toBe("Monthly Spend: $440.00 on the forecast (item amount $400 not used)");
+    expect(hookPayoffWords(line, { face: 440 })).toBe("Monthly Spend: $440.00 on the forecast");
+    expect(hookPayoffWords(line, { face: 400 })).toBe("Monthly Spend: $440.00 on the forecast");
+  });
+});
+
+// (Task 4, E's words) A no-plan row the forecast holds at the item's stored amount: "Assumed $X · no <cadence> plan set".
+describe("(Task 4) the no-plan row says what the forecast assumes", () => {
+  it("weekly $450 and monthly $425.50 (the item's stored amount, formatted as before)", () => {
+    const sig = {
+      hookReserves: [
+        { hook: "weekly", recurringItemId: "ws", planKey: "ws|2026-10-17", occurrenceDate: "2026-10-17", label: "Weekly Spend", basis: "stored_amount", storedAmount: "450.00", amount: "450.00" },
+        { hook: "monthly", recurringItemId: "ms", planKey: "ms|2026-11-01", occurrenceDate: "2026-11-01", label: "Monthly Spend", basis: "stored_amount", storedAmount: "425.50", amount: "425.50" },
+      ],
+      events: [
+        { date: "2026-10-17", label: "Weekly Spend", amount: "-450.00", itemId: "ws", occurrenceKey: "ws|2026-10-17" },
+        { date: "2026-11-01", label: "Monthly Spend", amount: "-425.50", itemId: "ms", occurrenceKey: "ms|2026-11-01" },
+      ],
+      overdueAssumedPaid: [],
+    };
+    const m = hookPayoffsOf(sig as never);
+    expect(hookPayoffWords(m.get("ws|2026-10-17")!, { face: 450 })).toBe("Assumed $450 · no weekly plan set");
+    expect(hookPayoffWords(m.get("ms|2026-11-01")!, { face: 425.5 })).toBe("Assumed $425.50 · no monthly plan set");
+  });
+});
+
+// ⭐ (Task 4, D) THE REGISTER'S FIGURE FOR EACH HOOK OCCURRENCE: the curve's, by the occurrence's own key.
+describe("(Task 4) hookCurveOf — what the forecast takes, by occurrence key", () => {
+  it("sums each occurrence's events (a moved or dragged one under its own key); only hook items; none without hooks", () => {
+    const sig = {
+      ...novGap,
+      events: [
+        ...novGap.events,
+        // September's, dragged to the next business day: its own key, a later date.
+        { date: "2026-10-15", label: "Monthly Spend", amount: "-120.00", itemId: MS, originalDate: "2026-09-01", occurrenceKey: `${MS}|2026-09-01`, occurrenceDate: "2026-09-01", assumption: "overdue_assumed_unpaid" },
+        { date: "2026-11-01", label: "Mortgage", amount: "-1650.00", itemId: "mort", occurrenceKey: "mort|2026-11-01" },
+      ],
+    };
+    const c = hookCurveOf(sig as never)!;
+    expect([...c.items]).toEqual([MS]);
+    expect(Object.fromEntries(c.amountByKey)).toEqual({ [`${MS}|2026-10-01`]: -574.5, [`${MS}|2026-11-01`]: -620, [`${MS}|2026-09-01`]: -120 });
+    expect(hookCurveOf(undefined)).toBeNull();
+    expect(hookCurveOf({ events: sig.events } as never)).toBeNull();
+    // A hook with every occurrence off the curve: known items, no figures.
+    expect(hookCurveOf({ ...novGap, events: [] } as never)!.amountByKey.size).toBe(0);
   });
 });
 
 // ⭐ (C4) THE PROPERTY: for every hook row, the amount the forecast takes equals
-// the sum of the parts the words print (less the partial row they name), and a
-// row whose own figure differs says the forecast's. Generated synthetic signals
-// in the server's shape: curve = incurred + carried + left − partial.
+// the sum of the parts the words print, and a row whose own figure differs says
+// the forecast's. Generated synthetic signals in the server's shape: curve =
+// incurred + carried + left. (Task 4, D) No partial: the ledger never reads one on a hook.
 describe("(C4) property — every hook row's words add up to its amount", () => {
   // A small deterministic generator (no Math.random: the cases are the same every run).
   let seed = 20261016;
@@ -316,7 +372,7 @@ describe("(C4) property — every hook row's words add up to its amount", () => 
   };
   const shortDay = (iso: string) => `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
 
-  it("500 generated occurrences: plan / no plan, carried, paid, capped, partial, moved, dragged, row amount = stored or not", () => {
+  it("500 generated occurrences: plan / no plan, carried, paid, capped, moved, dragged, row amount = the curve's or not", () => {
     let checked = 0;
     for (let n = 0; n < 500; n += 1) {
       const weekly = rnd(2) === 0;
@@ -330,9 +386,7 @@ describe("(C4) property — every hook row's words add up to its amount", () => 
       const L = basis === "stored_amount" ? Math.max(0, stored - I - (rnd(2) ? rnd(5000) : 0)) : rnd(70000);
       const paid = rnd(3) === 0 ? 1 + rnd(30000) : 0;
       const capped = rnd(5) === 0 ? 1 + rnd(9000) : 0;
-      const gross = I + C + L;
-      const partial = rnd(4) === 0 && gross > 300 ? 101 + rnd(gross - 200) : 0;
-      const T = gross - partial;
+      const T = I + C + L;
       if (T <= 0) continue;
       const due = rnd(3) === 0 ? "2026-11-02" : occ;
       const sig = {
@@ -341,36 +395,36 @@ describe("(C4) property — every hook row's words add up to its amount", () => 
         hookReserves: [
           {
             hook: weekly ? "weekly" : "monthly", recurringItemId: id, planKey: `${id}|${occ}`, occurrenceDate: occ, label: weekly ? "Weekly Spend" : "Monthly Spend",
-            basis, storedAmount: d$(stored), amount: d$(gross + paid), incurred: d$(I), paid: d$(paid), carried: d$(C), allowanceLeft: d$(L), carriedTo: null,
+            basis, storedAmount: d$(stored), amount: d$(T + paid), incurred: d$(I), paid: d$(paid), carried: d$(C), allowanceLeft: d$(L), carriedTo: null,
             ...(capped ? { cappedByBalance: d$(capped) } : {}),
           },
         ],
         events: [{ date: due, label: "x", amount: `-${d$(T)}`, itemId: id, occurrenceKey: `${id}|${occ}`, occurrenceDate: occ, originalDate: due }],
         overdueAssumedPaid: [],
       };
-      const row = { itemId: id, date: due, ...(due !== occ ? { originalDate: occ } : {}), status: partial ? "partial" : "future", paidAmount: partial ? -partial / 100 : null, matchedTxnId: partial ? "t1" : null };
-      const m = hookPayoffsOf(sig as never, () => "CHECKING ROW", [row]);
+      const row = { itemId: id, date: due, ...(due !== occ ? { originalDate: occ } : {}) };
+      const m = hookPayoffsOf(sig as never, () => "CHECKING ROW");
       const line = hookLineOf(m, row);
       expect(line, `case ${n}`).toBeDefined();
-      const face = rnd(3) === 0 ? T / 100 : (stored - partial) / 100;
+      // ⭐ The register's own figure for the row is the curve's (`hookCurveOf`).
+      expect(hookCurveOf(sig as never)!.amountByKey.get(`${id}|${occ}`), `case ${n}`).toBe(-T / 100);
+      const face = rnd(3) === 0 ? stored / 100 : T / 100;
       const w = hookPayoffWords(line!, { face });
       const X = grab(w, /card purchases (\$[\d,.]+)(?! still)/);
       const Cw = grab(w, /\(\+ carried (\$[\d,.]+)\)/) ?? 0;
       const Lw = grab(w, /left to spend (\$[\d,.]+)/);
-      const Pw = grab(w, /(\$[\d,.]+) paid by/);
       const owed = grab(w, /(\$[\d,.]+) still owed/);
       const onForecast = grab(w, /(\$[\d,.]+) on the forecast/);
-      const reserve = grab(w, /reserve (\$[\d,.]+)/);
+      const reserve = grab(w, /[Aa]ssumed (\$[\d,.]+)/);
       if (X != null && Lw != null) {
-        // The additive parts, less the partial row the words name, are the amount.
-        expect(X + Cw + Lw - (Pw ?? 0), `case ${n}: ${w}`).toBe(T);
-        if (partial) expect(owed, `case ${n}: ${w}`).toBe(T);
+        // The additive parts are the amount.
+        expect(X + Cw + Lw, `case ${n}: ${w}`).toBe(T);
       } else if (owed != null) expect(owed, `case ${n}: ${w}`).toBe(T);
       else if (onForecast != null) expect(onForecast, `case ${n}: ${w}`).toBe(T);
       else expect(reserve, `case ${n}: ${w}`).toBe(T);
-      // A partial is always named; a row whose own figure is not the amount says the amount.
-      if (partial) expect(w, `case ${n}`).toMatch(/paid by CHECKING ROW/);
-      if (Math.round(face * 100) !== T) expect(owed === T || onForecast === T, `case ${n}: ${w}`).toBe(true);
+      // The stored amount is never named; a row whose own figure is not the amount says the amount.
+      expect(w, `case ${n}`).not.toMatch(/item amount|not used|paid by CHECKING ROW/);
+      if (Math.round(face * 100) !== T) expect(owed === T || onForecast === T || reserve === T, `case ${n}: ${w}`).toBe(true);
       // Moved or dragged: it names the day the forecast takes it.
       if (due !== occ) expect(w, `case ${n}`).toContain(`due ${shortDay(due)}`);
       checked += 1;

@@ -14,8 +14,34 @@ import { householdDayOf, householdTodayISO } from "../lib/householdClock";
 import { bankFetchedAt, computeBankFreshness } from "../lib/bankFreshness";
 import { classifyLedgerRowsThroughToday } from "../lib/ledgerCashRows";
 import { dataAsOfOf } from "../lib/dataAsOf";
+import { isBankRow, type CashRowReason } from "@workspace/avalanche-core";
 
 const router: IRouter = Router();
+
+/** (Task 4, D) One row the roll-forward read, with the cash rule's verdict on it (`BankBalanceExplainRow`). */
+type ExplainRow = {
+  id: string;
+  date: string;
+  description: string | null;
+  /** Signed, as stored. */
+  amount: string;
+  pending: boolean;
+  accountExternalId: string | null;
+  source: string | null;
+  /**
+   * On the reading's account by the rule's own `isBankRow` (a manual row is the
+   * account's own). The rule checks "held" first, so a card row dated before the
+   * reading's day comes back `held`: this says it is another account's.
+   */
+  onAccount: boolean;
+  /** The rule's `counts`: the row is in Checking today (it may add 0.00). */
+  counted: boolean;
+  /** What it adds to Checking today: 0.00 unless counted; for `adjusted`, posted − pending. */
+  contribution: string;
+  reason: CashRowReason;
+  /** A posted row's pending half, when it replaced one. */
+  replacedId: string | null;
+};
 
 /**
  * ⭐ WHY IS MY BANK BALANCE THIS NUMBER?
@@ -125,6 +151,14 @@ router.get(
     //     adds 0.00 because its pending half was already in the balance. Held,
     //     other-account and replaced pending rows are not counted.
     let sinceAnchor: { rowCount: number; net: string } | null = null;
+    // ⭐ (Task 4, D) EVERY ROW BEHIND THAT FIGURE, WITH THE RULE'S OWN VERDICT.
+    // The rows `classifyLedgerRowsThroughToday` read for the roll-forward
+    // (anchor day − SUPERSEDE_MAX_DAYS through today: the rows dated later can
+    // only pair, never count today), each with `classifyCashRows`' outcome as
+    // it came back — `reason`, `counts`, `contribution`. Nothing is judged
+    // here: Σ contribution of the `counted` rows is `sinceAnchor.net`, and their
+    // number is `sinceAnchor.rowCount` (spineParity pins both).
+    let explainRows: ExplainRow[] | null = null;
     if (anchorDay && settings?.bankSnapshotAt) {
       const cash = await classifyLedgerRowsThroughToday({
         householdId,
@@ -136,6 +170,28 @@ router.get(
         rowCount: cash.throughToday.rowCount,
         net: (Math.round(cash.throughToday.net * 100) / 100).toFixed(2),
       };
+      explainRows = cash.rows.flatMap((o, i) => {
+        if (o.occurredOn > todayDay) return [];
+        const r = cash.read[i]!;
+        return [
+          {
+            id: r.id,
+            date: r.occurredOn,
+            description: r.description,
+            amount: r.amount.toFixed(2),
+            pending: r.pending,
+            accountExternalId: r.plaidAccountId,
+            source: r.source,
+            onAccount: isBankRow(r.source, r.plaidAccountId, resolved.externalId),
+            counted: o.counts,
+            contribution: (Math.round(o.contribution * 100) / 100).toFixed(2),
+            reason: o.reason,
+            replacedId: o.replacedId,
+          },
+        ];
+      });
+      // Newest first, the counted rows before the rest of a day: the list reads like a statement.
+      explainRows.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : a.counted === b.counted ? 0 : a.counted ? -1 : 1));
     }
 
     // The most recent rows on the bank account, so a missing deposit is
@@ -221,6 +277,8 @@ router.get(
       ledger: {
         anchorDay,
         sinceAnchor,
+        // (Task 4, D) Additive: null when there is no read time (no roll-forward).
+        rows: explainRows,
         recentRows: recentRows.map((r) => ({
           date: r.occurredOn,
           description: r.description,

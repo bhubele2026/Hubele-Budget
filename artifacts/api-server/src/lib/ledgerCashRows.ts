@@ -129,6 +129,12 @@ export type LedgerCashRows = CashRowsResult & {
    * `plaidSync` for why manual rows stay out of it.
    */
   plaidRowsThroughToday: { rowCount: number; net: number };
+  /**
+   * (Task 4, D) The rows the rule read, in the order of `rows` (`rows[i]` is
+   * `read[i]`'s verdict): what "Why this number?" lists beside each verdict.
+   * Read only — never classified again.
+   */
+  read: CashRow[];
 };
 
 /**
@@ -177,5 +183,5 @@ export async function classifyLedgerRowsThroughToday(opts: {
       net += o.contribution;
     }
   });
-  return { ...result, plaidRowsThroughToday: { rowCount, net } };
+  return { ...result, plaidRowsThroughToday: { rowCount, net }, read: cashRows };
 }

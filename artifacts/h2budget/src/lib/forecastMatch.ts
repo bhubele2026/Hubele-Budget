@@ -205,6 +205,14 @@ export type PlanLine = {
   plannedAmount?: number;
   /** (PR5) `partial` lines: the paying row's amount, when known. */
   paidAmount?: number | null;
+  /**
+   * ⭐ (Task 4, D) An everyday hook occurrence (Weekly / Monthly Spend): `amount`
+   * is what the forecast takes for it — its cash-signal events by occurrence key
+   * (`hookCurveOf`), 0 when it is off the curve (`onCurve` false: shown "—").
+   * `itemAmount` is the hook item's stored amount, signed: a template the
+   * forecast does not use once a plan exists. Absent on every other line.
+   */
+  hookCurve?: { itemAmount: number; onCurve: boolean };
 };
 
 export type BankLine = {
@@ -325,6 +333,15 @@ export function buildLineRegister(opts: {
    *  client already knows is decided (plan or row resolved, pair rejected) is
    *  ignored, so a cash signal older than the bundle can't resurrect it. */
   matches?: ReadonlyArray<CashSignalMatch> | null;
+  /**
+   * ⭐ (Task 4, D) The everyday hooks' curve figures (`hookCurveOf(cashSignal)`).
+   * A hook occurrence's line then carries the forecast's figure, not the item's
+   * stored amount, so its headline, the running balance and every sum over the
+   * lines read what the curve takes. A `partial` answer on a hook is read as not
+   * given (the ledger's rule): its occurrence reads as unanswered. Absent: every
+   * line as before.
+   */
+  hookCurve?: { items: ReadonlySet<string>; amountByKey: ReadonlyMap<string, number> } | null;
 }): {
   rows: LineRow[];
   allPlan: PlanLine[];
@@ -333,7 +350,7 @@ export function buildLineRegister(opts: {
    *  No suggestion — the server's or the client's — may offer one again. */
   rejectedPairs: ReadonlySet<string>;
 } {
-  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO, visibleFromISO, lingerPastDuePlans, matches } = opts;
+  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO, visibleFromISO, lingerPastDuePlans, matches, hookCurve } = opts;
   const today = opts.today ?? new Date();
   const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const fromMs = parseISO(fromISO);
@@ -426,6 +443,12 @@ export function buildLineRegister(opts: {
     const origKey = `${ev.itemId}|${ev.date}`;
     const moved = rescheduleByKey.get(origKey);
     const date = moved?.rescheduledTo ?? ev.date;
+    // (Task 4, D) A hook occurrence: a `partial` answer on it decides nothing (the ledger reads it as not given).
+    const isHook = !!hookCurve?.items.has(ev.itemId);
+    const decisionAt = (key: string): Resolution | undefined => {
+      const r = byEventKey.get(key);
+      return isHook && r?.status === "partial" ? undefined : r;
+    };
     // The decision on the occurrence's own key wins; a moved occurrence also
     // honours a decision keyed on its new date (the pre-PR5 lookup) — (C4) unless
     // that day is the item's own occurrence (October's Monthly Spend moved onto
@@ -433,8 +456,8 @@ export function buildLineRegister(opts: {
     // the stored resolution.
     const movedKey = `${ev.itemId}|${date}`;
     const stored: Resolution | undefined =
-      byEventKey.get(origKey) ??
-      (moved?.rescheduledTo && !ownKeys.has(movedKey) ? byEventKey.get(movedKey) : undefined) ??
+      decisionAt(origKey) ??
+      (moved?.rescheduledTo && !ownKeys.has(movedKey) ? decisionAt(movedKey) : undefined) ??
       moved;
     // (#480) "Skip" from the Missed bucket: drop the occurrence entirely.
     // The row should not appear in the register, the bucket, or the
@@ -458,6 +481,15 @@ export function buildLineRegister(opts: {
       amount = partialRemainder(ev.amount, paidAmount);
     } else if (evMs > todayMs) status = "future";
     else status = "pending_plan";
+    // ⭐ (Task 4, D) An OPEN hook occurrence (the register's rows) carries what the forecast takes
+    // for it, never the item's stored amount. A decided one (matched / missed) keeps the record of
+    // the answer: the Review bucket lists it and the reconciliation compares a match with its row.
+    let hookFigure: PlanLine["hookCurve"];
+    if (isHook && (status === "pending_plan" || status === "future")) {
+      const curve = hookCurve!.amountByKey.get(origKey);
+      hookFigure = { itemAmount: ev.amount, onCurve: curve !== undefined };
+      amount = curve ?? 0;
+    }
 
     let probablyPaid: ProbablyPaid | undefined;
     // (One-time bill move) The stored `needs_review` pair, when the plan is still
@@ -517,6 +549,7 @@ export function buildLineRegister(opts: {
       originalDate: date !== ev.date ? ev.date : undefined,
       ...(probablyPaid ? { probablyPaid } : {}),
       ...(status === "partial" ? { plannedAmount, paidAmount: paidAmount ?? null } : {}),
+      ...(hookFigure ? { hookCurve: hookFigure } : {}),
     }];
   });
   for (const p of allPlan) {
