@@ -66,6 +66,7 @@ import {
 } from "../lib/dedupeTransactions";
 
 import { dataAsOfOf } from "../lib/dataAsOf";
+import { readHookSettings } from "../lib/everydayHooks";
 const router: IRouter = Router();
 
 async function ensureSettings(ownerUserId: string, householdId: string) {
@@ -1108,6 +1109,19 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
   if ((status === "not_match" || status === "partial") && (!recurringItemId || !occurrenceDate || !matchedTxnId)) {
     res.status(400).json({ error: `${status} requires recurringItemId, occurrenceDate, matchedTxnId` });
     return;
+  }
+  // ⭐ (Task 4, D) NO PARTIAL ON AN EVERYDAY HOOK. A Weekly / Monthly Spend
+  // occurrence is its card payment, paid by the payments the ledger allocates to
+  // its purchases; a partial answer would take a row the balance already counts
+  // off it a second time. The ledger reads a stored one as not given
+  // (`forecastLedger.ts`, `isHookPartial`); this refuses a new one. No screen
+  // sends one: the ledger never pairs a hook, so the register never offers Partial.
+  if (status === "partial" && typeof recurringItemId === "string") {
+    const { hooks } = await readHookSettings(req.householdOwnerId!);
+    if (recurringItemId === hooks.weekly?.recurringItemId || recurringItemId === hooks.monthly?.recurringItemId) {
+      res.status(400).json({ error: "Weekly and Monthly Spend are paid by card payments, not partial matches" });
+      return;
+    }
   }
   if (status === "rescheduled") {
     if (!recurringItemId || !occurrenceDate || !rescheduledTo) {

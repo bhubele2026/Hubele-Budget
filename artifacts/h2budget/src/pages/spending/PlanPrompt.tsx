@@ -112,22 +112,22 @@ export function PlanPrompt({
   const primary = view === "week" ? mine.find((p) => p.source === "hook_stored") ?? null : null;
   const seen = new Set<string>(primary ? [primary.amount] : []);
   const others = mine.filter((p) => (seen.has(p.amount) ? false : (seen.add(p.amount), true)));
-  // ⭐ (C5) How the forecast's reserve and this plan relate, in one sentence: the
-  // hook item's stored amount (`hook_stored`, "Weekly Spend reserve") is what the
+  // ⭐ (C5/E3) The one assumption line: the hook item's stored amount (`hook_stored`) is what the
   // forecast holds until a plan is set.
   const hookStored = mine.find((p) => p.source === "hook_stored") ?? null;
-  const holds = hookStored
-    ? `Until a plan is set the forecast holds ${roundMoney(hookStored.amount)} a ${view} — the ${hookStored.label.replace(/ reserve$/, "")} item's amount. Pick the plan Spending should track.`
-    : null;
+  const holds = hookStored ? `Forecast assumes ${roundMoney(hookStored.amount)} a ${view}` : null;
 
   if (canSet === "unknown") {
     return <div className="skeleton h-6 w-2/3 rounded" aria-busy="true" data-testid="plan-prompt-owner-unknown" />;
   }
   if (!canSet) {
     return (
-      <p className="text-body text-neutral-600" data-testid="plan-prompt-readonly">
-        Only the household owner sets the {w.plan} plan.
-      </p>
+      <div className="space-y-1" data-testid="plan-prompt-readonly-wrap">
+        {holds ? <p className="text-label text-neutral-700" data-testid="plan-prompt-holds">{holds}</p> : null}
+        <p className="text-body text-neutral-600" data-testid="plan-prompt-readonly">
+          Only the household owner sets the {w.plan} plan.
+        </p>
+      </div>
     );
   }
 

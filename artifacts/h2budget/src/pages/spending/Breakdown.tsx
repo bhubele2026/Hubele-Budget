@@ -199,7 +199,7 @@ export function Breakdown({ data, open, onToggle, routeOf }: {
   const payments = data.excludedPayments;
   const why = whyOverLines(data);
   return (
-    <section className="surface rounded-card ring-1 ring-brand-line" data-testid="sp-breakdown">
+    <section id="sp-breakdown" className="surface scroll-mt-20 rounded-card ring-1 ring-brand-line" data-testid="sp-breakdown">
       <h2 className="border-b border-brand-line px-4 py-2.5 text-title font-semibold text-brand-navy">
         {over ? (data.provisional ? "Why over so far?" : "Why over?") : "Where it went"}
       </h2>

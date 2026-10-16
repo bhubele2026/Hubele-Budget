@@ -5720,6 +5720,69 @@ export const GetForecastBankBalanceExplainResponse = zod
         .describe(
           "What the bank balance adds on top of the snapshot, by the ledger's own rule (PR4e): rows the snapshot already held, rows off the account and the pending half of a replaced pair add nothing; manual rows on the account count. When the snapshot has a balance and both are read at the same moment, snapshot.balance + net equals displayed.bankToday to the cent; a row landing between the two reads, or a household midnight between them, can break that. rowCount is the rows that count, dated through today, including a posted row that adds 0.00. Null when the snapshot has no read time.",
         ),
+      rows: zod
+        .union([
+          zod.array(
+            zod
+              .object({
+                id: zod.string(),
+                date: zod
+                  .string()
+                  .describe("The row's household day (YYYY-MM-DD)"),
+                description: zod.string().nullable(),
+                amount: zod
+                  .string()
+                  .describe("Signed, as stored: negative is money out"),
+                pending: zod.boolean(),
+                accountExternalId: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "The row's Plaid account_id; null for a manual row",
+                  ),
+                source: zod.string().nullable(),
+                onAccount: zod
+                  .boolean()
+                  .describe(
+                    "On the reading's account by the rule's own `isBankRow` (a manual row is the account's own). The rule checks held first, so another account's row dated before the reading's day reads `held`.",
+                  ),
+                counted: zod
+                  .boolean()
+                  .describe(
+                    "In Checking today (`counts`), even when it adds 0.00",
+                  ),
+                contribution: zod
+                  .string()
+                  .describe(
+                    "What it adds to Checking today, signed; 0.00 unless counted",
+                  ),
+                reason: zod.enum([
+                  "held",
+                  "not_bank",
+                  "claim_confirmed",
+                  "superseded",
+                  "expired",
+                  "duplicate",
+                  "adjusted",
+                  "counted",
+                ]),
+                replacedId: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "A posted row's pending half, when it replaced one",
+                  ),
+              })
+              .describe(
+                "(Task 4) One ledger row behind Checking today and what the cash rule made of it. `reason`: held (the bank's reading already holds it) · not_bank (another account) · claim_confirmed (a logged payment a bank row confirmed; that row counts) · superseded (a pending row its posted row replaced) · expired (an expired hold or its reversal) · duplicate (a repeated Plaid id) · adjusted (counted: the posted half of a pair whose pending charge was in the reading — adds posted − pending) · counted.",
+              ),
+          ),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(Task 4) Every row the roll-forward read for today's figure (anchor day − 7 through today), newest first, each with the cash rule's own verdict (`classifyCashRows`): never a second rule. Σ contribution over the `counted` rows = sinceAnchor.net, and their number = sinceAnchor.rowCount. Null when the snapshot has no read time (nothing rolls forward); absent from an older server.",
+        ),
       recentRows: zod.array(
         zod.object({
           date: zod.string(),

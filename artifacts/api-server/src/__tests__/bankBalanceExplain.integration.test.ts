@@ -53,6 +53,20 @@ app.use("/api", bankBalanceExplainRouter);
 let server: Server;
 let baseUrl: string;
 
+type ExplainRow = {
+  id: string;
+  date: string;
+  description: string | null;
+  amount: string;
+  pending: boolean;
+  accountExternalId: string | null;
+  source: string | null;
+  onAccount: boolean;
+  counted: boolean;
+  contribution: string;
+  reason: string;
+  replacedId: string | null;
+};
 type Explain = {
   displayed: { bankToday: string };
   snapshot: { balance: string | null; mask: string | null; storedAccountId: string | null };
@@ -61,10 +75,15 @@ type Explain = {
   ledger: {
     anchorDay: string | null;
     sinceAnchor: { rowCount: number; net: string } | null;
+    rows?: ExplainRow[] | null;
     recentRows: { date: string; description: string; amount: string }[];
   };
   accounts: { externalId: string; isSnapshotAccount: boolean }[];
 };
+const cents = (v: string) => Math.round(Number(v) * 100);
+/** (Task 4) The rows' own sum: Σ contribution over the counted rows, in cents. */
+const countedCents = (e: Explain) => (e.ledger.rows ?? []).filter((r) => r.counted).reduce((t, r) => t + cents(r.contribution), 0);
+const verdicts = (e: Explain) => Object.fromEntries((e.ledger.rows ?? []).map((r) => [r.description ?? r.id, `${r.reason} ${r.counted ? "counted" : "left out"} ${r.contribution}`]));
 
 async function explain(): Promise<Explain> {
   const res = await fetch(`${baseUrl}/api/forecast/bank-balance-explain`);
@@ -206,8 +225,24 @@ describe("GET /forecast/bank-balance-explain", () => {
     // HY-VEE −442.91, the posted −55.00, the manual +200.00.
     expect(e.ledger.sinceAnchor).toEqual({ rowCount: 3, net: "-297.91" });
     expect(e.displayed.bankToday).toBe("4429.06");
-    const cents = (v: string) => Math.round(Number(v) * 100);
     expect(cents(e.snapshot.balance!) + cents(e.ledger.sinceAnchor!.net)).toBe(cents(e.displayed.bankToday));
+    // ⭐ (Task 4) Every row the roll-forward read, with the rule's own verdict; the counted ones ARE the figure.
+    expect(verdicts(e)).toEqual({
+      "HY-VEE": "counted counted -442.91",
+      "CASEY'S": "held left out 0.00",
+      NETFLIX: "held left out 0.00",
+      // ⭐ The pair counts once: the pending half is replaced, the posted half counts in full.
+      "TST* CORNER BISTRO": "superseded left out 0.00",
+      "CORNER BISTRO": "counted counted -55.00",
+      "Cash deposit": "counted counted 200.00",
+    });
+    expect(countedCents(e)).toBe(cents(e.ledger.sinceAnchor!.net));
+    expect(e.ledger.rows!.filter((r) => r.counted)).toHaveLength(e.ledger.sinceAnchor!.rowCount);
+    const posted = e.ledger.rows!.find((r) => r.description === "CORNER BISTRO")!;
+    expect(posted.replacedId).toBe(e.ledger.rows!.find((r) => r.description === "TST* CORNER BISTRO")!.id);
+    // Each row as stored: signed amount, pending flag, its account (null for a manual row), newest first.
+    expect(e.ledger.rows!.map((r) => r.date)).toEqual([...e.ledger.rows!.map((r) => r.date)].sort().reverse());
+    expect(e.ledger.rows!.find((r) => r.description === "Cash deposit")).toMatchObject({ amount: "200.00", pending: false, accountExternalId: null, source: "manual", onAccount: true });
   });
 
   it("(review E) a typed (manual) snapshot ties the same way", async () => {
@@ -381,6 +416,8 @@ describe("GET /forecast/bank-balance-explain", () => {
     const body: unknown = await res.json();
     const parsed = GetForecastBankBalanceExplainResponse.safeParse(body);
     expect(parsed.success ? null : parsed.error.issues).toBeNull();
+    // (Task 4) …with the rows behind the figure.
+    expect((body as Explain).ledger.rows).toHaveLength(1);
 
     // A Plaid snapshot from Aug 20 whose item has never synced since: old, with
     // no contact and no failure on record.
@@ -393,5 +430,119 @@ describe("GET /forecast/bank-balance-explain", () => {
       stale: true,
       staleReason: "old",
     });
+  });
+});
+
+// ⭐ (Task 4, D) THE ROWS BEHIND "CHECKING TODAY". The explain route lists every row
+// the roll-forward read (anchor day − 7 through today) with `classifyCashRows`' own
+// verdict — the one rule the balance uses — so the Details list is auditable.
+describe("(Task 4) GET /forecast/bank-balance-explain — ledger.rows", () => {
+  async function anchorAt(at: Date, balance: string): Promise<void> {
+    const { rowId } = await seedAccount({ externalId: "chase-5526", mask: "5526" });
+    await db.insert(forecastSettingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      bankSnapshotAccountId: rowId,
+      bankSnapshotBalance: balance,
+      bankSnapshotAt: at,
+      bankSnapshotSource: "plaid",
+      bankSnapshotMask: "5526",
+      cashBuffer: "0",
+    });
+  }
+  const base = () => ({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, plaidAccountId: "chase-5526", source: "plaid:chase" });
+
+  it("⭐ (zero-rows-today) a $0.00 reading yesterday at 7:02 AM and two PENDING rows dated today: both counted, flagged pending; Σ = Checking today − the reading", async () => {
+    await reset();
+    const today = householdTodayISO();
+    const yesterday = addDaysISO(today, -1);
+    // 16:19 Central yesterday (21:19Z in daylight time; the household day is what matters).
+    const read = new Date(`${yesterday}T16:19:00-05:00`);
+    await anchorAt(read, "0.00");
+    await db.insert(transactionsTable).values([
+      // A pending deposit after the reading: `available` never holds a pending deposit — it counts.
+      { ...base(), occurredOn: today, description: "PAYROLL DEPOSIT", amount: "3500.00", pending: true, createdAt: new Date(read.getTime() + 60 * 60 * 1000) },
+      // A pending charge dated after the reading's day, new to the ledger after the read: it counts.
+      { ...base(), occurredOn: today, description: "HARDWARE DEPOT 0099", amount: "-125.40", pending: true, createdAt: new Date(read.getTime() + 2 * 60 * 60 * 1000) },
+    ]);
+    const e = await explain();
+    expect(e.snapshot.balance).toBe("0.00");
+    expect(e.ledger.rows!.map((r) => [r.description, r.pending, r.counted, r.reason, r.contribution])).toEqual([
+      ["PAYROLL DEPOSIT", true, true, "counted", "3500.00"],
+      ["HARDWARE DEPOT 0099", true, true, "counted", "-125.40"],
+    ]);
+    expect(e.ledger.sinceAnchor).toEqual({ rowCount: 2, net: "3374.60" });
+    expect(e.displayed.bankToday).toBe("3374.60");
+    expect(countedCents(e)).toBe(cents(e.displayed.bankToday) - cents(e.snapshot.balance!));
+  });
+
+  it("⭐ an anchor-day pending charge with evidence it was in the reading: its posting counts the tip only (adjusted)", async () => {
+    await reset();
+    const today = householdTodayISO();
+    const day = addDaysISO(today, -2);
+    const read = new Date(`${day}T12:00:00-05:00`);
+    await anchorAt(read, "1000.00");
+    await db.insert(transactionsTable).values([
+      // On the reading's day, on the ledger before the read: the reading held it.
+      { ...base(), occurredOn: day, description: "TST* CORNER BISTRO", amount: "-48.20", pending: true, createdAt: new Date(read.getTime() - 60 * 60 * 1000) },
+      // Its posting, the next day, with the tip.
+      { ...base(), occurredOn: addDaysISO(day, 1), description: "CORNER BISTRO", amount: "-55.00", createdAt: createdAtStartOfHouseholdDay(addDaysISO(day, 1)) },
+    ]);
+    const e = await explain();
+    expect(verdicts(e)).toEqual({
+      "TST* CORNER BISTRO": "held left out 0.00",
+      "CORNER BISTRO": "adjusted counted -6.80",
+    });
+    expect(e.ledger.sinceAnchor).toEqual({ rowCount: 1, net: "-6.80" });
+    expect(e.displayed.bankToday).toBe("993.20");
+    expect(countedCents(e)).toBe(cents(e.displayed.bankToday) - cents(e.snapshot.balance!));
+  });
+
+  it("transfers: a checking-side transfer counts; the card's side of a payment, and every other account's row, adds 0 (not_bank); a row dated after today is not listed", async () => {
+    await reset();
+    const today = householdTodayISO();
+    const day = addDaysISO(today, -3);
+    await anchorAt(new Date(`${day}T08:00:00-05:00`), "2000.00");
+    const card = { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, plaidAccountId: "amex-1001", source: "plaid:amex" };
+    await db.insert(transactionsTable).values([
+      { ...base(), occurredOn: addDaysISO(day, 1), description: "AMEX EPAYMENT ACH PMT", amount: "-150.00", isTransfer: true, createdAt: createdAtStartOfHouseholdDay(addDaysISO(day, 1)) },
+      { ...base(), occurredOn: addDaysISO(day, 1), description: "TRANSFER TO SAVINGS", amount: "-40.00", isTransfer: true, createdAt: createdAtStartOfHouseholdDay(addDaysISO(day, 1)) },
+      { ...card, occurredOn: addDaysISO(day, 2), description: "PAYMENT RECEIVED - THANK YOU", amount: "150.00", createdAt: createdAtStartOfHouseholdDay(addDaysISO(day, 2)) },
+      { ...card, occurredOn: addDaysISO(day, 2), description: "GREEN GROCER", amount: "-60.00", createdAt: createdAtStartOfHouseholdDay(addDaysISO(day, 2)) },
+      // A card row dated before the reading's day: the rule says "held" first — it is another account's all the same.
+      { ...card, occurredOn: addDaysISO(day, -1), description: "FUEL STOP", amount: "-45.00", createdAt: createdAtStartOfHouseholdDay(addDaysISO(day, -1)) },
+      // Flagged for the forecast, dated tomorrow: not in today's figure, not in the list.
+      { ...base(), occurredOn: addDaysISO(today, 1), description: "RENT", amount: "-900.00", forecastFlag: true, createdAt: createdAtStartOfHouseholdDay(today) },
+    ]);
+    const e = await explain();
+    expect(verdicts(e)).toEqual({
+      "AMEX EPAYMENT ACH PMT": "counted counted -150.00",
+      "TRANSFER TO SAVINGS": "counted counted -40.00",
+      "PAYMENT RECEIVED - THANK YOU": "not_bank left out 0.00",
+      "GREEN GROCER": "not_bank left out 0.00",
+      "FUEL STOP": "held left out 0.00",
+    });
+    // `onAccount` is the rule's own `isBankRow`: the checking rows are the account's, the card's rows are not.
+    expect(Object.fromEntries(e.ledger.rows!.map((r) => [r.description, r.onAccount]))).toEqual({
+      "AMEX EPAYMENT ACH PMT": true,
+      "TRANSFER TO SAVINGS": true,
+      "PAYMENT RECEIVED - THANK YOU": false,
+      "GREEN GROCER": false,
+      "FUEL STOP": false,
+    });
+    expect(e.ledger.rows!.some((r) => r.description === "RENT")).toBe(false);
+    expect(e.ledger.sinceAnchor).toEqual({ rowCount: 2, net: "-190.00" });
+    expect(countedCents(e)).toBe(cents(e.displayed.bankToday) - cents(e.snapshot.balance!));
+  });
+
+  it("no read time: no roll-forward, rows null; the typed shape still parses", async () => {
+    await reset();
+    await seedAccount({ externalId: "chase-5526", mask: "5526" });
+    await db.insert(forecastSettingsTable).values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, cashBuffer: "0" });
+    const res = await fetch(`${baseUrl}/api/forecast/bank-balance-explain`);
+    const body = (await res.json()) as Explain;
+    expect(body.ledger.sinceAnchor).toBeNull();
+    expect(body.ledger.rows).toBeNull();
+    expect(GetForecastBankBalanceExplainResponse.safeParse(body).success).toBe(true);
   });
 });

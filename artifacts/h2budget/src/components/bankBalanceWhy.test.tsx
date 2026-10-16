@@ -36,6 +36,20 @@ vi.mock("@workspace/api-client-react", () => ({
     return { refetch: state.refetch, ...state.result };
   },
   getGetForecastBankBalanceExplainQueryKey: () => ["/api/forecast/bank-balance-explain"],
+  // (Task 4, D) The linked accounts, for the one route rule (`txnRoute`): a Chase checking ••1111.
+  useListPlaidItems: () => ({
+    data: [
+      {
+        id: "item-1", institutionName: "Chase", institutionSlug: "chase", lastSyncedAt: "2026-09-10T14:00:00.000Z", lastSyncError: null,
+        accounts: [{ id: "row-1", accountId: "ext-1", name: "Checking", mask: "1111", type: "depository", subtype: "checking" }],
+      },
+    ],
+  }),
+}));
+vi.mock("wouter", () => ({
+  Link: ({ href, children, ...rest }: { href: string; children?: React.ReactNode } & Record<string, unknown>) => (
+    <a href={href} className={rest.className as string} data-testid={rest["data-testid"] as string}>{children}</a>
+  ),
 }));
 
 import { BankBalanceWhy } from "./bank-balance-why";
@@ -162,6 +176,8 @@ describe("Why this number? — the server's lines", () => {
     // (T1) Named as the bank's reading (or a typed balance), with the account it was read from.
     expect(snap).toContain("Bank's last reading");
     expect(snap).toContain("(Checking · ••1111)");
+    // (Task 4) …and its time on the household clock (14:00Z = 9:00 AM Central).
+    expect(snap).toContain("Sep 10, 2026, 9:00 AM");
     const since = screen.getByTestId("bank-why-since").textContent ?? "";
     expect(since).toContain("2 rows since then");
     expect(since).toContain("-$40.00");
@@ -193,7 +209,7 @@ describe("Why this number? — the server's lines", () => {
     expect(screen.getByTestId("text-bank-snapshot-freshness").textContent).toBe(updatedWords("2026-09-10T14:00:00.000Z", NOW.getTime()));
   });
 
-  it("adds no note, and no equation, when the lines add up to the cent (even 0.10 + 0.20 = 0.30)", async () => {
+  it("(Task 4) adds no note, and says the sum, when the lines add up to the cent (even 0.10 + 0.20 = 0.30)", async () => {
     state.result = {
       data: explain({
         displayed: { bankToday: "0.30" },
@@ -204,7 +220,8 @@ describe("Why this number? — the server's lines", () => {
     render(<BankBalanceWhy />);
     await open();
     expect(screen.queryByTestId("bank-why-mismatch")).toBeNull();
-    expect(popoverText()).not.toContain("=");
+    // Only a sum that ties is written as one: "Bank's last reading $0.10 + 1 row = Checking today $0.30".
+    expect(screen.getByTestId("bank-why-sum").textContent).toBe("Bank's last reading $0.10 + 1 row = Checking today$0.30");
   });
 
   it("says the lines don't add up when they don't, still with no equation", async () => {
@@ -304,5 +321,118 @@ describe("Why this number? — the server's lines", () => {
     render(<BankBalanceWhy />);
     await open();
     expect(screen.getByTestId("text-bank-freshness-stale").textContent).toBe("Last sync failed · Updated 1 d ago");
+  });
+});
+
+// ⭐ (Task 4, D) THE ROWS BEHIND THE FIGURE: every row the server's rule counted
+// (date · description · signed amount · Pending/Posted · a link to the row), the
+// sum line, the estimate head, and the rows it left out behind "Not counted (n)"
+// with the rule's word. Synthetic figures: a reading of $0.00 and two pending rows.
+describe("(Task 4) Why this number? — the counted rows, the sum, what was left out", () => {
+  const row = (over: Record<string, unknown>) => ({
+    id: "t", date: "2026-09-11", description: "ROW", amount: "0.00", pending: false, accountExternalId: "ext-1", source: "plaid:chase", onAccount: true,
+    counted: true, contribution: "0.00", reason: "counted", replacedId: null, ...over,
+  });
+  const zeroRowsToday = (rows: unknown[], net = "3374.60", bankToday = "3374.60") =>
+    explain({
+      displayed: { bankToday },
+      snapshot: { ...explain().snapshot, balance: "0.00", at: "2026-09-10T12:02:00.000Z" },
+      ledger: {
+        anchorDay: "2026-09-10",
+        sinceAnchor: { rowCount: (rows as Array<{ counted: boolean }>).filter((r) => r.counted).length, net },
+        rows,
+        recentRows: [],
+      },
+    });
+  const pay = row({ id: "t-pay", description: "PAYROLL DEPOSIT", amount: "3500.00", contribution: "3500.00", pending: true });
+  const hw = row({ id: "t-hw", description: "HARDWARE DEPOT 0099", amount: "-125.40", contribution: "-125.40", pending: true });
+
+  it("lists every counted row with its date, description, signed figure and Pending chip; the sum line ties to Checking today", async () => {
+    state.result = { data: zeroRowsToday([pay, hw]) };
+    render(<BankBalanceWhy />);
+    await open();
+    const list = screen.getByTestId("bank-why-rows");
+    const items = Array.from(list.querySelectorAll("[data-testid=bank-why-row]"));
+    expect(items.map((li) => li.getAttribute("data-row-id"))).toEqual(["t-pay", "t-hw"]);
+    expect(items[0]!.textContent).toBe("Sep 11PAYROLL DEPOSITPendingmay still change+$3,500.00");
+    expect(items[1]!.textContent).toBe("Sep 11HARDWARE DEPOT 0099Pendingmay still change-$125.40");
+    // ⭐ Sum line: the reading + the counted rows = Checking today, to the cent (the server's figures, summed once to check).
+    expect(screen.getByTestId("bank-why-sum").textContent).toBe("Bank's last reading $0.00 + 2 rows = Checking today$3,374.60");
+    // A reading of $0.00 is a real $0.00, plain.
+    expect(screen.getByTestId("bank-why-snapshot").textContent).toContain("$0.00");
+  });
+
+  it("⭐ a pending counted row makes the head an Estimate — never 'confirmed'; posted rows only: no estimate", async () => {
+    state.result = { data: zeroRowsToday([pay, hw]) };
+    render(<BankBalanceWhy />);
+    await open();
+    expect(screen.getByTestId("bank-why-estimate").textContent).toBe("Estimate: 2 pending rows");
+    expect(popoverText().toLowerCase()).not.toContain("confirmed");
+    cleanup();
+    state.result = { data: zeroRowsToday([{ ...pay, pending: false }, { ...hw, pending: false }]) };
+    render(<BankBalanceWhy />);
+    await open();
+    expect(screen.queryByTestId("bank-why-estimate")).toBeNull();
+    expect(screen.queryAllByTestId("bank-why-row-may-change")).toHaveLength(0);
+    expect(screen.getByTestId("bank-why-rows").textContent).toContain("Posted");
+  });
+
+  it("each row links to itself on its ledger (the one route rule: ?tx= lands on it); a manual row opens the checking ledger", async () => {
+    const manual = row({ id: "t-man", description: "Cash deposit", amount: "20.00", contribution: "20.00", accountExternalId: null, source: "manual" });
+    state.result = { data: zeroRowsToday([pay, manual], "3520.00", "3520.00") };
+    render(<BankBalanceWhy />);
+    await open();
+    const links = screen.getAllByTestId("bank-why-row-link").map((a) => a.getAttribute("href"));
+    expect(links).toEqual(["/transactions?account=row-1&month=2026-09-01&tx=t-pay", "/transactions?tx=t-man&month=2026-09-01"]);
+  });
+
+  it("rows the rule left out sit behind 'Not counted (n)' with the rule's word; other accounts are one line", async () => {
+    const held = row({ id: "t-held", date: "2026-09-10", description: "CORNER BISTRO", amount: "-30.00", counted: false, reason: "held" });
+    const replaced = row({ id: "t-pend", date: "2026-09-09", description: "TST* BISTRO", amount: "-48.20", pending: true, counted: false, reason: "superseded" });
+    const card1 = row({ id: "t-c1", description: "GREEN GROCER", amount: "-90.00", accountExternalId: "card-9", source: "plaid:amex", onAccount: false, counted: false, reason: "not_bank" });
+    // The rule says "held" first: a card row dated before the reading's day is another account's all the same.
+    const card2 = row({ id: "t-c2", date: "2026-09-09", description: "FUEL STOP", amount: "-45.00", accountExternalId: "card-9", source: "plaid:amex", onAccount: false, counted: false, reason: "held" });
+    state.result = { data: zeroRowsToday([pay, hw, held, replaced, card1, card2]) };
+    render(<BankBalanceWhy />);
+    await open();
+    const box = screen.getByTestId("bank-why-not-counted");
+    expect(box.tagName).toBe("DETAILS");
+    expect(box.querySelector("summary")!.textContent).toBe("Not counted (4)");
+    const left = Array.from(screen.getByTestId("bank-why-not-counted-rows").querySelectorAll("[data-testid=bank-why-row-reason]")).map((e) => e.textContent);
+    expect(left).toEqual(["In the bank's reading", "Replaced by its posted row"]);
+    expect(screen.getByTestId("bank-why-other-accounts").textContent).toBe("2 rows · Another account");
+    // Never "In the bank's reading" beside another account's row.
+    expect(screen.getByTestId("bank-why-not-counted-rows").textContent).not.toContain("FUEL STOP");
+    // Left-out rows show their own amount, never as counted, and never in the counted list.
+    expect(Array.from(screen.getByTestId("bank-why-rows").querySelectorAll("[data-testid=bank-why-row]")).map((li) => li.getAttribute("data-row-id"))).toEqual(["t-pay", "t-hw"]);
+  });
+
+  it("a posted row whose pending charge was in the reading counts only the change, and says so", async () => {
+    const tip = row({ id: "t-tip", description: "CORNER BISTRO", amount: "-55.00", contribution: "-6.80", reason: "adjusted", replacedId: "t-p" });
+    state.result = { data: zeroRowsToday([tip], "-6.80", "-6.80") };
+    render(<BankBalanceWhy />);
+    await open();
+    const li = screen.getByTestId("bank-why-rows").querySelector("[data-testid=bank-why-row]")!;
+    expect(li.textContent).toContain("Adds the change from its pending charge");
+    expect(li.querySelector("[data-testid=bank-why-row-amount]")!.textContent).toBe("-$6.80");
+  });
+
+  it("⚠️ rows that do not add up to the server's own figure: no sum line, the 'do not add up' note instead", async () => {
+    // The rows say +3,374.60; the server's since-figure says +3,000.00.
+    state.result = { data: zeroRowsToday([pay, hw], "3000.00", "3000.00") };
+    render(<BankBalanceWhy />);
+    await open();
+    expect(screen.queryByTestId("bank-why-sum")).toBeNull();
+    expect(screen.getByTestId("bank-why-mismatch").textContent).toContain("do not add up to the cent");
+  });
+
+  it("an older server (no rows): the lines as before, no list, no estimate", async () => {
+    state.result = { data: explain() };
+    render(<BankBalanceWhy />);
+    await open();
+    expect(screen.queryByTestId("bank-why-rows")).toBeNull();
+    expect(screen.queryByTestId("bank-why-not-counted")).toBeNull();
+    expect(screen.queryByTestId("bank-why-estimate")).toBeNull();
+    expect(screen.getByTestId("bank-why-since").textContent).toContain("2 rows since then");
   });
 });

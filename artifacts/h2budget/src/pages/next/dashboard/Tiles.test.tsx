@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within, waitFor } from "@testing-library/react";
 import { Router } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { memoryLocation } from "wouter/memory-location";
@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   spine: { data: undefined as unknown, state: "loaded", refetch: () => {} } as { data: unknown; state: string; refetch: () => void; olderWords?: string | null },
   prefetch: vi.fn(),
   settings: undefined as unknown,
+  me: { isOwner: true } as unknown,
 }));
 const ok = (data: unknown) => ({ data, isError: false, isLoading: false, refetch: () => {} });
 const loading = { data: undefined, isError: false, isLoading: true, refetch: () => {} };
@@ -23,6 +24,7 @@ vi.mock("./queries", () => ({
 vi.mock("@workspace/api-client-react", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   useGetSettings: () => ({ data: h.settings }),
+  useGetMe: () => ({ data: h.me, isLoading: false }),
 }));
 vi.mock("@/hooks/useSpine", () => ({ useSpine: () => h.spine }));
 vi.mock("@/components/data-state", () => ({ FreshnessLine: () => <span>fresh</span> }));
@@ -70,7 +72,7 @@ function setup(spineOver: Record<string, unknown> = {}, pos: Record<string, unkn
   return mem;
 }
 
-beforeEach(() => { h.Q = {}; h.settings = undefined; h.prefetch.mockClear(); h.spine = { data: undefined, state: "loaded", refetch: () => {} }; });
+beforeEach(() => { h.Q = {}; h.settings = undefined; h.me = { isOwner: true }; h.prefetch.mockClear(); h.spine = { data: undefined, state: "loaded", refetch: () => {} }; });
 afterEach(() => cleanup());
 
 describe("six tiles", () => {
@@ -223,6 +225,47 @@ describe("this week and this month", () => {
     expect(t.textContent).not.toMatch(/Over/);
     expect(within(t).getByTestId("tile-week-spent").textContent).toBe("$140.00");
     expect(t.textContent).not.toContain("$0.00");
+  });
+  const noPlan = () => setup({ position: pos({ remainingWeek: null, remainingWeekKnown: null, withinPlan: null }) }, { weekCap: null });
+  const reserve = (o: Record<string, unknown>) => ({ hook: "weekly", occurrenceDate: "2026-10-17", amount: "450.00", storedAmount: "450.00", basis: "stored_amount", ...o });
+  it("(E3) no plan, owner: one action to set it and one line saying what the forecast assumes", async () => {
+    h.Q.cash = ok({ hookReserves: [reserve({ occurrenceDate: "2026-10-24" }), reserve({})] });
+    noPlan();
+    const t = screen.getByTestId("tile-week");
+    expect(within(t).getByTestId("tile-week-status").textContent).toBe("Plan not set");
+    await within(t).findByTestId("tile-week-assumed");
+    expect(within(t).getByTestId("tile-week-assumed").textContent).toBe("Forecast assumes $450 a week");
+    const a = within(t).getByTestId("tile-week-setplan");
+    expect(a.textContent).toBe("Set weekly plan →");
+    expect(a.getAttribute("href")).toBe("/spending/week?plan=1");
+    expect(t.textContent).not.toMatch(/Over/);
+  });
+  it("(E3) no plan, member or unknown: the line, no action", async () => {
+    h.Q.cash = ok({ hookReserves: [reserve({})] });
+    h.me = { isOwner: false };
+    noPlan();
+    expect(await screen.findByTestId("tile-week-assumed")).toBeTruthy();
+    expect(screen.queryByTestId("tile-week-setplan")).toBeNull();
+    cleanup();
+    h.me = undefined;
+    noPlan();
+    expect(await screen.findByTestId("tile-week-assumed")).toBeTruthy();
+    expect(screen.queryByTestId("tile-week-setplan")).toBeNull();
+  });
+  it("(E3) a plan that reads $0 says 'Plan set to $0': no action, no assumption, never Over", async () => {
+    h.Q.cash = ok({ hookReserves: [reserve({ basis: "plan", amount: "0.00" })] });
+    noPlan();
+    const t = screen.getByTestId("tile-week");
+    await waitFor(() => expect(within(t).getByTestId("tile-week-status").textContent).toBe("Plan set to $0"));
+    expect(within(t).queryByTestId("tile-week-setplan")).toBeNull();
+    expect(within(t).queryByTestId("tile-week-assumed")).toBeNull();
+    expect(t.textContent).not.toMatch(/Over/);
+  });
+  it("(E3) no cash signal yet: no figure invented, no action until it answers", async () => {
+    noPlan();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByTestId("tile-week-assumed")).toBeNull();
+    expect(screen.queryByTestId("tile-week-setplan")).toBeNull();
   });
   it("plan and overspend: Over $X on the KNOWN figure, named 'Counts toward plan'", () => {
     // The cautious total (spentWeekDiscretionary 999) is never what the tile shows.

@@ -18,11 +18,11 @@ afterEach(() => {
   h.params = [];
 });
 
-describe("Amex tile — Purchases this week (W4)", () => {
+describe("Amex tile — Amex purchases · this week (W4)", () => {
   it("shows the server's purchases for every card, this week", () => {
     h.data = { purchases: { amount: "425.00", count: 7 } };
     render(<AmexWeekCharges />);
-    expect(screen.getByTestId("tile-amex-purchases-week").textContent).toContain("Purchases this week");
+    expect(screen.getByTestId("tile-amex-purchases-week").textContent).toContain("Amex purchases · this week");
     expect(screen.getByTestId("tile-amex-purchases-week").textContent).toContain("$425.00");
     expect(h.params[0]!.accountId).toBe("all");
   });

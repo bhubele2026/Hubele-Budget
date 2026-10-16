@@ -24,6 +24,7 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { PlanLine } from "@/lib/forecastMatch";
 import { tooltipPlanLine } from "@/lib/forecastPastDue";
 import { runsBelow, type MarkerGroup } from "@/lib/forecastEventKinds";
+import { BUF_CHAR_PX, bufferBox, bufferLabelAbove, LOW_CHAR_PX, placeLowLabel } from "@/lib/chartLabelPlacement";
 
 /**
  * ⭐ THE CASH CURVE — the one chart on the most-used screen in the app.
@@ -214,6 +215,15 @@ export function ProjectedBalanceChart({
   }, [expanded, fp]);
   const animateNow = expanded ? settledFp !== fp : !sessionKey || (firstDraw && !swept);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // (E5) A pointer resting where the page loaded is not a choice: Safari fires a mousemove after the page changes
+  // under a still cursor, which used to replace the day the reader arrived on (`?day=`). Hover counts only
+  // once the pointer has really moved (3 px) since this chart appeared.
+  const pointer = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const trackPointer = (e: { clientX: number; clientY: number }) => {
+    const p = pointer.current;
+    if (!p) pointer.current = { x: e.clientX, y: e.clientY, moved: false };
+    else if (!p.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) >= 3) p.moved = true;
+  };
   useEffect(() => () => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
   }, []);
@@ -222,6 +232,38 @@ export function ProjectedBalanceChart({
     typeof window.matchMedia === "function" &&
     window.matchMedia("(hover: hover) and (pointer: fine)").matches;
   const selectedInWindow = !!selectedDate && series.some((d) => d.rawDate === selectedDate);
+
+  // (E4) The plot's size, measured, so the low-point label and the axis ticks can be placed by rule.
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!expanded || !el || typeof ResizeObserver === "undefined") return;
+    const read = () => {
+      const w = Math.round(el.clientWidth);
+      const h = Math.round(el.clientHeight);
+      setBox((b) => (b && b.w === w && b.h === h ? b : w > 0 && h > 0 ? { w, h } : b));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [expanded]);
+  // At most 5 axis ticks on a phone, 12 elsewhere (even spread, first and last always).
+  const narrow = box != null && box.w < 640;
+  const tickN = narrow ? 5 : 0;
+  const lenS = series.length;
+  const firstS = series[0]?.rawDate;
+  const lastS = series[lenS - 1]?.rawDate;
+  const fewTicks = useMemo(() => {
+    if (!tickN || lenS <= tickN) return null;
+    const idx = new Set<number>();
+    for (let i = 0; i < tickN; i++) idx.add(Math.round((i * (lenS - 1)) / (tickN - 1)));
+    return [...idx].sort((a, b) => a - b).map((i) => series[i]!.rawDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tickN, lenS, firstS, lastS]);
+  // Hovering or focusing a day shows that day's marker (the others stay quiet).
+  const [hoverDate, setHoverDate] = useState<string | null>(null);
 
   /**
    * ⚠️ ANCHOR THE LOW-POINT LABEL AWAY FROM THE EDGE IT SITS ON.
@@ -241,6 +283,48 @@ export function ProjectedBalanceChart({
   // place as "top". Anchoring has to be done on the <text> itself.
   const lowAnchor: "start" | "middle" | "end" =
     lowFrac <= 0.2 ? "start" : lowFrac >= 0.8 ? "end" : "middle";
+  // (E4) Collision rule, from the measured plot: below the dot in the top half or near the buffer label,
+  // right-anchored near the right edge (above); the buffer label yields when neither side clears it.
+  const LEFT = 56;
+  const RIGHT = 16;
+  const TOP = 14;
+  const BOTTOM = 16 + 30;
+  const lowText = lowestPoint ? `Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}` : "";
+  const bufText = `Cash buffer ${formatCurrency(cashBuffer)}`;
+  const placed = (() => {
+    if (!expanded || !box || !lowestPoint) return null;
+    const plotW = box.w - LEFT - RIGHT;
+    const plotH = box.h - TOP - BOTTOM;
+    const [d0, d1] = scale.domain as [number, number];
+    if (plotW <= 0 || plotH <= 0 || !(d1 > d0)) return null;
+    const yPx = (v: number) => TOP + ((d1 - v) / (d1 - d0)) * plotH;
+    const bufY = Number.isFinite(cashBuffer) ? yPx(cashBuffer) : null;
+    const bufAbove = bufY != null && bufferLabelAbove(bufY, TOP + plotH);
+    const buf = bufY != null ? bufferBox(box.w - RIGHT, bufY, bufText.length * BUF_CHAR_PX, bufAbove) : null;
+    return {
+      bufAbove,
+      ...placeLowLabel({
+        dotX: LEFT + lowFrac * plotW,
+        dotY: yPx(lowestPoint.y),
+        plotTop: TOP,
+        plotH,
+        plotLeft: LEFT,
+        plotRight: box.w - RIGHT,
+        anchor: lowAnchor,
+        lowWidth: lowText.length * LOW_CHAR_PX,
+        buffer: buf,
+      }),
+    };
+  })();
+  const lowBelow = placed?.below ?? false;
+  const lowAnchorUsed = placed?.anchor ?? lowAnchor;
+  const bufAbove = placed?.bufAbove ?? false;
+  const hideBufferLabel = placed?.hideBuffer ?? false;
+  // Only the big-bill days, paydays and the selected / hovered day draw a marker; the lowest point always draws.
+  const bigDates = new Set(bigBillMarkers.map((m) => m.date));
+  const shownMarkers = (markers ?? []).filter(
+    (m) => m.kinds.includes("payday") || bigDates.has(m.date) || m.date === selectedDate || m.date === hoverDate,
+  );
   // ⭐ (T2) Only a projected NEGATIVE is rust. A low point at or above $0 — even under the buffer — is
   // marked in navy: the buffer line and its tint already say "under the buffer", quietly.
   const lowNegative = !!lowestPoint && lowestPoint.y < 0;
@@ -254,7 +338,7 @@ export function ProjectedBalanceChart({
   return (
     // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
     // left→right so the curve reads as being plotted across the horizon.
-    <div key={expanded ? horizonKey : undefined} className={cn(firstDraw && "chart-in area-draw", "h-full w-full")}>
+    <div ref={boxRef} onPointerMove={expanded ? trackPointer : undefined} key={expanded ? horizonKey : undefined} className={cn(firstDraw && "chart-in area-draw", "h-full w-full")}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={chartData}
@@ -265,14 +349,16 @@ export function ProjectedBalanceChart({
                 onClick: (st: { activeLabel?: string | number } | undefined) => {
                   if (st?.activeLabel != null) onSelectDate(String(st.activeLabel));
                 },
-                onMouseMove: hoverSelects && canHover
-                  ? (st: { activeLabel?: string | number } | undefined) => {
-                      const d = st?.activeLabel;
-                      if (d == null) return;
-                      if (hoverTimer.current) clearTimeout(hoverTimer.current);
-                      hoverTimer.current = setTimeout(() => onSelectDate(String(d)), 140);
-                    }
-                  : undefined,
+                onMouseMove: (st: { activeLabel?: string | number } | undefined) => {
+                  const d = st?.activeLabel;
+                  if (d == null) return;
+                  if (!pointer.current?.moved) return;
+                  setHoverDate((h) => (h === String(d) ? h : String(d)));
+                  if (!(hoverSelects && canHover)) return;
+                  if (hoverTimer.current) clearTimeout(hoverTimer.current);
+                  hoverTimer.current = setTimeout(() => onSelectDate(String(d)), 140);
+                },
+                onMouseLeave: () => setHoverDate(null),
               }
             : {})}
         >
@@ -291,7 +377,7 @@ export function ProjectedBalanceChart({
             dataKey="rawDate"
             tick={AXIS_TICK}
             tickFormatter={(v: string) => (expanded || monthTicks ? longTick(v) : shortDate(v))}
-            ticks={xtk}
+            ticks={expanded && fewTicks ? fewTicks : xtk}
             interval="preserveStartEnd"
             minTickGap={28}
           />
@@ -493,7 +579,7 @@ export function ProjectedBalanceChart({
           )}
           {expanded && todayISO && (
               <ReferenceLine x={todayISO} stroke={CHART.mist} strokeWidth={1.25} data-testid="ref-today">
-                <RechartsLabel value="Today" position="insideTopRight" fill={CHART.steel} fontSize={10} />
+                <RechartsLabel value="Today" position="insideTopLeft" fill={CHART.steel} fontSize={10} />
               </ReferenceLine>
           )}
           {!(expanded && todayISO) && (
@@ -517,15 +603,16 @@ export function ProjectedBalanceChart({
               ifOverflow="extendDomain"
               data-testid="ref-cash-buffer"
             >
-              {/* Left, not right: the buffer sits low in the plot, so a
-                  right-anchored label lands on the last x tick and gets
-                  clipped by the svg edge. */}
-              <RechartsLabel
-                value={`Cash buffer ${formatCurrency(cashBuffer)}`}
-                position="insideTopLeft"
-                fill={CHART.badInk}
-                fontSize={10}
-              />
+              {/* Expanded: the right end, under the line, and hidden when the low-point label cannot clear it (the
+                  legend names the buffer). Classic keeps the left end. */}
+              {!hideBufferLabel && (
+                <RechartsLabel
+                  value={bufText}
+                  position={expanded ? (bufAbove ? "insideBottomRight" : "insideTopRight") : "insideTopLeft"}
+                  fill={CHART.badInk}
+                  fontSize={10}
+                />
+              )}
             </ReferenceLine>
           )}
           {bigBillMarkers.map((m) => {
@@ -563,7 +650,7 @@ export function ProjectedBalanceChart({
             />
           )}
           {expanded &&
-            (markers ?? []).map((m) => (
+            shownMarkers.map((m) => (
               <ReferenceDot
                 key={`mk-${m.date}`}
                 x={m.date}
@@ -643,10 +730,11 @@ export function ProjectedBalanceChart({
                   return (
                     <text
                       x={cx}
-                      y={lowLabel === "short" ? cy + 18 : cy - 12}
-                      textAnchor={lowAnchor}
+                      y={lowLabel === "short" || (expanded && lowBelow) ? cy + 18 : cy - 12}
+                      textAnchor={lowAnchorUsed}
                       fill={lowInk}
                       data-tone={lowNegative ? "bad" : "neutral"}
+                      data-testid="chart-low-label"
                       fontSize={11}
                       fontWeight={600}
                     >

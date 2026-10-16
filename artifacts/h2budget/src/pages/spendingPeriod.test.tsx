@@ -657,11 +657,11 @@ describe("(Q4) the owner gate on the plan prompt has three states", () => {
 // ⭐ (C5) The weekly plan and the forecast's reserve: one sentence says how they relate, and the
 // Forecast's "Set a weekly plan →" (`?plan=1`) opens the dialog on the same choices — nothing picked.
 describe("(C5) the plan ↔ the forecast's reserve", () => {
-  it("one sentence above the choices: the forecast holds the Weekly Spend item's amount until a plan is set", () => {
+  it("one line above the choices: the forecast assumes the Weekly Spend item's amount until a plan is set", () => {
     h.bd.week = notSet();
     mount("/spending/week");
     expect(screen.getByTestId("plan-prompt-holds").textContent).toBe(
-      "Until a plan is set the forecast holds $380 a week — the Weekly Spend item's amount. Pick the plan Spending should track.",
+      "Forecast assumes $380 a week",
     );
     // The choices are the same; nothing opens by itself.
     expect(screen.getByTestId("plan-use-primary").textContent).toBe("Use $380.00 as the weekly plan from this week");
@@ -676,7 +676,7 @@ describe("(C5) the plan ↔ the forecast's reserve", () => {
     h.plans = { plans: [], prefills: [...prefills, { period: "monthly", amount: "425.50", source: "hook_stored", label: "Monthly Spend reserve" }] };
     mount("/spending/month", "month");
     expect(screen.getByTestId("plan-prompt-holds").textContent).toBe(
-      "Until a plan is set the forecast holds $425.50 a month — the Monthly Spend item's amount. Pick the plan Spending should track.",
+      "Forecast assumes $425.50 a month",
     );
   });
 
@@ -684,7 +684,7 @@ describe("(C5) the plan ↔ the forecast's reserve", () => {
     h.bd.week = notSet();
     mount("/spending/week?plan=1");
     const choose = screen.getByTestId("plan-choose");
-    expect(within(choose).getByTestId("plan-choose-holds").textContent).toContain("the forecast holds $380 a week");
+    expect(within(choose).getByTestId("plan-choose-holds").textContent).toContain("Forecast assumes $380 a week");
     expect(within(choose).getByTestId("plan-choose-use-primary").textContent).toBe("Use $380.00 as the weekly plan from this week");
     expect(within(choose).getByTestId("plan-choose-use-suggested")).toBeTruthy();
     expect(within(choose).getByTestId("plan-choose-different")).toBeTruthy();

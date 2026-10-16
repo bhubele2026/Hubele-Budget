@@ -59,7 +59,13 @@ export function BankBalanceWhy({ trigger, onReviewDifference, defaultOpen = fals
         </button>
         )}
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-3" align="end" data-testid="bank-why">
+      {/* (Task 4, D) The rows can make it taller than a phone screen: it never outgrows the room it has, and scrolls inside. */}
+      <PopoverContent
+        className="w-80 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain p-3"
+        collisionPadding={8}
+        align="end"
+        data-testid="bank-why"
+      >
         <Suspense fallback={<p className="text-micro text-neutral-500" data-testid="bank-why-chunk">Loading…</p>}>
           <Body
             query={query}

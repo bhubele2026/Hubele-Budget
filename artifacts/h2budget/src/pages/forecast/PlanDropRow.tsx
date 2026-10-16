@@ -12,7 +12,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { fmtMonth } from "@/lib/avalanche";
 import type { PlanLine } from "@/lib/forecastMatch";
 import type { PayoffInfo } from "@/lib/forecastDebts";
-import { hookOwedStatus, hookPayoffWords, type HookPayoffLine } from "@/lib/forecastHooks";
+import { hookOwedStatus, hookPayoffWords, itemAmountWords, type HookPayoffLine } from "@/lib/forecastHooks";
 import { Flame } from "lucide-react";
 import { isPlanRowMatchEligible, statusBadge } from "./statusBadge";
 import { canRecordPartial } from "@/lib/forecastMatch";
@@ -82,10 +82,10 @@ export function PlanDropRow({
   activeDragId: string | null;
   payoff?: PayoffInfo;
   /**
-   * (WP8) An everyday hook's occurrence: the card payoff the curve takes in
-   * place of the stored plan ("card payoff $477.57 · plan $450"), or the bank
-   * row that paid it ("paid on evidence by …"). Display only: the row's
-   * amount and the register's running balance still read the stored plan.
+   * (WP8) An everyday hook's occurrence: what the curve takes and what it is
+   * made of ("card purchases $X + left to spend $Y"), or the bank row that paid
+   * it ("paid on evidence by …"). (Task 4, D) The row's own amount is the
+   * forecast's figure (`row.hookCurve`, from the register): the words describe it.
    */
   hook?: HookPayoffLine;
   /**
@@ -142,6 +142,10 @@ export function PlanDropRow({
   // the review's own repro: −$180 beside "Paid; $15.00 still assumed unpaid").
   const remainderNum = hasRemainder ? (pp!.remainderAmount as number) : null;
   const displayAmount = remainderNum ?? row.amount;
+  // ⭐ (Task 4, D) A hook occurrence off the curve (carried on, paid, nothing to pay): the forecast
+  // takes nothing for it — "—", never "$0.00" beside words that say why.
+  const offCurveHook = !!row.hookCurve && !row.hookCurve.onCurve;
+  const itemNote = row.hookCurve ? itemAmountWords(hook, row.hookCurve.itemAmount) : null;
   const paidSoFar = remainderNum !== null ? Math.round((row.amount - remainderNum) * 100) / 100 : null;
   // A partly-paid plan can move: the server keeps its `partial` beside the
   // `rescheduled` row, so the remainder lands on the new date.
@@ -245,11 +249,28 @@ export function PlanDropRow({
           <div className="whitespace-nowrap font-mono text-micro tabular-nums text-neutral-400">
             {formatDate(row.date)}
           </div>
-          {hook && (
+          {hook ? (
             <div className="text-micro text-neutral-500" data-testid={`plan-hook-${testKey}`}>
               {/* (C4) The row's own figure: the words say what the forecast takes when it differs. */}
               {hookPayoffWords(hook, { face: Math.abs(displayAmount) })}
             </div>
+          ) : offCurveHook ? (
+            <div className="text-micro text-neutral-500" data-testid={`plan-hook-${testKey}`}>
+              Nothing on the forecast
+            </div>
+          ) : null}
+          {itemNote && (
+            // ⭐ (Task 4, D) The item's stored amount, said once: a template the forecast does not use.
+            <details
+              className="text-micro text-neutral-500"
+              data-testid={`plan-hook-details-${testKey}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <summary className="cursor-pointer font-semibold text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control">
+                Details
+              </summary>
+              <p className="mt-1" data-testid={`plan-hook-item-${testKey}`}>{itemNote}</p>
+            </details>
           )}
           {hook?.planLink && hook.basis === "stored_amount" && (row.status === "future" || row.status === "pending_plan") && (
             <div className="text-micro">
@@ -334,10 +355,11 @@ export function PlanDropRow({
         )}
         <span
           className={`font-mono text-label tabular-nums ${
-            displayAmount < 0 ? "text-bad" : "text-brand-navy"
+            offCurveHook ? "text-neutral-500" : displayAmount < 0 ? "text-bad" : "text-brand-navy"
           }`}
+          data-testid={`plan-amount-${testKey}`}
         >
-          {formatCurrency(displayAmount)}
+          {offCurveHook ? "—" : formatCurrency(displayAmount)}
         </span>
         {suggested && pp && (() => {
           // (One-time bill move, review M3) A partial that needs review answers
