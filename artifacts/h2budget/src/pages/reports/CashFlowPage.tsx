@@ -16,7 +16,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshBanner } from "@/components/data-state";
 import { dataState, type DataState } from "@/lib/queryState";
 import { formatCurrency } from "@/lib/utils";
-import { type RangeMode } from "@/lib/timeRange";
 import { householdToday } from "@/lib/householdDay";
 import {
   ANIM_AREA,
@@ -63,7 +62,7 @@ import {
   ReportShell,
   Stat,
   ReportsRangeControls,
-  daysForMode,
+  useReportRange,
   ReportLoadFailed,
 } from "./reportsShared";
 
@@ -207,17 +206,11 @@ export function cashFlowCardTitle(
 
 export default function CashFlowPage() {
   // Weekly-first: opens on the current week; Mo/Yr are opt-in.
-  const [mode, setMode] = useState<RangeMode>("wk");
+  // (R) The period is the address's (?mode / ?from&to), not state: a hub tile's span, reload and Back keep it.
+  const range = useReportRange();
   const [compareToPrev, setCompareToPrev] = useState(false);
-  const rangeDays = daysForMode(mode);
-
-  // Date-window derivation lifted verbatim from the old shared reports data hook.
-  const today = useMemo(() => new Date(), []);
-  const fromDate = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - rangeDays);
-    return d;
-  }, [today, rangeDays]);
+  const rangeDays = Math.max(1, range.days);
+  const { fromDate, toDate: today } = range;
   const prevFromDate = useMemo(() => {
     const d = new Date(fromDate);
     d.setDate(d.getDate() - rangeDays);
@@ -300,8 +293,9 @@ export default function CashFlowPage() {
       title="Cash flow"
       controls={
         <ReportsRangeControls
-          mode={mode}
-          setMode={setMode}
+          mode={range.mode}
+          customLabel={range.customLabel}
+          setMode={range.setMode}
           compareToPrev={compareToPrev}
           setCompareToPrev={setCompareToPrev}
         />

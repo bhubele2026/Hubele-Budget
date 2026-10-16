@@ -7,7 +7,7 @@
 // ⚠️ This module statically imports recharts (~450 KB). Everything that
 // imports it must stay on a LAZY route chunk; `scripts/check-entry-graph.mjs`
 // fails the build if a recharts fingerprint reaches the landing graph.
-import { useMemo, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 // (C0) Through the kit, never from "recharts" directly (`chartsDoor.test.ts`).
 import {
@@ -49,6 +49,7 @@ import { pendingPaymentTotalOf } from "@/lib/debtBalance";
 import { Switch } from "@/components/ui/switch";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { rangeForMode, rangeDays as rangeDaysOf, type RangeMode } from "@/lib/timeRange";
+import { parseDay, spanFromSearch, spanLabel, searchWithMode, type ReportSpan } from "@/lib/reportRange";
 import {
   AMEX_BALANCE_DISTINCTION,
   resolveAmexRevolvingBalance,
@@ -61,6 +62,10 @@ import { moneyFace } from "@/components/data-state";
 import { CHART } from "@/lib/chartTokens";
 import { btnLink, emptyNote, errorBanner, fieldLabel, Help } from "@/ui";
 import { Panel, StatBlock, type PanelSpan } from "@/components/next";
+
+// The shared block (face + calculated line + Details), loaded on demand: a static edge from this route would add
+// chunk names to the landing's route map, and the landing has no headroom.
+const CheckingFull = lazy(() => import("@/components/checking-balance-note").then((m) => ({ default: m.CheckingBalanceFull })));
 
 // Recharts ships these as class components, which TypeScript + React 19's
 // @types/react can no longer accept as JSX element constructors. Re-bind each
@@ -96,6 +101,85 @@ export {
  */
 export function daysForMode(mode: RangeMode): number {
   return rangeDaysOf(rangeForMode(mode));
+}
+
+
+/**
+ * (R) ONE HOOK FOR THE PERIOD A REPORT SHOWS: the address is the state (`?mode=wk|mo|yr`, or an explicit
+ * `?from=&to=` custom span from a hub tile). Reload, Back and a shared link land on the same period;
+ * choosing a preset replaces the entry (a filter is not a place) and drops a custom span. Other params stay.
+ * The window is the pages' own (today back `days`), so no figure moves.
+ */
+export interface ReportRange extends ReportSpan {
+  /** The Date pair the pages already used: `fromDate` .. `toDate` (browser-local days). */
+  fromDate: Date;
+  toDate: Date;
+  /** Words for the span: "Oct 9 – Nov 8" for a custom one, null for a preset (the toggle names it). */
+  customLabel: string | null;
+  setMode: (m: RangeMode) => void;
+}
+
+/** The address's query string, following Back/Forward and in-app links (wouter patches pushState/replaceState). */
+function useSearchString(): [string, (next: string) => void] {
+  const read = () => (typeof window === "undefined" ? "" : window.location.search);
+  const [search, setSearch] = useState(read);
+  useEffect(() => {
+    const sync = () => setSearch(read());
+    window.addEventListener("popstate", sync);
+    window.addEventListener("pushState", sync);
+    window.addEventListener("replaceState", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("pushState", sync);
+      window.removeEventListener("replaceState", sync);
+    };
+  }, []);
+  return [search, setSearch];
+}
+
+/**
+ * (R) The Budget report's month, as `?month=0..3` (months back; "this month" is not written). Lives here, not in
+ * `useUrlState`, so the route adds no chunk of its own to the landing's route map.
+ */
+export function useReportMonth(): [string, (m: string) => void] {
+  const [search, setSearch] = useSearchString();
+  const raw = new URLSearchParams(search).get("month");
+  const month = raw && /^[0-3]$/.test(raw) ? raw : "0";
+  const set = useCallback((m: string) => {
+    const { pathname, search: cur, hash } = window.location;
+    const p = new URLSearchParams(cur);
+    if (m === "0") p.delete("month");
+    else p.set("month", m);
+    const qs = p.toString();
+    const next = qs ? `?${qs}` : "";
+    window.history.replaceState(window.history.state, "", `${pathname}${next}${hash}`);
+    setSearch(next);
+  }, [setSearch]);
+  return [month, set];
+}
+
+export function useReportRange(): ReportRange {
+  const [search, setSearch] = useSearchString();
+  // One instant per mount: the pages' windows never drift while open.
+  const now = useMemo(() => new Date(), []);
+  const span = useMemo(() => spanFromSearch(search, now), [search, now]);
+  const setMode = useCallback((m: RangeMode) => {
+    const { pathname, search: cur, hash } = window.location;
+    const next = searchWithMode(cur, m);
+    window.history.replaceState(window.history.state, "", `${pathname}${next}${hash}`);
+    setSearch(next);
+  }, [setSearch]);
+  return useMemo(() => {
+    const toDate = span.mode === null ? (parseDay(span.to) as Date) : now;
+    const fromDate = parseDay(span.from) as Date;
+    return {
+      ...span,
+      fromDate,
+      toDate,
+      customLabel: span.mode === null ? spanLabel(span.from, span.to) : null,
+      setMode,
+    };
+  }, [span, now, setMode]);
 }
 
 // --- Chart chrome ---------------------------------------------------------
@@ -298,28 +382,16 @@ export function Stat(props: {
  *     request while the low point beside it came from the spine, so the word
  *     and the number could describe two different instants.
  *
- * Both now read the spine. (WP1) So does the bank tile's LABEL: it used to name
- * the account the forecast bundle's snapshot remembered — a second request,
- * and not always the account whose rows roll the balance forward. It now reads
- * the checking model every surface shares (`useBankBalanceView`): the figure,
- * where the snapshot came from, and whose account it is, from one response. With
- * no bank balance at all the figure is "—" (as on the dashboard), never the
- * starting balance or $0.00.
+ * Both now read the spine. (R) The bank tile is the shared "Checking today" block
+ * (`CheckingBalanceFull`): the figure, the calculated line and Details come from the
+ * spine's `bank` (balance, snapshot, sinceSnapshot) — the Dashboard tile's own source.
+ * With no bank balance at all the figure is "—" (as on the dashboard), never the
+ * starting balance or $0.00; before the spine answers the tile claims nothing.
  */
 export function ReportsBalanceTiles() {
   const { data: dashboard } = useGetDashboard();
-  const { data: spine, state: spineState } = useSpine();
+  const { data: spine, state: spineState, olderWords } = useSpine();
   const { view: bank } = useBankBalanceView();
-
-  const bankValue = bank?.balance != null ? formatCurrency(bank.balance) : "—";
-  const acct = bank?.account;
-  const bankSub = bank
-    ? bank.snapshot
-      ? `${bank.snapshot.source === "plaid" ? "Plaid" : "Manual"} · ${acct?.name ?? "Bank"}${acct?.mask ? ` ··${acct.mask}` : ""}`
-      : "No checking snapshot yet"
-    : spineState === "failed"
-      ? "Couldn't load"
-      : undefined; // the spine has not answered: no claim about a snapshot yet
 
   const { data: amexCardAccounts, isError: amexCardAccountsError } = useListPlaidLiabilityAccounts();
   const amex = useMemo(
@@ -389,16 +461,22 @@ export function ReportsBalanceTiles() {
         hint={totalDebtSub}
         data-testid="reports-tile-total-debt"
       />
-      {/* Same words as the Command Center's tile, because it is now the same
-          figure: the spine's `bank.balance`. The hint keeps the account this
-          belongs to; the number is no longer this page's own. */}
-      <Stat
-        index={1}
-        label="Bank balance"
-        value={bankValue}
-        hint={bankSub}
-        data-testid="reports-tile-bank"
-      />
+      {/* (R) The Dashboard's block, not this page's own words: "Checking today", the calculated line, Details. */}
+      <div className="panel tile-in span-3 p-4" style={{ animationDelay: "calc(1 * var(--stagger))" }} data-testid="reports-tile-bank">
+        {/* (R) The one shared block: label, figure, calculated line, Details — from the spine's bank (the Dashboard
+            tile's own source), no Plaid/Manual account words, no second calculation. Before the spine answers
+            it makes no claim about a reading. */}
+        <Suspense fallback={<div className="min-h-[5.5rem]" aria-hidden />}>
+          <CheckingFull
+            size="kpi"
+            figure={bank?.balance ?? null}
+            reading={bank?.snapshot}
+            since={bank?.since}
+            older={olderWords}
+            status={bank ? undefined : spineState === "failed" ? "Couldn't load" : "Loading…"}
+          />
+        </Suspense>
+      </div>
       {/* (#884/#887) The Amex tile carries hover copy explaining why this
           CURRENT balance can differ from the Amex page's projected
           end-of-month figure — and carries it only when there IS a live
@@ -439,12 +517,15 @@ export function ReportsBalanceTiles() {
 /** Weekly-first Wk/Mo/Yr toggle + compare switch, shared by sub-pages. */
 export function ReportsRangeControls({
   mode,
+  customLabel,
   setMode,
   compareToPrev,
   setCompareToPrev,
   showCompare = true,
 }: {
-  mode: RangeMode;
+  /** The lit preset; null for a custom span (no preset lit, `customLabel` says the dates). */
+  mode: RangeMode | null;
+  customLabel?: string | null;
   setMode: (m: RangeMode) => void;
   compareToPrev?: boolean;
   setCompareToPrev?: (v: boolean) => void;
@@ -455,6 +536,11 @@ export function ReportsRangeControls({
       <div className="flex items-center gap-2">
         <span className={fieldLabel}>Range</span>
         <TimeRangeToggle value={mode} onChange={setMode} />
+        {customLabel ? (
+          <span className="text-micro font-semibold tabular-nums text-neutral-600" data-testid="report-range-custom">
+            {customLabel}
+          </span>
+        ) : null}
       </div>
       {showCompare && setCompareToPrev && (
         <div className="flex items-center gap-2">

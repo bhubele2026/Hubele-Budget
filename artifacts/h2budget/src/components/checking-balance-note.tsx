@@ -61,12 +61,15 @@ export function CheckingBalanceFull({
   size,
   className,
   testids = {},
+  status,
   ...note
 }: CheckingNoteProps & {
   figure: string | number | null | undefined;
   size: CheckingBalanceSize;
   className?: string;
   testids?: { figure?: string; line?: string; details?: string };
+  /** The spine has not answered ("Loading…") or failed ("Couldn't load"): the face, and this one line instead of a note that would claim a reading. */
+  status?: string;
 }) {
   return (
     <CheckingBalance
@@ -75,7 +78,15 @@ export function CheckingBalanceFull({
       size={size}
       className={className}
       figureTestId={testids.figure}
-      note={<CheckingBalanceNote {...note} testids={testids} />}
+      note={
+        status ? (
+          <div className="mt-1 text-micro text-neutral-600" data-testid={testids.line ?? "checking-balance-line"}>
+            {status}
+          </div>
+        ) : (
+          <CheckingBalanceNote {...note} testids={testids} />
+        )
+      }
     />
   );
 }

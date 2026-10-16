@@ -14,6 +14,9 @@ import React from "react";
  * that the hub quotes the SHARED figures rather than adding up its own.
  */
 
+// (R) The calculated line + Details are the shared note, loaded as its own chunk (as on the Dashboard tile).
+const noteReady = () => screen.findByTestId("checking-balance-details");
+
 const TEST_TODAY = new Date(2026, 4, 15, 12, 0, 0);
 
 // One 30-day aggregate, the shape `/reports/spending-facts` returns. The hub
@@ -179,10 +182,12 @@ describe("Reports hub — the five drill destinations", () => {
     const href = (id: string) =>
       screen.getByTestId(id).getAttribute("href");
     expect(href("report-tile-debt")).toBe("/reports/debt");
-    expect(href("report-tile-cashflow")).toBe("/reports/cashflow");
-    expect(href("report-tile-spending")).toBe("/reports/spending");
+    // (R) The three tiles whose figure is the hub's 30-day facts carry that exact span; Budget is a month.
+    const span = "?from=2026-04-15&to=2026-05-15";
+    expect(href("report-tile-cashflow")).toBe(`/reports/cashflow${span}`);
+    expect(href("report-tile-spending")).toBe(`/reports/spending${span}`);
     expect(href("report-tile-budget")).toBe("/reports/budget");
-    expect(href("report-tile-behavior")).toBe("/reports/behavior");
+    expect(href("report-tile-behavior")).toBe(`/reports/behavior${span}`);
   });
 
   it("renders the household's balance tiles", () => {
@@ -216,7 +221,7 @@ describe("Reports hub — the rename", () => {
 
   it("keeps the ROUTE at /reports/behavior so prefetch stays in lockstep", () => {
     renderPage();
-    expect(screen.getByTestId("report-tile-behavior").getAttribute("href")).toBe(
+    expect(screen.getByTestId("report-tile-behavior").getAttribute("href")?.split("?")[0]).toBe(
       "/reports/behavior",
     );
   });
@@ -228,21 +233,32 @@ describe("Reports hub — one basis, no local money maths", () => {
     expect(listTransactionsSpy).not.toHaveBeenCalled();
   });
 
-  it("shows the spine's bank today rather than a snapshot of its own", () => {
+  it("shows the spine's bank today rather than a snapshot of its own", async () => {
     renderPage();
+    await noteReady();
     expect(screen.getByTestId("reports-tile-bank").textContent).toContain(
       "$3,120.45",
     );
-    expect(screen.getByTestId("reports-tile-bank").textContent).not.toContain("$3,300.00");
+    // The raw reading is named once, in the calculated line, never as the figure.
+    expect(screen.getByTestId("checking-balance-figure").textContent).toBe("$3,120.45");
+    expect(screen.getByTestId("checking-balance-line").textContent).toContain("bank read $3,300.00");
   });
 
-  it("(WP1) names the account the balance rolls forward on, from the spine — and never asks for the forecast bundle", () => {
+  it("(R) the shared block: 'Checking today', the calculated line, Details; no Plaid/Manual account words; never asks for the forecast bundle", async () => {
     renderPage();
-    expect(screen.getByTestId("reports-tile-bank").textContent).toContain("Plaid · Total Checking ··5526");
+    await noteReady();
+    const tile = screen.getByTestId("reports-tile-bank").textContent ?? "";
+    expect(tile).toContain("Checking today");
+    expect(tile).toContain("Calculated · bank read $3,300.00");
+    expect(tile).toContain("+3 rows since");
+    expect(screen.getByTestId("checking-balance-details").textContent).toBe("Details");
+    expect(tile).not.toContain("Plaid ·");
+    expect(tile).not.toContain("Manual ·");
+    expect(tile).not.toContain("Bank balance");
     expect(getForecastSpy).not.toHaveBeenCalled();
   });
 
-  it("(WP1) a typed-in snapshot says Manual; an unresolved account is named 'Bank'", () => {
+  it("(R) a typed-in snapshot says 'Typed balance (not from the bank)', never 'Manual'", async () => {
     hub.spine = {
       ...SPINE,
       bank: {
@@ -253,19 +269,23 @@ describe("Reports hub — one basis, no local money maths", () => {
       },
     };
     renderPage();
-    expect(screen.getByTestId("reports-tile-bank").textContent).toContain("Manual · Bank");
+    await noteReady();
+    const tile = screen.getByTestId("reports-tile-bank").textContent ?? "";
+    expect(tile).toContain("Typed balance $3,300.00 (not from the bank)");
+    expect(tile).not.toContain("Manual");
   });
 
-  it("(WP1) no bank balance at all: an em dash, as on the dashboard — never the starting balance or $0.00", () => {
+  it("(WP1) no bank balance at all: an em dash, as on the dashboard — never the starting balance or $0.00", async () => {
     hub.spine = {
       ...SPINE,
       // (WP10) The server sends null with no snapshot, never "0.00".
       bank: { ...SPINE.bank, balance: null, asOfDate: null, source: null, snapshot: null, sinceSnapshot: null },
     };
     renderPage();
+    await noteReady();
     const tile = screen.getByTestId("reports-tile-bank").textContent ?? "";
     expect(tile).toContain("—");
-    expect(tile).toContain("No checking snapshot yet");
+    expect(tile).toContain("No bank reading yet");
     expect(tile).not.toContain("$0.00");
   });
 
@@ -406,14 +426,16 @@ describe("Reports hub — no claims before the figures arrive", () => {
     hub.spine = undefined;
     hub.liabilities = undefined;
     renderPage();
-    expect(tileText("reports-tile-bank")).not.toContain("No checking snapshot yet");
+    expect(tileText("reports-tile-bank")).not.toContain("No bank reading yet");
+    expect(tileText("reports-tile-bank")).toContain("Loading…");
     expect(tileText("reports-tile-amex")).not.toContain("Link an Amex card");
   });
 
-  it("once they answer with nothing, says so", () => {
+  it("once they answer with nothing, says so", async () => {
     hub.spine = { ...SPINE, bank: { ...SPINE.bank, snapshot: null, sinceSnapshot: null } };
     renderPage();
-    expect(tileText("reports-tile-bank")).toContain("No checking snapshot yet");
+    await noteReady();
+    expect(tileText("reports-tile-bank")).toContain("No bank reading yet");
     expect(tileText("reports-tile-amex")).toContain("Link an Amex card");
   });
 });
