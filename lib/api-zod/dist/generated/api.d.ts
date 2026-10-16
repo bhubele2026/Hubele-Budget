@@ -16523,6 +16523,95 @@ export declare const UpdateUiPreferencesResponse: zod.ZodObject<{
     modelAutoCategorize?: boolean | undefined;
 }>;
 /**
+ * `read` = the note ids the signed-in person pressed "I've read this" on (only ids H2 still ships). `from` = the first note day that needs their click: the first must-read note (READ_CLICK_FROM), or the day after they joined the household when that is later — a new member is never handed notes from before they had H2. Never anyone else's reads.
+ * @summary (WN) The notes this person has read, and where their click starts
+ */
+export declare const getWhatsNewMeResponseFromRegExp: RegExp;
+export declare const GetWhatsNewMeResponse: zod.ZodObject<{
+    read: zod.ZodArray<zod.ZodString, "many">;
+    from: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    from: string;
+    read: string[];
+}, {
+    from: string;
+    read: string[];
+}>;
+/**
+ * One row per person per note. A repeat changes nothing and keeps the first read time. A well-formed id H2 does not ship (an older bundle) is dropped, never refused. Moves no money and no figure.
+ * @summary (WN) Record "I've read this" for the signed-in person
+ */
+export declare const markWhatsNewReadBodyIdsItemRegExp: RegExp;
+export declare const markWhatsNewReadBodyIdsMax = 50;
+export declare const MarkWhatsNewReadBody: zod.ZodObject<{
+    ids: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    ids: string[];
+}, {
+    ids: string[];
+}>;
+export declare const MarkWhatsNewReadResponse: zod.ZodObject<{
+    ids: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    ids: string[];
+}, {
+    ids: string[];
+}>;
+/**
+ * For every must-read note, each other person in the household it is theirs to read (their start is on or before its day) and when they pressed "I've read this" (null = not yet). The owner is never listed. Names are first names only, never an email; "Household member" when no name is known. A member gets 403.
+ * @summary (WN) Who else in the household has read each note (owner only)
+ */
+export declare const GetWhatsNewReadsResponse: zod.ZodObject<{
+    updates: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        readers: zod.ZodArray<zod.ZodObject<{
+            userId: zod.ZodString;
+            name: zod.ZodString;
+            readAt: zod.ZodNullable<zod.ZodDate>;
+        }, "strip", zod.ZodTypeAny, {
+            userId: string;
+            name: string;
+            readAt: Date | null;
+        }, {
+            userId: string;
+            name: string;
+            readAt: Date | null;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        readers: {
+            userId: string;
+            name: string;
+            readAt: Date | null;
+        }[];
+    }, {
+        id: string;
+        readers: {
+            userId: string;
+            name: string;
+            readAt: Date | null;
+        }[];
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    updates: {
+        id: string;
+        readers: {
+            userId: string;
+            name: string;
+            readAt: Date | null;
+        }[];
+    }[];
+}, {
+    updates: {
+        id: string;
+        readers: {
+            userId: string;
+            name: string;
+            readAt: Date | null;
+        }[];
+    }[];
+}>;
+/**
  * @summary List all invitations (owner only).
  */
 export declare const ListInvitationsResponseItem: zod.ZodObject<{

@@ -9,6 +9,7 @@ import { useSpine } from "@/hooks/useSpine";
 import { knownWithinPlan, weekStory } from "@/lib/weekFigures";
 import { btn, btnSecondary } from "@/ui";
 import { cn } from "@/lib/utils";
+import { requestWhatsNewOpen, useWhatsNewUnread } from "@/lib/whatsNewSignal";
 import { useCashSignalQ, usePlaidItemsQ } from "./queries";
 import { dueSoonOf, obligationLine, upcomingRows } from "./obligations";
 import { bankLines, hasLinkedBank } from "./bankState";
@@ -16,6 +17,9 @@ import { money, rise, weekdayLabel } from "./shared";
 
 /** The quiet second control beside a more urgent action: Afford stays one tap away. */
 const QUIET = "bg-transparent px-1 text-label font-semibold text-brand-navy ring-0 hover:bg-transparent hover:underline";
+/** The second row's text buttons (Morning text, What's new). */
+const QUIET_TEXT =
+  "rounded-control text-label font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
 
 /** The morning text preview (and the request behind it) load on first open only. */
 const RecapPreview = lazyWithPreload(() => import("./RecapPreview"));
@@ -31,6 +35,8 @@ export default function DashboardHeader() {
   // The same hook-aware cash-signal events Coming up lists (shared by key).
   const cash = useCashSignalQ(90);
   const [recapOpen, setRecapOpen] = useState(false);
+  // (WN) Unread notes from the lazy What's new host; null until it has asked.
+  const whatsNewUnread = useWhatsNewUnread();
   const today = householdToday(new Date());
   const s = spine.data;
   const now = Date.now();
@@ -96,13 +102,22 @@ export default function DashboardHeader() {
         <AffordLauncher className={QUIET} />
         <button
           type="button"
-          className="text-label font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control"
+          className={QUIET_TEXT}
           aria-expanded={recapOpen}
           aria-controls="dash-recap"
           onClick={() => setRecapOpen((o) => !o)}
           data-testid="dash-recap-toggle"
         >
           {recapOpen ? "Hide morning text" : "Morning text"}
+        </button>
+        {/* (WN) The way back to What's new — a quiet link, not a tile; "New" while a note is unread. */}
+        <button type="button" className={QUIET_TEXT} onClick={requestWhatsNewOpen} data-testid="dash-whats-new">
+          What's new
+          {whatsNewUnread ? (
+            <span className="ml-1.5 rounded-full bg-brand-orange px-1.5 py-px align-middle text-micro font-semibold text-brand-navy" data-testid="dash-whats-new-new">
+              New
+            </span>
+          ) : null}
         </button>
         {recapOpen ? (
           <div id="dash-recap" className="mt-2">

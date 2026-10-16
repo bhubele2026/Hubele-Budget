@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -112,6 +112,7 @@ vi.mock("@/components/ui/dropdown-menu", () => {
 
 import { AppLayout } from "./layout";
 import { VERSION_LABEL } from "./account-menu";
+import { _resetWhatsNewSignalForTests, onWhatsNewOpen, setWhatsNewUnread } from "@/lib/whatsNewSignal";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -860,14 +861,14 @@ describe("(C12) Settings' sub-pages, the account menu and the chrome tokens", ()
     expect(more.querySelector(".tab-underline")).toBeTruthy();
   });
 
-  it("the account menu carries the build version, in the header and in the drawer", async () => {
+  it("the account menu carries What's new, then the build version (last), in the header and in the drawer", async () => {
     mount("/banking");
     const items = screen.getAllByTestId("account-menu-item").map((b) => b.textContent);
-    expect(items).toEqual([VERSION_LABEL]);
+    expect(items).toEqual(["What's new", VERSION_LABEL]);
     expect(VERSION_LABEL).toMatch(/^Version \S+$/);
     const drawer = await openDrawer();
     expect(within(drawer).getByTestId("drawer-version").textContent).toBe(VERSION_LABEL);
-    expect(within(drawer).getAllByTestId("account-menu-item").map((b) => b.textContent)).toEqual([VERSION_LABEL]);
+    expect(within(drawer).getAllByTestId("account-menu-item").map((b) => b.textContent)).toEqual(["What's new", VERSION_LABEL]);
   });
 
   it("tapping the version copies the build id", async () => {
@@ -875,10 +876,31 @@ describe("(C12) Settings' sub-pages, the account menu and the chrome tokens", ()
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     try {
       mount("/banking");
-      fireEvent.click(screen.getAllByTestId("account-menu-item")[0]!);
+      const version = screen.getAllByTestId("account-menu-item").find((b) => b.textContent === VERSION_LABEL)!;
+      fireEvent.click(version);
       expect(writeText).toHaveBeenCalledWith(VERSION_LABEL.replace(/^Version /, ""));
     } finally {
       Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    }
+  });
+
+  it("(WN) What's new opens the sheet (on the next frame, once Clerk's menu has closed); '· New' while a note is unread", async () => {
+    const opened = vi.fn();
+    const off = onWhatsNewOpen(opened);
+    try {
+      mount("/banking");
+      const item = () => screen.getAllByTestId("account-menu-item").find((b) => b.textContent?.startsWith("What's new"))!;
+      expect(item().textContent).toBe("What's new");
+      fireEvent.click(item());
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      expect(opened).toHaveBeenCalledTimes(1);
+      act(() => setWhatsNewUnread(1));
+      expect(item().textContent).toBe("What's new · New");
+      act(() => setWhatsNewUnread(0));
+      expect(item().textContent).toBe("What's new");
+    } finally {
+      off();
+      act(() => _resetWhatsNewSignalForTests());
     }
   });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within, waitFor, act } from "@testing-library/react";
 import type { ReactNode } from "react";
 
 // Every query the panels read is one entry in `Q`; a test sets what it needs.
@@ -66,6 +66,7 @@ import { BELOW_FOLD } from "./belowFoldSizes";
 import { bankLines } from "./bankState";
 import { cleanRecap, recapSourceWords } from "./recapWords";
 import { remainingDebtTotal } from "@/lib/debtBalance";
+import { _resetWhatsNewSignalForTests, onWhatsNewOpen, setWhatsNewUnread } from "@/lib/whatsNewSignal";
 
 // (WP1) The spine's bank carries the snapshot under the balance, what rolled
 // since (4,180.50 + 20.00 = 4,200.50) and the account with its ids (row c1).
@@ -213,6 +214,30 @@ describe("header", () => {
     fireEvent.click(t);
     await waitFor(() => expect(screen.getByTestId("recap-stub")).toBeTruthy());
     expect(t.getAttribute("aria-expanded")).toBe("true");
+  });
+  it("(WN) a quiet What's new link in the second row; New only while a note is unread; it opens the sheet", () => {
+    const opened = vi.fn();
+    const off = onWhatsNewOpen(opened);
+    try {
+      wrap(<DashboardHeader />);
+      const link = screen.getByTestId("dash-whats-new");
+      expect(link.tagName).toBe("BUTTON");
+      expect(link.textContent).toBe("What's new");
+      // Unknown (the host has not asked yet) and 0 both show no chip.
+      expect(screen.queryByTestId("dash-whats-new-new")).toBeNull();
+      act(() => setWhatsNewUnread(0));
+      expect(screen.queryByTestId("dash-whats-new-new")).toBeNull();
+      act(() => setWhatsNewUnread(1));
+      expect(screen.getByTestId("dash-whats-new-new").textContent).toBe("New");
+      expect(link.textContent).toBe("What's newNew");
+      // Same row as Afford and Morning text, after them.
+      expect(screen.getByTestId("dash-recap-toggle").parentElement).toBe(link.parentElement);
+      fireEvent.click(link);
+      expect(opened).toHaveBeenCalledTimes(1);
+    } finally {
+      off();
+      act(() => _resetWhatsNewSignalForTests());
+    }
   });
   it("with nothing to act on there is no action button, only the small links", () => {
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);

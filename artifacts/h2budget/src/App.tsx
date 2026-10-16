@@ -22,6 +22,7 @@ import { shadcn } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
 import { PlaidReconnectListener } from "@/components/plaid-reconnect-listener";
 import { VersionUpdatePrompt } from "@/components/version-update-prompt";
+import { WhatsNewMount } from "@/components/whats-new/WhatsNewMount";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
@@ -658,6 +659,10 @@ function ClerkProviderWithRoutes() {
               Polls /api/version and prompts a one-click reload when a
               new bundle has been deployed. No-op in dev. */}
           <VersionUpdatePrompt />
+          {/* (WN) What's new: greets each person once the page is quiet, until
+              they press "I've read this" (recorded on the server). Tiny here;
+              the notes and the sheet load at idle. Off in the test suite. */}
+          <WhatsNewMount />
         </TooltipProvider>
 
       </QueryClientProvider>

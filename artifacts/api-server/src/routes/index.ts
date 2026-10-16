@@ -37,6 +37,7 @@ import aiRouter from "./ai";
 import goalsRouter from "./goals";
 import bankingRouter from "./banking";
 import reviewProposalsRouter from "./reviewProposals";
+import whatsNewRouter from "./whatsNew";
 import { ledgerWriteFence } from "../middlewares/ledgerWriteFence";
 
 const router: IRouter = Router();
@@ -83,5 +84,7 @@ router.use(aiRouter);
 router.use(goalsRouter);
 router.use(bankingRouter);
 router.use(reviewProposalsRouter);
+// (WN) What's new: "I've read this", per person. Moves no money.
+router.use(whatsNewRouter);
 
 export default router;

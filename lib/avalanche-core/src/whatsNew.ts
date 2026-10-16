@@ -1,0 +1,148 @@
+// ⭐ WHAT'S NEW — the notes behind the household's "What's new" sheet.
+//
+// Owner, 2026-10-15: "so my wife can actually see what's changing as I update".
+// Modelled on the KFI dashboard's: a sheet greets each person until they press
+// "I've read this"; Escape or a click outside does nothing while a note is
+// unread; the press is recorded for the PERSON on the server
+// (`whats_new_reads`, `routes/whatsNew.ts`), never in the browser; the owner
+// sees "Read by <name> on <day>" or "Not read yet" under each note.
+//
+// The standing rules (CLAUDE.md §3, "What's new"):
+//   - ⚠️ EVERY BIGGER VISIBLE CHANGE ADDS A NOTE HERE, IN THE SAME COMMIT. A new
+//     feature or screen, or a real change in how a number is worked out, gets
+//     one. Ties, labels, polish, speed and internal work get none, and so do
+//     tools only the owner uses (proposed fixes). The feature itself gets none.
+//   - Big things only, plain words, short. Written for the people who use H2.
+//   - Never version numbers, package codes, system names, code words or cents.
+//     The app is "H2", never "I".
+//   - Newest first. The id is the day it shipped, `YYYY-MM-DD`; a second note
+//     on the same day is `.2`, then `.3` … `.9` (".10" would sort before ".9").
+//   - Never change or reuse a shipped id: it carries people's reads.
+//   `artifacts/h2budget/src/lib/whatsNew.test.ts` holds the format and words.
+//
+// A subpath of its own (`@workspace/avalanche-core/whatsNew`), like `glossary`:
+// the server reads the ids (what may be recorded, the owner's report) and the
+// web reads the words. The web takes it only from the lazy sheet, so the notes
+// never ride on the open path. No dependency but `./householdTime`.
+
+import { addDaysISO, householdDateOf } from "./householdTime";
+
+export interface WhatsNewItem {
+  title: string;
+  body: string;
+}
+
+export interface WhatsNewUpdate {
+  /** The day it shipped, `YYYY-MM-DD` (or `YYYY-MM-DD.2` … `.9`). Also what "I've read this" records. */
+  id: string;
+  headline: string;
+  items: WhatsNewItem[];
+}
+
+/** A note's id: the day it shipped, then `.2`–`.9` for a second note that day. */
+export const WHATS_NEW_ID = /^\d{4}-\d{2}-\d{2}(\.[2-9])?$/;
+
+/**
+ * ⭐ THE CLICK STARTS HERE. From this note on, a note stays in front of each
+ * person until they press "I've read this". Older notes (none yet) would be
+ * history only. A new member starts the day after they join (`startFor`).
+ */
+export const READ_CLICK_FROM = "2026-10-15";
+
+/** Newest first. */
+export const WHATS_NEW: readonly WhatsNewUpdate[] = [
+  {
+    id: "2026-10-15",
+    headline: "Clearer spending, bank checks and Amex",
+    items: [
+      {
+        title: "Spending counts what we know",
+        body: "This week's spending counts only charges that are clearly spending. A charge that may be a bill, a transfer or a loan payment shows apart as unconfirmed until one of you confirms it.",
+      },
+      {
+        title: "Old pending charges stop counting",
+        body: "A charge still pending more than a week after its date is a hold that never went through. It stays on the list, marked, but no longer counts toward spending or the plan.",
+      },
+      {
+        title: "Does H2 match the bank?",
+        body: "Banking and the dashboard say whether H2's balance matches the bank's. When they differ, Review difference shows what H2 counted and what it can't explain.",
+      },
+      {
+        title: "A Banking page that tells the story",
+        body: "Banking opens with the balance and how sure it is, then what wasn't in the plan: unplanned activity, amount differences and timing differences. Money in and money out show apart.",
+      },
+      {
+        title: "One Amex summary for every card",
+        body: "Amex opens with one summary: what each card owes, then purchases, payments and credits. Pick a card to see only that card. Each row opens its own Details.",
+      },
+    ],
+  },
+];
+
+const KNOWN = new Set(WHATS_NEW.map((u) => u.id));
+
+/** A note H2 has shipped (the server records reads only for these). */
+export function isKnownUpdateId(id: string): boolean {
+  return KNOWN.has(id);
+}
+
+/**
+ * What greets this person, and stays in front of them until they press
+ * "I've read this": every note from `from` on that they have not read.
+ */
+export function unreadUpdates(
+  updates: readonly WhatsNewUpdate[],
+  read: ReadonlySet<string>,
+  from: string,
+): WhatsNewUpdate[] {
+  return updates.filter((u) => u.id >= from && !read.has(u.id));
+}
+
+/**
+ * Where a person's click starts: `READ_CLICK_FROM`, or the day AFTER they joined
+ * the household when that is later — a new member is never handed the notes
+ * from before they had H2, and a person made today (a fresh test user) is never
+ * greeted by today's note. `joinedDay` is a household calendar day; null when
+ * unknown.
+ */
+export function startFor(joinedDay: string | null): string {
+  if (!joinedDay) return READ_CLICK_FROM;
+  const next = addDaysISO(joinedDay.slice(0, 10), 1);
+  return next > READ_CLICK_FROM ? next : READ_CLICK_FROM;
+}
+
+/** "Thursday, October 15" — a note's day. Pure calendar: the same in every timezone. */
+export function formatDay(id: string): string {
+  const y = Number(id.slice(0, 4));
+  const m = Number(id.slice(5, 7));
+  const d = Number(id.slice(8, 10));
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** The household's day of a read (an instant), as `formatDay` says it. */
+export function formatReadDay(readAtIso: string): string {
+  return formatDay(householdDateOf(new Date(readAtIso)));
+}
+
+export interface WhatsNewReaderLine {
+  name: string;
+  /** When they pressed "I've read this"; null = not yet. */
+  readAt: string | null;
+}
+
+/**
+ * The owner's lines under one note: "Read by Jen on Thursday, October 15", or
+ * "Not read yet" — with the name when the household has more than one other
+ * person ("Not read yet by Jen"). No one to read it: no line.
+ */
+export function readLines(readers: readonly WhatsNewReaderLine[]): string[] {
+  return readers.map((r) => {
+    if (r.readAt) return `Read by ${r.name} on ${formatReadDay(r.readAt)}`;
+    return readers.length > 1 ? `Not read yet by ${r.name}` : "Not read yet";
+  });
+}

@@ -13,6 +13,7 @@ import {
 import { budgetCategoriesTable, db, householdMembersTable, householdsTable, wishlistItemsTable } from "@workspace/db";
 import { AffordInputError, addDaysISO, dayOfWeekISO, evaluateAfford, weekBounds } from "@workspace/avalanche-core";
 import { requireAuth } from "../middlewares/requireAuth";
+import { requireHouseholdOwner } from "../middlewares/requireHouseholdOwner";
 import { buildMoneyPosition } from "../lib/moneyPosition";
 import {
   loadAllowancePlans,
@@ -137,18 +138,6 @@ router.post("/wishlist/:id/evaluate", requireAuth, async (req, res): Promise<voi
   const r = await evaluateWishlist(hh, req.householdOwnerId!, { itemId: item.id, force: true });
   res.json({ itemId: item.id, lastEvaluation: r.results.get(item.id)! });
 });
-
-/**
- * (V5) The household's OWNER only — the signed-in user must be the household's
- * owner, not merely a member of it. A member gets 403 `owner_only`.
- */
-const requireHouseholdOwner: RequestHandler = (req, res, next) => {
-  if (!req.actualUserId || req.actualUserId !== req.householdOwnerId) {
-    res.status(403).json({ error: "owner_only" });
-    return;
-  }
-  next();
-};
 
 /** A real calendar date (the pattern admits "2026-02-30"). */
 const isCalendarDate = (iso: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(iso) && addDaysISO(iso, 0) === iso;
