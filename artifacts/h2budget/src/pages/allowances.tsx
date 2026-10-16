@@ -890,6 +890,8 @@ export default function AllowancesPage() {
   // (T4) Another week's or month's answer (kept while this one loads) is not this one's.
   const weekBd = { ...weekRaw, data: scoped(weekRaw, (r) => r.start === windowStart && r.period === "week").data };
   const monthBd = { ...monthRaw, data: scoped(monthRaw, (r) => r.start === monthScopeStart && r.period === "month").data };
+  // The week's figure counts unconfirmed rows too; the Spending week page counts only what is confirmed toward the plan.
+  const weeklyGap = !!weekBd.data && weekBd.data.provisional && Number(weekBd.data.unresolved.amount) > 0;
   const actual = useMemo<Record<BucketKey, number | null>>(
     () => ({
       weekly: weekBd.data ? Number(weekBd.data.actual) : null,
@@ -1099,6 +1101,15 @@ export default function AllowancesPage() {
                   {weekIsCurrent && planned.weekly?.amount != null && planned.weekly.amount > 0 && actual.weekly != null && actual.weekly > planned.weekly.amount ? (
                     <WaysBackLauncher />
                   ) : null}
+                  {weeklyGap && weekBd.data ? (
+                    // The big figure is what the week's rows add up to, unconfirmed ones included; the Spending week page counts only what is confirmed toward the plan. Both, named, and the page that shows them.
+                    <p className="text-micro text-neutral-600" data-testid="allowance-weekly-measure">
+                      Counts toward plan {formatCurrency(Number(weekBd.data.known))} · unconfirmed {formatCurrency(Number(weekBd.data.unresolved.amount))}.{" "}
+                      <Link href={`/spending/week?start=${windowStart}`} className="font-semibold text-brand-navy underline" data-testid="allowance-weekly-measure-link">
+                        Where it went
+                      </Link>
+                    </p>
+                  ) : null}
                   {carryLine ? (
                     <p className="text-micro text-neutral-600" data-testid="allowance-carry-over">
                       {carryLine}
@@ -1191,6 +1202,14 @@ export default function AllowancesPage() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="bg-brand-tint/40">
+                  {b.key === "weekly" && weeklyGap ? (
+                    <p className="px-4 py-2 text-micro text-neutral-600" data-testid="allowance-weekly-rows-note">
+                      Rows filed to a weekly bucket. Unfiled and unconfirmed rows:{" "}
+                      <Link href={`/spending/week?start=${windowStart}`} className="font-semibold text-brand-navy underline">
+                        This week
+                      </Link>
+                    </p>
+                  ) : null}
                   {groups.length === 0 ||
                   groups.every((g) => g.txns.length === 0) ? (
                     <div className={emptyNote}>

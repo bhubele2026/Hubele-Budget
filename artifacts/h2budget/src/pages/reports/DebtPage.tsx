@@ -57,6 +57,7 @@ import {
   tooltipStyle,
   ReportShell,
   Stat,
+  ReportLoadFailed,
 } from "./reportsShared";
 
 /**
@@ -79,11 +80,25 @@ export default function DebtPage() {
   // avalanche plan — no transaction pull at all (the old shared hook fetched a
   // 95-day txn window this page never rendered).
   const today = useMemo(() => new Date(), []);
-  const { data: debts, isLoading: debtsLoading } = useListDebts();
-  const { data: debtBalanceHistory } = useListDebtBalanceHistory();
+  const { data: debts, isLoading: debtsLoading, isError: debtsFailed, refetch: refetchDebts } = useListDebts();
+  const { data: debtBalanceHistory, isError: historyFailed, refetch: refetchHistory } = useListDebtBalanceHistory();
   const { data: avSettings } = useGetAvalancheSettings();
   const { data: avExtra } = useGetAvalancheExtra();
   if (debtsLoading) return <PageSkeleton />;
+  // A failed read is not "0.0% paid off, $0.00 paid": the report needs both reads.
+  if ((debtsFailed && !debts) || (historyFailed && !debtBalanceHistory)) {
+    return (
+      <ReportShell crumb="Debt payoff" title="Debt payoff">
+        <ReportLoadFailed
+          what={debtsFailed && !debts ? "your debts" : "your balance history"}
+          onRetry={() => {
+            void refetchDebts();
+            void refetchHistory();
+          }}
+        />
+      </ReportShell>
+    );
+  }
   return (
     <ReportShell crumb="Debt payoff" title="Debt payoff">
       <DebtSection

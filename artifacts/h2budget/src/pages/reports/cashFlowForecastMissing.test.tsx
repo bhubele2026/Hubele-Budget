@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, within } from "@testing-library/react";
+import { render, cleanup, within, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import { existsSync, readFileSync } from "node:fs";
@@ -38,6 +38,7 @@ const q = vi.hoisted(() => ({
   /** How many times the page asked for the `/forecast` bundle. */
   forecastBundleCalls: 0,
   refetch: vi.fn(),
+  txnsFailed: false,
 }));
 
 vi.mock("wouter", () => ({
@@ -68,7 +69,7 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@workspace/api-client-react")>();
   return {
-    useListTransactions: () => ({ data: [], isLoading: false }),
+    useListTransactions: () => ({ data: q.txnsFailed ? undefined : [], isLoading: false, isError: q.txnsFailed, refetch: vi.fn() }),
     useListCategories: () => ({ data: [] }),
     useListRecurringItems: () => ({ data: [] }),
     useGetForecast: () => {
@@ -206,6 +207,7 @@ beforeEach(() => {
   q.cashSignalKeys = [];
   q.forecastBundleCalls = 0;
   q.refetch = vi.fn();
+  q.txnsFailed = false;
 });
 
 afterEach(() => {
@@ -444,5 +446,15 @@ describe("the card no longer reads the settings row's starting balance", () => {
     expect(path).toBeTruthy();
     const src = readFileSync(path!, "utf8");
     expect(stripComments(src)).not.toMatch(/settings\s*\??\.\s*startingBalance/);
+  });
+});
+
+describe("(S) Cash flow — a failed read is not 'Income $0.00 · Savings rate 0%'", () => {
+  it("says it could not load the transactions, keeps the title, and prints no zero figures", () => {
+    q.txnsFailed = true;
+    renderPage();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Cash flow");
+    expect(screen.getByRole("alert").textContent).toContain("Couldn't load your transactions.");
+    expect(screen.queryByText(/Savings rate/)).toBeNull();
   });
 });

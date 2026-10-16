@@ -118,6 +118,7 @@ const CATEGORIES = [
 
 let rulesState: Rule[] | undefined = BASE_RULES;
 let rulesLoading = false;
+let rulesFailed = false;
 const reorderMutate = vi.fn();
 const updateMutate = vi.fn();
 const testMutate = vi.fn();
@@ -132,7 +133,7 @@ vi.mock("@workspace/api-client-react/features", async () => {
 vi.mock("@workspace/api-client-react", async () => {
   const { defaultMappingRulesApiClientMock } = await import("./__test-helpers__/mapping-rules-mocks");
   return defaultMappingRulesApiClientMock({
-    useListMappingRules: () => ({ data: rulesState, isLoading: rulesLoading }),
+    useListMappingRules: () => ({ data: rulesState, isLoading: rulesLoading, isError: rulesFailed, refetch: vi.fn() }),
     useListCategories: () => ({ data: CATEGORIES, isLoading: false }),
     useReorderMappingRules: () => ({ mutate: reorderMutate, isPending: false }),
     useUpdateMappingRule: () => ({ mutate: updateMutate, isPending: false }),
@@ -281,6 +282,20 @@ describe("(C7) Mapping rules — composition", () => {
     // Search and the learned panel still render.
     expect(screen.getByTestId("input-search-rules")).toBeTruthy();
     expect(screen.getByTestId("learned-rules-panel")).toBeTruthy();
+  });
+});
+
+describe("(S) Mapping rules — a failed read is not 'No rules yet'", () => {
+  it("says it could not load the rules, with Try again, and keeps Add and Test", () => {
+    rulesState = undefined;
+    rulesLoading = false;
+    rulesFailed = true;
+    renderPage();
+    const panel = screen.getByTestId("panel-rules");
+    expect(within(panel).getByRole("alert").textContent).toContain("Couldn't load your rules.");
+    expect(within(panel).queryByText(/No rules yet/)).toBeNull();
+    expect(screen.getByTestId("input-add-pattern")).toBeTruthy();
+    rulesFailed = false;
   });
 });
 

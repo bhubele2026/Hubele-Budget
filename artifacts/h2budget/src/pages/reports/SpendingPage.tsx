@@ -68,6 +68,7 @@ import {
   ReportsRangeControls,
   Stat,
   daysForMode,
+  ReportLoadFailed,
 } from "./reportsShared";
 
 /** Reimbursable vs personal — two marks, two clearly opposed hexes. */
@@ -318,7 +319,7 @@ function SpendingSection({
   txns: Transaction[];
   categories: { id: string; name: string }[] | undefined;
 }) {
-  const { data: facts, isLoading } = useGetReportsSpendingFacts({ from, to });
+  const { data: facts, isLoading, isError: factsFailed, refetch: refetchFacts } = useGetReportsSpendingFacts({ from, to });
   // (#dow-drill) Clicked weekday bar → reveal that day's top merchants.
   const [selectedDow, setSelectedDow] = useState<number | null>(null);
 
@@ -482,6 +483,9 @@ function SpendingSection({
     [months, trendTopCatNames],
   );
 
+  if (factsFailed && !facts) {
+    return <ReportLoadFailed what="the spending report" onRetry={() => void refetchFacts()} />;
+  }
   if (isLoading || !facts) {
     return (
       <PageGrid>

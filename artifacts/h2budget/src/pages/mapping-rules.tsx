@@ -60,6 +60,7 @@ import {
   btnSm,
   btnLink,
   btnLinkDanger,
+  errorBanner,
   input,
   fieldLabel,
   Field,
@@ -214,7 +215,7 @@ const ruleCollisionDetection: CollisionDetection = (args) => {
 };
 
 export default function MappingRulesPage() {
-  const { data: rules, isLoading: rulesLoading } = useListMappingRules();
+  const { data: rules, isLoading: rulesLoading, isError: rulesFailed, refetch: refetchRules } = useListMappingRules();
   const { data: allCategories, isLoading: catsLoading } = useListCategories();
   // (#474) Hide `excludeFromBudget` categories (today: just "Uncategorized")
   // from every mapping-rules surface — assign-to dropdowns, bulk change
@@ -2055,9 +2056,18 @@ export default function MappingRulesPage() {
             variant={["static", "flush"]}
             data-testid="panel-rules"
           >
-            <p className={emptyNote}>
-              No rules yet. Categorizing a transaction creates one.
-            </p>
+            {rulesFailed && !rules ? (
+              <div role="alert" className={errorBanner} data-testid="rules-load-failed">
+                Couldn't load your rules.{" "}
+                <button type="button" className={btnLink} onClick={() => void refetchRules()}>
+                  Try again
+                </button>
+              </div>
+            ) : (
+              <p className={emptyNote}>
+                No rules yet. Categorizing a transaction creates one.
+              </p>
+            )}
           </Panel>
         ) : (
           <Panel

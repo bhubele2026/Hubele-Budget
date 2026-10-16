@@ -64,6 +64,7 @@ import {
   Stat,
   ReportsRangeControls,
   daysForMode,
+  ReportLoadFailed,
 } from "./reportsShared";
 
 /**
@@ -238,7 +239,7 @@ export default function CashFlowPage() {
   // the previous-period half of a compare. This page reads transactions rather
   // than an aggregate (it charts them individually), so the cap stays; what it
   // must never do is stay quiet about it. See `clipped` below.
-  const { data: txns, isLoading: txnsLoading } = useListTransactions({
+  const { data: txns, isLoading: txnsLoading, isError: txnsFailed, refetch: refetchTxns } = useListTransactions({
     from: fmtISO(fetchFromDate),
     to: fmtISO(today),
     limit: TXN_FETCH_LIMIT,
@@ -285,6 +286,14 @@ export default function CashFlowPage() {
   }, [txns, prevFromDate, fromDate]);
 
   if (txnsLoading) return <PageSkeleton />;
+  // A failed read is not "Income $0.00 · Savings rate 0%".
+  if (txnsFailed && !txns) {
+    return (
+      <ReportShell crumb="Cash flow" title="Cash flow">
+        <ReportLoadFailed what="your transactions" onRetry={() => void refetchTxns()} />
+      </ReportShell>
+    );
+  }
   return (
     <ReportShell
       crumb="Cash flow"

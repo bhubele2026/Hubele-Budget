@@ -1905,6 +1905,8 @@ function BudgetLineRow({
                               })()}
                               {/* (PR-D) Still waiting to post: counted, once. */}
                               {t.pending ? " · pending" : ""}
+                              {/* A credit on a spending line is listed but is not in the figure (the server counts outflows only). */}
+                              {line.kind !== "income" && amt > 0 ? " · credit, not in the figure" : ""}
                             </div>
                           </div>
                           <div className="flex flex-col items-end whitespace-nowrap">

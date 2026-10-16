@@ -25,6 +25,8 @@ const state = vi.hoisted(() => ({
   debts: [] as unknown[],
   budget: undefined as unknown,
   behavior: undefined as unknown,
+  debtsFailed: false,
+  historyFailed: false,
 }));
 
 vi.mock("wouter", () => ({
@@ -37,8 +39,8 @@ vi.mock("wouter", () => ({
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@workspace/api-client-react")>()),
-  useListDebts: () => ({ data: state.debts, isLoading: false }),
-  useListDebtBalanceHistory: () => ({ data: [] }),
+  useListDebts: () => ({ data: state.debtsFailed ? undefined : state.debts, isLoading: false, isError: state.debtsFailed, refetch: vi.fn() }),
+  useListDebtBalanceHistory: () => ({ data: state.historyFailed ? undefined : [], isError: state.historyFailed, refetch: vi.fn() }),
   useGetAvalancheSettings: () => ({ data: { strategy: "avalanche", manualExtra: "100" } }),
   useGetAvalancheExtra: () => ({ data: { amount: 100 } }),
   useGetReportsBudgetFacts: () => ({ data: state.budget, isLoading: false, isError: false }),
@@ -267,5 +269,27 @@ describe("Behavior (Habits) report", () => {
   it("RBH-05 keeps the day-of-week panel", () => {
     mount(<BehaviorPage />);
     expect(spanOf(screen.getByText("Spend by day of week"))).toContain("span-6");
+  });
+});
+
+describe("(S) Debt report — a failed read is not '0.0% paid off'", () => {
+  afterEach(() => {
+    state.debtsFailed = false;
+    state.historyFailed = false;
+  });
+
+  it("says it could not load the debts, keeps the title, and shows no paid-off figure", () => {
+    state.debtsFailed = true;
+    mount(<DebtPage />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Debt payoff");
+    expect(screen.getByRole("alert").textContent).toContain("Couldn't load your debts.");
+    expect(screen.queryByText(/Paid off since tracking began/)).toBeNull();
+  });
+
+  it("says it could not load the balance history when only that failed", () => {
+    state.historyFailed = true;
+    mount(<DebtPage />);
+    expect(screen.getByRole("alert").textContent).toContain("Couldn't load your balance history.");
+    expect(screen.queryByText(/Paid off since tracking began/)).toBeNull();
   });
 });

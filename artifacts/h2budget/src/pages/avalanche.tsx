@@ -54,6 +54,7 @@ import {
   DebtLastSynced,
   DebtPlaidSource,
   DebtReauthBanner,
+  DebtsLoadFailed,
 } from "@/components/debt-plaid-link";
 import {
   Stat,
@@ -177,7 +178,7 @@ function strategyVerdict(args: {
 }
 
 export default function AvalanchePage() {
-  const { data: debts, isLoading } = useListDebts();
+  const { data: debts, isLoading, isError: debtsFailed, refetch: refetchDebts } = useListDebts();
   const { data: settings } = useGetAvalancheSettings();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -606,6 +607,15 @@ export default function AvalanchePage() {
   // debts yet); once data exists, render it and revalidate in the background.
   if (isLoading && !debts) {
     return <PageSkeleton />;
+  }
+  // A failed read is not "0 active debts" and not "Add a debt to see which one dies first".
+  if (debtsFailed && !debts) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-display font-semibold text-brand-navy">Debt</h1>
+        <DebtsLoadFailed onRetry={() => void refetchDebts()} />
+      </div>
+    );
   }
 
   const handleSave = async (id: string, patch: Partial<Debt>) => {

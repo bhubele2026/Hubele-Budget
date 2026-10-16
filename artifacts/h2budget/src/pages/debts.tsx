@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
 import { PageSkeleton } from "@/components/page-skeleton";
-import { DebtReauthBanner } from "@/components/debt-plaid-link";
+import { DebtReauthBanner, DebtsLoadFailed } from "@/components/debt-plaid-link";
 import {
   Help,
   Foot,
@@ -97,7 +97,7 @@ export function killMonthForHistory(
 // the one in `@/lib/debtBalance` — same function, same basis, same answer.
 
 export default function DebtsPage() {
-  const { data: debts, isLoading } = useListDebts();
+  const { data: debts, isLoading, isError: debtsFailed, refetch: refetchDebts } = useListDebts();
   const { data: settings } = useGetAvalancheSettings();
   const { data: resolvedExtra } = useGetAvalancheExtra();
   const { data: balanceHistory } = useListDebtBalanceHistory();
@@ -203,6 +203,15 @@ export default function DebtsPage() {
   // background — never blank the page.
   if (isLoading && !debts) {
     return <PageSkeleton />;
+  }
+  // A failed read is not "No debts recorded" and not zero tiles.
+  if (debtsFailed && !debts) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-display font-semibold text-brand-navy">Debts</h1>
+        <DebtsLoadFailed onRetry={() => void refetchDebts()} />
+      </div>
+    );
   }
 
   // Sort by APR descending (avalanche)
