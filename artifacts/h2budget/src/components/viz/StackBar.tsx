@@ -5,6 +5,10 @@ export type StackSegment = {
   label: string;
   value: number;
   color: string;
+  /** (P) The segment's share, already computed by the caller's shared calculation (lib/spendShare). */
+  share?: string;
+  /** Always in the legend, even past `legendMax` (e.g. the Uncategorized row). */
+  pinned?: boolean;
 };
 
 /**
@@ -18,6 +22,8 @@ export function StackBar({
   showLegend = true,
   legendMax = 5,
   money = true,
+  denominatorText,
+  bar,
 }: {
   segments: StackSegment[];
   height?: number;
@@ -26,10 +32,18 @@ export function StackBar({
   legendMax?: number;
   /** Format legend values as currency (vs raw number). */
   money?: boolean;
+  /** The denominator in words ("of $X spent Sep 16 – Oct 16"); shown under the legend and in each tooltip. */
+  denominatorText?: string;
+  /** The bar's full width in value units (all spending in the span), so shown segments keep their true size. */
+  bar?: number;
 }) {
   const segs = (segments ?? []).filter((s) => (Number(s.value) || 0) > 0);
   const total = segs.reduce((sum, s) => sum + (Number(s.value) || 0), 0);
   if (total <= 0) return null;
+  // A caller with a declared denominator (the Spending tile) hands each segment its `share`; a pure
+  // mix (no `share`) is a share of the segments' own sum.
+  const shareText = (s: StackSegment) =>
+    s.share ?? `${Math.round(((Number(s.value) || 0) / total) * 100)}%`;
 
   return (
     <div className={cn("w-full", className)}>
@@ -46,17 +60,17 @@ export function StackBar({
           <div
             key={`${s.label}-${i}`}
             style={{
-              width: `${((Number(s.value) || 0) / total) * 100}%`,
+              width: `${((Number(s.value) || 0) / Math.max(total, bar ?? 0)) * 100}%`,
               background: s.color,
             }}
-            title={`${s.label} · ${money ? formatCurrency(s.value) : s.value}`}
+            title={`${s.label} · ${money ? formatCurrency(s.value) : s.value} · ${shareText(s)}${denominatorText ? ` ${denominatorText}` : ""}`}
           />
         ))}
       </div>
       {showLegend && (
         <div className="stagger-children mt-3 space-y-1.5">
-          {segs.slice(0, legendMax).map((s, i) => (
-            <div key={`${s.label}-${i}`} className="flex items-center gap-2 text-xs">
+          {segs.filter((s, i) => i < legendMax || s.pinned).map((s, i) => (
+            <div key={`${s.label}-${i}`} className="flex items-center gap-2 text-xs" data-share-name={s.label}>
               <span
                 className="w-2.5 h-2.5 rounded-sm shrink-0"
                 style={{ background: s.color }}
@@ -66,10 +80,15 @@ export function StackBar({
                 {money ? formatCurrency(s.value) : s.value}
               </span>
               <span className="tabular-nums text-muted-foreground w-9 text-right">
-                {Math.round(((Number(s.value) || 0) / total) * 100)}%
+                {shareText(s)}
               </span>
             </div>
           ))}
+          {denominatorText && (
+            <div className="text-micro text-muted-foreground" data-testid="stackbar-denominator">
+              {`% ${denominatorText}`}
+            </div>
+          )}
         </div>
       )}
     </div>

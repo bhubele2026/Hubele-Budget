@@ -10,6 +10,7 @@ import {
 import { Sparkline, StackBar, MiniBars, RingStat, MoneyText } from "@/components/viz";
 import { dataState } from "@/lib/queryState";
 import { fmtISO } from "@/lib/reportsAnalytics";
+import { spendingShares, formatShare, denominatorWords, spanLabel } from "@/lib/spendShare";
 import { spanQuery } from "@/lib/reportRange";
 import { effectiveDebtBalance } from "@/lib/debtBalance";
 // Tokens only — no recharts on the hub. `viz` is plain SVG/CSS, so this whole
@@ -132,16 +133,34 @@ export default function ReportsPage() {
     [facts],
   );
 
-  // Spend mix — top categories by real spend this range. A colour marks an
-  // ITEM, so these come off CAT8 in rank order rather than a sequential ramp.
+  // Spend mix — top categories by real spend this range, plus Uncategorized as its own segment. A
+  // colour marks an ITEM, so these come off CAT8 in rank order rather than a sequential ramp.
+  // (P) The percentages come from the SAME calculation as the Spending report (lib/spendShare):
+  // a share of ALL spending in the span (categorized + uncategorized), not of the five shown.
+  const spendShares = useMemo(
+    () =>
+      spendingShares((facts?.byCategory ?? []).filter((c) => !/uncategorized/i.test(c.name)), {
+        categorized: facts?.realSpend.total ?? 0,
+        uncategorized: facts?.uncategorized?.total ?? 0,
+        topN: 5,
+      }),
+    [facts],
+  );
   const spendMix = useMemo(
     () =>
-      (facts?.byCategory ?? []).slice(0, 5).map((c, i) => ({
-        label: c.name,
-        value: c.total,
-        color: catColor(i),
+      spendShares.rows.map((r, i) => ({
+        label: r.name,
+        value: r.amount,
+        color:
+          r.kind === "uncategorized" ? CHART.orangeDeep : catColor(r.kind === "other" ? 8 : i),
+        pinned: r.kind === "uncategorized",
+        share: formatShare(r.pct),
       })),
-    [facts],
+    [spendShares],
+  );
+  const spendDenomText = denominatorWords(
+    formatCurrency(spendShares.denominator),
+    spanLabel(fmtISO(fromDate), fmtISO(today)),
   );
 
   // Income vs spend — the budget glance ring. Both sides are the server's
@@ -239,7 +258,12 @@ export default function ReportsPage() {
           }
           visual={
             spendMix.length ? (
-              <StackBar segments={spendMix} legendMax={3} />
+              <StackBar
+                segments={spendMix}
+                legendMax={3}
+                bar={spendShares.denominator}
+                denominatorText={spendDenomText}
+              />
             ) : (
               <div className={noteClass}>{facts ? "No spend in range" : factsNote}</div>
             )
