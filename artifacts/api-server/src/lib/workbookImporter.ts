@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -15,7 +16,14 @@ import {
 import { categorize, directionGuard, type RuleRow } from "./autoCategorize";
 import { spendContextOf } from "./spendContext";
 import { refreshAmexAnchor } from "./amexAnchor";
-import { captureImportSnapshot } from "./importSnapshot";
+import {
+  captureImportSnapshot,
+  fingerprintOf,
+  importLockKey,
+  readImportState,
+  summarizeImportState,
+  type ImportStateSummary,
+} from "./importSnapshot";
 import { recordRuleChanges, ruleSnapshot, type RuleChange } from "./mappingRuleAudit";
 
 type Row = (string | number | Date | null)[];
@@ -66,9 +74,24 @@ export function amexSignedAmount(typeStr: string, amount: number): string {
  * nothing was changed (the whole import is one transaction).
  */
 export class WorkbookImportError extends Error {
-  constructor(message: string) {
+  /** (W) Every problem found in the file (the message is the first). */
+  readonly problems: string[];
+  constructor(message: string, problems?: string[]) {
     super(message);
     this.name = "WorkbookImportError";
+    this.problems = problems && problems.length ? problems : [message];
+  }
+}
+
+/**
+ * (W) The confirmation does not match what the import would replace now: the
+ * file is another one, or the person's data changed since the preview (a sync
+ * added rows). The import refuses; the screen shows a fresh preview.
+ */
+export class ImportPreviewStaleError extends Error {
+  constructor() {
+    super("Your data or the file changed since the preview. Upload the file again to see a fresh preview.");
+    this.name = "ImportPreviewStaleError";
   }
 }
 
@@ -201,7 +224,306 @@ export type ImportResult = {
   // column explicitly named the category (those aren't rule attributions)
   // and rows where a user's manual override was preserved.
   ruleAttributions: ImportRuleAttribution[];
+  /** (W) What the import replaced (the snapshot's contents, counted). */
+  replaced?: ImportStateSummary;
 };
+
+// ── (W) The file, read and checked before anything is written ───────────────
+
+const REQUIRED_SHEETS = [
+  "Debt Tracker",
+  "Monthly Budget",
+  "Recurring Items",
+  "Mapping",
+  "Payments",
+];
+
+/** The problems listed by name; any beyond are counted in one last line. */
+const MAX_PROBLEMS = 20;
+
+export interface WorkbookPlan {
+  debts: Array<{ name: string; type: string | null; apr: string; balance: string; minPayment: string }>;
+  /** Monthly Budget rows, in sheet order: one category and one plan line each. */
+  categories: Array<{ name: string; planned: string; note: string | null }>;
+  recurring: Array<{
+    name: string;
+    kind: "debt" | "income" | "bill";
+    amount: string;
+    frequency: string;
+    dayOfMonth: number | null;
+    anchorDate: string | null;
+    active: "true" | "false";
+  }>;
+  rules: Array<{ pattern: string; target: string | null }>;
+  payments: Array<{
+    date: string;
+    occurredAt: string | null;
+    description: string;
+    target: string | null;
+    signed: string;
+    notes: string | null;
+  }>;
+  tracking: Array<{ monthStart: string; payload: Record<string, string> }>;
+}
+
+/**
+ * (W) Read and check the whole workbook, writing nothing. The preview and the
+ * import both start here, so a file the preview accepts is the file the import
+ * writes, row for row. Every problem is collected (the first is the message);
+ * a missing sheet stops at once.
+ */
+export function planWorkbook(wb: XLSX.WorkBook): WorkbookPlan {
+  const missing = REQUIRED_SHEETS.filter((s) => !wb.Sheets[s]);
+  if (missing.length) {
+    throw new WorkbookImportError(
+      `Workbook is missing required sheet(s): ${missing.join(", ")}`,
+    );
+  }
+  const problems: string[] = [];
+  const checked = <T,>(fallback: T, read: () => T): T => {
+    try {
+      return read();
+    } catch (e) {
+      if (e instanceof WorkbookImportError) {
+        problems.push(e.message);
+        return fallback;
+      }
+      throw e;
+    }
+  };
+  const plan: WorkbookPlan = { debts: [], categories: [], recurring: [], rules: [], payments: [], tracking: [] };
+
+  // Debts
+  const dt = sheet(wb, "Debt Tracker");
+  for (let i = 4; i < dt.length; i++) {
+    const r = dt[i];
+    if (!r || !r[1] || String(r[1]).toUpperCase() === "TOTALS") continue;
+    const name = toStr(r[1]);
+    if (!name) continue;
+    // In the order the import used to check them: APR, balance, minimum.
+    const apr = checked("0", () => toAprDecimal(r[3], `debt "${name}"`));
+    const balance = checked("0", () => toNum(r[4], { at: rowAt("Debt Tracker", i), field: "balance" }));
+    const minPayment = checked("0", () => toNum(r[5], { at: rowAt("Debt Tracker", i), field: "minimum payment" }));
+    plan.debts.push({ name, type: toStr(r[2]), apr, balance, minPayment });
+  }
+
+  // Categories (Monthly Budget)
+  const mb = sheet(wb, "Monthly Budget");
+  for (let i = 5; i < mb.length; i++) {
+    const r = mb[i];
+    if (!r) continue;
+    const num = r[0];
+    const label = toStr(r[1]);
+    if (!label) continue;
+    if (num === null && r[2] === null) continue;
+    if (label.toLowerCase().startsWith("subtotal")) continue;
+    plan.categories.push({
+      name: label,
+      planned: checked("0", () => toNum(r[2], { at: rowAt("Monthly Budget", i), field: "amount" })),
+      note: toStr(r[6]),
+    });
+  }
+
+  // Recurring items
+  const ri = sheet(wb, "Recurring Items");
+  for (let i = 5; i < ri.length; i++) {
+    const r = ri[i];
+    if (!r) continue;
+    const name = toStr(r[1]);
+    if (!name) continue;
+    const kindRaw = String(r[2] ?? "Expense").toLowerCase();
+    const kind = kindRaw.includes("debt")
+      ? "debt"
+      : kindRaw.includes("income")
+        ? "income"
+        : "bill";
+    // (W) A day the database cannot store (text, a fraction, a date cell) used
+    // to fail the whole import with a 500; it is the file's problem, said as
+    // such. Every day that imported before still imports.
+    let dayOfMonth: number | null = null;
+    if (r[5] != null && r[5] !== "") {
+      const day = Number(r[5]);
+      if (!(r[5] instanceof Date) && Number.isInteger(day) && Math.abs(day) <= 2_147_483_647) dayOfMonth = day;
+      else problems.push(`${rowAt("Recurring Items", i)}: the day ${JSON.stringify(r[5] instanceof Date ? r[5].toISOString().slice(0, 10) : r[5])} is not a day of the month.`);
+    }
+    plan.recurring.push({
+      name,
+      kind,
+      amount: checked("0", () => toNum(r[3], { at: rowAt("Recurring Items", i), field: "amount" })),
+      frequency: (toStr(r[4]) ?? "monthly").toLowerCase(),
+      dayOfMonth,
+      anchorDate: excelDate(r[6]),
+      active: (toStr(r[7]) ?? "true").toLowerCase() === "no" ? "false" : "true",
+    });
+  }
+
+  // Mapping rules
+  const mp = sheet(wb, "Mapping");
+  for (let i = 4; i < mp.length; i++) {
+    const r = mp[i];
+    if (!r) continue;
+    const pattern = toStr(r[0]);
+    if (!pattern) continue;
+    plan.rules.push({ pattern, target: toStr(r[1]) });
+  }
+
+  // Payments (the Amex card register)
+  const pay = sheet(wb, "Payments");
+  for (let i = 5; i < pay.length; i++) {
+    const r = pay[i];
+    if (!r || !r[1]) continue;
+    const date = excelDate(r[1]);
+    if (!date) continue;
+    const typeStr = String(r[3] ?? "Expense").toLowerCase();
+    const rawAmount = checked("0", () => toNum(r[5], { at: rowAt("Payments", i), field: "amount" }));
+    plan.payments.push({
+      date,
+      occurredAt: excelDateTime(r[1]),
+      description: toStr(r[2]) ?? "(no description)",
+      target: toStr(r[4]),
+      signed: amexSignedAmount(typeStr, Number(rawAmount)),
+      notes: toStr(r[7]),
+    });
+  }
+
+  // Monthly snapshots (optional sheet)
+  const mt = sheet(wb, "Monthly Tracking");
+  if (mt.length > 5) {
+    const headerRow = mt[4] ?? [];
+    const cols: { col: number; monthStart: string }[] = [];
+    for (let c = 2; c < headerRow.length; c++) {
+      const h = headerRow[c];
+      if (!h) continue;
+      const d = new Date(`1 ${h}`);
+      if (!Number.isNaN(d.getTime())) {
+        const ms = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+        cols.push({ col: c, monthStart: ms });
+      }
+    }
+    const byMonth = new Map<string, Record<string, string>>();
+    for (let i = 5; i < mt.length; i++) {
+      const r = mt[i];
+      if (!r) continue;
+      const metric = toStr(r[1]);
+      if (!metric) continue;
+      for (const m of cols) {
+        const v = r[m.col];
+        if (v === null || v === undefined || v === "") continue;
+        const bucket = byMonth.get(m.monthStart) ?? {};
+        bucket[metric] = toNum(v, null);
+        byMonth.set(m.monthStart, bucket);
+      }
+    }
+    for (const [monthStart, payload] of byMonth) plan.tracking.push({ monthStart, payload });
+  }
+
+  if (problems.length) {
+    const listed = problems.slice(0, MAX_PROBLEMS);
+    if (problems.length > MAX_PROBLEMS) listed.push(`…and ${problems.length - MAX_PROBLEMS} more.`);
+    throw new WorkbookImportError(problems[0]!, listed);
+  }
+  return plan;
+}
+
+const SEED_PRIORITY = 0;
+
+/**
+ * Merge user-edited mapping rules: keep any prior rule whose priority is
+ * higher than the workbook seed (0), or whose (pattern, matchType) the
+ * workbook does not redefine. (W) One function for the import and its preview.
+ */
+export function keptPriorRules<R extends { pattern: string; matchType: string; priority: number }>(
+  prior: R[],
+  seed: Array<{ pattern: string; matchType: string }>,
+): R[] {
+  const seedKeys = new Set(seed.map((v) => `${v.pattern}|${v.matchType}`));
+  return prior.filter(
+    (r) => r.priority > SEED_PRIORITY || !seedKeys.has(`${r.pattern}|${r.matchType}`),
+  );
+}
+
+/** (W) What the file adds, in the counts the screen says. */
+export interface ImportAddSummary {
+  transactions: number;
+  /** First and last day of the file's rows; null with no rows. */
+  from: string | null;
+  to: string | null;
+  categories: number;
+  budgetLines: number;
+  debts: number;
+  rules: number;
+  recurring: number;
+  monthlySnapshots: number;
+}
+
+export function summarizePlan(plan: WorkbookPlan): ImportAddSummary {
+  const days = plan.payments.map((p) => p.date).sort();
+  return {
+    transactions: plan.payments.length,
+    from: days[0] ?? null,
+    to: days[days.length - 1] ?? null,
+    categories: plan.categories.length,
+    budgetLines: plan.categories.length,
+    debts: plan.debts.length,
+    rules: plan.rules.length,
+    recurring: plan.recurring.length,
+    monthlySnapshots: plan.tracking.length,
+  };
+}
+
+/** (W) The file's identity, for the confirmation. */
+export function fileSha256(buf: Buffer): string {
+  return createHash("sha256").update(buf).digest("hex");
+}
+
+/**
+ * (W) The confirmation the import requires: this person, this file, and what
+ * the import would replace (counts and the bank rows' span). Not a secret; it
+ * makes the import refuse unless the person was shown exactly what it replaces.
+ */
+export function confirmTokenOf(userId: string, fileSha: string, replaces: ImportStateSummary): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ v: 1, userId, fileSha, replaces }))
+    .digest("hex")
+    .slice(0, 32);
+}
+
+export interface ImportPreview {
+  fileName: string | null;
+  confirmToken: string;
+  adds: ImportAddSummary;
+  replaces: ImportStateSummary;
+  /** Rules of the person's that survive the import (re-pointed by name). */
+  rulesKept: number;
+}
+
+/**
+ * (W) The dry run: the same reading and checks as the import, then the
+ * person's data read (not written) to say what the import would replace.
+ * Writes nothing at all.
+ */
+export async function previewWorkbookImport(
+  userId: string,
+  wb: XLSX.WorkBook,
+  opts: { fileSha: string; filename?: string | null; plan?: WorkbookPlan },
+): Promise<ImportPreview> {
+  const plan = opts.plan ?? planWorkbook(wb);
+  // One consistent reading, in a READ ONLY transaction: Postgres itself
+  // refuses any write here.
+  const state = await db.transaction(
+    async (tx) => readImportState(tx as unknown as typeof db, userId),
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+  const replaces = summarizeImportState(state);
+  const priorRules = state.mappingRules as Array<{ pattern: string; matchType: string; priority: number }>;
+  return {
+    fileName: opts.filename ?? null,
+    confirmToken: confirmTokenOf(userId, opts.fileSha, replaces),
+    adds: summarizePlan(plan),
+    replaces,
+    rulesKept: keptPriorRules(priorRules, plan.rules.map((r) => ({ pattern: r.pattern, matchType: "contains" }))).length,
+  };
+}
 
 export async function importWorkbook(
   userId: string,
@@ -213,21 +535,16 @@ export async function importWorkbook(
    * (`POST /import/workbook` passes null).
    */
   batchIdIn: string | null,
-  opts?: { filename?: string | null },
+  opts?: {
+    filename?: string | null;
+    /** (W) The file already read and checked (the route checks it before the confirmation). */
+    plan?: WorkbookPlan;
+    /** (W) The preview's confirmation: refused unless it still matches. */
+    confirm?: { token: string; fileSha: string };
+  },
 ): Promise<ImportResult> {
-  const REQUIRED = [
-    "Debt Tracker",
-    "Monthly Budget",
-    "Recurring Items",
-    "Mapping",
-    "Payments",
-  ];
-  const missing = REQUIRED.filter((s) => !wb.Sheets[s]);
-  if (missing.length) {
-    throw new WorkbookImportError(
-      `Workbook is missing required sheet(s): ${missing.join(", ")}`,
-    );
-  }
+  // (W) The whole file is read and checked before the first write.
+  const plan = opts?.plan ?? planWorkbook(wb);
 
   const counts: Record<string, number> = {};
   // Per-rule attribution counter — credited only for rows where the
@@ -242,6 +559,17 @@ export async function importWorkbook(
   >();
 
   return await db.transaction(async (tx) => {
+    // (W) One import or restore at a time per person: a second one waits here,
+    // then reads what the first left (so its confirmation no longer matches).
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${importLockKey(userId)}::text))`);
+    // (W) What the import replaces, read once: the confirmation is checked
+    // against it, and it is the snapshot.
+    const state = await readImportState(tx as unknown as typeof db, userId);
+    const replaced = summarizeImportState(state);
+    if (opts?.confirm && confirmTokenOf(userId, opts.confirm.fileSha, replaced) !== opts.confirm.token) {
+      throw new ImportPreviewStaleError();
+    }
+
     const batchId =
       batchIdIn ??
       (
@@ -296,6 +624,7 @@ export async function importWorkbook(
       householdId,
       importBatchId: batchId,
       filename: opts?.filename ?? null,
+      state,
     });
 
     // Wipe existing user data so re-imports are deterministic
@@ -328,24 +657,16 @@ export async function importWorkbook(
     await tx.delete(budgetCategoriesTable).where(eq(budgetCategoriesTable.userId, userId));
 
     // Debts
-    const dt = sheet(wb, "Debt Tracker");
-    const debtValues: typeof debtsTable.$inferInsert[] = [];
-    for (let i = 4; i < dt.length; i++) {
-      const r = dt[i];
-      if (!r || !r[1] || String(r[1]).toUpperCase() === "TOTALS") continue;
-      const name = toStr(r[1]);
-      if (!name) continue;
-      debtValues.push({
-        userId,
-        householdId,
-        name,
-        type: toStr(r[2]),
-        apr: toAprDecimal(r[3], `debt "${name}"`),
-        balance: toNum(r[4], { at: rowAt("Debt Tracker", i), field: "balance" }),
-        minPayment: toNum(r[5], { at: rowAt("Debt Tracker", i), field: "minimum payment" }),
-        payment: toNum(r[5], { at: rowAt("Debt Tracker", i), field: "minimum payment" }),
-      });
-    }
+    const debtValues: typeof debtsTable.$inferInsert[] = plan.debts.map((d) => ({
+      userId,
+      householdId,
+      name: d.name,
+      type: d.type,
+      apr: d.apr,
+      balance: d.balance,
+      minPayment: d.minPayment,
+      payment: d.minPayment,
+    }));
     const insertedDebts = debtValues.length
       ? await tx.insert(debtsTable).values(debtValues).returning({
           id: debtsTable.id,
@@ -356,31 +677,13 @@ export async function importWorkbook(
     const debtByName = new Map(insertedDebts.map((d) => [d.name, d.id]));
 
     // Categories
-    const mb = sheet(wb, "Monthly Budget");
-    const catValues: typeof budgetCategoriesTable.$inferInsert[] = [];
-    const lineSeed: { name: string; planned: string; note: string | null }[] = [];
-    let order = 0;
-    for (let i = 5; i < mb.length; i++) {
-      const r = mb[i];
-      if (!r) continue;
-      const num = r[0];
-      const label = toStr(r[1]);
-      if (!label) continue;
-      if (num === null && r[2] === null) continue;
-      if (label.toLowerCase().startsWith("subtotal")) continue;
-      catValues.push({
-        userId,
-        householdId,
-        name: label,
-        kind: "expense",
-        sortOrder: order++,
-      });
-      lineSeed.push({
-        name: label,
-        planned: toNum(r[2], { at: rowAt("Monthly Budget", i), field: "amount" }),
-        note: toStr(r[6]),
-      });
-    }
+    const catValues: typeof budgetCategoriesTable.$inferInsert[] = plan.categories.map((c, order) => ({
+      userId,
+      householdId,
+      name: c.name,
+      kind: "expense",
+      sortOrder: order,
+    }));
     const insertedCats = catValues.length
       ? await tx.insert(budgetCategoriesTable).values(catValues).returning({
           id: budgetCategoriesTable.id,
@@ -406,7 +709,7 @@ export async function importWorkbook(
       .onConflictDoNothing();
     counts.budget_months = 1;
 
-    const lineRows = lineSeed
+    const lineRows = plan.categories
       .filter((l) => catByName.has(l.name))
       .map((l) => ({
         userId,
@@ -422,55 +725,32 @@ export async function importWorkbook(
     counts.budget_lines = lineRows.length;
 
     // Recurring items
-    const ri = sheet(wb, "Recurring Items");
-    const recValues: typeof recurringItemsTable.$inferInsert[] = [];
-    for (let i = 5; i < ri.length; i++) {
-      const r = ri[i];
-      if (!r) continue;
-      const name = toStr(r[1]);
-      if (!name) continue;
-      const kindRaw = String(r[2] ?? "Expense").toLowerCase();
-      const kind = kindRaw.includes("debt")
-        ? "debt"
-        : kindRaw.includes("income")
-          ? "income"
-          : "bill";
-      recValues.push({
-        userId,
-        householdId,
-        name,
-        kind,
-        amount: toNum(r[3], { at: rowAt("Recurring Items", i), field: "amount" }),
-        frequency: (toStr(r[4]) ?? "monthly").toLowerCase(),
-        dayOfMonth: r[5] != null && r[5] !== "" ? Number(r[5]) : null,
-        anchorDate: excelDate(r[6]),
-        active: (toStr(r[7]) ?? "true").toLowerCase() === "no" ? "false" : "true",
-        categoryId: catByName.get(name) ?? null,
-      });
-    }
+    const recValues: typeof recurringItemsTable.$inferInsert[] = plan.recurring.map((r) => ({
+      userId,
+      householdId,
+      name: r.name,
+      kind: r.kind,
+      amount: r.amount,
+      frequency: r.frequency,
+      dayOfMonth: r.dayOfMonth,
+      anchorDate: r.anchorDate,
+      active: r.active,
+      categoryId: catByName.get(r.name) ?? null,
+    }));
     if (recValues.length) {
       await tx.insert(recurringItemsTable).values(recValues);
     }
     counts.recurring_items = recValues.length;
 
     // Mapping rules
-    const mp = sheet(wb, "Mapping");
-    const mapValues: typeof mappingRulesTable.$inferInsert[] = [];
-    for (let i = 4; i < mp.length; i++) {
-      const r = mp[i];
-      if (!r) continue;
-      const pattern = toStr(r[0]);
-      if (!pattern) continue;
-      const target = toStr(r[1]);
-      mapValues.push({
-        userId,
-        householdId,
-        pattern,
-        matchType: "contains",
-        categoryId: target ? catByName.get(target) ?? null : null,
-        priority: 0,
-      });
-    }
+    const mapValues: Array<typeof mappingRulesTable.$inferInsert & { pattern: string; matchType: string }> = plan.rules.map((r) => ({
+      userId,
+      householdId,
+      pattern: r.pattern,
+      matchType: "contains",
+      categoryId: r.target ? catByName.get(r.target) ?? null : null,
+      priority: 0,
+    }));
     const insertedRules = mapValues.length
       ? await tx.insert(mappingRulesTable).values(mapValues).returning({
           id: mappingRulesTable.id,
@@ -482,34 +762,22 @@ export async function importWorkbook(
       : [];
     counts.mapping_rules = insertedRules.length;
 
-    // Merge user-edited mapping rules: keep any prior rule whose priority is
-    // higher than the workbook seed (0), or whose (pattern, matchType) the
-    // workbook does not redefine. categoryId is re-mapped by category name
-    // since wiping budget_categories assigned new ids.
-    const seedKeys = new Set(
-      mapValues.map((v) => `${v.pattern}|${v.matchType}`),
-    );
-    const SEED_PRIORITY = 0;
-    const preservedRuleRows = priorRules
-      .filter(
-        (r) =>
-          r.priority > SEED_PRIORITY ||
-          !seedKeys.has(`${r.pattern}|${r.matchType}`),
-      )
-      .map((r) => {
-        const oldName = r.categoryId
-          ? priorCatNameById.get(r.categoryId) ?? null
-          : null;
-        const remappedCat = oldName ? catByName.get(oldName) ?? null : null;
-        return {
-          userId,
-          householdId,
-          pattern: r.pattern,
-          matchType: r.matchType,
-          categoryId: remappedCat,
-          priority: r.priority,
-        };
-      });
+    // Merge user-edited mapping rules (see keptPriorRules). categoryId is
+    // re-mapped by category name since wiping budget_categories assigned new ids.
+    const preservedRuleRows = keptPriorRules(priorRules, mapValues).map((r) => {
+      const oldName = r.categoryId
+        ? priorCatNameById.get(r.categoryId) ?? null
+        : null;
+      const remappedCat = oldName ? catByName.get(oldName) ?? null : null;
+      return {
+        userId,
+        householdId,
+        pattern: r.pattern,
+        matchType: r.matchType,
+        categoryId: remappedCat,
+        priority: r.priority,
+      };
+    });
     const insertedPreservedRules = preservedRuleRows.length
       ? await tx
           .insert(mappingRulesTable)
@@ -559,21 +827,10 @@ export async function importWorkbook(
     // page and contributes to the Amex bucket of the budget source breakdown.
     // When the workbook leaves Target empty we run the rule engine so the
     // user gets out-of-the-box categorization instead of an uncategorized row.
-    const pay = sheet(wb, "Payments");
     const txValues: typeof transactionsTable.$inferInsert[] = [];
     let preservedTxOverrides = 0;
-    for (let i = 5; i < pay.length; i++) {
-      const r = pay[i];
-      if (!r || !r[1]) continue;
-      const date = excelDate(r[1]);
-      if (!date) continue;
-      const occurredAt = excelDateTime(r[1]);
-      const description = toStr(r[2]) ?? "(no description)";
-      const target = toStr(r[4]);
-      const typeStr = String(r[3] ?? "Expense").toLowerCase();
-      const rawAmount = toNum(r[5], { at: rowAt("Payments", i), field: "amount" });
-      const num = Number(rawAmount);
-      const signed = amexSignedAmount(typeStr, num);
+    for (const p of plan.payments) {
+      const { date, occurredAt, description, target, signed } = p;
       const explicitCat = target ? catByName.get(target) ?? null : null;
       const auto = explicitCat
         ? {
@@ -655,7 +912,7 @@ export async function importWorkbook(
         isTransfer: auto.isTransfer,
         source: "amex",
         importBatchId: batchId,
-        notes: toStr(r[7]),
+        notes: p.notes,
       });
     }
     const CHUNK = 500;
@@ -669,47 +926,19 @@ export async function importWorkbook(
     counts.transactions_preserved = preservedTxOverrides;
 
     // Monthly snapshots (optional sheet)
-    const mt = sheet(wb, "Monthly Tracking");
-    if (mt.length > 5) {
-      const headerRow = mt[4] ?? [];
-      const cols: { col: number; monthStart: string }[] = [];
-      for (let c = 2; c < headerRow.length; c++) {
-        const h = headerRow[c];
-        if (!h) continue;
-        const d = new Date(`1 ${h}`);
-        if (!Number.isNaN(d.getTime())) {
-          const ms = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-          cols.push({ col: c, monthStart: ms });
-        }
-      }
-      const byMonth = new Map<string, Record<string, string>>();
-      for (let i = 5; i < mt.length; i++) {
-        const r = mt[i];
-        if (!r) continue;
-        const metric = toStr(r[1]);
-        if (!metric) continue;
-        for (const m of cols) {
-          const v = r[m.col];
-          if (v === null || v === undefined || v === "") continue;
-          const bucket = byMonth.get(m.monthStart) ?? {};
-          bucket[metric] = toNum(v, null);
-          byMonth.set(m.monthStart, bucket);
-        }
-      }
-      const snapValues: typeof monthlySnapshotsTable.$inferInsert[] = [];
-      for (const [ms, payload] of byMonth) {
-        snapValues.push({ userId, householdId, monthStart: ms, payload });
-      }
-      if (snapValues.length) {
-        await tx
-          .insert(monthlySnapshotsTable)
-          .values(snapValues)
-          .onConflictDoNothing();
-      }
-      counts.monthly_snapshots = snapValues.length;
-    } else {
-      counts.monthly_snapshots = 0;
+    const snapValues: typeof monthlySnapshotsTable.$inferInsert[] = plan.tracking.map((t) => ({
+      userId,
+      householdId,
+      monthStart: t.monthStart,
+      payload: t.payload,
+    }));
+    if (snapValues.length) {
+      await tx
+        .insert(monthlySnapshotsTable)
+        .values(snapValues)
+        .onConflictDoNothing();
     }
+    counts.monthly_snapshots = snapValues.length;
 
     // Suppress unused-warning for debt mapping (used implicitly by future features)
     void debtByName;
@@ -721,12 +950,21 @@ export async function importWorkbook(
     const anchor = await refreshAmexAnchor(userId, tx, { adopt: true });
     counts.amex_anchor_updated = anchor.changed ? 1 : 0;
 
+    // (W) What this import replaced and the state it leaves, on its batch:
+    // the history says the first, a restore compares against the second
+    // (anything added, edited or removed since would be lost by a restore).
+    const after = fingerprintOf(await readImportState(tx as unknown as typeof db, userId));
+    await tx
+      .update(importBatchesTable)
+      .set({ summary: { v: 1, counts, replaced, after } })
+      .where(eq(importBatchesTable.id, batchId));
+
     // Sort attributions by count desc; insertion order (rule-first-hit
     // order) is the natural tiebreaker because Map preserves it.
     const ruleAttributions: ImportRuleAttribution[] = Array.from(
       attributionCounts.values(),
     ).sort((a, b) => b.count - a.count);
 
-    return { batchId, counts, ruleAttributions, snapshotId };
+    return { batchId, counts, ruleAttributions, snapshotId, replaced };
   });
 }

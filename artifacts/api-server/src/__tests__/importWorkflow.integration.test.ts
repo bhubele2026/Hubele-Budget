@@ -76,6 +76,7 @@ import { addDaysISO, householdToday, weekBounds } from "@workspace/avalanche-cor
 import fullRouter from "../routes";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { workbookFile, type WorkbookSpec, type BookType } from "./_helpers/workbookFiles";
+import { fingerprintOf, readImportState } from "../lib/importSnapshot";
 
 // ── The server: the real router under /api, as app.ts mounts it ─────────────
 const app = express();
@@ -88,15 +89,25 @@ app.use("/api", fullRouter);
 let server: Server;
 let base = "";
 
-async function upload(file: Buffer, filename: string, as: "owner" | "other" = "owner") {
+async function post(path: string, file: Buffer, filename: string, as: "owner" | "other", confirm?: string | null) {
   const fd = new FormData();
   fd.append("file", new Blob([new Uint8Array(file)]), filename);
-  const res = await fetch(`${base}/api/import/workbook`, {
+  if (confirm) fd.append("confirm", confirm);
+  const res = await fetch(`${base}/api${path}`, {
     method: "POST",
     body: fd,
     headers: as === "other" ? { "x-test-user": "other" } : {},
   });
   return { status: res.status, json: (await res.json().catch(() => null)) as Record<string, any> | null };
+}
+// (W) An import runs only with the confirmation of a preview of the same file:
+// preview, then import with it. A file the preview refuses goes to the import
+// without one, so the import's own checks answer (they run before the
+// confirmation is asked for).
+async function upload(file: Buffer, filename: string, as: "owner" | "other" = "owner") {
+  const preview = await post("/import/workbook/preview", file, filename, as);
+  const confirm = preview.status === 200 ? String(preview.json!.confirmToken) : null;
+  return post("/import/workbook", file, filename, as, confirm);
 }
 async function api(method: string, path: string, as: "owner" | "other" | "claims" = "owner") {
   const res = await fetch(`${base}/api${path}`, { method, headers: as === "owner" ? {} : { "x-test-user": as } });
@@ -299,6 +310,8 @@ const sorted = <T,>(rows: T[]) => [...rows].sort((a, b) => JSON.stringify(a).loc
 let PRE: Awaited<ReturnType<typeof userState>>;
 let PRE_TOTALS: Awaited<ReturnType<typeof totals>>;
 let FIRST_SNAPSHOT = "";
+// (W) Every import's snapshot, oldest first: a restore goes newest first.
+const SNAPSHOTS: string[] = [];
 
 beforeAll(async () => {
   TEST_HOUSEHOLD_ID = (await createTestHousehold(TEST_USER)).householdId;
@@ -316,7 +329,7 @@ afterAll(async () => {
   await new Promise<void>((r) => server.close(() => r()));
   const { householdsTable } = await import("@workspace/db");
   await db.delete(importSnapshotsTable).where(inArray(importSnapshotsTable.userId, [TEST_USER, CLAIM_USER]));
-  await db.delete(importBatchesTable).where(eq(importBatchesTable.userId, TEST_USER));
+  await db.delete(importBatchesTable).where(inArray(importBatchesTable.userId, [TEST_USER, CLAIM_USER]));
   await db.delete(transactionsTable).where(inArray(transactionsTable.userId, [TEST_USER, CLAIM_USER]));
   await db.delete(debtsTable).where(eq(debtsTable.userId, TEST_USER));
   await db.delete(settingsTable).where(eq(settingsTable.userId, TEST_USER));
@@ -388,6 +401,7 @@ describe("workbook import, through POST /api/import/workbook (synthetic files, i
     beforeAll(async () => {
       res = await upload(workbookFile(FILE), "synthetic-household.xlsx");
       FIRST_SNAPSHOT = String(res.json?.snapshotId ?? "");
+      SNAPSHOTS.push(FIRST_SNAPSHOT);
     });
 
     it("answers 200 with the batch, the counts and the pre-import snapshot id", async () => {
@@ -509,6 +523,7 @@ describe("workbook import, through POST /api/import/workbook (synthetic files, i
     const first = await importedRows();
     const res = await upload(workbookFile(FILE), "synthetic-household.xlsx");
     expect(res.status).toBe(200);
+    SNAPSHOTS.push(String(res.json!.snapshotId));
     expect(res.json!.counts.transactions).toBe(FILE_ROWS);
     expect(await importedRows()).toEqual(first);
     const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, TEST_USER));
@@ -527,6 +542,7 @@ describe("workbook import, through POST /api/import/workbook (synthetic files, i
   it.each<BookType>(["xlsm", "xls", "ods"])("the %s container the parser also reads → the same rows as the xlsx", async (bookType) => {
     const res = await upload(workbookFile(FILE, bookType), `synthetic-household.${bookType}`);
     expect(res.status).toBe(200);
+    SNAPSHOTS.push(String(res.json!.snapshotId));
     expect(res.json!.counts.transactions).toBe(FILE_ROWS);
     expect(await importedRows()).toEqual(sorted(EXPECTED_ROWS));
   });
@@ -560,10 +576,21 @@ describe("workbook import, through POST /api/import/workbook (synthetic files, i
       expect(await userState()).toEqual(before);
     });
 
-    it("the first import's snapshot returns every table the import touched to the pre-import state", async () => {
+    it("(W) the first import cannot be restored while a later import is in place (409, nothing changes)", async () => {
+      const before = await userState();
       const res = await api("POST", `/import/snapshots/${FIRST_SNAPSHOT}/restore`);
-      expect(res.status).toBe(200);
-      expect(res.json).toMatchObject({ ok: true, snapshotId: FIRST_SNAPSHOT });
+      expect(res.status).toBe(409);
+      expect(res.json).toMatchObject({ code: "later_import", error: "A later import replaced this one. Restore that one first." });
+      expect(await userState()).toEqual(before);
+    });
+
+    it("the imports restored newest first return every table the first import touched to the pre-import state", async () => {
+      expect(SNAPSHOTS).toHaveLength(5);
+      for (const id of [...SNAPSHOTS].reverse()) {
+        const res = await api("POST", `/import/snapshots/${id}/restore`);
+        expect({ id, status: res.status, error: res.json?.error }).toEqual({ id, status: 200, error: undefined });
+        expect(res.json).toMatchObject({ ok: true, snapshotId: id });
+      }
       const now = await userState();
       // Table by table first (a readable failure), then the whole state.
       for (const key of Object.keys(PRE) as Array<keyof typeof PRE>) {
@@ -577,7 +604,7 @@ describe("workbook import, through POST /api/import/workbook (synthetic files, i
       const before = await userState();
       const res = await api("POST", `/import/snapshots/${FIRST_SNAPSHOT}/restore`);
       expect(res.status).toBe(409);
-      expect(res.json!.error).toBe("Snapshot is restored, not available");
+      expect(res.json!.error).toBe("This import was already restored.");
       expect(await userState()).toEqual(before);
     });
   });
@@ -609,9 +636,15 @@ describe("restore, a payment claim whose bank row sits two chunks later", () => 
     // The claim first, its bank row last (index 520: the second chunk).
     const ordered = [rows.find((r) => r.id === claim!.id)!, ...rows.filter((r) => r.id !== claim!.id && r.id !== target), rows.find((r) => r.id === target)!];
     const empty = { budgetCategories: [], debts: [], budgetMonths: [], budgetLines: [], recurringItems: [], mappingRules: [], monthlySnapshots: [] };
+    // (W) A restore needs the state its import left, to see that nothing
+    // changed since: here that state is the rows as they stand.
+    const [batch] = await db
+      .insert(importBatchesTable)
+      .values({ userId: CLAIM_USER, householdId: TEST_HOUSEHOLD_ID, filename: "claims.xlsx", summary: { v: 1, after: fingerprintOf(await readImportState(db, CLAIM_USER)) } })
+      .returning();
     const [snap] = await db
       .insert(importSnapshotsTable)
-      .values({ userId: CLAIM_USER, householdId: TEST_HOUSEHOLD_ID, payload: { ...empty, transactions: JSON.parse(JSON.stringify(ordered)) }, status: "available" })
+      .values({ userId: CLAIM_USER, householdId: TEST_HOUSEHOLD_ID, importBatchId: batch!.id, payload: { ...empty, transactions: JSON.parse(JSON.stringify(ordered)) }, status: "available" })
       .returning();
     const res = await api("POST", `/import/snapshots/${snap!.id}/restore`, "claims");
     expect(res.status).toBe(200);

@@ -9,23 +9,51 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
+// (W) The import now runs preview → confirm: the upload previews (writing
+// nothing), and the toast comes after "Replace". The toast keeps its
+// rule-attribution line and the View link to the touched rules.
 type RuleAttr = { ruleId: string; pattern: string; count: number };
 type ImportResponse = {
   counts: Record<string, number>;
   ruleAttributions?: RuleAttr[];
 };
 
+const PREVIEW = {
+  fileName: "budget.xlsx",
+  confirmToken: "token-1",
+  adds: { transactions: 3, from: "2026-10-01", to: "2026-10-02", categories: 1, budgetLines: 1, debts: 0, rules: 1, recurring: 0, monthlySnapshots: 0 },
+  replaces: { transactions: 2, bankTransactions: 1, bankFrom: "2026-10-01", bankTo: "2026-10-01", categories: 1, budgetLines: 1, debts: 0, rules: 0, recurring: 0, monthlySnapshots: 0, decisions: 0, splits: 0 },
+  rulesKept: 0,
+};
 let importResponse: ImportResponse = { counts: { transactions: 0 } };
 const toastFn = vi.fn();
 const navigateFn = vi.fn();
-const importMutate = vi.fn(
-  (
-    _vars: { data: { file: File } },
-    opts: { onSuccess?: (r: ImportResponse) => void },
-  ) => {
-    opts.onSuccess?.(importResponse);
-  },
+const previewMutate = vi.hoisted(() =>
+  vi.fn((_vars: { data: { file: File } }, opts: { onSuccess?: (r: unknown) => void }) => {
+    opts.onSuccess?.(PREVIEW);
+  }),
 );
+const importMutate = vi.hoisted(() =>
+  vi.fn(
+    (
+      _vars: { data: { file: File; confirm?: string } },
+      opts: { onSuccess?: (r: ImportResponse) => void },
+    ) => {
+      opts.onSuccess?.(importResponse);
+    },
+  ),
+);
+
+vi.mock("@workspace/api-client-react/features", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-client-react/features")>();
+  return {
+    ...actual,
+    usePreviewWorkbookImport: () => ({ mutate: previewMutate, isPending: false }),
+    useImportWorkbook: () => ({ mutate: importMutate, isPending: false }),
+    useRestoreImportSnapshot: () => ({ mutate: vi.fn(), isPending: false }),
+    useListImportHistory: () => ({ data: { items: [] }, isLoading: false, isError: false }),
+  };
+});
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: toastFn }) }));
 vi.mock("@/components/owner-invitations", () => ({
@@ -63,7 +91,6 @@ vi.mock("@workspace/api-client-react", () => {
   return {
     useGetSettings: () => ({ data: SETTINGS, isLoading: false }),
     useUpdateSettings: () => mutation,
-    useImportWorkbook: () => ({ mutate: importMutate, isPending: false }),
     useListPlaidItems: () => ({ data: [] }),
     useDeletePlaidItem: () => mutation,
     useSyncPlaidTransactions: () => mutation,
@@ -138,6 +165,12 @@ function uploadWorkbook() {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   fireEvent.change(input, { target: { files: [file] } });
+  // The preview asks first; Replace runs the import with its confirmation.
+  fireEvent.click(screen.getByTestId("button-confirm-import"));
+  expect(importMutate).toHaveBeenCalledWith(
+    { data: { file, confirm: "token-1" } },
+    expect.anything(),
+  );
 }
 
 beforeEach(() => {
@@ -145,6 +178,7 @@ beforeEach(() => {
   toastFn.mockClear();
   navigateFn.mockClear();
   importMutate.mockClear();
+  previewMutate.mockClear();
   importResponse = { counts: { transactions: 0 } };
 });
 
@@ -170,7 +204,7 @@ describe("Settings — workbook-import rule-attribution toast", () => {
     const completeArg = toastFn.mock.calls.find(
       ([a]) => (a as { title: string }).title === "Import complete",
     )![0] as { description: string; action?: React.ReactElement };
-    expect(completeArg.description).toContain("Processed 100 transactions.");
+    expect(completeArg.description).toContain("Imported 100 rows · Restore available in History.");
     expect(completeArg.description).toContain(
       "Auto-categorized 10 transactions: 7 via 'STARBUCKS', 3 via 'AMAZON'.",
     );

@@ -52,6 +52,24 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-10-16.6",
+    headline: "Report percentages that agree, and imports you can undo",
+    items: [
+      {
+        title: "One percentage, everywhere",
+        body: "The Spending tile and the Spending report now share one percentage: each category's share of everything spent in the period, with uncategorized spending shown as its own slice.",
+      },
+      {
+        title: "Import previews first, then asks",
+        body: "Uploading a workbook now shows what it would add and replace, bank rows included, and waits for you to confirm. Nothing changes until you say Replace.",
+      },
+      {
+        title: "Import history with Restore",
+        body: "Settings › Data lists each import. Restore puts your data back as it was, and tells you first if anything done since would be lost.",
+      },
+    ],
+  },
+  {
     id: "2026-10-16.5",
     headline: "Reports keep their period, and safer imports",
     items: [

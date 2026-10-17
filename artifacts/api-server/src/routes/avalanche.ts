@@ -28,7 +28,7 @@ const DEFAULTS = {
 // Avalanche page. Editing the planned amount on the budget reflects back
 // into avalancheSettings.manualExtra.
 export const AVALANCHE_PAYMENT_NAME = "Avalanche payment";
-const AVALANCHE_PAYMENT_GROUP = "Avalanche — Extra to Highest APR";
+export const AVALANCHE_PAYMENT_GROUP = "Avalanche — Extra to Highest APR";
 const AVALANCHE_PAYMENT_LEGACY_NAME = "Avalanche extra";
 
 // Ensures a single "Avalanche payment" expense category exists for the

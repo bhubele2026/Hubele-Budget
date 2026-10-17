@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { formatCurrency, cn } from "@/lib/utils";
 import { fmtISO } from "@/lib/reportsAnalytics";
+import { spendingShares, formatShare, denominatorWords, spanLabel } from "@/lib/spendShare";
 import {
   ANIM_AREA,
   ANIM_BAR,
@@ -151,16 +152,7 @@ function monthShortLabel(ym: string): string {
   return new Date(y, m - 1, 1).toLocaleString("en-US", { month: "short" });
 }
 
-// Pretty "May 1–29" style label from two ISO dates.
-function rangeLabel(startIso: string, endIso: string): string {
-  const s = new Date(`${startIso}T00:00:00Z`);
-  const e = new Date(`${endIso}T00:00:00Z`);
-  const sM = s.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const eM = e.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const sD = s.getUTCDate();
-  const eD = e.getUTCDate();
-  return sM === eM ? `${sM} ${sD}–${eD}` : `${sM} ${sD} – ${eM} ${eD}`;
-}
+const rangeLabel = spanLabel;
 
 // Inclusive list of ISO days between two dates (UTC).
 function eachIsoDay(startIso: string, endIso: string): string[] {
@@ -338,23 +330,24 @@ function SpendingSection({
     [facts],
   );
 
-  // Pie: top 8 real categories + an "Other" slice for the rest.
-  const pieData = useMemo(() => {
-    const top8 = realCats.slice(0, 8).map((c) => ({
-      name: c.name,
-      total: c.total,
-      pct: c.pctOfRealSpend,
-    }));
-    const rest = realCats.slice(8);
-    if (rest.length > 0) {
-      top8.push({
-        name: "Other",
-        total: rest.reduce((s, c) => s + c.total, 0),
-        pct: rest.reduce((s, c) => s + c.pctOfRealSpend, 0),
-      });
-    }
-    return top8;
-  }, [realCats]);
+  // (P) ONE share calculation (lib/spendShare), the same one the hub tile uses. Denominator = all
+  // spending in the window: categorized + uncategorized. Uncategorized is its own slice, not hidden.
+  const shares = useMemo(
+    () =>
+      spendingShares(realCats, {
+        categorized: facts?.realSpend.total ?? 0,
+        uncategorized: facts?.uncategorized.total ?? 0,
+        topN: 8,
+      }),
+    [realCats, facts],
+  );
+  const pieData = shares.rows;
+  const denomWords = denominatorWords(
+    formatCurrency(shares.denominator),
+    facts ? rangeLabel(facts.range.start, facts.range.end) : null,
+  );
+  const pieColor = (r: { kind: string }, i: number) =>
+    r.kind === "uncategorized" ? CHART.orangeDeep : catColor(r.kind === "other" ? 8 : i);
 
   // Reimbursable donut from facts.reimbursable.
   const reimDonut = useMemo(() => {
@@ -543,7 +536,7 @@ function SpendingSection({
           value={topCat?.name ?? "—"}
           hint={
             topCat
-              ? `${formatCurrency(topCat.total)} · ${Math.round(topCat.pctOfRealSpend)}% of real spend`
+              ? `${formatCurrency(topCat.total)} · ${formatShare(pieData.find((r) => r.name === topCat.name && r.kind === "category")?.pct ?? null)} ${denomWords}`
               : "—"
           }
           data-testid="spending-top-category"
@@ -577,8 +570,8 @@ function SpendingSection({
         <ChartCard
           title="Top categories"
           span={reimEmpty ? 12 : 6}
-          help="Real spend by category. Uncategorized is excluded — it has its own banner — so these percentages are of categorized spend only."
-          empty={pieData.length === 0 ? "No categorized spend yet" : null}
+          help="Percentages are of all spending in the window, uncategorized included as its own slice. Refunds that match a category come off that category."
+          empty={pieData.length === 0 ? "No spend yet" : null}
           hideWhenEmpty
         >
           <div className="flex h-full flex-col items-center gap-4 sm:flex-row">
@@ -586,7 +579,7 @@ function SpendingSection({
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie {...ANIM_BAR} data={pieData}
-                    dataKey="total"
+                    dataKey="amount"
                     nameKey="name"
                     outerRadius="92%"
                     innerRadius="55%"
@@ -598,13 +591,16 @@ function SpendingSection({
                         entry is the rollup, and `catColor(8)` IS `OTHER_GREY`.
                         No local substitute needed — the kit's token is now
                         genuinely distinct from all eight identities. */}
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={catColor(i)} />
+                    {pieData.map((r, i) => (
+                      <Cell key={i} fill={pieColor(r, i)} />
                     ))}
                   </Pie>
                   <Tooltip
                     contentStyle={tooltipStyle}
-                    formatter={(v: number) => tooltipMoney(v)}
+                    formatter={(v: number, _n: string, item: { payload?: { pct?: number | null } }) => [
+                      `${tooltipMoney(v)} · ${formatShare(item?.payload?.pct ?? null)} ${denomWords}`,
+                      _n,
+                    ]}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -613,22 +609,25 @@ function SpendingSection({
                 without relying on hue discrimination. */}
             <ul className="w-full space-y-1 text-micro sm:w-1/2">
               {pieData.map((d, i) => (
-                <li key={d.name} className="flex items-center gap-2">
+                <li key={d.name} className="flex items-center gap-2" data-testid="spend-share-row" data-share-name={d.name}>
                   <span
                     className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                    style={{ background: catColor(i) }}
+                    style={{ background: pieColor(d, i) }}
                   />
                   <span className="flex-1 truncate text-neutral-600">
                     {sentenceCase(d.name)}
                   </span>
                   <span className="font-mono tabular-nums text-neutral-700">
-                    {formatCurrency(d.total)}
+                    {formatCurrency(d.amount)}
                   </span>
                   <span className="w-9 text-right font-mono tabular-nums text-neutral-400">
-                    {Math.round(d.pct)}%
+                    {formatShare(d.pct)}
                   </span>
                 </li>
               ))}
+              <li className="pt-1 text-neutral-400" data-testid="spend-share-denominator">
+                {`% ${denomWords}`}
+              </li>
             </ul>
           </div>
         </ChartCard>

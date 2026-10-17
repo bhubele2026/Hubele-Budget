@@ -967,3 +967,106 @@ export function safeNumber(n: number | string | null | undefined, fallback = 0):
   const v = typeof n === "string" ? Number(n) : n;
   return Number.isFinite(v) ? v : fallback;
 }
+
+// ---- (P) Spend shares: the ONE percentage calculation, re-exported by lib/spendShare.ts ----
+/**
+
+ * (P) ONE calculation for "what share of spending is this?", used by the Reports Spending tile, the
+ * Spending report (rows, pie, legend, tooltip) and anything else that prints a spending percentage.
+ *
+ * Measure: a category's share of ALL spending in the span. The denominator is declared, not implied:
+ *   denominator = categorized spend (the server's `realSpend.total`, refunds that match a category
+ *                 already netted off the category) + uncategorized spend (its own explicit row).
+ * Uncategorized is never hidden and never folded into a category; it is a row of its own with its share.
+ * No denominator (zero or less) means no share: "—", never NaN and never 100%.
+ *
+ * Pure: amounts in, numbers out. Money is held in cents inside so the sum is exact.
+ */
+export type ShareInput = { name: string; total: number };
+
+export type ShareRow = {
+  name: string;
+  /** Dollars, as given. */
+  amount: number;
+  /** Percent of the denominator, unrounded; null when there is no denominator. */
+  pct: number | null;
+  kind: "category" | "other" | "uncategorized";
+};
+
+export type SpendShares = {
+  /** Dollars. Categorized + uncategorized. */
+  denominator: number;
+  categorized: number;
+  uncategorized: number;
+  rows: ShareRow[];
+};
+
+const toCents = (n: number) => Math.round((Number(n) || 0) * 100);
+
+/** Percent (0–100, unrounded) of `denominator`; null when the denominator is not positive. */
+export function shareOf(amount: number, denominator: number): number | null {
+  const d = toCents(denominator);
+  if (!(d > 0)) return null;
+  return (toCents(amount) / d) * 100;
+}
+
+/** Whole-percent text. null prints "—" (a missing share), never "NaN%" or "100%". */
+export function formatShare(pct: number | null): string {
+  if (pct === null || !Number.isFinite(pct)) return "—";
+  return `${Math.round(pct)}%`;
+}
+
+/**
+ * The shares for one span. `categories` are the categorized rows (already without any
+ * "Uncategorized" bucket); `categorized` is the server's categorized total (so a category the list
+ * trims is still inside the denominator); `uncategorized` is the server's uncategorized total.
+ * `topN` folds the tail into one "Other" row; the fold keeps its share (it is not dropped).
+ * The uncategorized row is always last, and present whenever there is any.
+ */
+export function spendingShares(
+  categories: ShareInput[],
+  opts: { categorized: number; uncategorized: number; topN?: number },
+): SpendShares {
+  const categorized = Math.max(0, Number(opts.categorized) || 0);
+  const uncategorized = Math.max(0, Number(opts.uncategorized) || 0);
+  const denominator = (toCents(categorized) + toCents(uncategorized)) / 100;
+  const sorted = [...categories].sort((a, b) => b.total - a.total);
+  const topN = opts.topN ?? sorted.length;
+  const head = sorted.slice(0, topN);
+  const tail = sorted.slice(topN);
+  const rows: ShareRow[] = head.map((c) => ({
+    name: c.name,
+    amount: c.total,
+    pct: shareOf(c.total, denominator),
+    kind: "category",
+  }));
+  if (tail.length > 0) {
+    const sum = tail.reduce((s, c) => s + toCents(c.total), 0) / 100;
+    rows.push({ name: "Other", amount: sum, pct: shareOf(sum, denominator), kind: "other" });
+  }
+  if (uncategorized > 0) {
+    rows.push({
+      name: "Uncategorized",
+      amount: uncategorized,
+      pct: shareOf(uncategorized, denominator),
+      kind: "uncategorized",
+    });
+  }
+  return { denominator, categorized, uncategorized, rows };
+}
+
+/** "May 1–29" / "Sep 16 – Oct 16" from two ISO dates. */
+export function spanLabel(startIso: string, endIso: string): string {
+  const s = new Date(`${startIso}T00:00:00Z`);
+  const e = new Date(`${endIso}T00:00:00Z`);
+  const sM = s.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+  const eM = e.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+  const sD = s.getUTCDate();
+  const eD = e.getUTCDate();
+  return sM === eM ? `${sM} ${sD}–${eD}` : `${sM} ${sD} – ${eM} ${eD}`;
+}
+
+/** The denominator in words: "of $4,941.45 spent Sep 16 – Oct 16". The money text is passed in (formatCurrency). */
+export function denominatorWords(moneyText: string, label?: string | null): string {
+  return label ? `of ${moneyText} spent ${label}` : `of ${moneyText} spent`;
+}
