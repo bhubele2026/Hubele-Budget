@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import {
   useGetSettings,
   useUpdateSettings,
-  useImportWorkbook,
   getGetSettingsQueryKey,
   getListDashboardBudgetsQueryKey,
   useListPlaidItems,
@@ -21,11 +20,9 @@ import {
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
 } from "@workspace/api-client-react";
-import { useLocation, useSearch } from "wouter";
+import { useSearch } from "wouter";
 import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
 import { useQueryClient } from "@tanstack/react-query";
-import { ToastAction } from "@/components/ui/toast";
-import { buildRuleAttributionSummary } from "@/lib/rule-attribution-summary";
 import { PageSkeleton } from "@/components/page-skeleton";
 import {
   AlertDialog,
@@ -41,7 +38,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { UploadCloud, Download, RefreshCw, Trash2, Plus, Zap } from "lucide-react";
+import { RefreshCw, Trash2, Plus, Zap } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import {
@@ -103,6 +100,7 @@ import {
   importMemoryTab,
 } from "./settings/settingsTabs";
 import { TabSkeleton } from "./settings/parts";
+import { WorkbookImport } from "./settings/WorkbookImport";
 
 // (C8) The fold-in tabs are their own lazy chunks (hooks from the `features`
 // client only); the classic sections below stay in this module.
@@ -126,7 +124,6 @@ type SettingsFormValues = z.infer<typeof settingsSchema>;
 export default function SettingsPage() {
   const { data: settings, isLoading } = useGetSettings();
   const updateSettings = useUpdateSettings();
-  const importWorkbook = useImportWorkbook();
   const { data: plaidItems } = useListPlaidItems({
     query: {
       queryKey: getListPlaidItemsQueryKey(),
@@ -203,7 +200,6 @@ export default function SettingsPage() {
   const cleanupNonProd = useCleanupNonProdPlaidItems();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [, navigate] = useLocation();
 
   const handleSync = (itemId?: string, opts?: { force?: boolean }) => {
     if (itemId) setSyncingItemId(itemId);
@@ -472,68 +468,6 @@ export default function SettingsPage() {
   }, [trackers, categories]);
 
   const hasInvalidTracker = Object.values(trackerErrors).some((e) => e !== null);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    toast({ title: "Importing workbook..." });
-    importWorkbook.mutate({ data: { file } }, {
-      onSuccess: (res) => {
-        {
-          const c = res.counts as Record<string, number>;
-          const parts = [`Processed ${c.transactions || 0} transactions.`];
-          const rulesKept = c.mapping_rules_preserved || 0;
-          const txKept = c.transactions_preserved || 0;
-          if (rulesKept || txKept) {
-            parts.push(
-              `Preserved ${rulesKept} of your mapping rule${rulesKept === 1 ? "" : "s"} and ${txKept} manual category edit${txKept === 1 ? "" : "s"}.`,
-            );
-          }
-          // Append a per-rule attribution line + a "View" deep-link to the
-          // Mapping Rules page so users can immediately spot stale rules
-          // mis-routing big chunks of the freshly imported workbook.
-          const summary = buildRuleAttributionSummary(
-            res.ruleAttributions ?? [],
-          );
-          if (summary.totalAttributed > 0) {
-            parts.push(
-              `Auto-categorized ${summary.totalAttributed} ${
-                summary.totalAttributed === 1 ? "transaction" : "transactions"
-              }: ${summary.top
-                .map((r) => `${r.count} via '${r.pattern}'`)
-                .join(", ")}${summary.extraRules > 0 ? `, +${summary.extraRules} more` : ""}.`,
-            );
-          }
-          toast({
-            title: "Import complete",
-            description: parts.join(" "),
-            action:
-              summary.totalAttributed > 0 && summary.ruleIds.length > 0 ? (
-                <ToastAction
-                  altText="View matched rules"
-                  onClick={() =>
-                    navigate(
-                      `/mapping-rules?focus=${summary.ruleIds
-                        .map((id) => encodeURIComponent(id))
-                        .join(",")}`,
-                    )
-                  }
-                  data-testid="button-toast-view-import-matched-rules"
-                >
-                  View
-                </ToastAction>
-              ) : undefined,
-          });
-        }
-        e.target.value = ''; // reset input
-      },
-      onError: (err) => {
-        toast({ title: "Import failed", description: String(err), variant: "destructive" });
-        e.target.value = '';
-      }
-    });
-  };
 
   const tab = tabOf(useSearch());
 
@@ -1237,28 +1171,7 @@ export default function SettingsPage() {
           </Help>
           }
         >
-        <div className="flex flex-wrap items-center gap-2 p-4">
-          <span className={`${btnSecondary} relative inline-flex cursor-pointer items-center`}>
-            <UploadCloud className="mr-1.5 inline h-4 w-4 align-[-3px]" />
-            {importWorkbook.isPending ? "Importing…" : "Upload .xlsx"}
-            <input
-              type="file"
-              accept=".xlsx"
-              aria-label="Upload workbook"
-              className="absolute inset-0 cursor-pointer opacity-0"
-              onChange={handleFileUpload}
-              disabled={importWorkbook.isPending}
-            />
-          </span>
-          <a
-            href={`${import.meta.env.BASE_URL}sample/Hubele_Family_Budget_v36.xlsx`}
-            download
-            className={btnLink}
-          >
-            <Download className="h-3 w-3" />
-            Sample workbook
-          </a>
-        </div>
+        <WorkbookImport />
               </Panel>
       {import.meta.env.DEV && plaidEnv && plaidEnv.nonProdItemCount > 0 && (
         <Panel

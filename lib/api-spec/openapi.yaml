@@ -2416,10 +2416,14 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BillsSummary" }
 
-  /import/workbook:
+  # (W) The workbook import: preview (writes nothing) → confirm → import →
+  # history → restore (refused when it would lose anything). Tagged features:
+  # only the lazy Settings page uses these hooks.
+  /import/workbook/preview:
     post:
-      operationId: importWorkbook
-      tags: [import]
+      operationId: previewWorkbookImport
+      tags: [import, features]
+      summary: Reads and checks a workbook and says what importing it would add and replace. Writes nothing.
       requestBody:
         required: true
         content:
@@ -2433,10 +2437,122 @@ paths:
                   format: binary
       responses:
         "200":
+          description: What the import would do, and the confirmation it requires
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportPreview" }
+        "400":
+          description: The file cannot be imported (every problem listed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportError" }
+
+  /import/workbook:
+    post:
+      operationId: importWorkbook
+      tags: [import, features]
+      summary: Replaces the caller's workbook data with the file's. Requires the confirmation from a preview of the same file.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                confirm:
+                  type: string
+                  description: The preview's `confirmToken`. Without it the import is refused (428).
+      responses:
+        "200":
           description: OK
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ImportSummary" }
+        "400":
+          description: The file cannot be imported (every problem listed); nothing written
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportError" }
+        "409":
+          description: The file or the caller's data changed since the preview; nothing written
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportError" }
+        "428":
+          description: No confirmation; nothing written
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportError" }
+
+  /import/history:
+    get:
+      operationId: listImportHistory
+      tags: [import, features]
+      summary: The caller's workbook imports, newest first (at most 20), each with whether it can be restored.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportHistory" }
+
+  /import/snapshots/{snapshotId}/restore-preview:
+    get:
+      operationId: getImportRestorePreview
+      tags: [import, features]
+      summary: What restoring this import would put back and remove, or why it cannot (changes since it would be lost). Reads only.
+      parameters:
+        - in: path
+          name: snapshotId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportRestorePreview" }
+        "404":
+          description: Not the caller's import
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportError" }
+
+  /import/snapshots/{snapshotId}/restore:
+    post:
+      operationId: restoreImportSnapshot
+      tags: [import, features]
+      summary: Puts back the caller's data from before this import. Refused, with nothing written, when it would lose anything.
+      parameters:
+        - in: path
+          name: snapshotId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportRestoreResult" }
+        "404":
+          description: Not the caller's import
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportError" }
+        "409":
+          description: Already restored, a later import is in place, too old to tell, or changes since the import
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportError" }
 
   /me:
     get:
@@ -10561,6 +10677,147 @@ components:
         ruleAttributions:
           type: array
           items: { $ref: "#/components/schemas/RuleAttribution" }
+        # (W) The pre-import snapshot (History restores it) and what it holds.
+        snapshotId: { type: string }
+        replaced: { $ref: "#/components/schemas/ImportStateSummary" }
+
+    # (W) What the file adds.
+    ImportAddSummary:
+      type: object
+      required: [transactions, from, to, categories, budgetLines, debts, rules, recurring, monthlySnapshots]
+      properties:
+        transactions: { type: integer }
+        from: { type: ["string", "null"], description: "First day of the file's rows (YYYY-MM-DD)" }
+        to: { type: ["string", "null"], description: "Last day of the file's rows (YYYY-MM-DD)" }
+        categories: { type: integer }
+        budgetLines: { type: integer }
+        debts: { type: integer }
+        rules: { type: integer }
+        recurring: { type: integer }
+        monthlySnapshots: { type: integer }
+
+    # (W) The caller's data an import replaces (or a restore puts back).
+    ImportStateSummary:
+      type: object
+      required: [transactions, bankTransactions, bankFrom, bankTo, categories, budgetLines, debts, rules, recurring, monthlySnapshots, decisions, splits]
+      properties:
+        transactions: { type: integer }
+        bankTransactions: { type: integer, description: Rows the bank sent (Plaid) }
+        bankFrom: { type: ["string", "null"], description: "First day of the bank rows (YYYY-MM-DD)" }
+        bankTo: { type: ["string", "null"], description: "Last day of the bank rows (YYYY-MM-DD)" }
+        categories: { type: integer }
+        budgetLines: { type: integer }
+        debts: { type: integer }
+        rules: { type: integer }
+        recurring: { type: integer }
+        monthlySnapshots: { type: integer }
+        decisions: { type: integer }
+        splits: { type: integer }
+
+    ImportPreview:
+      type: object
+      required: [fileName, confirmToken, adds, replaces, rulesKept]
+      properties:
+        fileName: { type: ["string", "null"] }
+        confirmToken: { type: string, description: Send as `confirm` with the same file to import it }
+        adds: { $ref: "#/components/schemas/ImportAddSummary" }
+        replaces: { $ref: "#/components/schemas/ImportStateSummary" }
+        rulesKept: { type: integer, description: The caller's rules that survive the import }
+
+    # (W) What changed since an import (a restore would lose it).
+    ImportChanges:
+      type: object
+      required: [total, transactionsAdded, bankRowsAdded, transactionsEdited, transactionsRemoved, categories, rules, debts, decisions, plan, other]
+      properties:
+        total: { type: integer }
+        transactionsAdded: { type: integer }
+        bankRowsAdded: { type: integer }
+        transactionsEdited: { type: integer }
+        transactionsRemoved: { type: integer }
+        categories: { type: integer }
+        rules: { type: integer }
+        debts: { type: integer }
+        decisions: { type: integer }
+        plan: { type: integer }
+        other: { type: integer }
+
+    ImportError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        code: { type: string }
+        errors:
+          type: array
+          items: { type: string }
+        changes:
+          oneOf:
+            - $ref: "#/components/schemas/ImportChanges"
+            - type: "null"
+
+    ImportHistoryItem:
+      type: object
+      required: [batchId, fileName, importedAt, counts, replaced, snapshotId, restoredAt, restore]
+      properties:
+        batchId: { type: string }
+        fileName: { type: ["string", "null"] }
+        importedAt: { type: string, format: date-time }
+        counts:
+          type: ["object", "null"]
+          additionalProperties: { type: integer }
+        replaced:
+          oneOf:
+            - $ref: "#/components/schemas/ImportStateSummary"
+            - type: "null"
+        snapshotId: { type: ["string", "null"] }
+        restoredAt: { type: ["string", "null"], format: date-time }
+        restore:
+          type: string
+          enum: [available, later_import, too_old, restored, none]
+
+    ImportHistory:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ImportHistoryItem" }
+
+    ImportRestorePreview:
+      type: object
+      required: [snapshotId, batchId, fileName, importedAt, restoredAt, status, blockedBy, reason, putsBack, removes, changes]
+      properties:
+        snapshotId: { type: string }
+        batchId: { type: ["string", "null"] }
+        fileName: { type: ["string", "null"] }
+        importedAt: { type: string, format: date-time }
+        restoredAt: { type: ["string", "null"], format: date-time }
+        status:
+          type: string
+          enum: [ready, blocked, restored]
+        blockedBy:
+          type: ["string", "null"]
+          enum: [already_restored, later_import, too_old, changed_since, null]
+        reason: { type: ["string", "null"] }
+        putsBack: { $ref: "#/components/schemas/ImportStateSummary" }
+        removes:
+          oneOf:
+            - $ref: "#/components/schemas/ImportStateSummary"
+            - type: "null"
+        changes:
+          oneOf:
+            - $ref: "#/components/schemas/ImportChanges"
+            - type: "null"
+
+    ImportRestoreResult:
+      type: object
+      required: [ok, snapshotId, counts]
+      properties:
+        ok: { type: boolean }
+        snapshotId: { type: string }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
 
     RuleAttribution:
       type: object

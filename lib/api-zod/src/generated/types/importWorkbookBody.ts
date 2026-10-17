@@ -8,4 +8,6 @@
 
 export type ImportWorkbookBody = {
   file: Blob;
+  /** The preview's `confirmToken`. Without it the import is refused (428). */
+  confirm?: string;
 };

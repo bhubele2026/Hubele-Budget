@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { ImportStateSummary } from "./importStateSummary";
 import type { ImportSummaryCounts } from "./importSummaryCounts";
 import type { RuleAttribution } from "./ruleAttribution";
 
@@ -12,4 +13,6 @@ export interface ImportSummary {
   batchId: string;
   counts: ImportSummaryCounts;
   ruleAttributions: RuleAttribution[];
+  snapshotId?: string;
+  replaced?: ImportStateSummary;
 }

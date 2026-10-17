@@ -8220,8 +8220,71 @@ export const GetBillsSummaryResponse = zod.object({
   }),
 });
 
+/**
+ * @summary Reads and checks a workbook and says what importing it would add and replace. Writes nothing.
+ */
+export const PreviewWorkbookImportBody = zod.object({
+  file: zod.instanceof(File),
+});
+
+export const PreviewWorkbookImportResponse = zod.object({
+  fileName: zod.string().nullable(),
+  confirmToken: zod
+    .string()
+    .describe("Send as `confirm` with the same file to import it"),
+  adds: zod.object({
+    transactions: zod.number(),
+    from: zod
+      .string()
+      .nullable()
+      .describe("First day of the file's rows (YYYY-MM-DD)"),
+    to: zod
+      .string()
+      .nullable()
+      .describe("Last day of the file's rows (YYYY-MM-DD)"),
+    categories: zod.number(),
+    budgetLines: zod.number(),
+    debts: zod.number(),
+    rules: zod.number(),
+    recurring: zod.number(),
+    monthlySnapshots: zod.number(),
+  }),
+  replaces: zod.object({
+    transactions: zod.number(),
+    bankTransactions: zod.number().describe("Rows the bank sent (Plaid)"),
+    bankFrom: zod
+      .string()
+      .nullable()
+      .describe("First day of the bank rows (YYYY-MM-DD)"),
+    bankTo: zod
+      .string()
+      .nullable()
+      .describe("Last day of the bank rows (YYYY-MM-DD)"),
+    categories: zod.number(),
+    budgetLines: zod.number(),
+    debts: zod.number(),
+    rules: zod.number(),
+    recurring: zod.number(),
+    monthlySnapshots: zod.number(),
+    decisions: zod.number(),
+    splits: zod.number(),
+  }),
+  rulesKept: zod
+    .number()
+    .describe("The caller's rules that survive the import"),
+});
+
+/**
+ * @summary Replaces the caller's workbook data with the file's. Requires the confirmation from a preview of the same file.
+ */
 export const ImportWorkbookBody = zod.object({
   file: zod.instanceof(File),
+  confirm: zod
+    .string()
+    .optional()
+    .describe(
+      "The preview's `confirmToken`. Without it the import is refused (428).",
+    ),
 });
 
 export const ImportWorkbookResponse = zod.object({
@@ -8234,6 +8297,183 @@ export const ImportWorkbookResponse = zod.object({
       count: zod.number(),
     }),
   ),
+  snapshotId: zod.string().optional(),
+  replaced: zod
+    .object({
+      transactions: zod.number(),
+      bankTransactions: zod.number().describe("Rows the bank sent (Plaid)"),
+      bankFrom: zod
+        .string()
+        .nullable()
+        .describe("First day of the bank rows (YYYY-MM-DD)"),
+      bankTo: zod
+        .string()
+        .nullable()
+        .describe("Last day of the bank rows (YYYY-MM-DD)"),
+      categories: zod.number(),
+      budgetLines: zod.number(),
+      debts: zod.number(),
+      rules: zod.number(),
+      recurring: zod.number(),
+      monthlySnapshots: zod.number(),
+      decisions: zod.number(),
+      splits: zod.number(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary The caller's workbook imports, newest first (at most 20), each with whether it can be restored.
+ */
+export const listImportHistoryQueryLimitMax = 20;
+
+export const ListImportHistoryQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listImportHistoryQueryLimitMax)
+    .optional(),
+});
+
+export const ListImportHistoryResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      batchId: zod.string(),
+      fileName: zod.string().nullable(),
+      importedAt: zod.coerce.date(),
+      counts: zod.record(zod.string(), zod.number()).nullable(),
+      replaced: zod.union([
+        zod.object({
+          transactions: zod.number(),
+          bankTransactions: zod.number().describe("Rows the bank sent (Plaid)"),
+          bankFrom: zod
+            .string()
+            .nullable()
+            .describe("First day of the bank rows (YYYY-MM-DD)"),
+          bankTo: zod
+            .string()
+            .nullable()
+            .describe("Last day of the bank rows (YYYY-MM-DD)"),
+          categories: zod.number(),
+          budgetLines: zod.number(),
+          debts: zod.number(),
+          rules: zod.number(),
+          recurring: zod.number(),
+          monthlySnapshots: zod.number(),
+          decisions: zod.number(),
+          splits: zod.number(),
+        }),
+        zod.null(),
+      ]),
+      snapshotId: zod.string().nullable(),
+      restoredAt: zod.coerce.date().nullable(),
+      restore: zod.enum([
+        "available",
+        "later_import",
+        "too_old",
+        "restored",
+        "none",
+      ]),
+    }),
+  ),
+});
+
+/**
+ * @summary What restoring this import would put back and remove, or why it cannot (changes since it would be lost). Reads only.
+ */
+export const GetImportRestorePreviewParams = zod.object({
+  snapshotId: zod.coerce.string(),
+});
+
+export const GetImportRestorePreviewResponse = zod.object({
+  snapshotId: zod.string(),
+  batchId: zod.string().nullable(),
+  fileName: zod.string().nullable(),
+  importedAt: zod.coerce.date(),
+  restoredAt: zod.coerce.date().nullable(),
+  status: zod.enum(["ready", "blocked", "restored"]),
+  blockedBy: zod
+    .union([
+      zod.literal("already_restored"),
+      zod.literal("later_import"),
+      zod.literal("too_old"),
+      zod.literal("changed_since"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  reason: zod.string().nullable(),
+  putsBack: zod.object({
+    transactions: zod.number(),
+    bankTransactions: zod.number().describe("Rows the bank sent (Plaid)"),
+    bankFrom: zod
+      .string()
+      .nullable()
+      .describe("First day of the bank rows (YYYY-MM-DD)"),
+    bankTo: zod
+      .string()
+      .nullable()
+      .describe("Last day of the bank rows (YYYY-MM-DD)"),
+    categories: zod.number(),
+    budgetLines: zod.number(),
+    debts: zod.number(),
+    rules: zod.number(),
+    recurring: zod.number(),
+    monthlySnapshots: zod.number(),
+    decisions: zod.number(),
+    splits: zod.number(),
+  }),
+  removes: zod.union([
+    zod.object({
+      transactions: zod.number(),
+      bankTransactions: zod.number().describe("Rows the bank sent (Plaid)"),
+      bankFrom: zod
+        .string()
+        .nullable()
+        .describe("First day of the bank rows (YYYY-MM-DD)"),
+      bankTo: zod
+        .string()
+        .nullable()
+        .describe("Last day of the bank rows (YYYY-MM-DD)"),
+      categories: zod.number(),
+      budgetLines: zod.number(),
+      debts: zod.number(),
+      rules: zod.number(),
+      recurring: zod.number(),
+      monthlySnapshots: zod.number(),
+      decisions: zod.number(),
+      splits: zod.number(),
+    }),
+    zod.null(),
+  ]),
+  changes: zod.union([
+    zod.object({
+      total: zod.number(),
+      transactionsAdded: zod.number(),
+      bankRowsAdded: zod.number(),
+      transactionsEdited: zod.number(),
+      transactionsRemoved: zod.number(),
+      categories: zod.number(),
+      rules: zod.number(),
+      debts: zod.number(),
+      decisions: zod.number(),
+      plan: zod.number(),
+      other: zod.number(),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Puts back the caller's data from before this import. Refused, with nothing written, when it would lose anything.
+ */
+export const RestoreImportSnapshotParams = zod.object({
+  snapshotId: zod.coerce.string(),
+});
+
+export const RestoreImportSnapshotResponse = zod.object({
+  ok: zod.boolean(),
+  snapshotId: zod.string(),
+  counts: zod.record(zod.string(), zod.number()),
 });
 
 /**
