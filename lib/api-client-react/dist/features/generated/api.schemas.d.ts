@@ -6972,10 +6972,156 @@ export interface RuleAttribution {
     pattern: string;
     count: number;
 }
+export interface ImportStateSummary {
+    transactions: number;
+    /** Rows the bank sent (Plaid) */
+    bankTransactions: number;
+    /**
+     * First day of the bank rows (YYYY-MM-DD)
+     * @nullable
+     */
+    bankFrom: string | null;
+    /**
+     * Last day of the bank rows (YYYY-MM-DD)
+     * @nullable
+     */
+    bankTo: string | null;
+    categories: number;
+    budgetLines: number;
+    debts: number;
+    rules: number;
+    recurring: number;
+    monthlySnapshots: number;
+    decisions: number;
+    splits: number;
+}
 export interface ImportSummary {
     batchId: string;
     counts: ImportSummaryCounts;
     ruleAttributions: RuleAttribution[];
+    snapshotId?: string;
+    replaced?: ImportStateSummary;
+}
+export interface ImportAddSummary {
+    transactions: number;
+    /**
+     * First day of the file's rows (YYYY-MM-DD)
+     * @nullable
+     */
+    from: string | null;
+    /**
+     * Last day of the file's rows (YYYY-MM-DD)
+     * @nullable
+     */
+    to: string | null;
+    categories: number;
+    budgetLines: number;
+    debts: number;
+    rules: number;
+    recurring: number;
+    monthlySnapshots: number;
+}
+export interface ImportPreview {
+    /** @nullable */
+    fileName: string | null;
+    /** Send as `confirm` with the same file to import it */
+    confirmToken: string;
+    adds: ImportAddSummary;
+    replaces: ImportStateSummary;
+    /** The caller's rules that survive the import */
+    rulesKept: number;
+}
+export interface ImportChanges {
+    total: number;
+    transactionsAdded: number;
+    bankRowsAdded: number;
+    transactionsEdited: number;
+    transactionsRemoved: number;
+    categories: number;
+    rules: number;
+    debts: number;
+    decisions: number;
+    plan: number;
+    other: number;
+}
+export interface ImportError {
+    error: string;
+    code?: string;
+    errors?: string[];
+    changes?: ImportChanges | null;
+}
+/**
+ * @nullable
+ */
+export type ImportHistoryItemCounts = {
+    [key: string]: number;
+} | null;
+export type ImportHistoryItemRestore = (typeof ImportHistoryItemRestore)[keyof typeof ImportHistoryItemRestore];
+export declare const ImportHistoryItemRestore: {
+    readonly available: "available";
+    readonly later_import: "later_import";
+    readonly too_old: "too_old";
+    readonly restored: "restored";
+    readonly none: "none";
+};
+export interface ImportHistoryItem {
+    batchId: string;
+    /** @nullable */
+    fileName: string | null;
+    importedAt: string;
+    /** @nullable */
+    counts: ImportHistoryItemCounts;
+    replaced: ImportStateSummary | null;
+    /** @nullable */
+    snapshotId: string | null;
+    /** @nullable */
+    restoredAt: string | null;
+    restore: ImportHistoryItemRestore;
+}
+export interface ImportHistory {
+    items: ImportHistoryItem[];
+}
+export type ImportRestorePreviewStatus = (typeof ImportRestorePreviewStatus)[keyof typeof ImportRestorePreviewStatus];
+export declare const ImportRestorePreviewStatus: {
+    readonly ready: "ready";
+    readonly blocked: "blocked";
+    readonly restored: "restored";
+};
+/**
+ * @nullable
+ */
+export type ImportRestorePreviewBlockedBy = (typeof ImportRestorePreviewBlockedBy)[keyof typeof ImportRestorePreviewBlockedBy] | null;
+export declare const ImportRestorePreviewBlockedBy: {
+    readonly already_restored: "already_restored";
+    readonly later_import: "later_import";
+    readonly too_old: "too_old";
+    readonly changed_since: "changed_since";
+};
+export interface ImportRestorePreview {
+    snapshotId: string;
+    /** @nullable */
+    batchId: string | null;
+    /** @nullable */
+    fileName: string | null;
+    importedAt: string;
+    /** @nullable */
+    restoredAt: string | null;
+    status: ImportRestorePreviewStatus;
+    /** @nullable */
+    blockedBy: ImportRestorePreviewBlockedBy;
+    /** @nullable */
+    reason: string | null;
+    putsBack: ImportStateSummary;
+    removes: ImportStateSummary | null;
+    changes: ImportChanges | null;
+}
+export type ImportRestoreResultCounts = {
+    [key: string]: number;
+};
+export interface ImportRestoreResult {
+    ok: boolean;
+    snapshotId: string;
+    counts: ImportRestoreResultCounts;
 }
 export interface PlaidLinkToken {
     linkToken: string;
@@ -8949,6 +9095,21 @@ export type GetAmexSummaryParams = {
      * @maximum 50
      */
     rowsPerGroup?: number;
+};
+export type PreviewWorkbookImportBody = {
+    file: Blob;
+};
+export type ImportWorkbookBody = {
+    file: Blob;
+    /** The preview's `confirmToken`. Without it the import is refused (428). */
+    confirm?: string;
+};
+export type ListImportHistoryParams = {
+    /**
+     * @minimum 1
+     * @maximum 20
+     */
+    limit?: number;
 };
 export type CreateAllowancePlanParams = {
     /**

@@ -17192,12 +17192,162 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         endsThisCycle?: boolean | undefined;
     }[];
 }>;
-export declare const ImportWorkbookBody: zod.ZodObject<{
+/**
+ * @summary Reads and checks a workbook and says what importing it would add and replace. Writes nothing.
+ */
+export declare const PreviewWorkbookImportBody: zod.ZodObject<{
     file: zod.ZodType<File, zod.ZodTypeDef, File>;
 }, "strip", zod.ZodTypeAny, {
     file: File;
 }, {
     file: File;
+}>;
+export declare const PreviewWorkbookImportResponse: zod.ZodObject<{
+    fileName: zod.ZodNullable<zod.ZodString>;
+    confirmToken: zod.ZodString;
+    adds: zod.ZodObject<{
+        transactions: zod.ZodNumber;
+        from: zod.ZodNullable<zod.ZodString>;
+        to: zod.ZodNullable<zod.ZodString>;
+        categories: zod.ZodNumber;
+        budgetLines: zod.ZodNumber;
+        debts: zod.ZodNumber;
+        rules: zod.ZodNumber;
+        recurring: zod.ZodNumber;
+        monthlySnapshots: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        from: string | null;
+        to: string | null;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+    }, {
+        from: string | null;
+        to: string | null;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+    }>;
+    replaces: zod.ZodObject<{
+        transactions: zod.ZodNumber;
+        bankTransactions: zod.ZodNumber;
+        bankFrom: zod.ZodNullable<zod.ZodString>;
+        bankTo: zod.ZodNullable<zod.ZodString>;
+        categories: zod.ZodNumber;
+        budgetLines: zod.ZodNumber;
+        debts: zod.ZodNumber;
+        rules: zod.ZodNumber;
+        recurring: zod.ZodNumber;
+        monthlySnapshots: zod.ZodNumber;
+        decisions: zod.ZodNumber;
+        splits: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    }, {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    }>;
+    rulesKept: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    fileName: string | null;
+    confirmToken: string;
+    adds: {
+        from: string | null;
+        to: string | null;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+    };
+    replaces: {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    };
+    rulesKept: number;
+}, {
+    fileName: string | null;
+    confirmToken: string;
+    adds: {
+        from: string | null;
+        to: string | null;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+    };
+    replaces: {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    };
+    rulesKept: number;
+}>;
+/**
+ * @summary Replaces the caller's workbook data with the file's. Requires the confirmation from a preview of the same file.
+ */
+export declare const ImportWorkbookBody: zod.ZodObject<{
+    file: zod.ZodType<File, zod.ZodTypeDef, File>;
+    confirm: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    file: File;
+    confirm?: string | undefined;
+}, {
+    file: File;
+    confirm?: string | undefined;
 }>;
 export declare const ImportWorkbookResponse: zod.ZodObject<{
     batchId: zod.ZodString;
@@ -17215,6 +17365,47 @@ export declare const ImportWorkbookResponse: zod.ZodObject<{
         ruleId: string;
         pattern: string;
     }>, "many">;
+    snapshotId: zod.ZodOptional<zod.ZodString>;
+    replaced: zod.ZodOptional<zod.ZodObject<{
+        transactions: zod.ZodNumber;
+        bankTransactions: zod.ZodNumber;
+        bankFrom: zod.ZodNullable<zod.ZodString>;
+        bankTo: zod.ZodNullable<zod.ZodString>;
+        categories: zod.ZodNumber;
+        budgetLines: zod.ZodNumber;
+        debts: zod.ZodNumber;
+        rules: zod.ZodNumber;
+        recurring: zod.ZodNumber;
+        monthlySnapshots: zod.ZodNumber;
+        decisions: zod.ZodNumber;
+        splits: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    }, {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    }>>;
 }, "strip", zod.ZodTypeAny, {
     counts: Record<string, number>;
     ruleAttributions: {
@@ -17223,6 +17414,21 @@ export declare const ImportWorkbookResponse: zod.ZodObject<{
         pattern: string;
     }[];
     batchId: string;
+    replaced?: {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    } | undefined;
+    snapshotId?: string | undefined;
 }, {
     counts: Record<string, number>;
     ruleAttributions: {
@@ -17231,6 +17437,435 @@ export declare const ImportWorkbookResponse: zod.ZodObject<{
         pattern: string;
     }[];
     batchId: string;
+    replaced?: {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    } | undefined;
+    snapshotId?: string | undefined;
+}>;
+/**
+ * @summary The caller's workbook imports, newest first (at most 20), each with whether it can be restored.
+ */
+export declare const listImportHistoryQueryLimitMax = 20;
+export declare const ListImportHistoryQueryParams: zod.ZodObject<{
+    limit: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    limit?: number | undefined;
+}, {
+    limit?: number | undefined;
+}>;
+export declare const ListImportHistoryResponse: zod.ZodObject<{
+    items: zod.ZodArray<zod.ZodObject<{
+        batchId: zod.ZodString;
+        fileName: zod.ZodNullable<zod.ZodString>;
+        importedAt: zod.ZodDate;
+        counts: zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodNumber>>;
+        replaced: zod.ZodUnion<[zod.ZodObject<{
+            transactions: zod.ZodNumber;
+            bankTransactions: zod.ZodNumber;
+            bankFrom: zod.ZodNullable<zod.ZodString>;
+            bankTo: zod.ZodNullable<zod.ZodString>;
+            categories: zod.ZodNumber;
+            budgetLines: zod.ZodNumber;
+            debts: zod.ZodNumber;
+            rules: zod.ZodNumber;
+            recurring: zod.ZodNumber;
+            monthlySnapshots: zod.ZodNumber;
+            decisions: zod.ZodNumber;
+            splits: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            splits: number;
+            debts: number;
+            transactions: number;
+            categories: number;
+            budgetLines: number;
+            rules: number;
+            recurring: number;
+            monthlySnapshots: number;
+            bankTransactions: number;
+            bankFrom: string | null;
+            bankTo: string | null;
+            decisions: number;
+        }, {
+            splits: number;
+            debts: number;
+            transactions: number;
+            categories: number;
+            budgetLines: number;
+            rules: number;
+            recurring: number;
+            monthlySnapshots: number;
+            bankTransactions: number;
+            bankFrom: string | null;
+            bankTo: string | null;
+            decisions: number;
+        }>, zod.ZodNull]>;
+        snapshotId: zod.ZodNullable<zod.ZodString>;
+        restoredAt: zod.ZodNullable<zod.ZodDate>;
+        restore: zod.ZodEnum<["available", "later_import", "too_old", "restored", "none"]>;
+    }, "strip", zod.ZodTypeAny, {
+        counts: Record<string, number> | null;
+        replaced: {
+            splits: number;
+            debts: number;
+            transactions: number;
+            categories: number;
+            budgetLines: number;
+            rules: number;
+            recurring: number;
+            monthlySnapshots: number;
+            bankTransactions: number;
+            bankFrom: string | null;
+            bankTo: string | null;
+            decisions: number;
+        } | null;
+        restore: "none" | "restored" | "available" | "later_import" | "too_old";
+        fileName: string | null;
+        batchId: string;
+        snapshotId: string | null;
+        importedAt: Date;
+        restoredAt: Date | null;
+    }, {
+        counts: Record<string, number> | null;
+        replaced: {
+            splits: number;
+            debts: number;
+            transactions: number;
+            categories: number;
+            budgetLines: number;
+            rules: number;
+            recurring: number;
+            monthlySnapshots: number;
+            bankTransactions: number;
+            bankFrom: string | null;
+            bankTo: string | null;
+            decisions: number;
+        } | null;
+        restore: "none" | "restored" | "available" | "later_import" | "too_old";
+        fileName: string | null;
+        batchId: string;
+        snapshotId: string | null;
+        importedAt: Date;
+        restoredAt: Date | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    items: {
+        counts: Record<string, number> | null;
+        replaced: {
+            splits: number;
+            debts: number;
+            transactions: number;
+            categories: number;
+            budgetLines: number;
+            rules: number;
+            recurring: number;
+            monthlySnapshots: number;
+            bankTransactions: number;
+            bankFrom: string | null;
+            bankTo: string | null;
+            decisions: number;
+        } | null;
+        restore: "none" | "restored" | "available" | "later_import" | "too_old";
+        fileName: string | null;
+        batchId: string;
+        snapshotId: string | null;
+        importedAt: Date;
+        restoredAt: Date | null;
+    }[];
+}, {
+    items: {
+        counts: Record<string, number> | null;
+        replaced: {
+            splits: number;
+            debts: number;
+            transactions: number;
+            categories: number;
+            budgetLines: number;
+            rules: number;
+            recurring: number;
+            monthlySnapshots: number;
+            bankTransactions: number;
+            bankFrom: string | null;
+            bankTo: string | null;
+            decisions: number;
+        } | null;
+        restore: "none" | "restored" | "available" | "later_import" | "too_old";
+        fileName: string | null;
+        batchId: string;
+        snapshotId: string | null;
+        importedAt: Date;
+        restoredAt: Date | null;
+    }[];
+}>;
+/**
+ * @summary What restoring this import would put back and remove, or why it cannot (changes since it would be lost). Reads only.
+ */
+export declare const GetImportRestorePreviewParams: zod.ZodObject<{
+    snapshotId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    snapshotId: string;
+}, {
+    snapshotId: string;
+}>;
+export declare const GetImportRestorePreviewResponse: zod.ZodObject<{
+    snapshotId: zod.ZodString;
+    batchId: zod.ZodNullable<zod.ZodString>;
+    fileName: zod.ZodNullable<zod.ZodString>;
+    importedAt: zod.ZodDate;
+    restoredAt: zod.ZodNullable<zod.ZodDate>;
+    status: zod.ZodEnum<["ready", "blocked", "restored"]>;
+    blockedBy: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"already_restored">, zod.ZodLiteral<"later_import">, zod.ZodLiteral<"too_old">, zod.ZodLiteral<"changed_since">, zod.ZodLiteral<null>]>>;
+    reason: zod.ZodNullable<zod.ZodString>;
+    putsBack: zod.ZodObject<{
+        transactions: zod.ZodNumber;
+        bankTransactions: zod.ZodNumber;
+        bankFrom: zod.ZodNullable<zod.ZodString>;
+        bankTo: zod.ZodNullable<zod.ZodString>;
+        categories: zod.ZodNumber;
+        budgetLines: zod.ZodNumber;
+        debts: zod.ZodNumber;
+        rules: zod.ZodNumber;
+        recurring: zod.ZodNumber;
+        monthlySnapshots: zod.ZodNumber;
+        decisions: zod.ZodNumber;
+        splits: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    }, {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    }>;
+    removes: zod.ZodUnion<[zod.ZodObject<{
+        transactions: zod.ZodNumber;
+        bankTransactions: zod.ZodNumber;
+        bankFrom: zod.ZodNullable<zod.ZodString>;
+        bankTo: zod.ZodNullable<zod.ZodString>;
+        categories: zod.ZodNumber;
+        budgetLines: zod.ZodNumber;
+        debts: zod.ZodNumber;
+        rules: zod.ZodNumber;
+        recurring: zod.ZodNumber;
+        monthlySnapshots: zod.ZodNumber;
+        decisions: zod.ZodNumber;
+        splits: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    }, {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    }>, zod.ZodNull]>;
+    changes: zod.ZodUnion<[zod.ZodObject<{
+        total: zod.ZodNumber;
+        transactionsAdded: zod.ZodNumber;
+        bankRowsAdded: zod.ZodNumber;
+        transactionsEdited: zod.ZodNumber;
+        transactionsRemoved: zod.ZodNumber;
+        categories: zod.ZodNumber;
+        rules: zod.ZodNumber;
+        debts: zod.ZodNumber;
+        decisions: zod.ZodNumber;
+        plan: zod.ZodNumber;
+        other: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        total: number;
+        debts: number;
+        plan: number;
+        categories: number;
+        rules: number;
+        decisions: number;
+        transactionsAdded: number;
+        bankRowsAdded: number;
+        transactionsEdited: number;
+        transactionsRemoved: number;
+        other: number;
+    }, {
+        total: number;
+        debts: number;
+        plan: number;
+        categories: number;
+        rules: number;
+        decisions: number;
+        transactionsAdded: number;
+        bankRowsAdded: number;
+        transactionsEdited: number;
+        transactionsRemoved: number;
+        other: number;
+    }>, zod.ZodNull]>;
+}, "strip", zod.ZodTypeAny, {
+    status: "ready" | "restored" | "blocked";
+    reason: string | null;
+    fileName: string | null;
+    batchId: string | null;
+    snapshotId: string;
+    importedAt: Date;
+    restoredAt: Date | null;
+    blockedBy: "later_import" | "too_old" | "already_restored" | "changed_since" | null;
+    putsBack: {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    };
+    removes: {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    } | null;
+    changes: {
+        total: number;
+        debts: number;
+        plan: number;
+        categories: number;
+        rules: number;
+        decisions: number;
+        transactionsAdded: number;
+        bankRowsAdded: number;
+        transactionsEdited: number;
+        transactionsRemoved: number;
+        other: number;
+    } | null;
+}, {
+    status: "ready" | "restored" | "blocked";
+    reason: string | null;
+    fileName: string | null;
+    batchId: string | null;
+    snapshotId: string;
+    importedAt: Date;
+    restoredAt: Date | null;
+    blockedBy: "later_import" | "too_old" | "already_restored" | "changed_since" | null;
+    putsBack: {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    };
+    removes: {
+        splits: number;
+        debts: number;
+        transactions: number;
+        categories: number;
+        budgetLines: number;
+        rules: number;
+        recurring: number;
+        monthlySnapshots: number;
+        bankTransactions: number;
+        bankFrom: string | null;
+        bankTo: string | null;
+        decisions: number;
+    } | null;
+    changes: {
+        total: number;
+        debts: number;
+        plan: number;
+        categories: number;
+        rules: number;
+        decisions: number;
+        transactionsAdded: number;
+        bankRowsAdded: number;
+        transactionsEdited: number;
+        transactionsRemoved: number;
+        other: number;
+    } | null;
+}>;
+/**
+ * @summary Puts back the caller's data from before this import. Refused, with nothing written, when it would lose anything.
+ */
+export declare const RestoreImportSnapshotParams: zod.ZodObject<{
+    snapshotId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    snapshotId: string;
+}, {
+    snapshotId: string;
+}>;
+export declare const RestoreImportSnapshotResponse: zod.ZodObject<{
+    ok: zod.ZodBoolean;
+    snapshotId: zod.ZodString;
+    counts: zod.ZodRecord<zod.ZodString, zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    counts: Record<string, number>;
+    ok: boolean;
+    snapshotId: string;
+}, {
+    counts: Record<string, number>;
+    ok: boolean;
+    snapshotId: string;
 }>;
 /**
  * @summary Returns information about the current authenticated user, including whether they are the owner.
@@ -22403,15 +23038,6 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     };
     period: "month" | "week";
     limitations: string[];
-    withinPlan: boolean | null;
-    provisional: boolean;
-    remaining: string | null;
-    usualBasis: "same_days" | "full_period";
-    usualThrough: string | null;
-    carryOver: string | null;
-    isCurrent: boolean;
-    planScope: "household";
-    known: string;
     categories: {
         count: number;
         amount: string;
@@ -22472,6 +23098,15 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
         usualFullPeriod: string | null;
         aboveUsual: string | null;
     }[];
+    withinPlan: boolean | null;
+    provisional: boolean;
+    remaining: string | null;
+    usualBasis: "same_days" | "full_period";
+    usualThrough: string | null;
+    carryOver: string | null;
+    isCurrent: boolean;
+    planScope: "household";
+    known: string;
     needsClassification: {
         count: number;
         amount: string;
@@ -22665,15 +23300,6 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     };
     period: "month" | "week";
     limitations: string[];
-    withinPlan: boolean | null;
-    provisional: boolean;
-    remaining: string | null;
-    usualBasis: "same_days" | "full_period";
-    usualThrough: string | null;
-    carryOver: string | null;
-    isCurrent: boolean;
-    planScope: "household";
-    known: string;
     categories: {
         count: number;
         amount: string;
@@ -22734,6 +23360,15 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
         usualFullPeriod: string | null;
         aboveUsual: string | null;
     }[];
+    withinPlan: boolean | null;
+    provisional: boolean;
+    remaining: string | null;
+    usualBasis: "same_days" | "full_period";
+    usualThrough: string | null;
+    carryOver: string | null;
+    isCurrent: boolean;
+    planScope: "household";
+    known: string;
     needsClassification: {
         count: number;
         amount: string;
@@ -22877,7 +23512,7 @@ export declare const GetBankingReviewQueryParams: zod.ZodObject<{
     from: string;
     to: string;
     rowsPerBucket: number;
-    kind?: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | undefined;
+    kind?: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | undefined;
     account?: string | undefined;
     cursor?: string | undefined;
     bucket?: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched" | undefined;
@@ -22885,7 +23520,7 @@ export declare const GetBankingReviewQueryParams: zod.ZodObject<{
     from: string;
     to: string;
     limit?: number | undefined;
-    kind?: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | undefined;
+    kind?: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | undefined;
     account?: string | undefined;
     cursor?: string | undefined;
     bucket?: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched" | undefined;
@@ -23310,7 +23945,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, "strip", zod.ZodTypeAny, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -23370,7 +24005,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -23574,6 +24209,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -23603,13 +24245,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -23624,6 +24259,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -23653,13 +24295,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -23808,7 +24443,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -23882,6 +24517,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -23911,13 +24553,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -23960,7 +24595,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -24034,6 +24669,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -24063,13 +24705,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -24309,7 +24944,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, "strip", zod.ZodTypeAny, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -24369,7 +25004,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -24573,6 +25208,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -24602,13 +25244,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -24623,6 +25258,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -24652,13 +25294,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -24807,7 +25442,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -24881,6 +25516,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -24910,13 +25552,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -24959,7 +25594,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -25033,6 +25668,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -25062,13 +25704,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -25308,7 +25943,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, "strip", zod.ZodTypeAny, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -25368,7 +26003,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -25572,6 +26207,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -25601,13 +26243,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -25622,6 +26257,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -25651,13 +26293,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -25806,7 +26441,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -25880,6 +26515,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -25909,13 +26551,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -25958,7 +26593,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -26032,6 +26667,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -26061,13 +26703,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26307,7 +26942,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, "strip", zod.ZodTypeAny, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -26367,7 +27002,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -26571,6 +27206,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -26600,13 +27242,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26621,6 +27256,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -26650,13 +27292,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26805,7 +27440,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -26879,6 +27514,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -26908,13 +27550,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -26957,7 +27592,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -27031,6 +27666,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -27060,13 +27702,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27306,7 +27941,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, "strip", zod.ZodTypeAny, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -27366,7 +28001,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             }, {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -27570,6 +28205,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -27599,13 +28241,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27620,6 +28255,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -27649,13 +28291,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27804,7 +28439,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -27878,6 +28513,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -27907,13 +28549,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -27956,7 +28591,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -28030,6 +28665,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -28059,13 +28701,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28110,7 +28745,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -28184,6 +28819,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -28213,13 +28855,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28263,7 +28898,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -28337,6 +28972,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -28366,13 +29008,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28416,7 +29051,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -28490,6 +29125,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -28519,13 +29161,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28569,7 +29204,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -28643,6 +29278,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -28672,13 +29314,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28722,7 +29357,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -28796,6 +29431,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -28825,13 +29467,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -28876,7 +29511,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -28950,6 +29585,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -28979,13 +29621,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29029,7 +29664,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -29103,6 +29738,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -29132,13 +29774,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29182,7 +29817,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -29256,6 +29891,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -29285,13 +29927,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29335,7 +29970,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -29409,6 +30044,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -29438,13 +30080,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -29488,7 +30123,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -29562,6 +30197,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -29591,13 +30233,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -30023,7 +30658,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         }, "strip", zod.ZodTypeAny, {
             date: string;
             id: string;
-            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
             description: string;
             amount: string;
             pending: boolean;
@@ -30083,7 +30718,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         }, {
             date: string;
             id: string;
-            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
             description: string;
             amount: string;
             pending: boolean;
@@ -30145,11 +30780,11 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         limit: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         limit: number;
-        kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | null;
+        kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | null;
         rows: {
             date: string;
             id: string;
-            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
             description: string;
             amount: string;
             pending: boolean;
@@ -30211,11 +30846,11 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         bucket: "amountDifference" | "timingDifference" | "confirmedUnplanned" | "uncertain" | "unmatched";
     }, {
         limit: number;
-        kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | null;
+        kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | null;
         rows: {
             date: string;
             id: string;
-            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
             description: string;
             amount: string;
             pending: boolean;
@@ -30373,7 +31008,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -30447,6 +31082,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -30476,13 +31118,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -30526,7 +31161,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -30600,6 +31235,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -30629,13 +31271,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -30679,7 +31314,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -30753,6 +31388,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -30782,13 +31424,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -30832,7 +31467,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -30906,6 +31541,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -30935,13 +31577,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -30985,7 +31620,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -31059,6 +31694,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -31088,13 +31730,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -31179,11 +31814,11 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
     };
     page: {
         limit: number;
-        kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | null;
+        kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | null;
         rows: {
             date: string;
             id: string;
-            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
             description: string;
             amount: string;
             pending: boolean;
@@ -31345,7 +31980,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -31419,6 +32054,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -31448,13 +32090,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -31498,7 +32133,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -31572,6 +32207,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -31601,13 +32243,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -31651,7 +32286,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -31725,6 +32360,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -31754,13 +32396,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -31804,7 +32439,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -31878,6 +32513,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -31907,13 +32549,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -31957,7 +32592,7 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             rows: {
                 date: string;
                 id: string;
-                kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+                kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
                 description: string;
                 amount: string;
                 pending: boolean;
@@ -32031,6 +32666,13 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     net: string;
                     pendingNet: string;
                 };
+                other: {
+                    count: number;
+                    moneyIn: string;
+                    moneyOut: string;
+                    net: string;
+                    pendingNet: string;
+                };
                 transfer: {
                     count: number;
                     moneyIn: string;
@@ -32060,13 +32702,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     pendingNet: string;
                 };
                 spending: {
-                    count: number;
-                    moneyIn: string;
-                    moneyOut: string;
-                    net: string;
-                    pendingNet: string;
-                };
-                other: {
                     count: number;
                     moneyIn: string;
                     moneyOut: string;
@@ -32151,11 +32786,11 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
     };
     page: {
         limit: number;
-        kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other" | null;
+        kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | null;
         rows: {
             date: string;
             id: string;
-            kind: "income" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending" | "other";
+            kind: "income" | "other" | "transfer" | "debt_payment" | "card_payment" | "refund" | "spending";
             description: string;
             amount: string;
             pending: boolean;
@@ -34979,6 +35614,13 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         decisionId?: string | null | undefined;
     }[];
     limitations: ("forecast_pairs_as_before" | "banking_after_not_previewed" | "listed_rows_only")[];
+    replaces: {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }[];
     dryRun: true;
     proposal: {
         kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
@@ -34987,13 +35629,6 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         key: string;
         proposalHash: string;
     };
-    replaces: {
-        status: string;
-        id: string;
-        recurringItemId: string | null;
-        occurrenceDate: string | null;
-        matchedTxnId: string | null;
-    }[];
     learnsMemory: boolean;
     figures: {
         month: {
@@ -35198,6 +35833,13 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         decisionId?: string | null | undefined;
     }[];
     limitations: ("forecast_pairs_as_before" | "banking_after_not_previewed" | "listed_rows_only")[];
+    replaces: {
+        status: string;
+        id: string;
+        recurringItemId: string | null;
+        occurrenceDate: string | null;
+        matchedTxnId: string | null;
+    }[];
     dryRun: true;
     proposal: {
         kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
@@ -35206,13 +35848,6 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         key: string;
         proposalHash: string;
     };
-    replaces: {
-        status: string;
-        id: string;
-        recurringItemId: string | null;
-        occurrenceDate: string | null;
-        matchedTxnId: string | null;
-    }[];
     learnsMemory: boolean;
     figures: {
         month: {
@@ -36250,14 +36885,14 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         recurring: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         rules: number;
+        recurring: number;
         learned: number;
         memories: number;
-        recurring: number;
     }, {
         rules: number;
+        recurring: number;
         learned: number;
         memories: number;
-        recurring: number;
     }>;
     model: zod.ZodObject<{
         mode: zod.ZodEnum<["off", "suggest", "auto"]>;
@@ -36387,7 +37022,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         undoable: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "recurring" | "refund" | "memory" | "user" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
@@ -36401,7 +37036,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         decidedAt: Date;
     }, {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "recurring" | "refund" | "memory" | "user" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
@@ -36496,13 +37131,13 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     reviewCount: number;
     engine: {
         rules: number;
+        recurring: number;
         learned: number;
         memories: number;
-        recurring: number;
     };
     recent: {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "recurring" | "refund" | "memory" | "user" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
@@ -36564,13 +37199,13 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     reviewCount: number;
     engine: {
         rules: number;
+        recurring: number;
         learned: number;
         memories: number;
-        recurring: number;
     };
     recent: {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "recurring" | "refund" | "memory" | "user" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
@@ -36636,14 +37271,14 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         recurring: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         rules: number;
+        recurring: number;
         learned: number;
         memories: number;
-        recurring: number;
     }, {
         rules: number;
+        recurring: number;
         learned: number;
         memories: number;
-        recurring: number;
     }>;
     model: zod.ZodObject<{
         mode: zod.ZodEnum<["off", "suggest", "auto"]>;
@@ -36773,7 +37408,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         undoable: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "recurring" | "refund" | "memory" | "user" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
@@ -36787,7 +37422,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         decidedAt: Date;
     }, {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "recurring" | "refund" | "memory" | "user" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
@@ -36882,13 +37517,13 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     reviewCount: number;
     engine: {
         rules: number;
+        recurring: number;
         learned: number;
         memories: number;
-        recurring: number;
     };
     recent: {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "recurring" | "refund" | "memory" | "user" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
@@ -36950,13 +37585,13 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     reviewCount: number;
     engine: {
         rules: number;
+        recurring: number;
         learned: number;
         memories: number;
-        recurring: number;
     };
     recent: {
         id: string;
-        source: "model" | "rule" | "locked" | "refund" | "memory" | "user" | "recurring" | "inherited" | "heuristic";
+        source: "model" | "rule" | "locked" | "recurring" | "refund" | "memory" | "user" | "inherited" | "heuristic";
         occurredOn: Date;
         description: string;
         amount: string;
@@ -38696,8 +39331,8 @@ export declare const GetAiUsageSummaryResponse: zod.ZodObject<{
         costUsd: number | null;
     }[];
     failures?: number | undefined;
-    calls?: number | undefined;
     blocked?: number | undefined;
+    calls?: number | undefined;
     cacheHitRatio?: number | null | undefined;
 }, {
     budget: {
@@ -38727,8 +39362,8 @@ export declare const GetAiUsageSummaryResponse: zod.ZodObject<{
         costUsd: number | null;
     }[];
     failures?: number | undefined;
-    calls?: number | undefined;
     blocked?: number | undefined;
+    calls?: number | undefined;
     cacheHitRatio?: number | null | undefined;
 }>;
 /**

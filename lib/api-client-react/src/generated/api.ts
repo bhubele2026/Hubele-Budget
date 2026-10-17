@@ -138,6 +138,11 @@ import type {
   GoalList,
   GoalUpdate,
   HealthStatus,
+  ImportError,
+  ImportHistory,
+  ImportPreview,
+  ImportRestorePreview,
+  ImportRestoreResult,
   ImportSummary,
   ImportWorkbookBody,
   Invitation,
@@ -151,6 +156,7 @@ import type {
   ListCategoryDecisionsParams,
   ListDashboardBudgetsParams,
   ListGoalsParams,
+  ListImportHistoryParams,
   ListPlaidLiabilityAccountsParams,
   ListRecapDeliveriesParams,
   ListRecapHistoryParams,
@@ -188,6 +194,7 @@ import type {
   PlaidSyncResult,
   PlaidUpdateLinkTokenInput,
   PlanUnsafe,
+  PreviewWorkbookImportBody,
   PutMemoryBody,
   PutMerchantAliasInput,
   PutMerchantAliasResult,
@@ -10070,6 +10077,98 @@ export function useGetBillsSummary<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+/**
+ * @summary Reads and checks a workbook and says what importing it would add and replace. Writes nothing.
+ */
+export const getPreviewWorkbookImportUrl = () => {
+  return `/api/import/workbook/preview`;
+};
+
+export const previewWorkbookImport = async (
+  previewWorkbookImportBody: PreviewWorkbookImportBody,
+  options?: RequestInit,
+): Promise<ImportPreview> => {
+  const formData = new FormData();
+  formData.append(`file`, previewWorkbookImportBody.file);
+
+  return customFetch<ImportPreview>(getPreviewWorkbookImportUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getPreviewWorkbookImportMutationOptions = <
+  TError = ErrorType<ImportError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewWorkbookImport>>,
+    TError,
+    { data: BodyType<PreviewWorkbookImportBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof previewWorkbookImport>>,
+  TError,
+  { data: BodyType<PreviewWorkbookImportBody> },
+  TContext
+> => {
+  const mutationKey = ["previewWorkbookImport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof previewWorkbookImport>>,
+    { data: BodyType<PreviewWorkbookImportBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return previewWorkbookImport(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PreviewWorkbookImportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof previewWorkbookImport>>
+>;
+export type PreviewWorkbookImportMutationBody =
+  BodyType<PreviewWorkbookImportBody>;
+export type PreviewWorkbookImportMutationError = ErrorType<ImportError>;
+
+/**
+ * @summary Reads and checks a workbook and says what importing it would add and replace. Writes nothing.
+ */
+export const usePreviewWorkbookImport = <
+  TError = ErrorType<ImportError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewWorkbookImport>>,
+    TError,
+    { data: BodyType<PreviewWorkbookImportBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof previewWorkbookImport>>,
+  TError,
+  { data: BodyType<PreviewWorkbookImportBody> },
+  TContext
+> => {
+  return useMutation(getPreviewWorkbookImportMutationOptions(options));
+};
+
+/**
+ * @summary Replaces the caller's workbook data with the file's. Requires the confirmation from a preview of the same file.
+ */
 export const getImportWorkbookUrl = () => {
   return `/api/import/workbook`;
 };
@@ -10080,6 +10179,9 @@ export const importWorkbook = async (
 ): Promise<ImportSummary> => {
   const formData = new FormData();
   formData.append(`file`, importWorkbookBody.file);
+  if (importWorkbookBody.confirm !== undefined) {
+    formData.append(`confirm`, importWorkbookBody.confirm);
+  }
 
   return customFetch<ImportSummary>(getImportWorkbookUrl(), {
     ...options,
@@ -10089,7 +10191,7 @@ export const importWorkbook = async (
 };
 
 export const getImportWorkbookMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ImportError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -10130,10 +10232,13 @@ export type ImportWorkbookMutationResult = NonNullable<
   Awaited<ReturnType<typeof importWorkbook>>
 >;
 export type ImportWorkbookMutationBody = BodyType<ImportWorkbookBody>;
-export type ImportWorkbookMutationError = ErrorType<unknown>;
+export type ImportWorkbookMutationError = ErrorType<ImportError>;
 
+/**
+ * @summary Replaces the caller's workbook data with the file's. Requires the confirmation from a preview of the same file.
+ */
 export const useImportWorkbook = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ImportError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -10150,6 +10255,285 @@ export const useImportWorkbook = <
   TContext
 > => {
   return useMutation(getImportWorkbookMutationOptions(options));
+};
+
+/**
+ * @summary The caller's workbook imports, newest first (at most 20), each with whether it can be restored.
+ */
+export const getListImportHistoryUrl = (params?: ListImportHistoryParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/import/history?${stringifiedParams}`
+    : `/api/import/history`;
+};
+
+export const listImportHistory = async (
+  params?: ListImportHistoryParams,
+  options?: RequestInit,
+): Promise<ImportHistory> => {
+  return customFetch<ImportHistory>(getListImportHistoryUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListImportHistoryQueryKey = (
+  params?: ListImportHistoryParams,
+) => {
+  return [`/api/import/history`, ...(params ? [params] : [])] as const;
+};
+
+export const getListImportHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof listImportHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListImportHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listImportHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListImportHistoryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listImportHistory>>
+  > = ({ signal }) => listImportHistory(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listImportHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListImportHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listImportHistory>>
+>;
+export type ListImportHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The caller's workbook imports, newest first (at most 20), each with whether it can be restored.
+ */
+
+export function useListImportHistory<
+  TData = Awaited<ReturnType<typeof listImportHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListImportHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listImportHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListImportHistoryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary What restoring this import would put back and remove, or why it cannot (changes since it would be lost). Reads only.
+ */
+export const getGetImportRestorePreviewUrl = (snapshotId: string) => {
+  return `/api/import/snapshots/${snapshotId}/restore-preview`;
+};
+
+export const getImportRestorePreview = async (
+  snapshotId: string,
+  options?: RequestInit,
+): Promise<ImportRestorePreview> => {
+  return customFetch<ImportRestorePreview>(
+    getGetImportRestorePreviewUrl(snapshotId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetImportRestorePreviewQueryKey = (snapshotId: string) => {
+  return [`/api/import/snapshots/${snapshotId}/restore-preview`] as const;
+};
+
+export const getGetImportRestorePreviewQueryOptions = <
+  TData = Awaited<ReturnType<typeof getImportRestorePreview>>,
+  TError = ErrorType<ImportError>,
+>(
+  snapshotId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getImportRestorePreview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetImportRestorePreviewQueryKey(snapshotId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getImportRestorePreview>>
+  > = ({ signal }) =>
+    getImportRestorePreview(snapshotId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!snapshotId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getImportRestorePreview>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetImportRestorePreviewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getImportRestorePreview>>
+>;
+export type GetImportRestorePreviewQueryError = ErrorType<ImportError>;
+
+/**
+ * @summary What restoring this import would put back and remove, or why it cannot (changes since it would be lost). Reads only.
+ */
+
+export function useGetImportRestorePreview<
+  TData = Awaited<ReturnType<typeof getImportRestorePreview>>,
+  TError = ErrorType<ImportError>,
+>(
+  snapshotId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getImportRestorePreview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetImportRestorePreviewQueryOptions(
+    snapshotId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Puts back the caller's data from before this import. Refused, with nothing written, when it would lose anything.
+ */
+export const getRestoreImportSnapshotUrl = (snapshotId: string) => {
+  return `/api/import/snapshots/${snapshotId}/restore`;
+};
+
+export const restoreImportSnapshot = async (
+  snapshotId: string,
+  options?: RequestInit,
+): Promise<ImportRestoreResult> => {
+  return customFetch<ImportRestoreResult>(
+    getRestoreImportSnapshotUrl(snapshotId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getRestoreImportSnapshotMutationOptions = <
+  TError = ErrorType<ImportError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreImportSnapshot>>,
+    TError,
+    { snapshotId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof restoreImportSnapshot>>,
+  TError,
+  { snapshotId: string },
+  TContext
+> => {
+  const mutationKey = ["restoreImportSnapshot"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof restoreImportSnapshot>>,
+    { snapshotId: string }
+  > = (props) => {
+    const { snapshotId } = props ?? {};
+
+    return restoreImportSnapshot(snapshotId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RestoreImportSnapshotMutationResult = NonNullable<
+  Awaited<ReturnType<typeof restoreImportSnapshot>>
+>;
+
+export type RestoreImportSnapshotMutationError = ErrorType<ImportError>;
+
+/**
+ * @summary Puts back the caller's data from before this import. Refused, with nothing written, when it would lose anything.
+ */
+export const useRestoreImportSnapshot = <
+  TError = ErrorType<ImportError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreImportSnapshot>>,
+    TError,
+    { snapshotId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof restoreImportSnapshot>>,
+  TError,
+  { snapshotId: string },
+  TContext
+> => {
+  return useMutation(getRestoreImportSnapshotMutationOptions(options));
 };
 
 /**

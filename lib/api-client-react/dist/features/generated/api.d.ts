@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexCardPayoffMode, AmexSummary, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, BankingCheckExplain, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, ForecastResolutionUndoInput, ForecastResolutionUndone, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PlanUnsafe, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewProposals, ReviewRefusal, ReviewResolution, RunCategorizationInput, SetAmexCardPayoffModeBody, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexCardPayoffMode, AmexSummary, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, BankingCheckExplain, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, ForecastResolutionUndoInput, ForecastResolutionUndone, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, ImportError, ImportHistory, ImportPreview, ImportRestorePreview, ImportRestoreResult, ImportSummary, ImportWorkbookBody, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListImportHistoryParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PlanUnsafe, PreviewWorkbookImportBody, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewProposals, ReviewRefusal, ReviewResolution, RunCategorizationInput, SetAmexCardPayoffModeBody, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -459,6 +459,132 @@ export declare function useGetAmexSummary<TData = Awaited<ReturnType<typeof getA
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * @summary Reads and checks a workbook and says what importing it would add and replace. Writes nothing.
+ */
+export declare const getPreviewWorkbookImportUrl: () => string;
+export declare const previewWorkbookImport: (previewWorkbookImportBody: PreviewWorkbookImportBody, options?: RequestInit) => Promise<ImportPreview>;
+export declare const getPreviewWorkbookImportMutationOptions: <TError = ErrorType<ImportError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof previewWorkbookImport>>, TError, {
+        data: BodyType<PreviewWorkbookImportBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof previewWorkbookImport>>, TError, {
+    data: BodyType<PreviewWorkbookImportBody>;
+}, TContext>;
+export type PreviewWorkbookImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewWorkbookImport>>>;
+export type PreviewWorkbookImportMutationBody = BodyType<PreviewWorkbookImportBody>;
+export type PreviewWorkbookImportMutationError = ErrorType<ImportError>;
+/**
+ * @summary Reads and checks a workbook and says what importing it would add and replace. Writes nothing.
+ */
+export declare const usePreviewWorkbookImport: <TError = ErrorType<ImportError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof previewWorkbookImport>>, TError, {
+        data: BodyType<PreviewWorkbookImportBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof previewWorkbookImport>>, TError, {
+    data: BodyType<PreviewWorkbookImportBody>;
+}, TContext>;
+/**
+ * @summary Replaces the caller's workbook data with the file's. Requires the confirmation from a preview of the same file.
+ */
+export declare const getImportWorkbookUrl: () => string;
+export declare const importWorkbook: (importWorkbookBody: ImportWorkbookBody, options?: RequestInit) => Promise<ImportSummary>;
+export declare const getImportWorkbookMutationOptions: <TError = ErrorType<ImportError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof importWorkbook>>, TError, {
+        data: BodyType<ImportWorkbookBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof importWorkbook>>, TError, {
+    data: BodyType<ImportWorkbookBody>;
+}, TContext>;
+export type ImportWorkbookMutationResult = NonNullable<Awaited<ReturnType<typeof importWorkbook>>>;
+export type ImportWorkbookMutationBody = BodyType<ImportWorkbookBody>;
+export type ImportWorkbookMutationError = ErrorType<ImportError>;
+/**
+ * @summary Replaces the caller's workbook data with the file's. Requires the confirmation from a preview of the same file.
+ */
+export declare const useImportWorkbook: <TError = ErrorType<ImportError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof importWorkbook>>, TError, {
+        data: BodyType<ImportWorkbookBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof importWorkbook>>, TError, {
+    data: BodyType<ImportWorkbookBody>;
+}, TContext>;
+/**
+ * @summary The caller's workbook imports, newest first (at most 20), each with whether it can be restored.
+ */
+export declare const getListImportHistoryUrl: (params?: ListImportHistoryParams) => string;
+export declare const listImportHistory: (params?: ListImportHistoryParams, options?: RequestInit) => Promise<ImportHistory>;
+export declare const getListImportHistoryQueryKey: (params?: ListImportHistoryParams) => readonly ["/api/import/history", ...ListImportHistoryParams[]];
+export declare const getListImportHistoryQueryOptions: <TData = Awaited<ReturnType<typeof listImportHistory>>, TError = ErrorType<unknown>>(params?: ListImportHistoryParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listImportHistory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listImportHistory>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListImportHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listImportHistory>>>;
+export type ListImportHistoryQueryError = ErrorType<unknown>;
+/**
+ * @summary The caller's workbook imports, newest first (at most 20), each with whether it can be restored.
+ */
+export declare function useListImportHistory<TData = Awaited<ReturnType<typeof listImportHistory>>, TError = ErrorType<unknown>>(params?: ListImportHistoryParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listImportHistory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary What restoring this import would put back and remove, or why it cannot (changes since it would be lost). Reads only.
+ */
+export declare const getGetImportRestorePreviewUrl: (snapshotId: string) => string;
+export declare const getImportRestorePreview: (snapshotId: string, options?: RequestInit) => Promise<ImportRestorePreview>;
+export declare const getGetImportRestorePreviewQueryKey: (snapshotId: string) => readonly [`/api/import/snapshots/${string}/restore-preview`];
+export declare const getGetImportRestorePreviewQueryOptions: <TData = Awaited<ReturnType<typeof getImportRestorePreview>>, TError = ErrorType<ImportError>>(snapshotId: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getImportRestorePreview>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getImportRestorePreview>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetImportRestorePreviewQueryResult = NonNullable<Awaited<ReturnType<typeof getImportRestorePreview>>>;
+export type GetImportRestorePreviewQueryError = ErrorType<ImportError>;
+/**
+ * @summary What restoring this import would put back and remove, or why it cannot (changes since it would be lost). Reads only.
+ */
+export declare function useGetImportRestorePreview<TData = Awaited<ReturnType<typeof getImportRestorePreview>>, TError = ErrorType<ImportError>>(snapshotId: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getImportRestorePreview>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary Puts back the caller's data from before this import. Refused, with nothing written, when it would lose anything.
+ */
+export declare const getRestoreImportSnapshotUrl: (snapshotId: string) => string;
+export declare const restoreImportSnapshot: (snapshotId: string, options?: RequestInit) => Promise<ImportRestoreResult>;
+export declare const getRestoreImportSnapshotMutationOptions: <TError = ErrorType<ImportError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof restoreImportSnapshot>>, TError, {
+        snapshotId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof restoreImportSnapshot>>, TError, {
+    snapshotId: string;
+}, TContext>;
+export type RestoreImportSnapshotMutationResult = NonNullable<Awaited<ReturnType<typeof restoreImportSnapshot>>>;
+export type RestoreImportSnapshotMutationError = ErrorType<ImportError>;
+/**
+ * @summary Puts back the caller's data from before this import. Refused, with nothing written, when it would lose anything.
+ */
+export declare const useRestoreImportSnapshot: <TError = ErrorType<ImportError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof restoreImportSnapshot>>, TError, {
+        snapshotId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof restoreImportSnapshot>>, TError, {
+    snapshotId: string;
+}, TContext>;
 /**
  * `read` = the note ids the signed-in person pressed "I've read this" on (only ids H2 still ships). `from` = the first note day that needs their click: the first must-read note (READ_CLICK_FROM), or the day after they joined the household when that is later — a new member is never handed notes from before they had H2. Never anyone else's reads.
  * @summary (WN) The notes this person has read, and where their click starts
