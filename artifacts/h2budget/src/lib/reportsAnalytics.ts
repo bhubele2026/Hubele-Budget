@@ -1066,7 +1066,7 @@ export function spanLabel(startIso: string, endIso: string): string {
   return sM === eM ? `${sM} ${sD}–${eD}` : `${sM} ${sD} – ${eM} ${eD}`;
 }
 
-/** The denominator in words: "of $10,652.47 spent Sep 16 – Oct 16". The money text is passed in (formatCurrency). */
+/** The denominator in words: "of $4,941.45 spent Sep 16 – Oct 16". The money text is passed in (formatCurrency). */
 export function denominatorWords(moneyText: string, label?: string | null): string {
   return label ? `of ${moneyText} spent ${label}` : `of ${moneyText} spent`;
 }
