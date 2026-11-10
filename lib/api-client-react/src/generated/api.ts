@@ -50,6 +50,7 @@ import type {
   AvalancheSchedule,
   AvalancheSettings,
   AvalancheSettingsInput,
+  AvalancheWeeklyPlan,
   BadgeCount,
   BankBalanceExplain,
   BankSnapshot,
@@ -4008,6 +4009,86 @@ export const useUpdateAvalancheSettings = <
 > => {
   return useMutation(getUpdateAvalancheSettingsMutationOptions(options));
 };
+
+/**
+ * (AVAL-W) With the weekly cadence: every payment day from today with the
+most the forecast says is safe to pay (room), what it pays, where it
+goes, the debts it pays off and the debt-free date. The same plan the
+forecast puts on the curve. With the monthly cadence: no weeks.
+
+ * @summary The weekly avalanche — each payment day, payoff dates, debt-free date
+ */
+export const getGetAvalancheWeeklyUrl = () => {
+  return `/api/avalanche/weekly`;
+};
+
+export const getAvalancheWeekly = async (
+  options?: RequestInit,
+): Promise<AvalancheWeeklyPlan> => {
+  return customFetch<AvalancheWeeklyPlan>(getGetAvalancheWeeklyUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAvalancheWeeklyQueryKey = () => {
+  return [`/api/avalanche/weekly`] as const;
+};
+
+export const getGetAvalancheWeeklyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAvalancheWeekly>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAvalancheWeekly>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAvalancheWeeklyQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAvalancheWeekly>>
+  > = ({ signal }) => getAvalancheWeekly({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAvalancheWeekly>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAvalancheWeeklyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAvalancheWeekly>>
+>;
+export type GetAvalancheWeeklyQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The weekly avalanche — each payment day, payoff dates, debt-free date
+ */
+
+export function useGetAvalancheWeekly<
+  TData = Awaited<ReturnType<typeof getAvalancheWeekly>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAvalancheWeekly>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAvalancheWeeklyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getUpdateDebtUrl = (id: string) => {
   return `/api/debts/${id}`;

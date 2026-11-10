@@ -238,7 +238,10 @@ describe("GET /whats-new/reads — the owner's report", () => {
     clerk.fail = true;
     const r = await report(OWNER);
     expect(r.status).toBe(200);
-    expect(r.json.updates[0].readers).toEqual([{ userId: MEMBER, name: "Household member", readAt: null }]);
+    // The newest note from before LATE joined (10-20), which the member has not read:
+    // only the member is listed. (It was `updates[0]` until a note shipped after 10-20.)
+    const note = r.json.updates.find((u: { id: string }) => u.id.slice(0, 10) < "2026-10-21" && u.id !== READ_CLICK_FROM);
+    expect(note.readers).toEqual([{ userId: MEMBER, name: "Household member", readAt: null }]);
   });
 
   it("names are kept for a while: a second report does not ask Clerk again", async () => {

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AvalancheSettingsInputBudgetMode } from "./avalancheSettingsInputBudgetMode";
+import type { AvalancheSettingsInputExtraCadence } from "./avalancheSettingsInputExtraCadence";
 import type { AvalancheSettingsInputExtraSource } from "./avalancheSettingsInputExtraSource";
 import type { AvalancheSettingsInputStrategy } from "./avalancheSettingsInputStrategy";
 
@@ -16,4 +17,12 @@ export interface AvalancheSettingsInput {
   extraBudgetCategoryId?: string | null;
   manualExtra?: string;
   budgetMode?: AvalancheSettingsInputBudgetMode;
+  /** (AVAL-W) Owner only — a member's change is refused (403 owner_only). */
+  extraCadence?: AvalancheSettingsInputExtraCadence;
+  /**
+   * (AVAL-W) Owner only — a member's change is refused (403 owner_only).
+   * @minimum 0
+   * @maximum 6
+   */
+  extraWeekday?: number;
 }

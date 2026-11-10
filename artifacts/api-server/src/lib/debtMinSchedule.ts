@@ -6,6 +6,7 @@ import {
   activeSimDebts,
   monthsUntilAvalanchePayoff,
 } from "./avalancheSim";
+import type { WeeklyPlanWeek } from "./avalancheWeekly";
 
 // Sentinel id used for the synthetic "Avalanche extra payment" row that
 // the Bills page renders below the debt minimums and the Forecast/cash-
@@ -13,6 +14,8 @@ import {
 export const AVALANCHE_EXTRA_DEBT_ID = "avalanche-extra";
 export const AVALANCHE_EXTRA_LABEL = "Avalanche extra payment";
 export const AVALANCHE_EXTRA_EVENT_ITEM_ID = "avalanche:extra";
+/** (AVAL-W) A weekly payment's label: "Avalanche payment → <debt name>". */
+export const AVALANCHE_WEEKLY_LABEL = "Avalanche payment";
 
 type DebtRow = typeof debtsTable.$inferSelect;
 type RecurringRow = typeof recurringItemsTable.$inferSelect;
@@ -161,7 +164,15 @@ export function expandDebtMin(
   from: Date,
   to: Date,
   /** (F1) The debt is linked to a card the owner pays IN FULL: the everyday hook pays it. */
-  opts: { inFull?: boolean } = {},
+  opts: {
+    inFull?: boolean;
+    /**
+     * (AVAL-W) The weekly avalanche's projected payoff day for this debt: no
+     * minimum after it — the freed minimum is inside the weekly payments from
+     * then on, and counting both would count it twice. Absent: every month.
+     */
+    stopAfter?: string | null;
+  } = {},
 ): CashEvent[] {
   if (!activeDebt(debt)) return [];
   // If a recurring item is explicitly linked to this debt, the recurring
@@ -183,6 +194,7 @@ export function expandDebtMin(
     const lastDay = new Date(y, m + 1, 0).getDate();
     const dt = new Date(y, m, Math.min(day, lastDay));
     if (dt > to) break;
+    if (opts.stopAfter && fmtISO(dt) > opts.stopAfter) break;
     if (dt >= from) {
       out.push({
         date: fmtISO(dt),
@@ -300,6 +312,87 @@ export function expandAvalancheExtra(
 }
 
 /**
+ * ⭐ (AVAL-W) The weekly avalanche on the curve: one `avalanche:extra`
+ * occurrence per payment day in [from, to] that the forecast priced
+ * (`basis: "curve"`) and that is due to pay something — "Avalanche payment →
+ * <debt name>", the week's `due` (its `paid`, unless the household answered
+ * it: the answer then takes it off the curve by its own key, as for any plan).
+ * Weeks past what the forecast can see are never put on it.
+ */
+export function expandAvalancheWeekly(
+  weeks: readonly Pick<WeeklyPlanWeek, "date" | "due" | "basis" | "targets" | "nextTarget">[],
+  from: Date,
+  to: Date,
+): CashEvent[] {
+  const fromISO = fmtISO(from);
+  const toISO = fmtISO(to);
+  const out: CashEvent[] = [];
+  for (const w of weeks) {
+    if (w.basis !== "curve" || w.due <= 0.005 || w.date < fromISO || w.date > toISO) continue;
+    const names = w.targets.length > 0 ? w.targets.map((t) => t.name) : w.nextTarget ? [w.nextTarget.name] : [];
+    out.push({
+      date: w.date,
+      itemId: AVALANCHE_EXTRA_EVENT_ITEM_ID,
+      label: names.length > 0 ? `${AVALANCHE_WEEKLY_LABEL} → ${names.join(" + ")}` : AVALANCHE_WEEKLY_LABEL,
+      kind: "expense",
+      amount: -Math.abs(Math.round(w.due * 100) / 100),
+    });
+  }
+  return out;
+}
+
+/**
+ * (AVAL-W) How the avalanche reaches the curve:
+ *   - `monthly`: the month-end extra of `manualExtra` (`expandAvalancheExtra`), as always;
+ *   - `weekly`: the weekly plan's payments, and each paid-off debt's minimum stops after its payoff day;
+ *   - `none`: no avalanche payment at all — the curve the weekly plan is priced on.
+ */
+export type AvalancheOnCurve =
+  | { kind: "monthly"; manualExtra: number }
+  | {
+      kind: "weekly";
+      weeks: readonly Pick<WeeklyPlanWeek, "date" | "due" | "basis" | "targets" | "nextTarget">[];
+      /** Debt id → the payoff day after which its minimum stops. */
+      minimumsStopAfter: ReadonlyMap<string, string>;
+    }
+  | { kind: "none" };
+
+/**
+ * ⭐ THE DEBT PLAN'S OCCURRENCES — every debt minimum (debts without a linked
+ * bill), then the avalanche, in that order. The forecast ledger and the
+ * Forecast register both build them here, so the curve and the register list
+ * the same occurrences. With `monthly` this is exactly the `expandDebtMin` +
+ * `expandAvalancheExtra` the two always called.
+ */
+export function expandDebtPlanEvents(args: {
+  debts: DebtRow[];
+  linkedRecurringByDebt: ReadonlyMap<string, RecurringRow>;
+  inFullDebtIds: ReadonlySet<string>;
+  from: Date;
+  to: Date;
+  today: Date;
+  avalanche: AvalancheOnCurve;
+}): CashEvent[] {
+  const { debts, linkedRecurringByDebt, inFullDebtIds, from, to, today, avalanche } = args;
+  const stops = avalanche.kind === "weekly" ? avalanche.minimumsStopAfter : null;
+  const out: CashEvent[] = [];
+  for (const d of debts) {
+    out.push(
+      ...expandDebtMin(d, linkedRecurringByDebt.get(d.id) ?? null, from, to, {
+        inFull: inFullDebtIds.has(d.id),
+        ...(stops ? { stopAfter: stops.get(d.id) ?? null } : {}),
+      }),
+    );
+  }
+  if (avalanche.kind === "monthly") {
+    out.push(...expandAvalancheExtra(debts, avalanche.manualExtra, from, to, today, { inFullDebtIds }));
+  } else if (avalanche.kind === "weekly") {
+    out.push(...expandAvalancheWeekly(avalanche.weeks, from, to));
+  }
+  return out;
+}
+
+/**
  * Identify recurring items that should be skipped in the cash projection
  * because their associated debt minimum is sourced from the debts table
  * directly (the user explicitly linked the recurring item to a debt).
@@ -319,14 +412,19 @@ export function expandAvalancheExtra(
  * items by their own cadence, and `debt:<id>` minimums (monthly) for debts with
  * no linked bill. The ledger and the `/forecast` bundle both build it from the
  * same rows, so the curve and the register map a resolution to the same
- * occurrence. The avalanche extra (always month-end) has no schedule to edit.
+ * occurrence. The avalanche extra (month-end, or the weekly plan's payment days)
+ * has no schedule to edit.
  */
 export function resolutionScheduleLookup(
   recurring: RecurringRow[],
   debts: DebtRow[],
   linkedRecurringByDebt: Map<string, RecurringRow>,
   /** (F1) Debts of cards paid IN FULL have no minimum schedule. */
-  opts: { inFullDebtIds?: ReadonlySet<string> } = {},
+  opts: {
+    inFullDebtIds?: ReadonlySet<string>;
+    /** (AVAL-W) A paid-off debt's minimum has no occurrence after its payoff day. */
+    minimumsStopAfter?: ReadonlyMap<string, string> | null;
+  } = {},
 ): (itemId: string) => ResolutionSchedule | null {
   const recurringById = new Map(recurring.map((r) => [r.id, r] as const));
   const debtById = new Map(debts.map((d) => [d.id, d] as const));
@@ -340,7 +438,11 @@ export function resolutionScheduleLookup(
     if (!d) return null;
     const linked = linkedRecurringByDebt.get(d.id) ?? null;
     const inFull = opts.inFullDebtIds?.has(d.id) === true;
-    return { cadence: "monthly", occurrences: (from, to) => expandDebtMin(d, linked, from, to, { inFull }).map((e) => e.date) };
+    const stopAfter = opts.minimumsStopAfter?.get(d.id) ?? null;
+    return {
+      cadence: "monthly",
+      occurrences: (from, to) => expandDebtMin(d, linked, from, to, stopAfter ? { inFull, stopAfter } : { inFull }).map((e) => e.date),
+    };
   };
 }
 

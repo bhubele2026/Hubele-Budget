@@ -72,6 +72,7 @@ of the reinvention owns a range so parallel branches never collide:
 | | | 0210s | FIN2-F5 (card balance read) |
 | | | 0220s | PREM-Q2 (corrections: undo flags, applied fixes) |
 | | | 0230s | WN (What's new reads) |
+| | | 0240s | AVAL-W (weekly avalanche payments) |
 
 Packages may merge out of numeric order. The runner applies any file it has not
 recorded, whatever its number, so a lower-numbered file that lands later still

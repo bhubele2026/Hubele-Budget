@@ -25,10 +25,11 @@ import {
 } from "../lib/cashSignal";
 import {
   buildDebtMinSchedule,
-  expandDebtMin,
-  expandAvalancheExtra,
+  expandDebtPlanEvents,
   resolutionScheduleLookup,
+  type AvalancheOnCurve,
 } from "../lib/debtMinSchedule";
+import { cadenceOf, loadWeeklyAvalanchePlan, minimumsStopAfterOf } from "../lib/avalancheWeeklyPlan";
 import { remapOrphanResolutions } from "../lib/resolutionRemap";
 import {
   undoForecastResolution,
@@ -309,20 +310,25 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
 
   const events: CashEvent[] = [];
   for (const item of recurring) events.push(...expandItem(item, from, to));
-  for (const d of debtsList) {
-    events.push(
-      ...expandDebtMin(d, linkedRecurringByDebt.get(d.id) ?? null, from, to, { inFull: inFullDebtIds.has(d.id) }),
-    );
-  }
   // Inject the synthetic "Avalanche extra payment" events alongside the
   // debt-min series so the Forecast register shows the slider amount as a
   // committed end-of-month outflow until the avalanche pays everything off.
+  // ⭐ (AVAL-W) With the weekly cadence, the weekly plan's payments instead —
+  // and each paid-off debt's minimum stops after its payoff day — the ledger's
+  // own occurrences (`expandDebtPlanEvents`, the same plan).
   const [avaSettingsRow] = await db
     .select()
     .from(avalancheSettingsTable)
     .where(eq(avalancheSettingsTable.userId, ownerUserId));
   const manualExtra = Number(avaSettingsRow?.manualExtra ?? 0) || 0;
-  events.push(...expandAvalancheExtra(debtsList, manualExtra, from, to, today, { inFullDebtIds }));
+  const weeklyPlan =
+    cadenceOf(avaSettingsRow).cadence === "weekly" ? await loadWeeklyAvalanchePlan(householdId, ownerUserId) : null;
+  const avalanche: AvalancheOnCurve = weeklyPlan
+    ? { kind: "weekly", weeks: weeklyPlan.weeks, minimumsStopAfter: minimumsStopAfterOf(weeklyPlan) }
+    : { kind: "monthly", manualExtra };
+  events.push(
+    ...expandDebtPlanEvents({ debts: debtsList, linkedRecurringByDebt, inFullDebtIds, from, to, today, avalanche }),
+  );
   events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   // Forecast is Chase-checking-only. Resolve the configured checking
@@ -469,7 +475,10 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   });
   const resolutions = remapOrphanResolutions(
     resolutionsRead,
-    resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt, { inFullDebtIds }),
+    resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt, {
+      inFullDebtIds,
+      ...(avalanche.kind === "weekly" ? { minimumsStopAfter: avalanche.minimumsStopAfter } : {}),
+    }),
   )
     .filter(
       (r) =>

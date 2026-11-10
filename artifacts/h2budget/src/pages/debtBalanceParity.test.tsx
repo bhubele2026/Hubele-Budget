@@ -126,6 +126,7 @@ vi.mock("@workspace/api-client-react", () => {
     useListCategories: () => ({ data: [] }),
     useGetSettings: () => ({ data: undefined }),
     useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
+    useGetMe: () => ({ data: { isOwner: true } }),
     useGetAmexWeeklyPayoff: () => ({ data: undefined, isLoading: false }),
     // (WP4) The debt tile names cards off the plan from the linked accounts (none here).
     useListPlaidItems: () => ({ data: [], isLoading: false }),

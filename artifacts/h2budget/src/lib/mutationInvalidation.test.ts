@@ -84,6 +84,13 @@ describe("invalidateAfterWrite", () => {
     expect(invalidated(qc, SIGNAL_90)).toBe(true);
   });
 
+  it("(AVAL-W) marks the weekly avalanche stale: each week pays what the forecast says is safe", () => {
+    const qc = new QueryClient();
+    for (const k of [["/api/avalanche/weekly"], UNRELATED]) qc.setQueryData(k, { seeded: true });
+    invalidateAfterWrite(qc);
+    expect(invalidated(qc, ["/api/avalanche/weekly"])).toBe(true);
+    expect(invalidated(qc, UNRELATED)).toBe(false);
+  });
   it("leaves unrelated queries alone", () => {
     const qc = seeded();
     invalidateAfterWrite(qc);
@@ -138,6 +145,8 @@ describe("invalidateAfterWrite — the money position and the ways back (F7)", (
     expect([...AMEX_SUMMARY_KEY]).toEqual((await import("@workspace/api-client-react")).getGetAmexSummaryQueryKey());
     const { CASH_SIGNAL_KEY } = await import("./mutationInvalidation");
     expect([...CASH_SIGNAL_KEY]).toEqual((await import("@workspace/api-client-react")).getGetForecastCashSignalQueryKey());
+    const { AVALANCHE_WEEKLY_KEY } = await import("./mutationInvalidation");
+    expect([...AVALANCHE_WEEKLY_KEY]).toEqual((await import("@workspace/api-client-react")).getGetAvalancheWeeklyQueryKey());
   });
 });
 

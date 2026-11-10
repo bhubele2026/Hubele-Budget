@@ -2997,13 +2997,29 @@ export const CreateDebtPaymentBody = zod.object({
   notes: zod.string().nullish(),
 });
 
+export const getAvalancheSettingsResponseExtraWeekdayMin = 0;
+export const getAvalancheSettingsResponseExtraWeekdayMax = 6;
+
 export const GetAvalancheSettingsResponse = zod.object({
   strategy: zod.enum(["avalanche", "snowball"]),
   extraSource: zod.enum(["budget_net", "budget_line", "manual"]),
   extraBudgetCategoryId: zod.string().nullish(),
   manualExtra: zod.string(),
   budgetMode: zod.enum(["budgeted", "actual"]),
+  extraCadence: zod
+    .enum(["monthly", "weekly"])
+    .describe(
+      "(AVAL-W) monthly: one month-end payment of manualExtra. weekly: one\npayment on extraWeekday each week, the most the forecast says is\nsafe above the cash buffer; manualExtra stays the monthly target.\n",
+    ),
+  extraWeekday: zod
+    .number()
+    .min(getAvalancheSettingsResponseExtraWeekdayMin)
+    .max(getAvalancheSettingsResponseExtraWeekdayMax)
+    .describe("0 = Sunday … 6 = Saturday (5 = Friday)."),
 });
+
+export const updateAvalancheSettingsBodyExtraWeekdayMin = 0;
+export const updateAvalancheSettingsBodyExtraWeekdayMax = 6;
 
 export const UpdateAvalancheSettingsBody = zod.object({
   strategy: zod.enum(["avalanche", "snowball"]).optional(),
@@ -3011,7 +3027,24 @@ export const UpdateAvalancheSettingsBody = zod.object({
   extraBudgetCategoryId: zod.string().nullish(),
   manualExtra: zod.string().optional(),
   budgetMode: zod.enum(["budgeted", "actual"]).optional(),
+  extraCadence: zod
+    .enum(["monthly", "weekly"])
+    .optional()
+    .describe(
+      "(AVAL-W) Owner only — a member's change is refused (403 owner_only).",
+    ),
+  extraWeekday: zod
+    .number()
+    .min(updateAvalancheSettingsBodyExtraWeekdayMin)
+    .max(updateAvalancheSettingsBodyExtraWeekdayMax)
+    .optional()
+    .describe(
+      "(AVAL-W) Owner only — a member's change is refused (403 owner_only).",
+    ),
 });
+
+export const updateAvalancheSettingsResponseExtraWeekdayMin = 0;
+export const updateAvalancheSettingsResponseExtraWeekdayMax = 6;
 
 export const UpdateAvalancheSettingsResponse = zod.object({
   strategy: zod.enum(["avalanche", "snowball"]),
@@ -3019,6 +3052,107 @@ export const UpdateAvalancheSettingsResponse = zod.object({
   extraBudgetCategoryId: zod.string().nullish(),
   manualExtra: zod.string(),
   budgetMode: zod.enum(["budgeted", "actual"]),
+  extraCadence: zod
+    .enum(["monthly", "weekly"])
+    .describe(
+      "(AVAL-W) monthly: one month-end payment of manualExtra. weekly: one\npayment on extraWeekday each week, the most the forecast says is\nsafe above the cash buffer; manualExtra stays the monthly target.\n",
+    ),
+  extraWeekday: zod
+    .number()
+    .min(updateAvalancheSettingsResponseExtraWeekdayMin)
+    .max(updateAvalancheSettingsResponseExtraWeekdayMax)
+    .describe("0 = Sunday … 6 = Saturday (5 = Friday)."),
+});
+
+/**
+ * (AVAL-W) With the weekly cadence: every payment day from today with the
+most the forecast says is safe to pay (room), what it pays, where it
+goes, the debts it pays off and the debt-free date. The same plan the
+forecast puts on the curve. With the monthly cadence: no weeks.
+
+ * @summary The weekly avalanche — each payment day, payoff dates, debt-free date
+ */
+export const GetAvalancheWeeklyResponse = zod.object({
+  cadence: zod.enum(["monthly", "weekly"]),
+  weekday: zod.number(),
+  monthlyTarget: zod.number().describe("manualExtra — the target per month."),
+  targetWeekly: zod.number().describe("monthlyTarget × 12 ÷ 52."),
+  cashBuffer: zod.number(),
+  weeks: zod
+    .array(
+      zod.object({
+        date: zod.string(),
+        planned: zod
+          .number()
+          .describe(
+            "The target pace for the week (target × 12 ÷ 52 plus freed minimums).",
+          ),
+        room: zod
+          .number()
+          .nullable()
+          .describe(
+            "The most that is safe this week; null past what the forecast can see.",
+          ),
+        due: zod.number().describe("What the week is due to pay"),
+        paid: zod
+          .number()
+          .describe("What the week pays (0 when already answered)."),
+        basis: zod
+          .enum(["curve", "target"])
+          .describe(
+            "curve = priced from the forecast (on the curve); target = past it, at the target pace (payoff dates only).",
+          ),
+        answered: zod.boolean(),
+        nextTarget: zod.union([
+          zod.object({
+            debtId: zod.string(),
+            name: zod.string(),
+          }),
+          zod.null(),
+        ]),
+        targets: zod.array(
+          zod.object({
+            debtId: zod.string(),
+            name: zod.string(),
+            amount: zod.number(),
+            paidOff: zod.boolean(),
+          }),
+        ),
+        paidOff: zod.array(
+          zod.object({
+            debtId: zod.string(),
+            name: zod.string(),
+            date: zod
+              .string()
+              .describe("The projected payoff day (YYYY-MM-DD)."),
+            freedWeekly: zod
+              .number()
+              .describe(
+                "What its freed minimum adds to the weekly target pace (minimum × 12 ÷ 52).",
+              ),
+          }),
+        ),
+      }),
+    )
+    .describe("Every payment day from today (empty with the monthly cadence)."),
+  payoffs: zod.array(
+    zod.object({
+      debtId: zod.string(),
+      name: zod.string(),
+      date: zod.string().describe("The projected payoff day (YYYY-MM-DD)."),
+      freedWeekly: zod
+        .number()
+        .describe(
+          "What its freed minimum adds to the weekly target pace (minimum × 12 ÷ 52).",
+        ),
+    }),
+  ),
+  debtFreeDate: zod.string().nullable(),
+  curveThrough: zod
+    .string()
+    .nullable()
+    .describe("The last payment day priced from the forecast."),
+  ranOutOfTime: zod.boolean(),
 });
 
 export const UpdateDebtParams = zod.object({

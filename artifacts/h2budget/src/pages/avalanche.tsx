@@ -49,6 +49,8 @@ import { useSpine } from "@/hooks/useSpine";
 import { AvalancheCardConfig } from "@/components/avalanche-card-config";
 import { DebtRangePanel } from "@/components/plan/DebtRangePanel";
 import { AvalancheScheduleCard } from "@/components/avalanche-schedule-card";
+import { AvalancheWeeklyPanel } from "@/components/avalanche-weekly-panel";
+import { PillToggle } from "@/components/pill-toggle";
 import {
   DebtPlaidActions,
   DebtLastSynced,
@@ -960,11 +962,21 @@ export default function AvalanchePage() {
         );
       })()}
 
+      {/* ⭐ (AVAL-W) How the avalanche goes out: monthly, or weekly at the most
+          that is safe (server-computed; the switch is the owner's). */}
+      <AvalancheWeeklyPanel
+        settings={settings}
+        saving={updateSettings.isPending}
+        onUpdate={(data) => updateSettings.mutate({ data })}
+      />
+
       {/* Two cards: Extra per month + Strategy */}
         {/* Extra per month */}
         <div className="panel tile-in span-6">
           <div className="panel-head">
-            <span className="text-title font-semibold text-brand-navy">Extra per month</span>
+            <span className="text-title font-semibold text-brand-navy">
+              {settings?.extraCadence === "weekly" ? "Target per month" : "Extra per month"}
+            </span>
             <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
               {fmtMoney(resolvedExtraAmount)}
             </span>
@@ -1179,7 +1191,7 @@ export default function AvalanchePage() {
       {/* Your next 3 moves / Kill order.
           ⚠️ `space-y-3` + a `.grid` of card divs is asserted by
           avalanchePagePlan.test.tsx — keep both when restyling. */}
-      <div className="span-6 space-y-3">
+      <div className={cn(settings?.extraCadence === "weekly" ? "span-12" : "span-6", "space-y-3")}>
         <div className="flex items-baseline gap-2">
           <h2 className="text-title font-semibold text-brand-navy">Your next 3 moves</h2>
           <span className="text-micro uppercase tracking-wide text-neutral-400">Kill order</span>
@@ -1236,10 +1248,13 @@ export default function AvalanchePage() {
         )}
       </div>
 
-      {/* Dated avalanche extra-payment schedule (server-computed). */}
-      <div className="span-6">
-        <AvalancheScheduleCard />
-      </div>
+      {/* Dated avalanche extra-payment schedule (server-computed). With the
+          weekly cadence the weekly panel above is the schedule. */}
+      {settings?.extraCadence !== "weekly" && (
+        <div className="span-6">
+          <AvalancheScheduleCard />
+        </div>
+      )}
 
       {/* The server's debt plan as a range (F11). */}
       <div className="span-12">
@@ -1709,47 +1724,6 @@ export default function AvalanchePage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-/** A two-option segmented control. Flat, hairline-ringed, navy when chosen. */
-function PillToggle<T extends string>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string; sub: string }[];
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-1 rounded-control bg-platinum-3 p-1 ring-1 ring-brand-line">
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            aria-pressed={active}
-            className={cn(
-              "press rounded-control px-3 py-1.5 text-left",
-              active ? "bg-brand-navy text-white" : "text-neutral-600 hover:bg-white",
-            )}
-          >
-            <div className="text-body font-semibold leading-tight">{opt.label}</div>
-            <div
-              className={cn(
-                "mt-0.5 text-micro uppercase tracking-wide",
-                active ? "text-white/70" : "text-neutral-600",
-              )}
-            >
-              {opt.sub}
-            </div>
-          </button>
-        );
-      })}
     </div>
   );
 }

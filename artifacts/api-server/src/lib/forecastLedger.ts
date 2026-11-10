@@ -57,6 +57,8 @@ import {
 } from "./everydayHooks";
 import { inFullDebtIdsFor } from "./cardPayoffMode";
 import { patchRows, type CorrectionOverlay } from "./correctionOverlay";
+import type { AvalancheOnCurve } from "./debtMinSchedule";
+import type { WeeklyAvalanchePlan } from "./avalancheWeeklyPlan";
 import {
   addDays,
   expandItem,
@@ -374,7 +376,37 @@ export type ForecastLedger = {
    * the banking review places a row against these instead of one occurrence.
    */
   paymentAllocations: Map<string, Array<{ planKey: string; cents: number }>>;
+  /**
+   * ⭐ (AVAL-W) The weekly avalanche this curve carries — present only with the
+   * weekly cadence (never with the monthly one, whose ledger is unchanged).
+   * Internal (not in `computeCashSignal`'s output); `GET /avalanche/weekly`
+   * reads the same plan.
+   */
+  avalancheWeekly?: WeeklyAvalanchePlan;
 };
+
+/**
+ * ⭐ (AVAL-W) How this ledger's avalanche reaches the curve: the month-end extra
+ * (monthly cadence, as always), the weekly plan (weekly cadence), or nothing
+ * (`base`: the curve the weekly plan is priced on).
+ */
+async function avalancheOnCurveFor(
+  householdId: string,
+  ownerUserId: string,
+  avaSettingsRow: (typeof avalancheSettingsTable.$inferSelect) | undefined,
+  manualExtra: number,
+  opts: { base: boolean; planOverride: PlanOverride | null; correctionOverlay: CorrectionOverlay | null },
+): Promise<{ onCurve: AvalancheOnCurve; plan: WeeklyAvalanchePlan | null }> {
+  if (opts.base) return { onCurve: { kind: "none" }, plan: null };
+  if (avaSettingsRow?.extraCadence !== "weekly") return { onCurve: { kind: "monthly", manualExtra }, plan: null };
+  const { loadWeeklyAvalanchePlan, minimumsStopAfterOf } = await import("./avalancheWeeklyPlan");
+  const plan = await loadWeeklyAvalanchePlan(householdId, ownerUserId, {
+    planOverride: opts.planOverride,
+    correctionOverlay: opts.correctionOverlay,
+  });
+  if (!plan) return { onCurve: { kind: "monthly", manualExtra }, plan: null };
+  return { onCurve: { kind: "weekly", weeks: plan.weeks, minimumsStopAfter: minimumsStopAfterOf(plan) }, plan };
+}
 
 /** (PR6) How far back an overdue expense still drags onto the curve (#803's floor). */
 export const DRAG_LOOKBACK_DAYS = 14;
@@ -491,6 +523,12 @@ export async function buildForecastLedger(
      * set outside a dry run; nothing is written.
      */
     correctionOverlay?: CorrectionOverlay | null;
+    /**
+     * ⭐ (AVAL-W) INTERNAL — the curve the weekly avalanche is priced on
+     * (`avalancheWeeklyPlan.ts`): no avalanche payment at all, and every debt
+     * minimum on its due days. Never set by any other caller.
+     */
+    avalancheBase?: boolean;
   } = {},
 ): Promise<ForecastLedger> {
   ledgerBuilds += 1;
@@ -508,7 +546,7 @@ export async function buildForecastLedger(
     hookSettings,
     [avaSettingsRow],
     resolutionsAsStored,
-    { expandDebtMin, expandAvalancheExtra, resolutionScheduleLookup, AVALANCHE_EXTRA_EVENT_ITEM_ID },
+    { expandDebtPlanEvents, resolutionScheduleLookup, AVALANCHE_EXTRA_EVENT_ITEM_ID },
   ] = await Promise.all([
     db.select().from(forecastSettingsTable).where(eq(forecastSettingsTable.userId, ownerUserId)),
     db.select().from(recurringItemsTable).where(eq(recurringItemsTable.householdId, householdId)),
@@ -672,34 +710,44 @@ export async function buildForecastLedger(
   // recurring item — same series the Bills page renders for "Debt
   // minimums", so the projection never double-counts and never misses an
   // obligation that was synced via Plaid liabilities.
-  // (P2) `expandDebtMin`, `expandAvalancheExtra` … come from the import above.
-  for (const d of debtsList) {
-    events.push(
-      ...expandDebtMin(
-        d,
-        linkedRecurringByDebt.get(d.id) ?? null,
-        syntheticExpandStart,
-        to,
-        { inFull: inFullDebtIds.has(d.id) },
-      ),
-    );
-  }
+  // (P2) `expandDebtPlanEvents` comes from the import above.
   // Inject the synthetic "Avalanche extra payment" events so the cash-
   // signal projection accounts for the same end-of-month outflow that
   // the Forecast register shows. Capped server-side at the avalanche
   // payoff horizon so the projection stops once all debts are paid.
   // (P2) `avaSettingsRow` is read above, with the settings.
+  // ⭐ (AVAL-W) With the weekly cadence the month-end extra is replaced by the
+  // weekly plan's payments (the most that is safe each week), and each paid-off
+  // debt's minimum stops after its payoff day — it is inside the weekly figure
+  // from then on. The plan is priced on this same forecast built without any
+  // avalanche payment (`avalancheBase`), which therefore expands none.
   const manualExtra = Number(avaSettingsRow?.manualExtra ?? 0) || 0;
-  events.push(
-    ...expandAvalancheExtra(debtsList, manualExtra, syntheticExpandStart, to, todayDateOnly, { inFullDebtIds }),
-  );
+  const avalanche = await avalancheOnCurveFor(householdId, ownerUserId, avaSettingsRow, manualExtra, {
+    base: opts.avalancheBase === true,
+    planOverride: opts.planOverride ?? null,
+    correctionOverlay: overlay,
+  });
+  const debtPlanEvents = (from: Date, until: Date): CashEvent[] =>
+    expandDebtPlanEvents({
+      debts: debtsList,
+      linkedRecurringByDebt,
+      inFullDebtIds,
+      from,
+      to: until,
+      today: todayDateOnly,
+      avalanche: avalanche.onCurve,
+    });
+  events.push(...debtPlanEvents(syntheticExpandStart, to));
 
   // (PR6) Each item's schedule — to map a resolution a schedule edit orphaned
   // (`remapOrphanResolutions`) — and the first day an occurrence can belong to it.
   const recurringById = new Map(recurring.map((r) => [r.id, r] as const));
   const debtById = new Map(debtsList.map((d) => [d.id, d] as const));
   const scheduleOf: (itemId: string) => ResolutionSchedule | null =
-    resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt, { inFullDebtIds });
+    resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt, {
+      inFullDebtIds,
+      ...(avalanche.onCurve.kind === "weekly" ? { minimumsStopAfter: avalanche.onCurve.minimumsStopAfter } : {}),
+    });
   // The anchor date, else the day the item was created; a debt minimum starts
   // on the debt's created day. (PR6 review, M1) The Avalanche extra starts on the
   // day its settings were last saved: setting a $500 extra on 05-05 must not drag
@@ -762,10 +810,7 @@ export async function buildForecastLedger(
     if (eventKeys.has(key)) continue;
     const day = parseISO(r.occurrenceDate);
     const recurringItem = recurring.find(item => item.id === r.recurringItemId);
-    const recovered = recurringItem ? expandItem(recurringItem, day, day) : [
-      ...debtsList.flatMap(d => expandDebtMin(d, linkedRecurringByDebt.get(d.id) ?? null, day, day, { inFull: inFullDebtIds.has(d.id) })),
-      ...expandAvalancheExtra(debtsList, manualExtra, day, day, todayDateOnly, { inFullDebtIds }),
-    ];
+    const recovered = recurringItem ? expandItem(recurringItem, day, day) : debtPlanEvents(day, day);
     for (const event of recovered) {
       if (event.itemId !== r.recurringItemId || eventKeys.has(`${event.itemId}|${event.date}`)) continue;
       events.push(event);
@@ -2192,5 +2237,6 @@ export async function buildForecastLedger(
     }),
     hookPayoffs,
     paymentAllocations,
+    ...(avalanche.plan ? { avalancheWeekly: avalanche.plan } : {}),
   };
 }

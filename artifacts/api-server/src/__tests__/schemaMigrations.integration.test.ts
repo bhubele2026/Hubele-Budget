@@ -53,6 +53,8 @@ const ADDED_COLUMNS: Record<string, string[]> = {
   forecast_settings: ["last_bank_reconciliation"],
   // FIN2-F5 (0210): the rows pending when a card's balance was read; (round 6) whether that read followed a sync.
   plaid_accounts: ["liability_pending_txn_ids", "liability_pending_after_sync"],
+  // AVAL-W (0240): weekly avalanche payments — the cadence and the weekday.
+  avalanche_settings: ["extra_cadence", "extra_weekday"],
 };
 
 type ColumnShape = {

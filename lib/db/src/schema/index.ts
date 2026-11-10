@@ -177,6 +177,12 @@ export const avalancheSettingsTable = pgTable("avalanche_settings", {
   extraBudgetCategoryId: uuid("extra_budget_category_id"),
   manualExtra: numeric("manual_extra", { precision: 12, scale: 2 }).notNull().default("0"),
   budgetMode: text("budget_mode").notNull().default("budgeted"),
+  // (AVAL-W, 0240) How the extra goes out: "monthly" (one month-end payment of
+  // `manualExtra`, as before) or "weekly" (one payment on `extraWeekday` each
+  // week, the most the forecast says is safe). `manualExtra` stays the MONTHLY
+  // figure either way. Weekday: 0 = Sunday … 6 = Saturday (5 = Friday).
+  extraCadence: text("extra_cadence").notNull().default("monthly"),
+  extraWeekday: integer("extra_weekday").notNull().default(5),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

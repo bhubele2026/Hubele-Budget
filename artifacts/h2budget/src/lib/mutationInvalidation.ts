@@ -22,6 +22,9 @@ import {
  *   stored amount to the plan, so the Forecast, its overview and the dashboard's
  *   forecast panel read the new plan — not a cached reserve.
  *
+ * - ⭐ (AVAL-W) The weekly avalanche (`/api/avalanche/weekly`): each week pays
+ *   the most the forecast says is safe, so any write that moves the curve moves it.
+ *
  * `invalidateQueries` refetches only mounted queries; anything else is simply
  * marked stale for its next reader. `mutationInvalidation.test.ts` pins every
  * key, so dropping one fails a test.
@@ -35,6 +38,8 @@ export const PERIOD_BREAKDOWN_KEY = ["/api/money/period-breakdown"] as const;
 export const AMEX_SUMMARY_KEY = ["/api/amex/summary"] as const;
 /** (C5) The cash signal: a prefix, so every horizon and dry run is covered. */
 export const CASH_SIGNAL_KEY = ["/api/forecast/cash-signal"] as const;
+/** (AVAL-W) The weekly avalanche plan: priced on the forecast curve. */
+export const AVALANCHE_WEEKLY_KEY = ["/api/avalanche/weekly"] as const;
 
 export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
@@ -50,6 +55,8 @@ export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: AMEX_SUMMARY_KEY });
   // (C5) The forecast's hook reserves move with a plan write (and with any spend).
   void queryClient.invalidateQueries({ queryKey: CASH_SIGNAL_KEY });
+  // (AVAL-W) The weekly avalanche is priced on that curve.
+  void queryClient.invalidateQueries({ queryKey: AVALANCHE_WEEKLY_KEY });
   void queryClient.invalidateQueries({
     predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/"),
   });

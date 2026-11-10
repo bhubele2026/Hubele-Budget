@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildDebtMinSchedule, expandAvalancheExtra, expandDebtMin, resolutionScheduleLookup } from "./debtMinSchedule";
+import {
+  buildDebtMinSchedule,
+  expandAvalancheExtra,
+  expandAvalancheWeekly,
+  expandDebtMin,
+  expandDebtPlanEvents,
+  resolutionScheduleLookup,
+} from "./debtMinSchedule";
 import { activeSimDebts } from "./avalancheSim";
 import { debtsTable, recurringItemsTable } from "@workspace/db";
 
@@ -230,5 +237,87 @@ describe("(F1) in_full cards: no minimum, no schedule, out of the avalanche popu
     // With the in_full card's $1,000 out, a $100 extra clears the $100 loan this month: one extra, at October's end.
     expect(expandAvalancheExtra([debt(), other], 100, from, to, today, { inFullDebtIds: new Set(["d-1"]) }).map((e) => e.date)).toEqual(["2026-10-31"]);
     expect(expandAvalancheExtra([debt(), other], 100, from, to, today).map((e) => e.date)).toEqual(["2026-10-31", "2026-11-30"]);
+  });
+});
+
+// ⭐ (AVAL-W) The weekly avalanche's occurrences, and the minimums it stops.
+describe("(AVAL-W) weekly cadence: the plan's payments, and each paid-off minimum stops", () => {
+  const from = new Date(2026, 9, 1);
+  const to = new Date(2026, 11, 31);
+  const today = new Date(2026, 9, 14);
+  const other = debt({ id: "d-2", name: "Store loan", balance: "5000.00", minPayment: "120.00", dueDay: 2, apr: "0.0500" });
+  const linked = new Map<string, RecurringRow>();
+
+  it("monthly: exactly the minimums then the month-end extra the two callers always built", () => {
+    const legacy = [
+      ...[debt(), other].flatMap((d) => expandDebtMin(d, null, from, to)),
+      ...expandAvalancheExtra([debt(), other], 300, from, to, today),
+    ];
+    const now = expandDebtPlanEvents({
+      debts: [debt(), other],
+      linkedRecurringByDebt: linked,
+      inFullDebtIds: new Set(),
+      from,
+      to,
+      today,
+      avalanche: { kind: "monthly", manualExtra: 300 },
+    });
+    expect(now).toEqual(legacy);
+  });
+
+  it("stopAfter: no minimum after the payoff day; the payoff day's own minimum stays", () => {
+    expect(expandDebtMin(debt(), null, from, to, { stopAfter: "2026-11-15" }).map((e) => e.date)).toEqual(["2026-10-15", "2026-11-15"]);
+    expect(expandDebtMin(debt(), null, from, to, { stopAfter: "2026-11-14" }).map((e) => e.date)).toEqual(["2026-10-15"]);
+    const lookup = resolutionScheduleLookup([], [debt()], new Map(), { minimumsStopAfter: new Map([["d-1", "2026-10-20"]]) });
+    expect(lookup("debt:d-1")?.occurrences(from, to)).toEqual(["2026-10-15"]);
+  });
+
+  it("weekly: one occurrence per priced week that pays, labelled with its debts; none: no avalanche at all", () => {
+    const weeks = [
+      { date: "2026-10-16", due: 350, basis: "curve" as const, targets: [{ debtId: "d-1", name: "Card A", amount: 350, paidOff: false }], nextTarget: { debtId: "d-1", name: "Card A" } },
+      { date: "2026-10-23", due: 0, basis: "curve" as const, targets: [], nextTarget: { debtId: "d-1", name: "Card A" } },
+      // Answered: still due, so the answer has an occurrence to take off the curve.
+      { date: "2026-10-30", due: 572.5, basis: "curve" as const, targets: [], nextTarget: { debtId: "d-1", name: "Card A" } },
+      {
+        date: "2026-11-06",
+        due: 1200,
+        basis: "curve" as const,
+        targets: [
+          { debtId: "d-1", name: "Card A", amount: 300, paidOff: true },
+          { debtId: "d-2", name: "Store loan", amount: 900, paidOff: false },
+        ],
+        nextTarget: { debtId: "d-1", name: "Card A" },
+      },
+      // Past what the forecast can see: never on the curve.
+      { date: "2026-11-13", due: 600, basis: "target" as const, targets: [{ debtId: "d-2", name: "Store loan", amount: 600, paidOff: false }], nextTarget: { debtId: "d-2", name: "Store loan" } },
+    ];
+    expect(expandAvalancheWeekly(weeks, from, to)).toEqual([
+      { date: "2026-10-16", itemId: "avalanche:extra", label: "Avalanche payment → Card A", kind: "expense", amount: -350 },
+      { date: "2026-10-30", itemId: "avalanche:extra", label: "Avalanche payment → Card A", kind: "expense", amount: -572.5 },
+      { date: "2026-11-06", itemId: "avalanche:extra", label: "Avalanche payment → Card A + Store loan", kind: "expense", amount: -1200 },
+    ]);
+    const weekly = expandDebtPlanEvents({
+      debts: [debt(), other],
+      linkedRecurringByDebt: linked,
+      inFullDebtIds: new Set(),
+      from,
+      to,
+      today,
+      avalanche: { kind: "weekly", weeks, minimumsStopAfter: new Map([["d-1", "2026-11-06"]]) },
+    });
+    expect(weekly.filter((e) => e.itemId === "debt:d-1").map((e) => e.date)).toEqual(["2026-10-15"]);
+    expect(weekly.filter((e) => e.itemId === "debt:d-2").map((e) => e.date)).toEqual(["2026-10-02", "2026-11-02", "2026-12-02"]);
+    expect(weekly.filter((e) => e.itemId === "avalanche:extra")).toHaveLength(3);
+    const none = expandDebtPlanEvents({
+      debts: [debt(), other],
+      linkedRecurringByDebt: linked,
+      inFullDebtIds: new Set(),
+      from,
+      to,
+      today,
+      avalanche: { kind: "none" },
+    });
+    expect(none.some((e) => e.itemId === "avalanche:extra")).toBe(false);
+    expect(none.filter((e) => e.itemId === "debt:d-1")).toHaveLength(3);
   });
 });

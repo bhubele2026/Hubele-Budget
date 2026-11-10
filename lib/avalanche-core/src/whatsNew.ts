@@ -52,6 +52,20 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-10",
+    headline: "Debt payments can go out every week",
+    items: [
+      {
+        title: "Weekly avalanche payments",
+        body: "Switch the Debt page to Weekly and H2 plans one payment each Friday: the most that is safe that week, never taking checking below your cushion.",
+      },
+      {
+        title: "More each time a debt is paid off",
+        body: "When a debt is paid off, its minimum stops and that money joins the weekly payment. The Debt page lists the next 12 payments and your debt-free date.",
+      },
+    ],
+  },
+  {
     id: "2026-10-16.6",
     headline: "Report percentages that agree, and imports you can undo",
     items: [

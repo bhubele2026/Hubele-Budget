@@ -3,6 +3,7 @@ import { and, eq, notInArray, sql } from "drizzle-orm";
 import {
   db,
   avalancheSettingsTable,
+  forecastSettingsTable,
   budgetCategoriesTable,
   budgetLinesTable,
   budgetMonthsTable,
@@ -13,6 +14,8 @@ import { monthEndExclusive } from "../lib/monthBounds";
 import { addDaysISO, householdTodayISO, monthBounds } from "../lib/householdClock";
 import { expiredHoldsRuleOn, findSupersededPendingForRange } from "../lib/supersededPending";
 import { UpdateAvalancheSettingsBody } from "@workspace/api-zod";
+import { cadenceOf, loadWeeklyAvalanchePlan } from "../lib/avalancheWeeklyPlan";
+import { weeklyShare } from "../lib/avalancheWeekly";
 
 const router: IRouter = Router();
 
@@ -235,6 +238,9 @@ function present(row: typeof avalancheSettingsTable.$inferSelect) {
     extraBudgetCategoryId: row.extraBudgetCategoryId,
     manualExtra: row.manualExtra,
     budgetMode: row.budgetMode,
+    // (AVAL-W) Read safely: anything unknown reads as monthly / Friday.
+    extraCadence: cadenceOf(row).cadence,
+    extraWeekday: cadenceOf(row).weekday,
   };
 }
 
@@ -527,6 +533,20 @@ router.put("/avalanche/settings", requireAuth, async (req, res): Promise<void> =
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  if (parsed.data.extraWeekday !== undefined && !Number.isInteger(parsed.data.extraWeekday)) {
+    res.status(400).json({ error: "extraWeekday must be a whole day, 0 (Sunday) to 6 (Saturday)" });
+    return;
+  }
+  // ⭐ (AVAL-W) How the avalanche goes out (monthly or weekly, and on which day)
+  // is the owner's to set; a member's change of either is refused. The other
+  // settings keep the gate they had.
+  if (
+    (parsed.data.extraCadence !== undefined || parsed.data.extraWeekday !== undefined) &&
+    (!req.actualUserId || req.actualUserId !== req.householdOwnerId)
+  ) {
+    res.status(403).json({ error: "owner_only" });
+    return;
+  }
   await ensureSettings(req.householdId!, req.householdOwnerId!);
   const [row] = await db
     .update(avalancheSettingsTable)
@@ -542,6 +562,55 @@ router.put("/avalanche/settings", requireAuth, async (req, res): Promise<void> =
     );
   }
   res.json(present(row));
+});
+
+/**
+ * ⭐ (AVAL-W) The weekly avalanche: each payment day from today (the most the
+ * forecast says is safe, what it pays, where it goes), the payoff dates and the
+ * debt-free date — `loadWeeklyAvalanchePlan`, the plan the forecast itself puts
+ * on the curve. Monthly cadence: the targets and no weeks. Read only.
+ */
+router.get("/avalanche/weekly", requireAuth, async (req, res): Promise<void> => {
+  // A read: no settings row is created here (none reads as monthly, $0).
+  const [row] = await db
+    .select()
+    .from(avalancheSettingsTable)
+    .where(eq(avalancheSettingsTable.userId, req.householdOwnerId!));
+  const { cadence, weekday } = cadenceOf(row);
+  const monthlyTarget = Math.round(Math.max(0, Number(row?.manualExtra ?? 0) || 0) * 100) / 100;
+  const plan = cadence === "weekly" ? await loadWeeklyAvalanchePlan(req.householdId!, req.householdOwnerId!) : null;
+  if (!plan) {
+    // The forecast's own buffer rule (`buildForecastLedger`): $500 when unset.
+    const [fs] = await db
+      .select({ cashBuffer: forecastSettingsTable.cashBuffer })
+      .from(forecastSettingsTable)
+      .where(eq(forecastSettingsTable.userId, req.householdOwnerId!));
+    res.json({
+      cadence,
+      weekday,
+      monthlyTarget,
+      targetWeekly: weeklyShare(monthlyTarget),
+      cashBuffer: Math.round((Number(fs?.cashBuffer ?? 500) || 0) * 100) / 100,
+      weeks: [],
+      payoffs: [],
+      debtFreeDate: null,
+      curveThrough: null,
+      ranOutOfTime: false,
+    });
+    return;
+  }
+  res.json({
+    cadence,
+    weekday: plan.weekday,
+    monthlyTarget: plan.monthlyTarget,
+    targetWeekly: plan.targetWeekly,
+    cashBuffer: plan.cashBuffer,
+    weeks: plan.weeks,
+    payoffs: plan.payoffs,
+    debtFreeDate: plan.debtFreeDate,
+    curveThrough: plan.curveThrough,
+    ranOutOfTime: plan.ranOutOfTime,
+  });
 });
 
 export default router;

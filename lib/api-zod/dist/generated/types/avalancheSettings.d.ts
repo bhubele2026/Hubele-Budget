@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AvalancheSettingsBudgetMode } from "./avalancheSettingsBudgetMode";
+import type { AvalancheSettingsExtraCadence } from "./avalancheSettingsExtraCadence";
 import type { AvalancheSettingsExtraSource } from "./avalancheSettingsExtraSource";
 import type { AvalancheSettingsStrategy } from "./avalancheSettingsStrategy";
 export interface AvalancheSettings {
@@ -15,5 +16,16 @@ export interface AvalancheSettings {
     extraBudgetCategoryId?: string | null;
     manualExtra: string;
     budgetMode: AvalancheSettingsBudgetMode;
+    /** (AVAL-W) monthly: one month-end payment of manualExtra. weekly: one
+  payment on extraWeekday each week, the most the forecast says is
+  safe above the cash buffer; manualExtra stays the monthly target.
+   */
+    extraCadence: AvalancheSettingsExtraCadence;
+    /**
+     * 0 = Sunday … 6 = Saturday (5 = Friday).
+     * @minimum 0
+     * @maximum 6
+     */
+    extraWeekday: number;
 }
 //# sourceMappingURL=avalancheSettings.d.ts.map

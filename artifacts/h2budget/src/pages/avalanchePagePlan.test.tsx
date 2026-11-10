@@ -112,6 +112,7 @@ vi.mock("@workspace/api-client-react", () => {
     useListCategories: () => ({ data: [] }),
     useGetSettings: () => ({ data: undefined }),
     useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
+    useGetMe: () => ({ data: { isOwner: true } }),
     useGetAmexWeeklyPayoff: () => ({ data: undefined, isLoading: false }),
     useUpdateSettings: mutation2,
     useBulkCreateDebtsFromPlaidAccounts: mutation2,

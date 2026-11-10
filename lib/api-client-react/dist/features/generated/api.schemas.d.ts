@@ -4379,6 +4379,17 @@ export declare const AvalancheSettingsBudgetMode: {
     readonly budgeted: "budgeted";
     readonly actual: "actual";
 };
+/**
+ * (AVAL-W) monthly: one month-end payment of manualExtra. weekly: one
+payment on extraWeekday each week, the most the forecast says is
+safe above the cash buffer; manualExtra stays the monthly target.
+
+ */
+export type AvalancheSettingsExtraCadence = (typeof AvalancheSettingsExtraCadence)[keyof typeof AvalancheSettingsExtraCadence];
+export declare const AvalancheSettingsExtraCadence: {
+    readonly monthly: "monthly";
+    readonly weekly: "weekly";
+};
 export interface AvalancheSettings {
     strategy: AvalancheSettingsStrategy;
     extraSource: AvalancheSettingsExtraSource;
@@ -4386,6 +4397,17 @@ export interface AvalancheSettings {
     extraBudgetCategoryId?: string | null;
     manualExtra: string;
     budgetMode: AvalancheSettingsBudgetMode;
+    /** (AVAL-W) monthly: one month-end payment of manualExtra. weekly: one
+  payment on extraWeekday each week, the most the forecast says is
+  safe above the cash buffer; manualExtra stays the monthly target.
+   */
+    extraCadence: AvalancheSettingsExtraCadence;
+    /**
+     * 0 = Sunday … 6 = Saturday (5 = Friday).
+     * @minimum 0
+     * @maximum 6
+     */
+    extraWeekday: number;
 }
 export type AvalancheSettingsInputStrategy = (typeof AvalancheSettingsInputStrategy)[keyof typeof AvalancheSettingsInputStrategy];
 export declare const AvalancheSettingsInputStrategy: {
@@ -4403,6 +4425,14 @@ export declare const AvalancheSettingsInputBudgetMode: {
     readonly budgeted: "budgeted";
     readonly actual: "actual";
 };
+/**
+ * (AVAL-W) Owner only — a member's change is refused (403 owner_only).
+ */
+export type AvalancheSettingsInputExtraCadence = (typeof AvalancheSettingsInputExtraCadence)[keyof typeof AvalancheSettingsInputExtraCadence];
+export declare const AvalancheSettingsInputExtraCadence: {
+    readonly monthly: "monthly";
+    readonly weekly: "weekly";
+};
 export interface AvalancheSettingsInput {
     strategy?: AvalancheSettingsInputStrategy;
     extraSource?: AvalancheSettingsInputExtraSource;
@@ -4410,6 +4440,85 @@ export interface AvalancheSettingsInput {
     extraBudgetCategoryId?: string | null;
     manualExtra?: string;
     budgetMode?: AvalancheSettingsInputBudgetMode;
+    /** (AVAL-W) Owner only — a member's change is refused (403 owner_only). */
+    extraCadence?: AvalancheSettingsInputExtraCadence;
+    /**
+     * (AVAL-W) Owner only — a member's change is refused (403 owner_only).
+     * @minimum 0
+     * @maximum 6
+     */
+    extraWeekday?: number;
+}
+export interface AvalancheWeeklyDebt {
+    debtId: string;
+    name: string;
+}
+export interface AvalancheWeeklyTarget {
+    debtId: string;
+    name: string;
+    amount: number;
+    paidOff: boolean;
+}
+export interface AvalancheWeeklyPayoff {
+    debtId: string;
+    name: string;
+    /** The projected payoff day (YYYY-MM-DD). */
+    date: string;
+    /** What its freed minimum adds to the weekly target pace (minimum × 12 ÷ 52). */
+    freedWeekly: number;
+}
+/**
+ * curve = priced from the forecast (on the curve); target = past it, at the target pace (payoff dates only).
+ */
+export type AvalancheWeeklyWeekBasis = (typeof AvalancheWeeklyWeekBasis)[keyof typeof AvalancheWeeklyWeekBasis];
+export declare const AvalancheWeeklyWeekBasis: {
+    readonly curve: "curve";
+    readonly target: "target";
+};
+export interface AvalancheWeeklyWeek {
+    date: string;
+    /** The target pace for the week (target × 12 ÷ 52 plus freed minimums). */
+    planned: number;
+    /**
+     * The most that is safe this week; null past what the forecast can see.
+     * @nullable
+     */
+    room: number | null;
+    /** What the week is due to pay */
+    due: number;
+    /** What the week pays (0 when already answered). */
+    paid: number;
+    /** curve = priced from the forecast (on the curve); target = past it, at the target pace (payoff dates only). */
+    basis: AvalancheWeeklyWeekBasis;
+    answered: boolean;
+    nextTarget: AvalancheWeeklyDebt | null;
+    targets: AvalancheWeeklyTarget[];
+    paidOff: AvalancheWeeklyPayoff[];
+}
+export type AvalancheWeeklyPlanCadence = (typeof AvalancheWeeklyPlanCadence)[keyof typeof AvalancheWeeklyPlanCadence];
+export declare const AvalancheWeeklyPlanCadence: {
+    readonly monthly: "monthly";
+    readonly weekly: "weekly";
+};
+export interface AvalancheWeeklyPlan {
+    cadence: AvalancheWeeklyPlanCadence;
+    weekday: number;
+    /** manualExtra — the target per month. */
+    monthlyTarget: number;
+    /** monthlyTarget × 12 ÷ 52. */
+    targetWeekly: number;
+    cashBuffer: number;
+    /** Every payment day from today (empty with the monthly cadence). */
+    weeks: AvalancheWeeklyWeek[];
+    payoffs: AvalancheWeeklyPayoff[];
+    /** @nullable */
+    debtFreeDate: string | null;
+    /**
+     * The last payment day priced from the forecast.
+     * @nullable
+     */
+    curveThrough: string | null;
+    ranOutOfTime: boolean;
 }
 export type AvalancheExtraSource = (typeof AvalancheExtraSource)[keyof typeof AvalancheExtraSource];
 export declare const AvalancheExtraSource: {

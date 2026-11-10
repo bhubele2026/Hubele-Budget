@@ -1108,6 +1108,23 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AvalancheSettings" }
+  /avalanche/weekly:
+    get:
+      operationId: getAvalancheWeekly
+      # features: only the lazy Debt page reads it, so its hook stays off the landing chunk.
+      tags: [avalanche, features]
+      summary: The weekly avalanche — each payment day, payoff dates, debt-free date
+      description: |
+        (AVAL-W) With the weekly cadence: every payment day from today with the
+        most the forecast says is safe to pay (room), what it pays, where it
+        goes, the debts it pays off and the debt-free date. The same plan the
+        forecast puts on the curve. With the monthly cadence: no weeks.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheWeeklyPlan" }
   /debts/{id}:
     patch:
       operationId: updateDebt
@@ -7818,13 +7835,25 @@ components:
           items: { $ref: "#/components/schemas/BulkCreateDebtFromPlaidResult" }
     AvalancheSettings:
       type: object
-      required: [strategy, extraSource, manualExtra, budgetMode]
+      required: [strategy, extraSource, manualExtra, budgetMode, extraCadence, extraWeekday]
       properties:
         strategy: { type: string, enum: [avalanche, snowball] }
         extraSource: { type: string, enum: [budget_net, budget_line, manual] }
         extraBudgetCategoryId: { type: ["string", "null"] }
         manualExtra: { type: string }
         budgetMode: { type: string, enum: [budgeted, actual] }
+        extraCadence:
+          type: string
+          enum: [monthly, weekly]
+          description: |
+            (AVAL-W) monthly: one month-end payment of manualExtra. weekly: one
+            payment on extraWeekday each week, the most the forecast says is
+            safe above the cash buffer; manualExtra stays the monthly target.
+        extraWeekday:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0 = Sunday … 6 = Saturday (5 = Friday).
     AvalancheSettingsInput:
       type: object
       properties:
@@ -7833,6 +7862,87 @@ components:
         extraBudgetCategoryId: { type: ["string", "null"] }
         manualExtra: { type: string }
         budgetMode: { type: string, enum: [budgeted, actual] }
+        extraCadence:
+          type: string
+          enum: [monthly, weekly]
+          description: (AVAL-W) Owner only — a member's change is refused (403 owner_only).
+        extraWeekday:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: (AVAL-W) Owner only — a member's change is refused (403 owner_only).
+    AvalancheWeeklyDebt:
+      type: object
+      required: [debtId, name]
+      properties:
+        debtId: { type: string }
+        name: { type: string }
+    AvalancheWeeklyTarget:
+      type: object
+      required: [debtId, name, amount, paidOff]
+      properties:
+        debtId: { type: string }
+        name: { type: string }
+        amount: { type: number }
+        paidOff: { type: boolean }
+    AvalancheWeeklyPayoff:
+      type: object
+      required: [debtId, name, date, freedWeekly]
+      properties:
+        debtId: { type: string }
+        name: { type: string }
+        date: { type: string, description: The projected payoff day (YYYY-MM-DD). }
+        freedWeekly:
+          type: number
+          description: What its freed minimum adds to the weekly target pace (minimum × 12 ÷ 52).
+    AvalancheWeeklyWeek:
+      type: object
+      required: [date, planned, room, due, paid, basis, answered, nextTarget, targets, paidOff]
+      properties:
+        date: { type: string }
+        planned: { type: number, description: The target pace for the week (target × 12 ÷ 52 plus freed minimums). }
+        room:
+          type: ["number", "null"]
+          description: The most that is safe this week; null past what the forecast can see.
+        due: { type: number, description: What the week is due to pay, answered or not. }
+        paid: { type: number, description: What the week pays (0 when already answered). }
+        basis:
+          type: string
+          enum: [curve, target]
+          description: curve = priced from the forecast (on the curve); target = past it, at the target pace (payoff dates only).
+        answered: { type: boolean }
+        nextTarget:
+          oneOf:
+            - $ref: "#/components/schemas/AvalancheWeeklyDebt"
+            - type: "null"
+        targets:
+          type: array
+          items: { $ref: "#/components/schemas/AvalancheWeeklyTarget" }
+        paidOff:
+          type: array
+          items: { $ref: "#/components/schemas/AvalancheWeeklyPayoff" }
+    AvalancheWeeklyPlan:
+      type: object
+      required:
+        [cadence, weekday, monthlyTarget, targetWeekly, cashBuffer, weeks, payoffs, debtFreeDate, curveThrough, ranOutOfTime]
+      properties:
+        cadence: { type: string, enum: [monthly, weekly] }
+        weekday: { type: integer }
+        monthlyTarget: { type: number, description: manualExtra — the target per month. }
+        targetWeekly: { type: number, description: monthlyTarget × 12 ÷ 52. }
+        cashBuffer: { type: number }
+        weeks:
+          type: array
+          description: Every payment day from today (empty with the monthly cadence).
+          items: { $ref: "#/components/schemas/AvalancheWeeklyWeek" }
+        payoffs:
+          type: array
+          items: { $ref: "#/components/schemas/AvalancheWeeklyPayoff" }
+        debtFreeDate: { type: ["string", "null"] }
+        curveThrough:
+          type: ["string", "null"]
+          description: The last payment day priced from the forecast.
+        ranOutOfTime: { type: boolean }
     AvalancheExtra:
       type: object
       required: [source, amount, monthStart]
