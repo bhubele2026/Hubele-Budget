@@ -263,13 +263,13 @@ vi.mock("@/hooks/useSpine", () => ({
 
 import ForecastPage from "./forecast";
 
-function renderPage() {
+function renderPage(mode: "overall" | "review" = "overall") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
   });
   return render(
     <QueryClientProvider client={qc}>
-      <ForecastPage />
+      <ForecastPage mode={mode} />
     </QueryClientProvider>,
   );
 }
@@ -314,6 +314,10 @@ describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", (
   it("clicking a big-bill marker scrolls and briefly highlights the matching plan row", async () => {
     renderPage();
 
+    // (Readable forecast) /forecast draws the big-bill rings behind the legend's "Show bills".
+    expect(screen.queryByTestId("big-bill-marker-2026-05-01")).toBeNull();
+    fireEvent.click(screen.getByTestId("chart-show-bills"));
+
     // Both markers should be on-chart.
     const marker = screen.getByTestId("big-bill-marker-2026-05-01");
     expect(marker).toBeTruthy();
@@ -352,7 +356,9 @@ describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", (
   });
 
   it("clicking a bill inside the marker tooltip jumps to that specific plan row", async () => {
-    renderPage();
+    // The full tooltip with its bill names is the /review chart's (on /forecast the day panel's
+    // "Open in register" does this — below).
+    renderPage("review");
 
     // The Tooltip mock renders the content render-prop for every daily
     // point, so the tooltip-bill button for the May 15 gym marker is in
@@ -389,5 +395,21 @@ describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", (
     expect(
       screen.getByTestId("plan-row-rent-2026-05-01").className,
     ).not.toMatch(/ring-primary/);
+  });
+
+  it("(Readable forecast) /forecast: the day panel's 'Open in register' opens the folded Planned items and jumps to the row", async () => {
+    window.history.replaceState(null, "", "/forecast?day=2026-05-15");
+    renderPage();
+    const planned = screen.getByTestId("section-planned") as HTMLDetailsElement;
+    expect(planned.open).toBe(false);
+    fireEvent.click(screen.getByTestId("day-jump-gym"));
+    await act(async () => {
+      await new Promise((r) => requestAnimationFrame(() => r(undefined)));
+    });
+    expect(planned.open).toBe(true);
+    expect(screen.getByTestId("plan-row-gym-2026-05-15").className).toMatch(/ring-primary/);
+    const lastCall = scrollIntoViewMock.mock.instances[scrollIntoViewMock.mock.instances.length - 1];
+    expect((lastCall as HTMLElement).getAttribute("data-plan-key")).toBe("gym|2026-05-15");
+    window.history.replaceState(null, "", "/forecast");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { fireEvent, render, screen, cleanup, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -406,7 +406,8 @@ describe("Forecast accuracy — 90-day projection reflects bills + income (a)", 
 
 describe("Forecast accuracy — a bill is event-based, full amount in its due week (b)", () => {
   it("rent's full $1,500 lands on its due date as a big-bill marker", () => {
-    renderPage();
+    // The full tooltip and the always-on markers are the /review chart's; /forecast is checked below.
+    renderPage({ mode: "review" });
 
     // The big-bill marker exists exactly on the rent due date.
     expect(screen.getByTestId(`big-bill-marker-${RENT_DATE}`)).toBeTruthy();
@@ -420,7 +421,7 @@ describe("Forecast accuracy — a bill is event-based, full amount in its due we
   });
 
   it("a smaller bill still posts its full amount on its own due date", () => {
-    renderPage();
+    renderPage({ mode: "review" });
 
     // The $200 Visa min is under the big-bill threshold so it gets NO
     // marker, but it still appears (full amount) in its due-day tooltip —
@@ -430,6 +431,18 @@ describe("Forecast accuracy — a bill is event-based, full amount in its due we
     const cardBill = screen.getByTestId(`tooltip-bill-${CARD_DATE}-card-min`);
     expect(cardBill.textContent).toContain("Visa Card");
     expect(cardBill.textContent).toContain("$200.00");
+  });
+
+  it("(Readable forecast) /forecast: the same full amounts, in the calm tooltip's Out and behind 'Show bills'", () => {
+    renderPage();
+    const tip = (date: string) => document.querySelector(`[data-testid="tooltip-calm"][data-date="${date}"]`)!;
+    expect(tip(RENT_DATE).querySelector('[data-testid="tooltip-in-out"]')!.textContent).toContain("Out $1,500.00");
+    expect(tip(CARD_DATE).querySelector('[data-testid="tooltip-in-out"]')!.textContent).toContain("Out $200.00");
+    expect(screen.queryByTestId(`tooltip-bill-${RENT_DATE}-rent`)).toBeNull();
+    expect(screen.queryByTestId(`big-bill-marker-${RENT_DATE}`)).toBeNull();
+    fireEvent.click(screen.getByTestId("chart-show-bills"));
+    expect(screen.getByTestId(`big-bill-marker-${RENT_DATE}`)).toBeTruthy();
+    expect(screen.queryByTestId(`big-bill-marker-${CARD_DATE}`)).toBeNull();
   });
 });
 

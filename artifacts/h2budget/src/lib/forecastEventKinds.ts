@@ -29,13 +29,19 @@ export const MARKER_LABEL: Record<MarkerKind, string> = {
   debt: "Debt payment",
 };
 
-/** Income is a payday; a recurring item linked to a debt is a debt payment,
- *  unless its name says it pays a card; anything else out is a bill. */
+/** The weekly avalanche extra payment's item id (the cash signal's own, one per Friday). */
+export const AVALANCHE_EXTRA_ID = "avalanche:extra";
+
+/** Income is a payday; the avalanche extra payment and a recurring item linked
+ *  to a debt are debt payments (the avalanche row before the card words: its
+ *  label names the debt it pays, which may be a card); a linked item whose
+ *  name says it pays a card is a card payment; anything else out is a bill. */
 export function classifyEvent(
   e: { label: string; amount: number; itemId?: string },
   debtLinks: ReadonlyMap<string, string>,
 ): MarkerKind {
   if (e.amount > 0) return "payday";
+  if (e.itemId === AVALANCHE_EXTRA_ID) return "debt";
   if (CARD_WORDS.test(e.label)) return "card";
   if (e.itemId && debtLinks.has(e.itemId)) return "debt";
   return "bill";
@@ -286,4 +292,128 @@ export function stepDate(
   if (idx < 0) return (dir === 1 ? series[0] : series[series.length - 1]).rawDate;
   const next = Math.min(series.length - 1, Math.max(0, idx + dir));
   return series[next].rawDate;
+}
+
+/**
+ * (Readable forecast) A short name for a list: the weekly avalanche payment
+ * ("Avalanche payment → Maple Card") reads "Avalanche → Maple Card"; every
+ * other label as the cash signal gave it.
+ */
+export function shortEventLabel(e: { label: string; itemId?: string }): string {
+  if (e.itemId === AVALANCHE_EXTRA_ID) {
+    const m = /→\s*(.+)$/.exec(e.label);
+    return m ? `Avalanche → ${m[1].trim()}` : "Avalanche";
+  }
+  return e.label;
+}
+
+export type DayInOut = {
+  /** Money in that day: income plus counted bank rows in (≥ 0). */
+  moneyIn: number;
+  /** Money out that day: bills, card and debt payments plus counted bank rows out (signed, ≤ 0). */
+  moneyOut: number;
+};
+
+/**
+ * (Readable forecast) Each day's money in and money out, grouped exactly as
+ * `daySummary` groups them (in = income + bank rows in; out = the three
+ * outflow kinds + bank rows out), so the chart tooltip and the Next 14 days
+ * rows say what the day panel says. Display grouping of the server's
+ * amounts; nothing is estimated.
+ */
+export function inOutByDate(events: readonly KindedEvent[], bank: readonly BankDayRow[] = []): Map<string, DayInOut> {
+  const m = new Map<string, DayInOut>();
+  const slot = (date: string) => {
+    let s = m.get(date);
+    if (!s) {
+      s = { moneyIn: 0, moneyOut: 0 };
+      m.set(date, s);
+    }
+    return s;
+  };
+  for (const e of events) {
+    if (e.kind === "payday") slot(e.date).moneyIn += e.amount;
+    else slot(e.date).moneyOut += e.amount;
+  }
+  for (const b of bank) {
+    if (b.amount > 0) slot(b.date).moneyIn += b.amount;
+    else slot(b.date).moneyOut += b.amount;
+  }
+  return m;
+}
+
+/** "2026-11-10" + n days, as YYYY-MM-DD (calendar arithmetic, no time zone). */
+export function addDaysIso(iso: string, n: number): string {
+  const [y, mo, d] = iso.split("-").map(Number);
+  const t = new Date(Date.UTC(y, mo - 1, d + n));
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, "0")}-${String(t.getUTCDate()).padStart(2, "0")}`;
+}
+
+export type UpcomingDay = {
+  date: string;
+  /** The day's close, straight from the curve. */
+  close: number;
+  moneyIn: number;
+  moneyOut: number;
+  /** Names in and out, largest first (avalanche rows shortened). */
+  inNames: string[];
+  outNames: string[];
+  isToday: boolean;
+  /** The lowest close in the rows shown (the cash signal's own low day when it falls here). */
+  lowest: boolean;
+  /** Under the cash buffer at or above $0 (quiet), or below zero (the alarm). */
+  underBuffer: boolean;
+  belowZero: boolean;
+};
+
+/**
+ * ⭐ (Readable forecast) NEXT N DAYS — one row per day in `[today, today + days)`
+ * that has money moving (any item the walk applied, bank rows included), plus
+ * today always. The balance is the curve's own close; in and out are
+ * `inOutByDate`'s. Nothing is computed beyond grouping and comparing.
+ */
+export function upcomingDays(
+  series: ReadonlyArray<{ rawDate: string; balance: number }>,
+  events: readonly KindedEvent[],
+  bank: readonly BankDayRow[],
+  opts: { today: string; days: number; buffer: number; lowestDate?: string | null },
+): UpcomingDay[] {
+  const end = addDaysIso(opts.today, opts.days);
+  const totals = inOutByDate(events, bank);
+  const names = new Map<string, { inn: Array<[string, number]>; out: Array<[string, number]> }>();
+  const push = (date: string, label: string, amount: number) => {
+    const s = names.get(date) ?? { inn: [], out: [] };
+    (amount > 0 ? s.inn : s.out).push([label, Math.abs(amount)]);
+    names.set(date, s);
+  };
+  for (const e of events) push(e.date, shortEventLabel(e), e.amount);
+  for (const b of bank) push(b.date, b.label, b.amount);
+  const order = (xs: Array<[string, number]>) => xs.sort((a, b) => b[1] - a[1]).map((x) => x[0]);
+  const rows: UpcomingDay[] = [];
+  for (const d of series) {
+    if (d.rawDate < opts.today || d.rawDate >= end || !Number.isFinite(d.balance)) continue;
+    const t = totals.get(d.rawDate);
+    const isToday = d.rawDate === opts.today;
+    if (!t && !isToday) continue;
+    const n = names.get(d.rawDate);
+    rows.push({
+      date: d.rawDate,
+      close: d.balance,
+      moneyIn: t?.moneyIn ?? 0,
+      moneyOut: t?.moneyOut ?? 0,
+      inNames: n ? order(n.inn) : [],
+      outNames: n ? order(n.out) : [],
+      isToday,
+      lowest: false,
+      belowZero: d.balance < 0,
+      underBuffer: d.balance >= 0 && Number.isFinite(opts.buffer) && d.balance < opts.buffer,
+    });
+  }
+  if (rows.length > 0) {
+    let low = rows.find((r) => r.date === opts.lowestDate) ?? null;
+    const min = Math.min(...rows.map((r) => r.close));
+    if (!low || low.close !== min) low = rows.find((r) => r.close === min) ?? null;
+    if (low) low.lowest = true;
+  }
+  return rows;
 }

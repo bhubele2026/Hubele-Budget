@@ -146,16 +146,35 @@ const sent = () => (upsertMutate.mock.calls.at(-1)![0] as { data: Record<string,
 describe("T3 — Unpaid items, Paid by a bank row, Older than 14 days, Income not arrived", () => {
   it("lists every group with its count, each in its own card or group", () => {
     renderPage();
+    // ⭐ (Readable forecast) On /forecast "Unpaid items" holds the carried rows and stays open; the other
+    // three lists are folded sections whose heads carry the count and the total.
     const unpaid = screen.getByTestId("card-dragging-plans-summary");
     expect(unpaid.id).toBe("forecast-unpaid");
+    expect(unpaid.closest("details")).toBeNull();
     expect(within(unpaid).getByTestId("dragging-plans-list").children).toHaveLength(1);
-    expect(within(unpaid).getByTestId("assumed-paid-list").children).toHaveLength(1);
-    expect(within(unpaid).getByTestId("older-unpaid-list").children).toHaveLength(1);
+    const paid = screen.getByTestId("section-paid-by-bank") as HTMLDetailsElement;
+    expect(paid.open).toBe(false);
+    expect(within(paid).getByTestId("section-paid-by-bank-summary").textContent).toBe("Paid by a bank row1-$60.00");
+    expect(within(paid).getByTestId("assumed-paid-list").children).toHaveLength(1);
+    const older = screen.getByTestId("section-older-unpaid") as HTMLDetailsElement;
+    expect(older.open).toBe(false);
+    expect(within(older).getByTestId("section-older-unpaid-summary").textContent).toBe("Older than 14 days · off the curve1-$40.00");
+    expect(within(older).getByTestId("older-unpaid-list").children).toHaveLength(1);
     expect(screen.getByTestId("older-unpaid-group").id).toBe("forecast-older-unpaid");
+    const incomeSection = screen.getByTestId("section-income-not-arrived") as HTMLDetailsElement;
+    expect(incomeSection.open).toBe(false);
+    expect(within(incomeSection).getByTestId("section-income-not-arrived-summary").textContent).toBe("Income not arrived1 · off the curve$300.00");
     const income = screen.getByTestId("card-income-not-arrived");
     expect(income.id).toBe("forecast-income-not-arrived");
-    expect(within(income).getByText("1 · off the curve")).toBeTruthy();
     expect(within(income).getByTestId("income-plan-bonus-2026-06-01").textContent).toContain("$300.00");
+  });
+
+  it("'How this adds up' opens the folded list it links to", () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId("adds-up-list-olderUnpaid"));
+    expect((screen.getByTestId("section-older-unpaid") as HTMLDetailsElement).open).toBe(true);
+    fireEvent.click(screen.getByTestId("adds-up-list-incomeNotArrived"));
+    expect((screen.getByTestId("section-income-not-arrived") as HTMLDetailsElement).open).toBe(true);
   });
 
   it("a carried bill's Mark missed and Skip send its occurrence date, with Undo", () => {

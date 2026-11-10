@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { Link } from "wouter";
-import { Settings as SettingsIcon } from "lucide-react";
+import { ChevronDown, Settings as SettingsIcon } from "lucide-react";
 import { btnLink } from "@/ui";
 import { PageGrid, Panel, StatBlock } from "@/components/next";
 import { usePaneHeight } from "@/components/account-page/ledger-panel";
@@ -8,6 +8,9 @@ import { moneyFace } from "@/components/data-state";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ChartPanel, useChartModel } from "../next/forecast/ChartPanel";
 import { DayPanel } from "../next/forecast/DayPanel";
+import { NextDaysPanel } from "../next/forecast/NextDaysPanel";
+import type { KindedEvent } from "@/lib/forecastEventKinds";
+import { householdToday } from "@/lib/householdDay";
 import type { ForecastNextCtx } from "../next/forecast/types";
 import { lowPointView } from "@/lib/lowPoint";
 import { CheckingBalanceFull } from "@/components/checking-balance-note";
@@ -37,6 +40,15 @@ import { shortDate } from "@/lib/dates";
  * The two views ARE the page's two modes. On `/forecast` and `/review` they
  * are links between the routes (each route keeps its own area in the nav);
  * on `/next/forecast` they switch in place (`onTab`).
+ *
+ * ⭐ (Readable forecast, `readable` — `/forecast` only; owner, 2026-11-10: "the
+ * forecast graph and page itself feels a little clunky and hard to read") the
+ * same sections, re-ordered and folded, nothing dropped: the answer line
+ * (Checking today · Lowest on <day> · Next payday · Ends on <day>), then
+ * "Details" (the headline above and its six figures, unchanged), then "Next 14
+ * days" beside the calm chart (above it on a phone), then the selected day and
+ * "How much will we have?" under them, then the register with its lists folded
+ * under count-and-total heads ("Unpaid items" stays open).
  */
 export type RegisterTab = "register" | "plan";
 
@@ -272,6 +284,130 @@ function SummaryStrip({ ctx, onSeeDay }: { ctx: ForecastNextCtx; onSeeDay: (date
   );
 }
 
+/**
+ * ⭐ (Readable forecast) THE ANSWER LINE — the first thing under the head, four
+ * figures read off the same cash signal as everything else: Checking today ·
+ * Lowest on <day> · Next payday · Ends on <day>. Each figure is formatted
+ * exactly as the Details strip formats it (a test renders both from one
+ * fixture). The low point is in the quiet warning tone under the buffer and in
+ * rust below zero — and says so in words — with the strip's own link to its day.
+ */
+function AnswerLine({ ctx, kinded, onSeeDay }: { ctx: ForecastNextCtx; kinded: KindedEvent[]; onSeeDay: (date: string) => void }) {
+  const { proj, projReady } = ctx;
+  const lowest = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
+  const low = lowPointView(
+    proj ? { lowPoint: proj.lowestProjected, lowPointDate: proj.lowestDate, status: proj.status, cashBuffer: proj.cashBuffer } : null,
+  );
+  const lowShown = projReady && Number.isFinite(lowest);
+  const lowTone = !lowShown ? "text-brand-navy" : low.tone === "bad" ? "text-bad-ink" : low.kind === "below" ? "text-warn" : "text-brand-navy";
+  const lowWord = lowShown && low.chip && (low.tone === "bad" || low.kind === "below") ? low.chip.word : null;
+  const ended = proj && proj.status !== "no_data";
+  // The next payday on the curve: the first day from today with money in from a planned income; its amount is
+  // that day's planned income (the day panel's "Money in" before bank rows).
+  const today = householdToday();
+  let payDate: string | null = null;
+  let payAmount = 0;
+  if (projReady) {
+    for (const e of kinded) {
+      if (e.kind !== "payday" || e.date < today) continue;
+      if (payDate == null || e.date < payDate) {
+        payDate = e.date;
+        payAmount = 0;
+      }
+      if (e.date === payDate) payAmount += e.amount;
+    }
+  }
+  const label = "text-label text-neutral-600";
+  const fig = "font-mono text-title font-semibold tabular-nums sm:text-display";
+  const item = "flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 sm:border-l sm:border-brand-line sm:pl-5 sm:first:border-l-0 sm:first:pl-0";
+  return (
+    <section className="span-12 rounded-card bg-white px-4 py-3 ring-1 ring-brand-line" data-testid="forecast-answer" aria-label="The forecast in one line">
+      <ul className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-5 sm:gap-y-2">
+        <li className={item} data-testid="answer-checking">
+          <span className={label}>Checking today</span>
+          <span
+            className={`${fig} ${ctx.bankOlder ? "text-neutral-500" : Number(ctx.bankBalance) < 0 ? "text-bad-ink" : "text-brand-navy"}`}
+            data-testid="answer-checking-figure"
+          >
+            {moneyFace(ctx.bankBalance)}
+          </span>
+        </li>
+        <li className={item} data-testid="answer-lowest">
+          <span className={label}>Lowest</span>
+          <span className={`${fig} ${lowTone}`} data-testid="answer-lowest-figure" data-tone={lowWord ? (low.tone === "bad" ? "bad" : "warn") : "neutral"}>
+            {lowShown ? formatCurrency(lowest) : "—"}
+          </span>
+          {lowShown && proj?.lowestDate ? (
+            <span className={label} data-testid="answer-lowest-date">on {shortDate(proj.lowestDate)}</span>
+          ) : null}
+          {lowWord ? (
+            <span className={`text-micro font-semibold ${low.tone === "bad" ? "text-bad-ink" : "text-warn"}`} data-testid="answer-lowest-word">
+              {lowWord}
+            </span>
+          ) : null}
+          {lowShown && proj?.lowestDate ? (
+            <button type="button" className={`${btnLink} ml-1 self-center`} onClick={() => onSeeDay(proj.lowestDate!)} data-testid="answer-lowest-see-day">
+              {low.value != null && low.value < 0 ? "Review shortfall" : `See ${shortDate(proj.lowestDate)}`}
+            </button>
+          ) : null}
+        </li>
+        <li className={item} data-testid="answer-payday">
+          <span className={label}>Next payday</span>
+          {payDate ? (
+            <>
+              <span className={label} data-testid="answer-payday-date">{shortDate(payDate)}</span>
+              <span className={`${fig} text-brand-navy`} data-testid="answer-payday-figure">{formatCurrency(payAmount)}</span>
+            </>
+          ) : (
+            <span className={`${fig} text-brand-navy`} data-testid="answer-payday-figure">—</span>
+          )}
+        </li>
+        <li className={item} data-testid="answer-ending">
+          <span className={label}>Ends</span>
+          <span className={`${fig} ${ended && Number(proj!.endingBalance) < 0 ? "text-bad-ink" : "text-brand-navy"}`} data-testid="answer-ending-figure">
+            {ended ? moneyFace(proj!.endingBalance) : "—"}
+          </span>
+          {ended && proj?.endingDate ? (
+            <span className={label} data-testid="answer-ending-date">on {shortDate(proj.endingDate)}</span>
+          ) : null}
+        </li>
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * (Readable forecast) DETAILS — the old headline and its six figures, folded
+ * under the answer line: "Forecast balance" with "How this adds up" and the
+ * "Inbox cleared" badge, and "Where the money lands" (Checking today with its
+ * reading, Cash buffer, Lowest point with its link, Ending balance, Money in,
+ * Money out). The same components, unchanged; nothing is dropped.
+ */
+function ForecastDetails({ children }: { children: ReactNode }) {
+  return (
+    <details className="group span-12 min-w-0" data-testid="forecast-details">
+      <summary
+        className="press inline-flex cursor-pointer list-none items-center gap-1.5 rounded-control px-2 py-1 text-label font-semibold text-brand-navy hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 [&::-webkit-details-marker]:hidden"
+        data-testid="forecast-details-summary"
+      >
+        <ChevronDown className="h-4 w-4 text-neutral-400 transition-transform group-open:rotate-180" aria-hidden="true" />
+        Details
+        <span className="font-normal text-neutral-600">· opening, money in and out, cash buffer</span>
+      </summary>
+      <div className="grid-12 mt-3">{children}</div>
+    </details>
+  );
+}
+
+/** Opens every folded section around an element, so a jump to it lands on something visible. */
+function revealFolded(el: HTMLElement) {
+  let d: HTMLDetailsElement | null = el instanceof HTMLDetailsElement ? el : el.closest("details");
+  while (d) {
+    if (!d.open) d.open = true;
+    d = d.parentElement ? d.parentElement.closest("details") : null;
+  }
+}
+
 export function ForecastBody({
   ctx,
   tab,
@@ -279,6 +415,7 @@ export function ForecastBody({
   selectedDate,
   setSelectedDate,
   title,
+  readable = false,
 }: {
   ctx: ForecastNextCtx;
   tab: RegisterTab;
@@ -288,8 +425,14 @@ export function ForecastBody({
   selectedDate: string | null;
   setSelectedDate: (d: string | null) => void;
   title: string;
+  /**
+   * ⭐ (Readable forecast, `/forecast` only) The answer line first, the old headline folded into
+   * "Details", "Next 14 days" beside the calm chart, the day panel under them. Off (default): the layout
+   * as it was — `/review` and `/next/forecast` keep it.
+   */
+  readable?: boolean;
 }) {
-  const { kinded, bank, markers, incomeByDate } = useChartModel(ctx);
+  const { kinded, bank, markers, incomeByDate, dayTotals } = useChartModel(ctx);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (pending.current) clearTimeout(pending.current);
@@ -316,6 +459,8 @@ export function ForecastBody({
   const scrollToId = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
+    // (Readable forecast) The lists sit in folded sections: open the ones around the target first.
+    revealFolded(el);
     if (typeof el.scrollIntoView === "function") el.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
     el.focus({ preventScroll: true });
   };
@@ -383,32 +528,86 @@ export function ForecastBody({
       </div>
 
       <PageGrid className="mt-4">
-        <ForecastHero ctx={ctx} onOpenList={openList} />
-        <SummaryStrip ctx={ctx} onSeeDay={seeDay} />
+        {readable ? (
+          <>
+            <AnswerLine ctx={ctx} kinded={kinded} onSeeDay={seeDay} />
+            <ForecastDetails>
+              <ForecastHero ctx={ctx} onOpenList={openList} />
+              <SummaryStrip ctx={ctx} onSeeDay={seeDay} />
+            </ForecastDetails>
 
-        <ChartPanel
-          ctx={ctx}
-          kinded={kinded}
-          markers={markers}
-          incomeByDate={incomeByDate}
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-        />
+            {/* Next 14 days beside the chart from 1024 px (its column is the old Selected-day column); above it
+                on a phone and full width on a tablet. */}
+            <div className="span-12 grid-12" data-testid="forecast-chart-row">
+              <NextDaysPanel
+                ctx={ctx}
+                kinded={kinded}
+                bank={bank}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                className="sm:max-lg:col-span-full lg:order-last"
+              />
+              <ChartPanel
+                ctx={ctx}
+                kinded={kinded}
+                markers={markers}
+                incomeByDate={incomeByDate}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                calm
+                dayTotals={dayTotals}
+              />
+            </div>
 
-        {/* (T3) `selected-day`: where "See <day>" / `?day=` bring the reader (scroll target, focusable). */}
-        <div id="selected-day" tabIndex={-1} className="span-4 min-w-0 space-y-4 scroll-mt-[var(--page-sticky-top,0px)] outline-none">
-          <Panel title="Selected day" variant="static" data-testid="selected-day-panel">
-            <DayPanel
+            {/* (T3) `selected-day`: where "See <day>" / `?day=` bring the reader — now directly under the chart row. */}
+            <div
+              id="selected-day"
+              tabIndex={-1}
+              className="span-12 grid-12 scroll-mt-[var(--page-sticky-top,0px)] outline-none"
+            >
+              <Panel title="Selected day" span={8} variant="static" data-testid="selected-day-panel">
+                <DayPanel
+                  ctx={ctx}
+                  kinded={kinded}
+                  bank={bank}
+                  selectedDate={selectedDate}
+                  onClear={() => setSelectedDate(null)}
+                  onOpenRegister={openRegister}
+                />
+              </Panel>
+              <div className="span-4 min-w-0 sm:max-lg:col-span-full">{ctx.dateBalance}</div>
+            </div>
+          </>
+        ) : (
+          <>
+            <ForecastHero ctx={ctx} onOpenList={openList} />
+            <SummaryStrip ctx={ctx} onSeeDay={seeDay} />
+
+            <ChartPanel
               ctx={ctx}
               kinded={kinded}
-              bank={bank}
+              markers={markers}
+              incomeByDate={incomeByDate}
               selectedDate={selectedDate}
-              onClear={() => setSelectedDate(null)}
-              onOpenRegister={openRegister}
+              onSelectDate={setSelectedDate}
             />
-          </Panel>
-          {ctx.dateBalance}
-        </div>
+
+            {/* (T3) `selected-day`: where "See <day>" / `?day=` bring the reader (scroll target, focusable). */}
+            <div id="selected-day" tabIndex={-1} className="span-4 min-w-0 space-y-4 scroll-mt-[var(--page-sticky-top,0px)] outline-none">
+              <Panel title="Selected day" variant="static" data-testid="selected-day-panel">
+                <DayPanel
+                  ctx={ctx}
+                  kinded={kinded}
+                  bank={bank}
+                  selectedDate={selectedDate}
+                  onClear={() => setSelectedDate(null)}
+                  onOpenRegister={openRegister}
+                />
+              </Panel>
+              {ctx.dateBalance}
+            </div>
+          </>
+        )}
 
         {/* ⚠️ STICKY-SAFE: the review inbox inside pins to <main> under the
             head (FC-44); an `overflow: hidden` panel would hold it in place.

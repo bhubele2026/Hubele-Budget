@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatCurrency } from "@/lib/utils";
 import { shortDate } from "@/lib/dates";
 import { draggingPlanLine, type DraggingPlanRow } from "@/lib/forecastPastDue";
+import { CollapsibleSection } from "./CollapsibleSection";
 import type { PlanLine } from "@/lib/forecastMatch";
 
 /** A pending bank row a plan can be matched to (the page's bank inbox), already worded. */
@@ -153,6 +154,7 @@ export function ListedPlans({
   older,
   incomeNotArrived,
   onNotThis,
+  split = false,
   ...h
 }: Handlers & {
   carried: DraggingPlanRow[];
@@ -163,33 +165,152 @@ export function ListedPlans({
   incomeNotArrived: CashSignalListedPlan[];
   /** Rejects the bank row's pair ("not_match"): the plan goes back on the curve (Undo toast). */
   onNotThis: (p: CashSignalAssumedPaidPlan) => void;
+  /**
+   * ⭐ (Readable forecast, `/forecast`) "Unpaid items" keeps only the carried rows and stays open — they need
+   * answers; "Paid by a bank row", "Older than 14 days" and "Income not arrived" become folded sections whose
+   * heads show the count and the total. Opening one shows exactly the rows and answers below. Off: one card.
+   */
+  split?: boolean;
 }) {
   const hasCarried = carried.length > 0 && !!carriedTo;
   const hasUnpaid = hasCarried || assumedPaid.length > 0 || older.length > 0;
+
+  const unpaidHead = (
+    <div className={cardHead}>
+      <h2 className="text-title font-semibold text-brand-navy">Unpaid items</h2>
+      {hasCarried && (
+        <>
+          <span className="chip bad" data-testid="dragging-plans-chip">
+            {carried.length} · carried to {shortDate(carriedTo!)}
+          </span>
+          <span className="ml-auto font-mono text-label tabular-nums text-bad" data-testid="dragging-plans-total">
+            {formatCurrency(carriedTotal)}
+          </span>
+        </>
+      )}
+    </div>
+  );
+  const carriedList = hasCarried && (
+    <ul data-testid="dragging-plans-list">
+      {carried.map((row) => (
+        <PlanRow key={`${row.itemId}|${row.originalDate}`} row={row} prefix="dragging-plan" missedWord="Mark missed" h={h} />
+      ))}
+    </ul>
+  );
+  const assumedList = (
+    <ul data-testid="assumed-paid-list">
+      {assumedPaid.map((p) => {
+        const remainder = Number(p.unpaidRemainder);
+        return (
+          <li
+            key={p.planKey}
+            data-testid={`assumed-paid-${p.itemId}-${p.dueDate}`}
+            className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="truncate text-body font-medium text-neutral-700">{p.label}</span>
+                <span className="font-mono text-label tabular-nums text-neutral-700">{formatCurrency(Number(p.planAmount))}</span>
+              </div>
+              <div className="text-micro text-neutral-600" data-testid={`assumed-paid-words-${p.itemId}-${p.dueDate}`}>
+                {/* Words carry the direction ("paid", "still unpaid"): the amounts read unsigned. */}
+                Due {shortDate(p.dueDate)} · paid {formatCurrency(Math.abs(Number(p.txnAmount)))}
+                {Number.isFinite(remainder) && remainder !== 0 ? ` · ${formatCurrency(Math.abs(remainder))} still unpaid` : ""}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={h.busy}
+              onClick={() => onNotThis(p)}
+              aria-label={`Not paid by that bank row: ${p.label}, due ${shortDate(p.dueDate)}`}
+              data-testid={`assumed-paid-not-this-${p.itemId}-${p.dueDate}`}
+            >
+              Not this
+            </Button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+  const olderList = (
+    <ul data-testid="older-unpaid-list">
+      {older.map((p) => (
+        <PlanRow key={p.planKey} row={listedRow(p)} prefix="older-plan" missedWord="Mark missed" h={h} />
+      ))}
+    </ul>
+  );
+  const incomeList = (
+    <ul data-testid="income-not-arrived-list">
+      {incomeNotArrived.map((p) => (
+        <PlanRow key={p.planKey} row={listedRow(p)} prefix="income-plan" missedWord="Didn't arrive" h={h} />
+      ))}
+    </ul>
+  );
+  const anchorClass = "scroll-mt-[var(--page-sticky-top,0px)] outline-none";
+
+  if (split) {
+    // Totals of the rows each section lists — the server's amounts, summed only to head the fold.
+    const sum = (xs: ReadonlyArray<{ amount: string }>) => xs.reduce((s, x) => s + Number(x.amount), 0);
+    const paidTotal = assumedPaid.reduce((s, p) => s + Number(p.planAmount), 0);
+    const olderTotal = sum(older);
+    const incomeTotal = sum(incomeNotArrived);
+    return (
+      <>
+        {hasCarried && (
+          <section className={`${kitCard} ${anchorClass}`} id={ANCHOR.unpaid} tabIndex={-1} data-testid="card-dragging-plans-summary">
+            {unpaidHead}
+            {carriedList}
+            <Foot>Resolving a row here removes it from the projection for that day.</Foot>
+          </section>
+        )}
+        {assumedPaid.length > 0 && (
+          <CollapsibleSection id="paid-by-bank" title="Paid by a bank row" count={assumedPaid.length} chipClass="chip info" total={formatCurrency(paidTotal)}>
+            <section className={kitCard} data-testid="assumed-paid-group">
+              <h2 className="sr-only">Paid by a bank row</h2>
+              {assumedList}
+            </section>
+          </CollapsibleSection>
+        )}
+        {older.length > 0 && (
+          <CollapsibleSection
+            id="older-unpaid"
+            title="Older than 14 days · off the curve"
+            count={older.length}
+            total={formatCurrency(olderTotal)}
+            totalTone={olderTotal < 0 ? "bad" : undefined}
+          >
+            <section className={`${kitCard} ${anchorClass}`} id={ANCHOR.older} tabIndex={-1} data-testid="older-unpaid-group">
+              <h2 className="sr-only">Older than 14 days · off the curve</h2>
+              {olderList}
+            </section>
+          </CollapsibleSection>
+        )}
+        {incomeNotArrived.length > 0 && (
+          <CollapsibleSection
+            id="income-not-arrived"
+            title="Income not arrived"
+            count={`${incomeNotArrived.length} · off the curve`}
+            chipClass="chip warn"
+            total={formatCurrency(incomeTotal)}
+          >
+            <section className={`${kitCard} ${anchorClass}`} id={ANCHOR.income} tabIndex={-1} data-testid="card-income-not-arrived">
+              <h2 className="sr-only">Income not arrived</h2>
+              {incomeList}
+            </section>
+          </CollapsibleSection>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       {hasUnpaid && (
-        <section className={`${kitCard} scroll-mt-[var(--page-sticky-top,0px)] outline-none`} id={ANCHOR.unpaid} tabIndex={-1} data-testid="card-dragging-plans-summary">
-          <div className={cardHead}>
-            <h2 className="text-title font-semibold text-brand-navy">Unpaid items</h2>
-            {hasCarried && (
-              <>
-                <span className="chip bad" data-testid="dragging-plans-chip">
-                  {carried.length} · carried to {shortDate(carriedTo!)}
-                </span>
-                <span className="ml-auto font-mono text-label tabular-nums text-bad" data-testid="dragging-plans-total">
-                  {formatCurrency(carriedTotal)}
-                </span>
-              </>
-            )}
-          </div>
-          {hasCarried && (
-            <ul data-testid="dragging-plans-list">
-              {carried.map((row) => (
-                <PlanRow key={`${row.itemId}|${row.originalDate}`} row={row} prefix="dragging-plan" missedWord="Mark missed" h={h} />
-              ))}
-            </ul>
-          )}
+        <section className={`${kitCard} ${anchorClass}`} id={ANCHOR.unpaid} tabIndex={-1} data-testid="card-dragging-plans-summary">
+          {unpaidHead}
+          {carriedList}
 
           {assumedPaid.length > 0 && (
             <div data-testid="assumed-paid-group">
@@ -197,55 +318,17 @@ export function ListedPlans({
                 <h3 className={groupTitle}>Paid by a bank row</h3>
                 <span className="chip info">{assumedPaid.length}</span>
               </div>
-              <ul data-testid="assumed-paid-list">
-                {assumedPaid.map((p) => {
-                  const remainder = Number(p.unpaidRemainder);
-                  return (
-                    <li
-                      key={p.planKey}
-                      data-testid={`assumed-paid-${p.itemId}-${p.dueDate}`}
-                      className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className="truncate text-body font-medium text-neutral-700">{p.label}</span>
-                          <span className="font-mono text-label tabular-nums text-neutral-700">{formatCurrency(Number(p.planAmount))}</span>
-                        </div>
-                        <div className="text-micro text-neutral-600" data-testid={`assumed-paid-words-${p.itemId}-${p.dueDate}`}>
-                          {/* Words carry the direction ("paid", "still unpaid"): the amounts read unsigned. */}
-                          Due {shortDate(p.dueDate)} · paid {formatCurrency(Math.abs(Number(p.txnAmount)))}
-                          {Number.isFinite(remainder) && remainder !== 0 ? ` · ${formatCurrency(Math.abs(remainder))} still unpaid` : ""}
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        disabled={h.busy}
-                        onClick={() => onNotThis(p)}
-                        aria-label={`Not paid by that bank row: ${p.label}, due ${shortDate(p.dueDate)}`}
-                        data-testid={`assumed-paid-not-this-${p.itemId}-${p.dueDate}`}
-                      >
-                        Not this
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
+              {assumedList}
             </div>
           )}
 
           {older.length > 0 && (
-            <div id={ANCHOR.older} tabIndex={-1} className="scroll-mt-[var(--page-sticky-top,0px)] outline-none" data-testid="older-unpaid-group">
+            <div id={ANCHOR.older} tabIndex={-1} className={anchorClass} data-testid="older-unpaid-group">
               <div className={groupHead}>
                 <h3 className={groupTitle}>Older than 14 days · off the curve</h3>
                 <span className="chip gray">{older.length}</span>
               </div>
-              <ul data-testid="older-unpaid-list">
-                {older.map((p) => (
-                  <PlanRow key={p.planKey} row={listedRow(p)} prefix="older-plan" missedWord="Mark missed" h={h} />
-                ))}
-              </ul>
+              {olderList}
             </div>
           )}
           {hasCarried && <Foot>Resolving a row here removes it from the projection for that day.</Foot>}
@@ -253,16 +336,12 @@ export function ListedPlans({
       )}
 
       {incomeNotArrived.length > 0 && (
-        <section className={`${kitCard} scroll-mt-[var(--page-sticky-top,0px)] outline-none`} id={ANCHOR.income} tabIndex={-1} data-testid="card-income-not-arrived">
+        <section className={`${kitCard} ${anchorClass}`} id={ANCHOR.income} tabIndex={-1} data-testid="card-income-not-arrived">
           <div className={cardHead}>
             <h2 className="text-title font-semibold text-brand-navy">Income not arrived</h2>
             <span className="chip warn">{incomeNotArrived.length} · off the curve</span>
           </div>
-          <ul data-testid="income-not-arrived-list">
-            {incomeNotArrived.map((p) => (
-              <PlanRow key={p.planKey} row={listedRow(p)} prefix="income-plan" missedWord="Didn't arrive" h={h} />
-            ))}
-          </ul>
+          {incomeList}
         </section>
       )}
     </>

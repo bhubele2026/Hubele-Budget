@@ -52,6 +52,24 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-10.3",
+    headline: "The Forecast reads in one line",
+    items: [
+      {
+        title: "The answer first",
+        body: "The top of the Forecast now says it in one line: checking today, the lowest point and its day, the next payday, and where the window ends. The other figures are under Details.",
+      },
+      {
+        title: "The next 14 days",
+        body: "Beside the chart, each day with money moving: what comes in, what goes out, and the balance after. Tap a day to see it in full. Show 30 days looks further.",
+      },
+      {
+        title: "A calmer chart and shorter lists",
+        body: "The chart marks paydays only; Show bills brings the bills back. The lists below fold under their count and total, with Unpaid items left open.",
+      },
+    ],
+  },
+  {
     id: "2026-11-10.2",
     headline: "Mark this week's debt payment as paid",
     items: [

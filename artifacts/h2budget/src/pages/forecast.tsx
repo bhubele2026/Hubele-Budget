@@ -274,6 +274,9 @@ export default function ForecastPage({
    *  derived figures to this renderer instead of laying them out itself. */
   renderNext?: (ctx: ForecastNextCtx) => ReactNode;
 } = {}) {
+  // ⭐ (Readable forecast) `/forecast` reads as one answer, the next 14 days and a calm chart, with its lists
+  // folded under count-and-total heads. `/review` and `/next/forecast` keep the layout they had.
+  const readable = mode === "overall" && !renderNext;
   // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
   // charges — banks sync only on the manual Sync button now.
   // ⭐ (C3) ONE HORIZON (lib/forecastHorizon): `?horizon=` in the address wins, then the saved choice, then 90.
@@ -2324,6 +2327,7 @@ export default function ForecastPage({
       onSkip={onSkipDraggingPlan}
       onMatch={matchInboxToPlan}
       onNotThis={onNotThisAssumedPaid}
+      split={readable}
     />
   );
 
@@ -3018,37 +3022,58 @@ export default function ForecastPage({
               );
             })()}
 
-            <section className={kitCard}>
-              <div className={`${cardHead} flex-wrap`}>
-                <h2 className="text-title font-semibold text-brand-navy">
-                  Planned items
-                </h2>
-                <Help>
-                  Every bill and income in the window; a row leaves once you match, miss, skip or move it.
-                </Help>
-              </div>
-              <div>
-                {planRows.length === 0 ? (
-                  <div className={emptyNote}>
-                    Nothing planned in this window.
+            {(() => {
+              const plannedCard = (
+                <section className={kitCard}>
+                  <div className={`${cardHead} flex-wrap`}>
+                    {/* Folded (readable), the section's head already says it: the heading is read, not shown twice. */}
+                    <h2 className={readable ? "sr-only" : "text-title font-semibold text-brand-navy"}>
+                      Planned items
+                    </h2>
+                    <Help>
+                      Every bill and income in the window; a row leaves once you match, miss, skip or move it.
+                    </Help>
                   </div>
-                ) : (
-                  <PlannedItemsList
-                    items={plannedItems}
-                    payoffsByItem={payoffsByItem}
-                    hookPayoffs={hookPayoffs}
-                    bestSuggestionPlanKey={bestSuggestionPlanKey}
-                    highlightedPlanKey={highlightedPlanKey}
-                    activeDragId={activeDragId}
-                    onSelectPlan={onSelectPlan}
-                    onMoveStart={onMoveStart}
-                    onMarkMissed={onMarkMissed}
-                    onAnswerSuggestion={answerSuggestion}
-                    answerDisabled={upsertResolution.isPending}
-                  />
-                )}
-              </div>
-            </section>
+                  <div>
+                    {planRows.length === 0 ? (
+                      <div className={emptyNote}>
+                        Nothing planned in this window.
+                      </div>
+                    ) : (
+                      <PlannedItemsList
+                        items={plannedItems}
+                        payoffsByItem={payoffsByItem}
+                        hookPayoffs={hookPayoffs}
+                        bestSuggestionPlanKey={bestSuggestionPlanKey}
+                        highlightedPlanKey={highlightedPlanKey}
+                        activeDragId={activeDragId}
+                        onSelectPlan={onSelectPlan}
+                        onMoveStart={onMoveStart}
+                        onMarkMissed={onMarkMissed}
+                        onAnswerSuggestion={answerSuggestion}
+                        answerDisabled={upsertResolution.isPending}
+                      />
+                    )}
+                  </div>
+                </section>
+              );
+              if (!readable) return plannedCard;
+              // (Readable forecast) Folded under its count and the total of the rows it lists; a jump to a
+              // planned row (the day panel's "Open in register", a list's row) opens it first.
+              const plannedTotal = planRows.reduce((s, r) => s + r.amount, 0);
+              return (
+                <CollapsibleSection
+                  id="planned"
+                  title="Planned items"
+                  count={planRows.length}
+                  total={formatCurrency(plannedTotal)}
+                  totalTone={plannedTotal < 0 ? "bad" : undefined}
+                  forceOpen={!!highlightedPlanKey}
+                >
+                  {plannedCard}
+                </CollapsibleSection>
+              );
+            })()}
 
             {(() => {
               // ⭐ (F5 round 2) A card week answered "missed" whose purchases are
@@ -3691,6 +3716,7 @@ export default function ForecastPage({
         selectedDate={selectedDate}
         setSelectedDate={setSelectedDate}
         title={forecastTitle(mode)}
+        readable={readable}
       />
     ));
 
@@ -3704,7 +3730,21 @@ export default function ForecastPage({
         draggingCard,
         bankGrid,
         registerBlock,
-        monthBlock,
+        // (Readable forecast) The month picker, close / reopen and the Review bucket fold into "Month & bank",
+        // headed by the month and its bucket's count and net (the bucket's own figures).
+        monthBlock: readable ? (
+          <CollapsibleSection
+            id="month"
+            title={`Month & bank · ${monthFilter}`}
+            count={bucket.length}
+            total={formatCurrency(bucket.reduce((s, b) => s + b.amount, 0))}
+            forceOpen={bucketHasHighlight(bucket)}
+          >
+            {monthBlock}
+          </CollapsibleSection>
+        ) : (
+          monthBlock
+        ),
         proj,
         projReady,
         dailySeries,

@@ -32,15 +32,27 @@ function Tint({ opacity }: { opacity: number }) {
 }
 
 /** The legend row under the expanded chart: lines, markers (each told apart by
- *  shape AND word) and the two risk tints. */
-export function ChartLegend() {
+ *  shape AND word) and the two risk tints.
+ *
+ *  ⭐ (Readable forecast) With `onToggleBills` the legend carries the calm
+ *  chart's "Show bills" switch: Payday is the only marker listed until it is
+ *  on; then Bill, Card payment and Debt payment join it, as on the chart. */
+export function ChartLegend({
+  showBills,
+  onToggleBills,
+}: {
+  showBills?: boolean;
+  onToggleBills?: () => void;
+} = {}) {
   const item = "inline-flex items-center gap-1.5 text-micro text-neutral-600";
+  const calm = !!onToggleBills;
+  const kinds = (Object.keys(MARKER) as MarkerKind[]).filter((k) => !calm || showBills || k === "payday");
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5" data-testid="chart-legend" aria-label="Chart legend">
       <li className={item}><Line color={CHART.navy} />Actual</li>
       <li className={item}><Line color={CHART.mid} dashed />Projected</li>
       <li className={item}><Line color={CHART.orangeDeep} dashed />Cash buffer</li>
-      {(Object.keys(MARKER) as MarkerKind[]).map((k) => (
+      {kinds.map((k) => (
         <li key={k} className={item} data-testid={`legend-${k}`}>
           <Swatch kind={k} />
           {MARKER_LABEL[k]}
@@ -48,6 +60,21 @@ export function ChartLegend() {
       ))}
       <li className={item} data-testid="legend-under-buffer"><Tint opacity={0.18} />Under buffer</li>
       <li className={item} data-testid="legend-below-zero"><Tint opacity={0.42} />Below zero</li>
+      {calm ? (
+        <li className="ml-auto">
+          <button
+            type="button"
+            onClick={onToggleBills}
+            aria-pressed={!!showBills}
+            className={`press inline-flex items-center rounded-control px-2.5 py-1 text-micro font-semibold ring-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 ${
+              showBills ? "bg-brand-navy text-white ring-brand-navy" : "bg-white text-brand-navy ring-brand-line hover:bg-neutral-50"
+            }`}
+            data-testid="chart-show-bills"
+          >
+            Show bills
+          </button>
+        </li>
+      ) : null}
     </ul>
   );
 }

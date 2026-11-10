@@ -288,7 +288,10 @@ describe("/forecast and /review are the one forecast screen (C13)", () => {
     expect(screen.getByText(/^Matched impact/).textContent).toContain("$200.00");
     expect(screen.getByTestId("forecast-kpis")).toBeTruthy();
 
-    // FC-28: the classic big-bill marker is on the screen's chart (rent, $800).
+    // FC-28: the classic big-bill marker is on the screen's chart (rent, $800) — (Readable forecast) behind
+    // the legend's "Show bills", which the chart starts without.
+    expect(screen.queryByTestId("big-bill-marker-2026-06-15")).toBeNull();
+    fireEvent.click(screen.getByTestId("chart-show-bills"));
     expect(screen.getByTestId("big-bill-marker-2026-06-15")).toBeTruthy();
 
     // The register panel: sticky-safe; the views are links to the two routes
@@ -469,8 +472,10 @@ describe("T3 — the Forecast screen tells one story from the cash signal", () =
     expect(within(unpaid).getByRole("heading", { level: 2 }).textContent).toBe("Unpaid items");
     expect(screen.getByTestId("dragging-plans-chip").textContent).toBe("1 · carried to Jun 15");
     expect(screen.queryByText("Past due")).toBeNull();
-    expect(within(unpaid).getByTestId("assumed-paid-words-water-2026-06-05").textContent).toBe("Due Jun 5 · paid $60.00");
-    expect(within(unpaid).getByTestId("assumed-paid-not-this-water-2026-06-05").textContent).toBe("Not this");
+    // (Readable forecast) "Paid by a bank row" and "Older than 14 days" are their own folded sections now.
+    const paid = screen.getByTestId("section-paid-by-bank");
+    expect(within(paid).getByTestId("assumed-paid-words-water-2026-06-05").textContent).toBe("Due Jun 5 · paid $60.00");
+    expect(within(paid).getByTestId("assumed-paid-not-this-water-2026-06-05").textContent).toBe("Not this");
     expect(within(screen.getByTestId("older-unpaid-group")).getByText("Older than 14 days · off the curve")).toBeTruthy();
     expect(screen.getByTestId("older-plan-mark-missed-gym-2026-05-01")).toBeTruthy();
     const income = screen.getByTestId("card-income-not-arrived");
@@ -482,6 +487,7 @@ describe("T3 — the Forecast screen tells one story from the cash signal", () =
     // A count line opens its list (focus moves to it).
     fireEvent.click(within(lines).getByTestId("adds-up-list-incomeNotArrived"));
     expect(document.activeElement).toBe(income);
+    expect((screen.getByTestId("section-income-not-arrived") as HTMLDetailsElement).open).toBe(true);
   });
 
   it("?day= is the selected day's address: a deep link lands on it, and the address follows a pick", async () => {
@@ -551,8 +557,34 @@ describe("T3 — the Forecast screen tells one story from the cash signal", () =
 describe("(C6) the Forecast screen puts the actions where the reader is", () => {
   const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-  it("order: hero + figures, then the chart beside the selected day, then the register; the date balance stays under the day", () => {
+  it("(Readable forecast) /forecast order: the answer line, Details (hero + figures), Next 14 days and the chart, the selected day with the date balance, then the register", () => {
     mount(<ForecastPage mode="overall" />);
+    const answer = screen.getByTestId("forecast-answer");
+    const details = screen.getByTestId("forecast-details") as HTMLDetailsElement;
+    const next = screen.getByTestId("next-days-panel");
+    const chart = screen.getByTestId("card-projected-balance-chart");
+    const day = document.getElementById("selected-day")!;
+    const reg = screen.getByTestId("register-panel");
+    expect(details.open).toBe(false);
+    expect(within(details).getByTestId("card-forecast-hero")).toBeTruthy();
+    expect(within(details).getByTestId("forecast-kpis")).toBeTruthy();
+    // DOM order is the phone's order; from 1024 px Next 14 days moves beside the chart, in the old day column.
+    for (const [a, b] of [[answer, details], [details, next], [next, chart], [chart, day], [day, reg]] as const) {
+      expect(before(a, b)).toBe(true);
+    }
+    expect(chart.className).toContain("span-8");
+    expect(next.className).toContain("span-4");
+    expect(next.className).toContain("lg:order-last");
+    expect(day.className).toContain("span-12");
+    expect(within(day).getByTestId("selected-day-panel").className).toContain("span-8");
+    expect(within(day).getByTestId("forecast-date-balance")).toBeTruthy();
+    expect(before(within(day).getByTestId("selected-day-panel"), within(day).getByTestId("forecast-date-balance"))).toBe(true);
+  });
+
+  it("/review keeps its order: hero + figures, then the chart beside the selected day, then the register; the date balance stays under the day", () => {
+    mount(<ForecastPage mode="review" />);
+    expect(screen.queryByTestId("forecast-answer")).toBeNull();
+    expect(screen.queryByTestId("next-days-panel")).toBeNull();
     const hero = screen.getByTestId("card-forecast-hero");
     const chart = screen.getByTestId("card-projected-balance-chart");
     const day = document.getElementById("selected-day")!;
@@ -567,10 +599,26 @@ describe("(C6) the Forecast screen puts the actions where the reader is", () => 
     expect(before(within(day).getByTestId("selected-day-panel"), within(day).getByTestId("forecast-date-balance"))).toBe(true);
   });
 
-  it("Planned items stays open; the Checking today card starts folded, says its figure, and is remembered once opened", async () => {
-    const first = mount(<ForecastPage mode="overall" />);
+  it("Planned items folds on /forecast (count + total) and stays open on /review", () => {
+    const f = mount(<ForecastPage mode="overall" />);
+    const planned = screen.getByTestId("section-planned") as HTMLDetailsElement;
+    expect(planned.open).toBe(false);
+    expect(within(planned).getByRole("heading", { name: "Planned items" })).toBeTruthy();
+    expect(screen.getByTestId("section-planned-summary").textContent).toMatch(/^Planned items\d+-?\$[\d,]+\.\d\d$/);
+    // "Month & bank": the month picker, close / reopen and the Review bucket, folded under the month.
+    const month = screen.getByTestId("section-month") as HTMLDetailsElement;
+    expect(month.open).toBe(false);
+    expect(within(month).getByTestId("select-month-filter")).toBeTruthy();
+    expect(within(month).getByTestId("section-review-bucket")).toBeTruthy();
+    f.unmount();
+    mount(<ForecastPage mode="review" />);
     const panel = screen.getByTestId("register-panel");
     expect(within(panel).getByRole("heading", { name: "Planned items" }).closest("details")).toBeNull();
+    expect(screen.queryByTestId("section-month")).toBeNull();
+  });
+
+  it("the Checking today card starts folded, says its figure, and is remembered once opened", async () => {
+    const first = mount(<ForecastPage mode="overall" />);
     const sec = screen.getByTestId("section-checking") as HTMLDetailsElement;
     expect(sec.open).toBe(false);
     const sum = screen.getByTestId("section-checking-summary");

@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
 import { Maximize2 } from "lucide-react";
 import { Panel } from "@/components/next";
 import { Link } from "wouter";
@@ -9,7 +9,7 @@ import { householdToday } from "@/lib/householdDay";
 import { bankReadCaption, openingCaption } from "@/lib/openingWords";
 import { BalanceDetails } from "@/components/checking-balance-note";
 import { shortDate } from "@/lib/dates";
-import { groupMarkers, kindDayItems, kindEvents, stepDate, type BankDayRow, type KindedEvent } from "@/lib/forecastEventKinds";
+import { groupMarkers, inOutByDate, kindDayItems, kindEvents, stepDate, type BankDayRow, type KindedEvent } from "@/lib/forecastEventKinds";
 import { ProjectedBalanceChart } from "../../forecast/ProjectedBalanceChart";
 import { ChartLegend } from "./ChartLegend";
 import type { ForecastNextCtx } from "./types";
@@ -45,7 +45,26 @@ export function useChartModel(ctx: ForecastNextCtx) {
     }
     return m;
   }, [kinded]);
-  return { kinded, bank, markers, incomeByDate };
+  // (Readable forecast) Each day's money in and out, for the calm tooltip and the Next 14 days rows.
+  const dayTotals = useMemo(() => inOutByDate(kinded, bank), [kinded, bank]);
+  return { kinded, bank, markers, incomeByDate, dayTotals };
+}
+
+/** (Readable forecast) "Show bills" is remembered per viewer, in this browser only. */
+export const SHOW_BILLS_KEY = "h2.forecast.showBills";
+function readShowBills(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_BILLS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeShowBills(on: boolean) {
+  try {
+    window.localStorage.setItem(SHOW_BILLS_KEY, on ? "1" : "0");
+  } catch {
+    /* storage can be blocked; the toggle still works for this visit */
+  }
 }
 
 export function ChartPanel({
@@ -55,6 +74,9 @@ export function ChartPanel({
   incomeByDate,
   selectedDate,
   onSelectDate,
+  calm = false,
+  dayTotals,
+  className,
 }: {
   ctx: ForecastNextCtx;
   kinded: KindedEvent[];
@@ -62,8 +84,19 @@ export function ChartPanel({
   incomeByDate: ReturnType<typeof useChartModel>["incomeByDate"];
   selectedDate: string | null;
   onSelectDate: (iso: string | null) => void;
+  /** ⭐ (Readable forecast) The calmer chart: paydays only until "Show bills", the short tooltip. Off: as before. */
+  calm?: boolean;
+  dayTotals?: ReturnType<typeof useChartModel>["dayTotals"];
+  className?: string;
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [showBills, setShowBills] = useState<boolean>(() => calm && typeof window !== "undefined" && readShowBills());
+  const toggleBills = useCallback(() => {
+    setShowBills((on) => {
+      writeShowBills(!on);
+      return !on;
+    });
+  }, []);
   const label = `${ctx.bankAccountName}${ctx.bankAccountMask ? ` ••${ctx.bankAccountMask}` : ""}`;
   const noCurve = ctx.dailySeries.length === 0 || ctx.proj?.status === "no_data";
   // ⭐ (C2) Where the curve starts, in ONE moment: the day the window opens, the balance at the START of that
@@ -105,6 +138,9 @@ export function ChartPanel({
       hoverSelects
       horizonKey={ctx.horizonDays}
       openingBalance={opening?.reading ? Number(opening.balance) : null}
+      calm={calm}
+      showBills={showBills}
+      dayTotals={dayTotals}
     />
   );
 
@@ -123,6 +159,7 @@ export function ChartPanel({
       title={`Projected cash — ${label}`}
       sub={startLines ? `${startLines[0]} · ${ctx.horizonDays} days` : `${ctx.horizonDays} days`}
       span={8}
+      className={className}
       data-testid="card-projected-balance-chart"
       actions={
         !noCurve ? (
@@ -175,7 +212,7 @@ export function ChartPanel({
           >
             {chart}
           </div>
-          <ChartLegend />
+          <ChartLegend {...(calm ? { showBills, onToggleBills: toggleBills } : {})} />
         </div>
       )}
       <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -187,7 +224,7 @@ export function ChartPanel({
           <div className="min-h-0 flex-1" onKeyDown={onKeyDown}>
             {sheetOpen && chart}
           </div>
-          <ChartLegend />
+          <ChartLegend {...(calm ? { showBills, onToggleBills: toggleBills } : {})} />
         </DialogContent>
       </Dialog>
       <span className="sr-only" aria-live="polite" data-testid="selected-day-live">

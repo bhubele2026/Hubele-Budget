@@ -116,6 +116,9 @@ export function ProjectedBalanceChart({
   startLabel = null,
   openingBalance = null,
   sessionKey,
+  calm = false,
+  showBills = false,
+  dayTotals,
 }: {
   data: DailyPoint[];
   cashBuffer: number;
@@ -167,8 +170,21 @@ export function ProjectedBalanceChart({
    * mount, or a new horizon's data on the mounted chart, appears without a re-sweep.
    */
   sessionKey?: string;
+  /**
+   * ⭐ (Readable forecast) Expanded only: the calmer chart. Small payday ticks are the only resting markers;
+   * bill, card and debt markers, their counts and the big-bill rings appear only with `showBills` (the
+   * legend's "Show bills"), exactly as the chart drew them before. The tooltip is the date, the balance and
+   * "In $A · Out $B" (`dayTotals`); the names and their actions live in the day panel. Off (default): the
+   * chart as it always was — the dashboard and `/review` keep it.
+   */
+  calm?: boolean;
+  showBills?: boolean;
+  /** Calm tooltip: each day's money in and out (`inOutByDate`, the day panel's grouping). */
+  dayTotals?: ReadonlyMap<string, { moneyIn: number; moneyOut: number }>;
 }) {
   const expanded = variant === "expanded";
+  // Calm and bills hidden: only paydays rest on the curve. With "Show bills" the chart is the full one.
+  const quiet = expanded && calm && !showBills;
   const [firstDraw] = useState(() => !(sessionKey && !expanded && DRAWN.has(sessionKey)));
   const [swept, setSwept] = useState(false);
   useEffect(() => {
@@ -322,9 +338,16 @@ export function ProjectedBalanceChart({
   const hideBufferLabel = placed?.hideBuffer ?? false;
   // Only the big-bill days, paydays and the selected / hovered day draw a marker; the lowest point always draws.
   const bigDates = new Set(bigBillMarkers.map((m) => m.date));
-  const shownMarkers = (markers ?? []).filter(
-    (m) => m.kinds.includes("payday") || bigDates.has(m.date) || m.date === selectedDate || m.date === hoverDate,
+  const shownMarkers = (markers ?? []).filter((m) =>
+    quiet
+      ? m.date === selectedDate || m.date === hoverDate
+      : m.kinds.includes("payday") || bigDates.has(m.date) || m.date === selectedDate || m.date === hoverDate,
   );
+  // (Readable forecast) Quiet: a small payday tick on each payday the selected / hovered day does not cover.
+  const paydayTicks = quiet
+    ? (markers ?? []).filter((m) => m.kinds.includes("payday") && m.date !== selectedDate && m.date !== hoverDate)
+    : [];
+  const shownBigBills = quiet ? [] : bigBillMarkers;
   // ⭐ (T2) Only a projected NEGATIVE is rust. A low point at or above $0 — even under the buffer — is
   // marked in navy: the buffer line and its tint already say "under the buffer", quietly.
   const lowNegative = !!lowestPoint && lowestPoint.y < 0;
@@ -334,6 +357,8 @@ export function ProjectedBalanceChart({
   const touchesZero = series.some((d) => Number.isFinite(d.balance) && d.balance <= 0);
   const first = series[0];
   const startLines: readonly string[] = startLabel == null ? [] : typeof startLabel === "string" ? [startLabel] : startLabel;
+  // (Readable forecast) The start caption is drawn only where it cannot meet the low-point label (the outer fifth).
+  const startLabelShown = !(calm && lowestPoint && lowFrac <= 0.2);
 
   return (
     // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
@@ -380,6 +405,8 @@ export function ProjectedBalanceChart({
             ticks={expanded && fewTicks ? fewTicks : xtk}
             interval="preserveStartEnd"
             minTickGap={28}
+            // (Readable forecast) A few px lower, so the first date clears the y axis's bottom figure.
+            {...(calm ? { tickMargin: 6 } : {})}
           />
           <YAxis
             tick={AXIS_TICK}
@@ -391,7 +418,8 @@ export function ProjectedBalanceChart({
           <RechartsTooltip
             // Bill names inside the tooltip are clickable — they deep-link
             // into the register below (#335).
-            wrapperStyle={{ pointerEvents: "auto" }}
+            // (Readable forecast) The calm tooltip holds no buttons, so it never catches the pointer.
+            wrapperStyle={{ pointerEvents: calm && expanded ? "none" : "auto" }}
             content={({ active, payload }: { active?: boolean; payload?: any[] }) => {
               if (!active || !payload || payload.length === 0) return null;
               const p = payload[0]?.payload as
@@ -399,6 +427,32 @@ export function ProjectedBalanceChart({
                 | undefined;
               const rawDate = p?.rawDate;
               const balance = Number(p?.balance);
+              if (calm && expanded) {
+                const isFirst = openingBalance != null && Number.isFinite(openingBalance) && !!rawDate && rawDate === data[0]?.rawDate;
+                const t = rawDate ? dayTotals?.get(rawDate) : undefined;
+                return (
+                  <div className="min-w-[168px] rounded-card bg-white px-3 py-2 text-micro shadow-lift ring-1 ring-brand-line" data-testid="tooltip-calm" data-date={rawDate}>
+                    <div className="font-semibold text-brand-navy">{rawDate ? formatDate(rawDate) : ""}</div>
+                    {isFirst ? (
+                      <div className="mt-1 flex items-center justify-between gap-4" data-testid="tooltip-opening">
+                        <span className="text-neutral-500">Opening</span>
+                        <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(openingBalance)}</span>
+                      </div>
+                    ) : null}
+                    <div className="mt-1 flex items-center justify-between gap-4">
+                      <span className="text-neutral-500">{isFirst ? "Close" : "Balance"}</span>
+                      <span className="font-mono tabular-nums text-neutral-700" data-testid="tooltip-balance">
+                        {Number.isFinite(balance) ? formatCurrency(balance) : "—"}
+                      </span>
+                    </div>
+                    {t && (t.moneyIn !== 0 || t.moneyOut !== 0) ? (
+                      <div className="mt-1 font-mono tabular-nums text-neutral-600" data-testid="tooltip-in-out">
+                        In {formatCurrency(t.moneyIn)} · Out {formatCurrency(Math.abs(t.moneyOut))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
               const dayEvents = rawDate ? eventsByDate.get(rawDate) : undefined;
               return (
                 <div className="min-w-[188px] rounded-card bg-white px-3 py-2 text-micro shadow-lift ring-1 ring-brand-line">
@@ -615,7 +669,7 @@ export function ProjectedBalanceChart({
               )}
             </ReferenceLine>
           )}
-          {bigBillMarkers.map((m) => {
+          {shownBigBills.map((m) => {
             const top = m.bills.find((b) => !!b.itemId) ?? m.bills[0];
             // (C13) The expanded chart already draws a kind marker on every
             // event day, so a big bill is a navy RING around its day's marker
@@ -650,6 +704,20 @@ export function ProjectedBalanceChart({
             />
           )}
           {expanded &&
+            paydayTicks.map((m) => (
+              <ReferenceDot
+                key={`pd-${m.date}`}
+                x={m.date}
+                y={m.balance}
+                r={4}
+                ifOverflow="extendDomain"
+                isFront
+                shape={(p: { cx?: number; cy?: number }) => (
+                  <PaydayTick cx={p.cx ?? 0} cy={p.cy ?? 0} date={m.date} onSelect={onSelectDate} />
+                )}
+              />
+            ))}
+          {expanded &&
             shownMarkers.map((m) => (
               <ReferenceDot
                 key={`mk-${m.date}`}
@@ -665,6 +733,8 @@ export function ProjectedBalanceChart({
                     group={m}
                     selected={m.date === selectedDate}
                     onSelect={onSelectDate}
+                    // Calm: no count where it would sit on the low-point label (that day's words already name it).
+                    showCount={!quiet && !(calm && m.date === lowestPoint?.rawDate)}
                   />
                 )}
               />
@@ -681,7 +751,7 @@ export function ProjectedBalanceChart({
               isFront
               data-testid="ref-start-point"
             >
-              <RechartsLabel
+              {startLabelShown && <RechartsLabel
                 value={startLines.join(" ")}
                 content={(p: unknown) => {
                   const vb = (p as { viewBox?: { cx?: number; cy?: number; x?: number; y?: number } })?.viewBox ?? {};
@@ -698,7 +768,7 @@ export function ProjectedBalanceChart({
                     </text>
                   );
                 }}
-              />
+              />}
             </ReferenceDot>
           )}
           {lowestPoint && (
@@ -727,21 +797,36 @@ export function ProjectedBalanceChart({
                   // "short" sits BELOW the dot: it is the lowest point, so
                   // the curve is above it everywhere and the words never lie
                   // on the line (above, they crossed the dip's own walls).
-                  return (
+                  const labelY = lowLabel === "short" || (expanded && lowBelow) ? cy + 18 : cy - 12;
+                  const label = (
                     <text
                       x={cx}
-                      y={lowLabel === "short" || (expanded && lowBelow) ? cy + 18 : cy - 12}
+                      y={labelY}
                       textAnchor={lowAnchorUsed}
                       fill={lowInk}
                       data-tone={lowNegative ? "bad" : "neutral"}
                       data-testid="chart-low-label"
                       fontSize={11}
                       fontWeight={600}
+                      // (Readable forecast) A halo in the panel's own white, so the curve's walls never run
+                      // through the words on a narrow chart.
+                      style={calm ? { paintOrder: "stroke", stroke: "var(--color-platinum-0)", strokeWidth: 3, strokeLinejoin: "round" } : undefined}
                     >
                       {lowLabel === "short"
                         ? `Low ${formatCurrency(lowestPoint.y)}`
                         : `Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
                     </text>
+                  );
+                  if (!calm) return label;
+                  // (Readable forecast) A plate in the panel's own white behind the words: the selected-day rule
+                  // and the curve's walls pass behind them, never through them.
+                  const w = lowText.length * LOW_CHAR_PX + 6;
+                  const x0 = lowAnchorUsed === "start" ? cx - 3 : lowAnchorUsed === "end" ? cx - w + 3 : cx - w / 2;
+                  return (
+                    <g data-testid="chart-low-plate">
+                      <rect x={x0} y={labelY - 11} width={w} height={15} rx={3} style={{ fill: "var(--color-platinum-0)", fillOpacity: 0.92 }} />
+                      {label}
+                    </g>
                   );
                 }}
               />
@@ -777,12 +862,15 @@ function MarkerShape({
   group,
   selected,
   onSelect,
+  showCount = true,
 }: {
   cx: number;
   cy: number;
   group: MarkerGroup;
   selected: boolean;
   onSelect?: (iso: string | null) => void;
+  /** (Readable forecast) The calm chart draws no counts: the day panel lists the day. */
+  showCount?: boolean;
 }) {
   const fill = MARKER[group.kind];
   const common = { fill, stroke: "#ffffff", strokeWidth: 1.5 } as const;
@@ -806,11 +894,28 @@ function MarkerShape({
       {group.kind === "debt" && (
         <path d={`M${cx} ${cy - 7} L${cx + 7} ${cy} L${cx} ${cy + 7} L${cx - 7} ${cy} Z`} {...common} />
       )}
-      {group.count > 1 && (
+      {showCount && group.count > 1 && (
         <text x={cx + 8} y={cy - 7} fontSize={10} fontWeight={700} fill={CHART.navy}>
           {group.count}
         </text>
       )}
     </g>
+  );
+}
+
+/** (Readable forecast) The calm chart's resting marker: a small payday up-tick. Clicking it selects the day. */
+function PaydayTick({ cx, cy, date, onSelect }: { cx: number; cy: number; date: string; onSelect?: (iso: string | null) => void }) {
+  return (
+    <path
+      d={`M${cx} ${cy - 5} L${cx - 4.5} ${cy + 3} L${cx + 4.5} ${cy + 3} Z`}
+      fill={MARKER.payday}
+      strokeWidth={1.25}
+      data-testid={`payday-tick-${date}`}
+      style={{ stroke: "var(--color-platinum-0)", cursor: onSelect ? "pointer" : undefined }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.(date);
+      }}
+    />
   );
 }
