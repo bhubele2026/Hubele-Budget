@@ -13,9 +13,15 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { monthEndExclusive } from "../lib/monthBounds";
 import { addDaysISO, householdTodayISO, monthBounds } from "../lib/householdClock";
 import { expiredHoldsRuleOn, findSupersededPendingForRange } from "../lib/supersededPending";
-import { UpdateAvalancheSettingsBody } from "@workspace/api-zod";
+import { PayAvalancheWeekBody, UpdateAvalancheSettingsBody } from "@workspace/api-zod";
 import { cadenceOf, loadWeeklyAvalanchePlan } from "../lib/avalancheWeeklyPlan";
 import { weeklyShare } from "../lib/avalancheWeekly";
+import {
+  WeekPayRefusal,
+  lastAvalanchePayment,
+  payAvalancheWeek,
+  undoAvalancheWeekPay,
+} from "../lib/avalancheWeekPay";
 
 const router: IRouter = Router();
 
@@ -568,24 +574,29 @@ router.put("/avalanche/settings", requireAuth, async (req, res): Promise<void> =
  * ⭐ (AVAL-W) The weekly avalanche: each payment day from today (the most the
  * forecast says is safe, what it pays, where it goes), the payoff dates and the
  * debt-free date — `loadWeeklyAvalanchePlan`, the plan the forecast itself puts
- * on the curve. Monthly cadence: the targets and no weeks. Read only.
+ * on the curve — and the household's latest "We paid it" (`lastPaid`). Monthly
+ * cadence: the targets and no weeks. Read only. The pay and its undo answer
+ * with the same shape, read after their write.
  */
-router.get("/avalanche/weekly", requireAuth, async (req, res): Promise<void> => {
+async function weeklyResponse(householdId: string, ownerUserId: string) {
   // A read: no settings row is created here (none reads as monthly, $0).
   const [row] = await db
     .select()
     .from(avalancheSettingsTable)
-    .where(eq(avalancheSettingsTable.userId, req.householdOwnerId!));
+    .where(eq(avalancheSettingsTable.userId, ownerUserId));
   const { cadence, weekday } = cadenceOf(row);
   const monthlyTarget = Math.round(Math.max(0, Number(row?.manualExtra ?? 0) || 0) * 100) / 100;
-  const plan = cadence === "weekly" ? await loadWeeklyAvalanchePlan(req.householdId!, req.householdOwnerId!) : null;
+  const [plan, lastPaid] = await Promise.all([
+    cadence === "weekly" ? loadWeeklyAvalanchePlan(householdId, ownerUserId) : Promise.resolve(null),
+    lastAvalanchePayment(householdId),
+  ]);
   if (!plan) {
     // The forecast's own buffer rule (`buildForecastLedger`): $500 when unset.
     const [fs] = await db
       .select({ cashBuffer: forecastSettingsTable.cashBuffer })
       .from(forecastSettingsTable)
-      .where(eq(forecastSettingsTable.userId, req.householdOwnerId!));
-    res.json({
+      .where(eq(forecastSettingsTable.userId, ownerUserId));
+    return {
       cadence,
       weekday,
       monthlyTarget,
@@ -596,10 +607,10 @@ router.get("/avalanche/weekly", requireAuth, async (req, res): Promise<void> => 
       debtFreeDate: null,
       curveThrough: null,
       ranOutOfTime: false,
-    });
-    return;
+      lastPaid,
+    };
   }
-  res.json({
+  return {
     cadence,
     weekday: plan.weekday,
     monthlyTarget: plan.monthlyTarget,
@@ -610,7 +621,49 @@ router.get("/avalanche/weekly", requireAuth, async (req, res): Promise<void> => 
     debtFreeDate: plan.debtFreeDate,
     curveThrough: plan.curveThrough,
     ranOutOfTime: plan.ranOutOfTime,
-  });
+    lastPaid,
+  };
+}
+
+router.get("/avalanche/weekly", requireAuth, async (req, res): Promise<void> => {
+  res.json(await weeklyResponse(req.householdId!, req.householdOwnerId!));
+});
+
+/**
+ * ⭐ (AVAL-W) "We paid it": close one week and lower each manual debt it pays
+ * (`payAvalancheWeek`). Any household member. Refusals write nothing.
+ */
+router.post("/avalanche/weekly/pay", requireAuth, async (req, res): Promise<void> => {
+  const parsed = PayAvalancheWeekBody.safeParse(req.body ?? {});
+  try {
+    const payment = await payAvalancheWeek(
+      req.householdId!,
+      req.householdOwnerId!,
+      req.userId!,
+      parsed.success ? parsed.data.date : undefined,
+    );
+    res.status(201).json({ payment, plan: await weeklyResponse(req.householdId!, req.householdOwnerId!) });
+  } catch (e) {
+    if (e instanceof WeekPayRefusal) {
+      res.status(e.status).json(e.body());
+      return;
+    }
+    throw e;
+  }
+});
+
+/** ⭐ (AVAL-W) Undo one "We paid it", whole and exactly, or nothing (`undoAvalancheWeekPay`). Any household member. */
+router.post("/avalanche/weekly/pay/:id/undo", requireAuth, async (req, res): Promise<void> => {
+  try {
+    const payment = await undoAvalancheWeekPay(req.householdId!, req.userId!, String(req.params.id));
+    res.json({ payment, plan: await weeklyResponse(req.householdId!, req.householdOwnerId!) });
+  } catch (e) {
+    if (e instanceof WeekPayRefusal) {
+      res.status(e.status).json(e.body());
+      return;
+    }
+    throw e;
+  }
 });
 
 export default router;

@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexCardPayoffMode, AmexSummary, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, AvalancheWeeklyPlan, BankingCheckExplain, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, ForecastResolutionUndoInput, ForecastResolutionUndone, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, ImportError, ImportHistory, ImportPreview, ImportRestorePreview, ImportRestoreResult, ImportSummary, ImportWorkbookBody, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListImportHistoryParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PlanUnsafe, PreviewWorkbookImportBody, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewProposals, ReviewRefusal, ReviewResolution, RunCategorizationInput, SetAmexCardPayoffModeBody, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexCardPayoffMode, AmexSummary, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, AvalancheWeekPayInput, AvalancheWeekPayRefusal, AvalancheWeekPayResult, AvalancheWeeklyPlan, BankingCheckExplain, BankingReview, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, ForecastResolutionUndoInput, ForecastResolutionUndone, GetAmexSummaryParams, GetBankingReviewParams, GetPeriodBreakdownParams, HealthStatus, ImportError, ImportHistory, ImportPreview, ImportRestorePreview, ImportRestoreResult, ImportSummary, ImportWorkbookBody, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListImportHistoryParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MappingRuleHistory, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PlanUnsafe, PreviewWorkbookImportBody, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewProposals, ReviewRefusal, ReviewResolution, RunCategorizationInput, SetAmexCardPayoffModeBody, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -374,6 +374,77 @@ export declare function useGetAvalancheWeekly<TData = Awaited<ReturnType<typeof 
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * Any household member. Only with the weekly cadence, for a payment day in
+the current plan that is not answered yet and has something due. In one
+transaction: answers the week `matched` (as POST /forecast/resolutions
+does, keeping the answers it replaced), lowers each debt the week pays by
+its amount exactly as POST /debts/{id}/payments does (a claim
+transaction, the balance, the day's history, archived at $0) — except a
+debt whose balance comes from the bank, which gets no balance write — and
+keeps one record of all of it for the undo. Returns that record and the
+fresh weekly plan.
+
+ * @summary (AVAL-W) "We paid it" — close one week of the weekly avalanche and lower each manual debt's balance
+ */
+export declare const getPayAvalancheWeekUrl: () => string;
+export declare const payAvalancheWeek: (avalancheWeekPayInput: AvalancheWeekPayInput, options?: RequestInit) => Promise<AvalancheWeekPayResult>;
+export declare const getPayAvalancheWeekMutationOptions: <TError = ErrorType<AvalancheWeekPayRefusal>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof payAvalancheWeek>>, TError, {
+        data: BodyType<AvalancheWeekPayInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof payAvalancheWeek>>, TError, {
+    data: BodyType<AvalancheWeekPayInput>;
+}, TContext>;
+export type PayAvalancheWeekMutationResult = NonNullable<Awaited<ReturnType<typeof payAvalancheWeek>>>;
+export type PayAvalancheWeekMutationBody = BodyType<AvalancheWeekPayInput>;
+export type PayAvalancheWeekMutationError = ErrorType<AvalancheWeekPayRefusal>;
+/**
+ * @summary (AVAL-W) "We paid it" — close one week of the weekly avalanche and lower each manual debt's balance
+ */
+export declare const usePayAvalancheWeek: <TError = ErrorType<AvalancheWeekPayRefusal>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof payAvalancheWeek>>, TError, {
+        data: BodyType<AvalancheWeekPayInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof payAvalancheWeek>>, TError, {
+    data: BodyType<AvalancheWeekPayInput>;
+}, TContext>;
+/**
+ * Any household member. In one transaction: deletes the week's answer and
+restores the answers it replaced (same ids), deletes the claim
+transactions, and puts each manual debt's balance, status and as-of and
+its day of history back. Refuses, writing nothing, when the record is
+already undone (already_undone), its week is more than 14 days ago
+(too_late), or a debt's balance or the week's answer changed since
+(changed_since).
+
+ * @summary (AVAL-W) Undo one "We paid it", whole and exactly
+ */
+export declare const getUndoAvalancheWeekPayUrl: (id: string) => string;
+export declare const undoAvalancheWeekPay: (id: string, options?: RequestInit) => Promise<AvalancheWeekPayResult>;
+export declare const getUndoAvalancheWeekPayMutationOptions: <TError = ErrorType<AvalancheWeekPayRefusal>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoAvalancheWeekPay>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof undoAvalancheWeekPay>>, TError, {
+    id: string;
+}, TContext>;
+export type UndoAvalancheWeekPayMutationResult = NonNullable<Awaited<ReturnType<typeof undoAvalancheWeekPay>>>;
+export type UndoAvalancheWeekPayMutationError = ErrorType<AvalancheWeekPayRefusal>;
+/**
+ * @summary (AVAL-W) Undo one "We paid it", whole and exactly
+ */
+export declare const useUndoAvalancheWeekPay: <TError = ErrorType<AvalancheWeekPayRefusal>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoAvalancheWeekPay>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof undoAvalancheWeekPay>>, TError, {
+    id: string;
+}, TContext>;
 /**
  * (WP5b) Every recorded change to one mapping rule, newest first:
 created, seeded, edited, reordered, deleted, with the rule before and

@@ -1111,7 +1111,7 @@ paths:
   /avalanche/weekly:
     get:
       operationId: getAvalancheWeekly
-      # features: only the lazy Debt page reads it, so its hook stays off the landing chunk.
+      # features: only lazy chunks read it (the Debt page, the home page's below-the-fold box), so its hook stays off the landing chunk.
       tags: [avalanche, features]
       summary: The weekly avalanche — each payment day, payoff dates, debt-free date
       description: |
@@ -1125,6 +1125,74 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AvalancheWeeklyPlan" }
+  /avalanche/weekly/pay:
+    post:
+      operationId: payAvalancheWeek
+      # features: only lazy chunks (the home page's below-the-fold box, the Debt page) call it.
+      tags: [avalanche, features]
+      summary: (AVAL-W) "We paid it" — close one week of the weekly avalanche and lower each manual debt's balance
+      description: |
+        Any household member. Only with the weekly cadence, for a payment day in
+        the current plan that is not answered yet and has something due. In one
+        transaction: answers the week `matched` (as POST /forecast/resolutions
+        does, keeping the answers it replaced), lowers each debt the week pays by
+        its amount exactly as POST /debts/{id}/payments does (a claim
+        transaction, the balance, the day's history, archived at $0) — except a
+        debt whose balance comes from the bank, which gets no balance write — and
+        keeps one record of all of it for the undo. Returns that record and the
+        fresh weekly plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AvalancheWeekPayInput" }
+      responses:
+        "201":
+          description: Paid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheWeekPayResult" }
+        "400":
+          description: No date, or not a payment day in the plan (invalid_date, unknown_week)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheWeekPayRefusal" }
+        "409":
+          description: Not weekly (not_weekly), already answered or paid (already_answered), nothing due (nothing_due), or a debt changed while paying (changed_since)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheWeekPayRefusal" }
+  /avalanche/weekly/pay/{id}/undo:
+    post:
+      operationId: undoAvalancheWeekPay
+      tags: [avalanche, features]
+      summary: (AVAL-W) Undo one "We paid it", whole and exactly
+      description: |
+        Any household member. In one transaction: deletes the week's answer and
+        restores the answers it replaced (same ids), deletes the claim
+        transactions, and puts each manual debt's balance, status and as-of and
+        its day of history back. Refuses, writing nothing, when the record is
+        already undone (already_undone), its week is more than 14 days ago
+        (too_late), or a debt's balance or the week's answer changed since
+        (changed_since).
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Undone
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheWeekPayResult" }
+        "404":
+          description: No such record in this household (not_found)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheWeekPayRefusal" }
+        "409":
+          description: already_undone, too_late or changed_since — nothing was written
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheWeekPayRefusal" }
   /debts/{id}:
     patch:
       operationId: updateDebt
@@ -7924,7 +7992,7 @@ components:
     AvalancheWeeklyPlan:
       type: object
       required:
-        [cadence, weekday, monthlyTarget, targetWeekly, cashBuffer, weeks, payoffs, debtFreeDate, curveThrough, ranOutOfTime]
+        [cadence, weekday, monthlyTarget, targetWeekly, cashBuffer, weeks, payoffs, debtFreeDate, curveThrough, ranOutOfTime, lastPaid]
       properties:
         cadence: { type: string, enum: [monthly, weekly] }
         weekday: { type: integer }
@@ -7943,6 +8011,69 @@ components:
           type: ["string", "null"]
           description: The last payment day priced from the forecast.
         ranOutOfTime: { type: boolean }
+        lastPaid:
+          description: The household's latest "We paid it" not undone; null when there is none.
+          oneOf:
+            - $ref: "#/components/schemas/AvalancheWeeklyLastPaid"
+            - type: "null"
+    AvalancheWeekPaidTarget:
+      type: object
+      required: [debtId, name, amount, linked, paidOff]
+      properties:
+        debtId: { type: string }
+        name: { type: string }
+        amount: { type: number, description: What the week paid this debt. }
+        linked:
+          type: boolean
+          description: The bank carries this debt's balance; it was not written, and updates when the bank shows the payment.
+        paidOff: { type: boolean }
+    AvalancheWeeklyLastPaid:
+      type: object
+      required: [id, date, total, targets, undoable]
+      properties:
+        id: { type: string }
+        date: { type: string, description: The payment day it closed (YYYY-MM-DD). }
+        total: { type: number }
+        targets:
+          type: array
+          items: { $ref: "#/components/schemas/AvalancheWeekPaidTarget" }
+        undoable:
+          type: boolean
+          description: Its week is within the last 14 days (or ahead), its answer is still in place and no manual debt's balance changed since.
+    AvalancheWeekPayInput:
+      type: object
+      required: [date]
+      properties:
+        date: { type: string, description: The payment day to close (YYYY-MM-DD), a week of the current plan. }
+    AvalancheWeekPayment:
+      type: object
+      required: [id, date, total, targets, createdBy, createdAt, undoneAt, undoable]
+      properties:
+        id: { type: string }
+        date: { type: string }
+        total: { type: number }
+        targets:
+          type: array
+          items: { $ref: "#/components/schemas/AvalancheWeekPaidTarget" }
+        createdBy: { type: string }
+        createdAt: { type: string }
+        undoneAt: { type: ["string", "null"] }
+        undoable: { type: boolean }
+    AvalancheWeekPayResult:
+      type: object
+      required: [payment, plan]
+      properties:
+        payment: { $ref: "#/components/schemas/AvalancheWeekPayment" }
+        plan: { $ref: "#/components/schemas/AvalancheWeeklyPlan" }
+    AvalancheWeekPayRefusal:
+      type: object
+      description: (AVAL-W) A refused "We paid it" or undo. Nothing was written.
+      required: [error, code]
+      properties:
+        error: { type: string, description: Plain words for the household }
+        code:
+          type: string
+          enum: [invalid_date, not_weekly, unknown_week, already_answered, nothing_due, not_found, already_undone, too_late, changed_since]
     AvalancheExtra:
       type: object
       required: [source, amount, monthStart]

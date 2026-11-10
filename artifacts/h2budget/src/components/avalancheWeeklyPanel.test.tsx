@@ -12,8 +12,20 @@ const h = vi.hoisted(() => ({
   owner: true as boolean | "unknown",
   plan: undefined as AvalancheWeeklyPlan | undefined,
   enabled: [] as boolean[],
+  pay: [] as string[],
+  undo: [] as string[],
 }));
 vi.mock("@/hooks/useOwner", () => ({ useOwner: () => h.owner }));
+// "We paid it" / Undo: the shared hook (its writes are pinned in useAvalancheWeekPay.test.tsx).
+vi.mock("@/hooks/useAvalancheWeekPay", () => ({
+  useAvalancheWeekPay: () => ({
+    pay: (d: string) => h.pay.push(d),
+    undo: (id: string) => h.undo.push(id),
+    paying: false,
+    undoing: false,
+    error: null,
+  }),
+}));
 vi.mock("@workspace/api-client-react/features", () => ({
   useGetAvalancheWeekly: (opts?: { query?: { enabled?: boolean } }) => {
     h.enabled.push(opts?.query?.enabled ?? true);
@@ -68,6 +80,7 @@ const PLAN: AvalancheWeeklyPlan = {
   debtFreeDate: "2031-10-29",
   curveThrough: "2030-12-06",
   ranOutOfTime: false,
+  lastPaid: null,
 };
 
 const settings = (over: Partial<AvalancheSettings> = {}): AvalancheSettings => ({
@@ -85,6 +98,8 @@ beforeEach(() => {
   h.owner = true;
   h.plan = PLAN;
   h.enabled = [];
+  h.pay = [];
+  h.undo = [];
 });
 afterEach(cleanup);
 
@@ -138,6 +153,51 @@ describe("AvalancheWeeklyPanel — weekly", () => {
   });
 });
 
+describe("AvalancheWeeklyPanel — We paid it (the same state as the home page's box)", () => {
+  it("this week to pay: the button marks it paid for that day", () => {
+    render(<AvalancheWeeklyPanel settings={settings()} onUpdate={vi.fn()} />);
+    fireEvent.click(screen.getByTestId("week-pay-button"));
+    expect(h.pay).toEqual(["2030-01-04"]);
+    expect(screen.queryByTestId("week-pay-undo")).toBeNull();
+  });
+
+  it("marked paid: the press's amount and cards, PAID OFF, Undo, and the bank's card note", () => {
+    h.plan = {
+      ...PLAN,
+      weeks: [{ ...WEEKS[0]!, answered: true, paid: 0, targets: [] }, ...WEEKS.slice(1)],
+      lastPaid: {
+        id: "rec-1",
+        date: "2030-01-04",
+        total: 350,
+        targets: [
+          { debtId: "a", name: "Card A", amount: 200, linked: false, paidOff: true },
+          { debtId: "b", name: "Card B", amount: 150, linked: true, paidOff: false },
+        ],
+        undoable: true,
+      },
+    };
+    render(<AvalancheWeeklyPanel settings={settings()} onUpdate={vi.fn()} />);
+    const head = screen.getByTestId("avalanche-this-week");
+    expect(head.textContent).toContain("$350.00");
+    expect(head.textContent).toContain("paid to Card A + Card B");
+    expect(screen.queryByTestId("week-pay-button")).toBeNull();
+    const row = screen.getByTestId("avalanche-week-paid-row");
+    expect(row.textContent).toContain("PAID OFF");
+    expect(row.textContent).toContain("Card A");
+    expect(screen.getByTestId("avalanche-week-linked").textContent).toBe("Card B: its balance updates when the bank shows the payment.");
+    expect(screen.getByTestId("avalanche-target-line").textContent).toContain("this Friday $350.00");
+    fireEvent.click(screen.getByTestId("week-pay-undo"));
+    expect(h.undo).toEqual(["rec-1"]);
+  });
+
+  it("answered on the Forecast: no button", () => {
+    h.plan = { ...PLAN, weeks: [{ ...WEEKS[0]!, answered: true, paid: 0, targets: [] }, ...WEEKS.slice(1)] };
+    render(<AvalancheWeeklyPanel settings={settings()} onUpdate={vi.fn()} />);
+    expect(screen.getByTestId("avalanche-this-week").textContent).toContain("answered on the Forecast");
+    expect(screen.queryByTestId("week-pay-button")).toBeNull();
+  });
+});
+
 describe("AvalancheWeeklyPanel — monthly", () => {
   it("says the month-end amount, does not ask for the weekly plan, and the owner can turn Weekly on", () => {
     const onUpdate = vi.fn();
@@ -145,6 +205,7 @@ describe("AvalancheWeeklyPanel — monthly", () => {
     expect(h.enabled.every((e) => e === false)).toBe(true);
     expect(screen.getByTestId("avalanche-monthly-line").textContent).toContain("Paying $2,600.00 at the end of each month");
     expect(screen.queryByTestId("avalanche-weekly-list")).toBeNull();
+    expect(screen.queryByTestId("week-pay-button")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Weekly/ }));
     expect(onUpdate).toHaveBeenCalledWith({ extraCadence: "weekly" });
   });

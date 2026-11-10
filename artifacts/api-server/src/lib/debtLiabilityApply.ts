@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db, debtBalanceHistoryTable, debtsTable, plaidAccountsTable } from "@workspace/db";
 import { householdTodayISO } from "./householdClock";
+import type { Exec } from "./categorizer/db";
 
 /**
  * (WP2) Writing a Plaid liability balance onto a linked debt — moved verbatim
@@ -24,6 +25,8 @@ export async function recordBalanceSnapshot(
   householdId: string,
   debtId: string,
   balance: string | number,
+  // (AVAL-W) "We paid it" records it inside its own transaction; everyone else uses the pool.
+  exec: Exec = db,
 ): Promise<void> {
   const balStr =
     typeof balance === "number" ? balance.toFixed(2) : String(balance);
@@ -31,7 +34,7 @@ export async function recordBalanceSnapshot(
   // a correction down to $0). Previously this used onConflictDoNothing,
   // which silently dropped same-day drops to zero and left paid-off debts
   // frozen at their last non-zero balance in the history curve.
-  await db
+  await exec
     .insert(debtBalanceHistoryTable)
     .values({
       userId,

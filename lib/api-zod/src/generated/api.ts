@@ -3153,6 +3153,209 @@ export const GetAvalancheWeeklyResponse = zod.object({
     .nullable()
     .describe("The last payment day priced from the forecast."),
   ranOutOfTime: zod.boolean(),
+  lastPaid: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        date: zod.string().describe("The payment day it closed (YYYY-MM-DD)."),
+        total: zod.number(),
+        targets: zod.array(
+          zod.object({
+            debtId: zod.string(),
+            name: zod.string(),
+            amount: zod.number().describe("What the week paid this debt."),
+            linked: zod
+              .boolean()
+              .describe(
+                "The bank carries this debt's balance; it was not written, and updates when the bank shows the payment.",
+              ),
+            paidOff: zod.boolean(),
+          }),
+        ),
+        undoable: zod
+          .boolean()
+          .describe(
+            "Its week is within the last 14 days (or ahead), its answer is still in place and no manual debt's balance changed since.",
+          ),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      'The household\'s latest \"We paid it\" not undone; null when there is none.',
+    ),
+});
+
+/**
+ * Any household member. Only with the weekly cadence, for a payment day in
+the current plan that is not answered yet and has something due. In one
+transaction: answers the week `matched` (as POST /forecast/resolutions
+does, keeping the answers it replaced), lowers each debt the week pays by
+its amount exactly as POST /debts/{id}/payments does (a claim
+transaction, the balance, the day's history, archived at $0) — except a
+debt whose balance comes from the bank, which gets no balance write — and
+keeps one record of all of it for the undo. Returns that record and the
+fresh weekly plan.
+
+ * @summary (AVAL-W) "We paid it" — close one week of the weekly avalanche and lower each manual debt's balance
+ */
+export const PayAvalancheWeekBody = zod.object({
+  date: zod.string().describe("The payment day to close (YYYY-MM-DD)"),
+});
+
+/**
+ * Any household member. In one transaction: deletes the week's answer and
+restores the answers it replaced (same ids), deletes the claim
+transactions, and puts each manual debt's balance, status and as-of and
+its day of history back. Refuses, writing nothing, when the record is
+already undone (already_undone), its week is more than 14 days ago
+(too_late), or a debt's balance or the week's answer changed since
+(changed_since).
+
+ * @summary (AVAL-W) Undo one "We paid it", whole and exactly
+ */
+export const UndoAvalancheWeekPayParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UndoAvalancheWeekPayResponse = zod.object({
+  payment: zod.object({
+    id: zod.string(),
+    date: zod.string(),
+    total: zod.number(),
+    targets: zod.array(
+      zod.object({
+        debtId: zod.string(),
+        name: zod.string(),
+        amount: zod.number().describe("What the week paid this debt."),
+        linked: zod
+          .boolean()
+          .describe(
+            "The bank carries this debt's balance; it was not written, and updates when the bank shows the payment.",
+          ),
+        paidOff: zod.boolean(),
+      }),
+    ),
+    createdBy: zod.string(),
+    createdAt: zod.string(),
+    undoneAt: zod.string().nullable(),
+    undoable: zod.boolean(),
+  }),
+  plan: zod.object({
+    cadence: zod.enum(["monthly", "weekly"]),
+    weekday: zod.number(),
+    monthlyTarget: zod.number().describe("manualExtra — the target per month."),
+    targetWeekly: zod.number().describe("monthlyTarget × 12 ÷ 52."),
+    cashBuffer: zod.number(),
+    weeks: zod
+      .array(
+        zod.object({
+          date: zod.string(),
+          planned: zod
+            .number()
+            .describe(
+              "The target pace for the week (target × 12 ÷ 52 plus freed minimums).",
+            ),
+          room: zod
+            .number()
+            .nullable()
+            .describe(
+              "The most that is safe this week; null past what the forecast can see.",
+            ),
+          due: zod.number().describe("What the week is due to pay"),
+          paid: zod
+            .number()
+            .describe("What the week pays (0 when already answered)."),
+          basis: zod
+            .enum(["curve", "target"])
+            .describe(
+              "curve = priced from the forecast (on the curve); target = past it, at the target pace (payoff dates only).",
+            ),
+          answered: zod.boolean(),
+          nextTarget: zod.union([
+            zod.object({
+              debtId: zod.string(),
+              name: zod.string(),
+            }),
+            zod.null(),
+          ]),
+          targets: zod.array(
+            zod.object({
+              debtId: zod.string(),
+              name: zod.string(),
+              amount: zod.number(),
+              paidOff: zod.boolean(),
+            }),
+          ),
+          paidOff: zod.array(
+            zod.object({
+              debtId: zod.string(),
+              name: zod.string(),
+              date: zod
+                .string()
+                .describe("The projected payoff day (YYYY-MM-DD)."),
+              freedWeekly: zod
+                .number()
+                .describe(
+                  "What its freed minimum adds to the weekly target pace (minimum × 12 ÷ 52).",
+                ),
+            }),
+          ),
+        }),
+      )
+      .describe(
+        "Every payment day from today (empty with the monthly cadence).",
+      ),
+    payoffs: zod.array(
+      zod.object({
+        debtId: zod.string(),
+        name: zod.string(),
+        date: zod.string().describe("The projected payoff day (YYYY-MM-DD)."),
+        freedWeekly: zod
+          .number()
+          .describe(
+            "What its freed minimum adds to the weekly target pace (minimum × 12 ÷ 52).",
+          ),
+      }),
+    ),
+    debtFreeDate: zod.string().nullable(),
+    curveThrough: zod
+      .string()
+      .nullable()
+      .describe("The last payment day priced from the forecast."),
+    ranOutOfTime: zod.boolean(),
+    lastPaid: zod
+      .union([
+        zod.object({
+          id: zod.string(),
+          date: zod
+            .string()
+            .describe("The payment day it closed (YYYY-MM-DD)."),
+          total: zod.number(),
+          targets: zod.array(
+            zod.object({
+              debtId: zod.string(),
+              name: zod.string(),
+              amount: zod.number().describe("What the week paid this debt."),
+              linked: zod
+                .boolean()
+                .describe(
+                  "The bank carries this debt's balance; it was not written, and updates when the bank shows the payment.",
+                ),
+              paidOff: zod.boolean(),
+            }),
+          ),
+          undoable: zod
+            .boolean()
+            .describe(
+              "Its week is within the last 14 days (or ahead), its answer is still in place and no manual debt's balance changed since.",
+            ),
+        }),
+        zod.null(),
+      ])
+      .describe(
+        'The household\'s latest \"We paid it\" not undone; null when there is none.',
+      ),
+  }),
 });
 
 export const UpdateDebtParams = zod.object({

@@ -3,7 +3,7 @@ import { useContext } from "react";
 import { BELOW_FOLD, slotKeys, type BelowFoldKey, type BelowFoldSlot } from "./belowFoldSizes";
 import { CompactFold } from "./foldDensity";
 
-const ROWS: Record<BelowFoldKey, number> = { forecast: 9, upcoming: 6, spending: 5, debt: 5, attention: 5, activity: 6 };
+const ROWS: Record<BelowFoldKey, number> = { avalanche: 2, forecast: 9, upcoming: 6, spending: 5, debt: 5, attention: 5, activity: 6 };
 
 /** Zero-number placeholders for one lazy slot, each the size of its panel. */
 export function BelowFoldSkeleton({ slot }: { slot: BelowFoldSlot }) {

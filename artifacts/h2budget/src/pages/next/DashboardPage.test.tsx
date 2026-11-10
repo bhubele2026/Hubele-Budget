@@ -76,7 +76,7 @@ describe("Dashboard page (the landing)", () => {
       if (v.minH) expect(slot!.className, k).toContain(v.minH);
     }
     const order = Array.from(sk.querySelectorAll("[data-testid^='below-fold-skeleton-']"), (e) => e.getAttribute("data-testid"));
-    expect(order).toEqual(["below-fold-skeleton-forecast"]);
+    expect(order).toEqual(["below-fold-skeleton-avalanche", "below-fold-skeleton-forecast"]);
     // …and the page, before its lazy chunk lands, draws exactly the same slot skeletons.
     cleanup();
     render(<DashboardPage />);
@@ -95,6 +95,7 @@ describe("no bank linked: the lazy panels drop their fixed heights together", ()
     expect(screen.getByTestId("page-next-dashboard").getAttribute("data-compact")).toBe("true");
     const { BELOW_FOLD } = await import("./dashboard/belowFoldSizes");
     expect(screen.getByTestId("below-fold-skeleton-forecast").className).not.toContain(BELOW_FOLD.forecast.minH);
+    expect(screen.getByTestId("below-fold-skeleton-avalanche").className).not.toContain(BELOW_FOLD.avalanche.minH);
   });
 });
 
@@ -102,7 +103,7 @@ describe("below-the-fold skeletons are the panels' size", () => {
   it("each skeleton carries the same span and minimum height as its panel (one constant feeds both)", async () => {
     const { BELOW_FOLD, slotKeys } = await import("./dashboard/belowFoldSizes");
     const { BelowFoldSkeleton } = await import("./dashboard/BelowFoldSkeleton");
-    expect(slotKeys("forecast")).toEqual(["forecast"]);
+    expect(slotKeys("forecast")).toEqual(["avalanche", "forecast"]);
     render(<BelowFoldSkeleton slot="forecast" />);
     for (const [k, v] of Object.entries(BELOW_FOLD).filter(([, v]) => v.slot === "forecast")) {
       const sk = screen.getByTestId(`below-fold-skeleton-${k}`);

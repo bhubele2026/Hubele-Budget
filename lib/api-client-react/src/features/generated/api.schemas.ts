@@ -5137,6 +5137,26 @@ export const AvalancheWeeklyPlanCadence = {
   weekly: "weekly",
 } as const;
 
+export interface AvalancheWeekPaidTarget {
+  debtId: string;
+  name: string;
+  /** What the week paid this debt. */
+  amount: number;
+  /** The bank carries this debt's balance; it was not written, and updates when the bank shows the payment. */
+  linked: boolean;
+  paidOff: boolean;
+}
+
+export interface AvalancheWeeklyLastPaid {
+  id: string;
+  /** The payment day it closed (YYYY-MM-DD). */
+  date: string;
+  total: number;
+  targets: AvalancheWeekPaidTarget[];
+  /** Its week is within the last 14 days (or ahead), its answer is still in place and no manual debt's balance changed since. */
+  undoable: boolean;
+}
+
 export interface AvalancheWeeklyPlan {
   cadence: AvalancheWeeklyPlanCadence;
   weekday: number;
@@ -5156,6 +5176,54 @@ export interface AvalancheWeeklyPlan {
    */
   curveThrough: string | null;
   ranOutOfTime: boolean;
+  /** The household's latest "We paid it" not undone; null when there is none. */
+  lastPaid: AvalancheWeeklyLastPaid | null;
+}
+
+export interface AvalancheWeekPayInput {
+  /** The payment day to close (YYYY-MM-DD) */
+  date: string;
+}
+
+export interface AvalancheWeekPayment {
+  id: string;
+  date: string;
+  total: number;
+  targets: AvalancheWeekPaidTarget[];
+  createdBy: string;
+  createdAt: string;
+  /** @nullable */
+  undoneAt: string | null;
+  undoable: boolean;
+}
+
+export interface AvalancheWeekPayResult {
+  payment: AvalancheWeekPayment;
+  plan: AvalancheWeeklyPlan;
+}
+
+export type AvalancheWeekPayRefusalCode =
+  (typeof AvalancheWeekPayRefusalCode)[keyof typeof AvalancheWeekPayRefusalCode];
+
+export const AvalancheWeekPayRefusalCode = {
+  invalid_date: "invalid_date",
+  not_weekly: "not_weekly",
+  unknown_week: "unknown_week",
+  already_answered: "already_answered",
+  nothing_due: "nothing_due",
+  not_found: "not_found",
+  already_undone: "already_undone",
+  too_late: "too_late",
+  changed_since: "changed_since",
+} as const;
+
+/**
+ * (AVAL-W) A refused "We paid it" or undo. Nothing was written.
+ */
+export interface AvalancheWeekPayRefusal {
+  /** Plain words for the household */
+  error: string;
+  code: AvalancheWeekPayRefusalCode;
 }
 
 export type AvalancheExtraSource =

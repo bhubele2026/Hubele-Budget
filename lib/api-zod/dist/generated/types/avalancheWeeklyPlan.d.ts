@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { AvalancheWeeklyLastPaid } from "./avalancheWeeklyLastPaid";
 import type { AvalancheWeeklyPayoff } from "./avalancheWeeklyPayoff";
 import type { AvalancheWeeklyPlanCadence } from "./avalancheWeeklyPlanCadence";
 import type { AvalancheWeeklyWeek } from "./avalancheWeeklyWeek";
@@ -27,5 +28,7 @@ export interface AvalancheWeeklyPlan {
      */
     curveThrough: string | null;
     ranOutOfTime: boolean;
+    /** The household's latest "We paid it" not undone; null when there is none. */
+    lastPaid: AvalancheWeeklyLastPaid | null;
 }
 //# sourceMappingURL=avalancheWeeklyPlan.d.ts.map

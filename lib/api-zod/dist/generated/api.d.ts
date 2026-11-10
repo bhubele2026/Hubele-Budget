@@ -5169,6 +5169,55 @@ export declare const GetAvalancheWeeklyResponse: zod.ZodObject<{
     debtFreeDate: zod.ZodNullable<zod.ZodString>;
     curveThrough: zod.ZodNullable<zod.ZodString>;
     ranOutOfTime: zod.ZodBoolean;
+    lastPaid: zod.ZodUnion<[zod.ZodObject<{
+        id: zod.ZodString;
+        date: zod.ZodString;
+        total: zod.ZodNumber;
+        targets: zod.ZodArray<zod.ZodObject<{
+            debtId: zod.ZodString;
+            name: zod.ZodString;
+            amount: zod.ZodNumber;
+            linked: zod.ZodBoolean;
+            paidOff: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }, {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }>, "many">;
+        undoable: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        id: string;
+        total: number;
+        targets: {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }[];
+        undoable: boolean;
+    }, {
+        date: string;
+        id: string;
+        total: number;
+        targets: {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }[];
+        undoable: boolean;
+    }>, zod.ZodNull]>;
 }, "strip", zod.ZodTypeAny, {
     cadence: "monthly" | "weekly";
     weekday: number;
@@ -5209,6 +5258,19 @@ export declare const GetAvalancheWeeklyResponse: zod.ZodObject<{
     debtFreeDate: string | null;
     curveThrough: string | null;
     ranOutOfTime: boolean;
+    lastPaid: {
+        date: string;
+        id: string;
+        total: number;
+        targets: {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }[];
+        undoable: boolean;
+    } | null;
 }, {
     cadence: "monthly" | "weekly";
     weekday: number;
@@ -5249,6 +5311,539 @@ export declare const GetAvalancheWeeklyResponse: zod.ZodObject<{
     debtFreeDate: string | null;
     curveThrough: string | null;
     ranOutOfTime: boolean;
+    lastPaid: {
+        date: string;
+        id: string;
+        total: number;
+        targets: {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }[];
+        undoable: boolean;
+    } | null;
+}>;
+/**
+ * Any household member. Only with the weekly cadence, for a payment day in
+the current plan that is not answered yet and has something due. In one
+transaction: answers the week `matched` (as POST /forecast/resolutions
+does, keeping the answers it replaced), lowers each debt the week pays by
+its amount exactly as POST /debts/{id}/payments does (a claim
+transaction, the balance, the day's history, archived at $0) — except a
+debt whose balance comes from the bank, which gets no balance write — and
+keeps one record of all of it for the undo. Returns that record and the
+fresh weekly plan.
+
+ * @summary (AVAL-W) "We paid it" — close one week of the weekly avalanche and lower each manual debt's balance
+ */
+export declare const PayAvalancheWeekBody: zod.ZodObject<{
+    date: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    date: string;
+}, {
+    date: string;
+}>;
+/**
+ * Any household member. In one transaction: deletes the week's answer and
+restores the answers it replaced (same ids), deletes the claim
+transactions, and puts each manual debt's balance, status and as-of and
+its day of history back. Refuses, writing nothing, when the record is
+already undone (already_undone), its week is more than 14 days ago
+(too_late), or a debt's balance or the week's answer changed since
+(changed_since).
+
+ * @summary (AVAL-W) Undo one "We paid it", whole and exactly
+ */
+export declare const UndoAvalancheWeekPayParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const UndoAvalancheWeekPayResponse: zod.ZodObject<{
+    payment: zod.ZodObject<{
+        id: zod.ZodString;
+        date: zod.ZodString;
+        total: zod.ZodNumber;
+        targets: zod.ZodArray<zod.ZodObject<{
+            debtId: zod.ZodString;
+            name: zod.ZodString;
+            amount: zod.ZodNumber;
+            linked: zod.ZodBoolean;
+            paidOff: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }, {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }>, "many">;
+        createdBy: zod.ZodString;
+        createdAt: zod.ZodString;
+        undoneAt: zod.ZodNullable<zod.ZodString>;
+        undoable: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        id: string;
+        createdAt: string;
+        total: number;
+        targets: {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }[];
+        undoable: boolean;
+        createdBy: string;
+        undoneAt: string | null;
+    }, {
+        date: string;
+        id: string;
+        createdAt: string;
+        total: number;
+        targets: {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }[];
+        undoable: boolean;
+        createdBy: string;
+        undoneAt: string | null;
+    }>;
+    plan: zod.ZodObject<{
+        cadence: zod.ZodEnum<["monthly", "weekly"]>;
+        weekday: zod.ZodNumber;
+        monthlyTarget: zod.ZodNumber;
+        targetWeekly: zod.ZodNumber;
+        cashBuffer: zod.ZodNumber;
+        weeks: zod.ZodArray<zod.ZodObject<{
+            date: zod.ZodString;
+            planned: zod.ZodNumber;
+            room: zod.ZodNullable<zod.ZodNumber>;
+            due: zod.ZodNumber;
+            paid: zod.ZodNumber;
+            basis: zod.ZodEnum<["curve", "target"]>;
+            answered: zod.ZodBoolean;
+            nextTarget: zod.ZodUnion<[zod.ZodObject<{
+                debtId: zod.ZodString;
+                name: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                debtId: string;
+                name: string;
+            }, {
+                debtId: string;
+                name: string;
+            }>, zod.ZodNull]>;
+            targets: zod.ZodArray<zod.ZodObject<{
+                debtId: zod.ZodString;
+                name: zod.ZodString;
+                amount: zod.ZodNumber;
+                paidOff: zod.ZodBoolean;
+            }, "strip", zod.ZodTypeAny, {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+            }, {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+            }>, "many">;
+            paidOff: zod.ZodArray<zod.ZodObject<{
+                debtId: zod.ZodString;
+                name: zod.ZodString;
+                date: zod.ZodString;
+                freedWeekly: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                debtId: string;
+                name: string;
+                freedWeekly: number;
+            }, {
+                date: string;
+                debtId: string;
+                name: string;
+                freedWeekly: number;
+            }>, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            planned: number;
+            room: number | null;
+            due: number;
+            paid: number;
+            basis: "curve" | "target";
+            answered: boolean;
+            nextTarget: {
+                debtId: string;
+                name: string;
+            } | null;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+            }[];
+            paidOff: {
+                date: string;
+                debtId: string;
+                name: string;
+                freedWeekly: number;
+            }[];
+        }, {
+            date: string;
+            planned: number;
+            room: number | null;
+            due: number;
+            paid: number;
+            basis: "curve" | "target";
+            answered: boolean;
+            nextTarget: {
+                debtId: string;
+                name: string;
+            } | null;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+            }[];
+            paidOff: {
+                date: string;
+                debtId: string;
+                name: string;
+                freedWeekly: number;
+            }[];
+        }>, "many">;
+        payoffs: zod.ZodArray<zod.ZodObject<{
+            debtId: zod.ZodString;
+            name: zod.ZodString;
+            date: zod.ZodString;
+            freedWeekly: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            debtId: string;
+            name: string;
+            freedWeekly: number;
+        }, {
+            date: string;
+            debtId: string;
+            name: string;
+            freedWeekly: number;
+        }>, "many">;
+        debtFreeDate: zod.ZodNullable<zod.ZodString>;
+        curveThrough: zod.ZodNullable<zod.ZodString>;
+        ranOutOfTime: zod.ZodBoolean;
+        lastPaid: zod.ZodUnion<[zod.ZodObject<{
+            id: zod.ZodString;
+            date: zod.ZodString;
+            total: zod.ZodNumber;
+            targets: zod.ZodArray<zod.ZodObject<{
+                debtId: zod.ZodString;
+                name: zod.ZodString;
+                amount: zod.ZodNumber;
+                linked: zod.ZodBoolean;
+                paidOff: zod.ZodBoolean;
+            }, "strip", zod.ZodTypeAny, {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+                linked: boolean;
+            }, {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+                linked: boolean;
+            }>, "many">;
+            undoable: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            id: string;
+            total: number;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+                linked: boolean;
+            }[];
+            undoable: boolean;
+        }, {
+            date: string;
+            id: string;
+            total: number;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+                linked: boolean;
+            }[];
+            undoable: boolean;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        cadence: "monthly" | "weekly";
+        weekday: number;
+        monthlyTarget: number;
+        targetWeekly: number;
+        cashBuffer: number;
+        weeks: {
+            date: string;
+            planned: number;
+            room: number | null;
+            due: number;
+            paid: number;
+            basis: "curve" | "target";
+            answered: boolean;
+            nextTarget: {
+                debtId: string;
+                name: string;
+            } | null;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+            }[];
+            paidOff: {
+                date: string;
+                debtId: string;
+                name: string;
+                freedWeekly: number;
+            }[];
+        }[];
+        payoffs: {
+            date: string;
+            debtId: string;
+            name: string;
+            freedWeekly: number;
+        }[];
+        debtFreeDate: string | null;
+        curveThrough: string | null;
+        ranOutOfTime: boolean;
+        lastPaid: {
+            date: string;
+            id: string;
+            total: number;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+                linked: boolean;
+            }[];
+            undoable: boolean;
+        } | null;
+    }, {
+        cadence: "monthly" | "weekly";
+        weekday: number;
+        monthlyTarget: number;
+        targetWeekly: number;
+        cashBuffer: number;
+        weeks: {
+            date: string;
+            planned: number;
+            room: number | null;
+            due: number;
+            paid: number;
+            basis: "curve" | "target";
+            answered: boolean;
+            nextTarget: {
+                debtId: string;
+                name: string;
+            } | null;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+            }[];
+            paidOff: {
+                date: string;
+                debtId: string;
+                name: string;
+                freedWeekly: number;
+            }[];
+        }[];
+        payoffs: {
+            date: string;
+            debtId: string;
+            name: string;
+            freedWeekly: number;
+        }[];
+        debtFreeDate: string | null;
+        curveThrough: string | null;
+        ranOutOfTime: boolean;
+        lastPaid: {
+            date: string;
+            id: string;
+            total: number;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+                linked: boolean;
+            }[];
+            undoable: boolean;
+        } | null;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    payment: {
+        date: string;
+        id: string;
+        createdAt: string;
+        total: number;
+        targets: {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }[];
+        undoable: boolean;
+        createdBy: string;
+        undoneAt: string | null;
+    };
+    plan: {
+        cadence: "monthly" | "weekly";
+        weekday: number;
+        monthlyTarget: number;
+        targetWeekly: number;
+        cashBuffer: number;
+        weeks: {
+            date: string;
+            planned: number;
+            room: number | null;
+            due: number;
+            paid: number;
+            basis: "curve" | "target";
+            answered: boolean;
+            nextTarget: {
+                debtId: string;
+                name: string;
+            } | null;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+            }[];
+            paidOff: {
+                date: string;
+                debtId: string;
+                name: string;
+                freedWeekly: number;
+            }[];
+        }[];
+        payoffs: {
+            date: string;
+            debtId: string;
+            name: string;
+            freedWeekly: number;
+        }[];
+        debtFreeDate: string | null;
+        curveThrough: string | null;
+        ranOutOfTime: boolean;
+        lastPaid: {
+            date: string;
+            id: string;
+            total: number;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+                linked: boolean;
+            }[];
+            undoable: boolean;
+        } | null;
+    };
+}, {
+    payment: {
+        date: string;
+        id: string;
+        createdAt: string;
+        total: number;
+        targets: {
+            amount: number;
+            debtId: string;
+            name: string;
+            paidOff: boolean;
+            linked: boolean;
+        }[];
+        undoable: boolean;
+        createdBy: string;
+        undoneAt: string | null;
+    };
+    plan: {
+        cadence: "monthly" | "weekly";
+        weekday: number;
+        monthlyTarget: number;
+        targetWeekly: number;
+        cashBuffer: number;
+        weeks: {
+            date: string;
+            planned: number;
+            room: number | null;
+            due: number;
+            paid: number;
+            basis: "curve" | "target";
+            answered: boolean;
+            nextTarget: {
+                debtId: string;
+                name: string;
+            } | null;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+            }[];
+            paidOff: {
+                date: string;
+                debtId: string;
+                name: string;
+                freedWeekly: number;
+            }[];
+        }[];
+        payoffs: {
+            date: string;
+            debtId: string;
+            name: string;
+            freedWeekly: number;
+        }[];
+        debtFreeDate: string | null;
+        curveThrough: string | null;
+        ranOutOfTime: boolean;
+        lastPaid: {
+            date: string;
+            id: string;
+            total: number;
+            targets: {
+                amount: number;
+                debtId: string;
+                name: string;
+                paidOff: boolean;
+                linked: boolean;
+            }[];
+            undoable: boolean;
+        } | null;
+    };
 }>;
 export declare const UpdateDebtParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -17957,8 +18552,8 @@ export declare const GetImportRestorePreviewResponse: zod.ZodObject<{
         other: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         total: number;
-        debts: number;
         plan: number;
+        debts: number;
         categories: number;
         rules: number;
         decisions: number;
@@ -17969,8 +18564,8 @@ export declare const GetImportRestorePreviewResponse: zod.ZodObject<{
         other: number;
     }, {
         total: number;
-        debts: number;
         plan: number;
+        debts: number;
         categories: number;
         rules: number;
         decisions: number;
@@ -18019,8 +18614,8 @@ export declare const GetImportRestorePreviewResponse: zod.ZodObject<{
     } | null;
     changes: {
         total: number;
-        debts: number;
         plan: number;
+        debts: number;
         categories: number;
         rules: number;
         decisions: number;
@@ -18069,8 +18664,8 @@ export declare const GetImportRestorePreviewResponse: zod.ZodObject<{
     } | null;
     changes: {
         total: number;
-        debts: number;
         plan: number;
+        debts: number;
         categories: number;
         rules: number;
         decisions: number;
@@ -23202,6 +23797,13 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     timezone: "America/Chicago";
     actual: string;
     basis: "weekly_allowance" | "monthly_allowance";
+    plan: {
+        status: "set" | "not_set";
+        source: "none" | "plan" | "override";
+        amount: string | null;
+        effectiveFrom: string | null;
+        planId: string | null;
+    };
     unresolved: {
         count: number;
         amount: string;
@@ -23255,13 +23857,6 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
         }[];
         truncated: boolean;
         nettedByRefunds: string;
-    };
-    plan: {
-        status: "set" | "not_set";
-        source: "none" | "plan" | "override";
-        amount: string | null;
-        effectiveFrom: string | null;
-        planId: string | null;
     };
     start: string;
     end: string;
@@ -23464,6 +24059,13 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
     timezone: "America/Chicago";
     actual: string;
     basis: "weekly_allowance" | "monthly_allowance";
+    plan: {
+        status: "set" | "not_set";
+        source: "none" | "plan" | "override";
+        amount: string | null;
+        effectiveFrom: string | null;
+        planId: string | null;
+    };
     unresolved: {
         count: number;
         amount: string;
@@ -23517,13 +24119,6 @@ export declare const GetPeriodBreakdownResponse: zod.ZodObject<{
         }[];
         truncated: boolean;
         nettedByRefunds: string;
-    };
-    plan: {
-        status: "set" | "not_set";
-        source: "none" | "plan" | "override";
-        amount: string | null;
-        effectiveFrom: string | null;
-        planId: string | null;
     };
     start: string;
     end: string;
@@ -24188,10 +24783,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -24205,6 +24796,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -24248,10 +24843,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -24265,6 +24856,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -24686,10 +25281,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -24703,6 +25294,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -24838,10 +25433,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -24855,6 +25446,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -25187,10 +25782,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -25204,6 +25795,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -25247,10 +25842,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -25264,6 +25855,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -25685,10 +26280,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -25702,6 +26293,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -25837,10 +26432,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -25854,6 +26445,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -26186,10 +26781,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -26203,6 +26794,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -26246,10 +26841,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -26263,6 +26854,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -26684,10 +27279,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -26701,6 +27292,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -26836,10 +27431,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -26853,6 +27444,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -27185,10 +27780,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -27202,6 +27793,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -27245,10 +27840,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -27262,6 +27853,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -27683,10 +28278,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -27700,6 +28291,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -27835,10 +28430,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -27852,6 +28443,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -28184,10 +28779,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -28201,6 +28792,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -28244,10 +28839,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -28261,6 +28852,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -28682,10 +29277,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -28699,6 +29290,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -28834,10 +29429,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -28851,6 +29442,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -28988,10 +29583,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -29005,6 +29596,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -29141,10 +29736,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -29158,6 +29749,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -29294,10 +29889,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -29311,6 +29902,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -29447,10 +30042,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -29464,6 +30055,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -29600,10 +30195,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -29617,6 +30208,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -29754,10 +30349,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -29771,6 +30362,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -29907,10 +30502,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -29924,6 +30515,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -30060,10 +30655,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -30077,6 +30668,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -30213,10 +30808,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -30230,6 +30821,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -30366,10 +30961,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -30383,6 +30974,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -30901,10 +31496,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             pending: boolean;
             displayName: string;
             manual: boolean;
-            category: {
-                id: string;
-                name: string | null;
-            } | null;
             plan: {
                 expected: string | null;
                 actual: string | null;
@@ -30918,6 +31509,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+            } | null;
+            category: {
+                id: string;
+                name: string | null;
             } | null;
             reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
@@ -30961,10 +31556,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             pending: boolean;
             displayName: string;
             manual: boolean;
-            category: {
-                id: string;
-                name: string | null;
-            } | null;
             plan: {
                 expected: string | null;
                 actual: string | null;
@@ -30978,6 +31569,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+            } | null;
+            category: {
+                id: string;
+                name: string | null;
             } | null;
             reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
@@ -31027,10 +31622,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             pending: boolean;
             displayName: string;
             manual: boolean;
-            category: {
-                id: string;
-                name: string | null;
-            } | null;
             plan: {
                 expected: string | null;
                 actual: string | null;
@@ -31044,6 +31635,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+            } | null;
+            category: {
+                id: string;
+                name: string | null;
             } | null;
             reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
@@ -31093,10 +31688,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             pending: boolean;
             displayName: string;
             manual: boolean;
-            category: {
-                id: string;
-                name: string | null;
-            } | null;
             plan: {
                 expected: string | null;
                 actual: string | null;
@@ -31110,6 +31701,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+            } | null;
+            category: {
+                id: string;
+                name: string | null;
             } | null;
             reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
@@ -31251,10 +31846,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -31268,6 +31859,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -31404,10 +31999,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -31421,6 +32012,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -31557,10 +32152,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -31574,6 +32165,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -31710,10 +32305,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -31727,6 +32318,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -31863,10 +32458,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -31880,6 +32471,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -32061,10 +32656,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             pending: boolean;
             displayName: string;
             manual: boolean;
-            category: {
-                id: string;
-                name: string | null;
-            } | null;
             plan: {
                 expected: string | null;
                 actual: string | null;
@@ -32078,6 +32669,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+            } | null;
+            category: {
+                id: string;
+                name: string | null;
             } | null;
             reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
@@ -32223,10 +32818,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -32240,6 +32831,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -32376,10 +32971,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -32393,6 +32984,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -32529,10 +33124,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -32546,6 +33137,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -32682,10 +33277,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -32699,6 +33290,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -32835,10 +33430,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 pending: boolean;
                 displayName: string;
                 manual: boolean;
-                category: {
-                    id: string;
-                    name: string | null;
-                } | null;
                 plan: {
                     expected: string | null;
                     actual: string | null;
@@ -32852,6 +33443,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                     eventKind: "income" | "hook" | "debt" | "bill" | null;
                     variance: string | null;
                     varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+                } | null;
+                category: {
+                    id: string;
+                    name: string | null;
                 } | null;
                 reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
                 flags: {
@@ -33033,10 +33628,6 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
             pending: boolean;
             displayName: string;
             manual: boolean;
-            category: {
-                id: string;
-                name: string | null;
-            } | null;
             plan: {
                 expected: string | null;
                 actual: string | null;
@@ -33050,6 +33641,10 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
                 eventKind: "income" | "hook" | "debt" | "bill" | null;
                 variance: string | null;
                 varianceKind: "less_than_expected" | "more_than_expected" | "over_planned" | "under_planned" | null;
+            } | null;
+            category: {
+                id: string;
+                name: string | null;
             } | null;
             reason: "amount" | "partial" | "timing" | "as_planned" | "marked_unplanned" | "ignored_unforecasted" | "needs_review" | "suggested_match" | "not_compared" | "no_plan" | "evidence_unresolved";
             flags: {
@@ -34197,51 +34792,51 @@ export declare const ListAppliedReviewProposalsResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         id: string;
         kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        undoable: boolean;
+        undoneAt: string | null;
         label: string;
         rowCount: number;
         proposalKey: string;
         filedCount: number;
         matchedCount: number;
         appliedAt: string;
-        undoneAt: string | null;
-        undoable: boolean;
     }, {
         id: string;
         kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        undoable: boolean;
+        undoneAt: string | null;
         label: string;
         rowCount: number;
         proposalKey: string;
         filedCount: number;
         matchedCount: number;
         appliedAt: string;
-        undoneAt: string | null;
-        undoable: boolean;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     items: {
         id: string;
         kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        undoable: boolean;
+        undoneAt: string | null;
         label: string;
         rowCount: number;
         proposalKey: string;
         filedCount: number;
         matchedCount: number;
         appliedAt: string;
-        undoneAt: string | null;
-        undoable: boolean;
     }[];
 }, {
     items: {
         id: string;
         kind: "transfer" | "income_category" | "bill_match" | "loan_payment";
+        undoable: boolean;
+        undoneAt: string | null;
         label: string;
         rowCount: number;
         proposalKey: string;
         filedCount: number;
         matchedCount: number;
         appliedAt: string;
-        undoneAt: string | null;
-        undoable: boolean;
     }[];
 }>;
 /**
@@ -34508,8 +35103,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
                 over: zod.ZodNullable<zod.ZodString>;
             }, "strip", zod.ZodTypeAny, {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34517,8 +35112,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
                 known: string;
             }, {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34536,8 +35131,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
                 over: zod.ZodNullable<zod.ZodString>;
             }, "strip", zod.ZodTypeAny, {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34545,8 +35140,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
                 known: string;
             }, {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34556,8 +35151,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         }, "strip", zod.ZodTypeAny, {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34566,8 +35161,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34577,8 +35172,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         }, {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34587,8 +35182,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34608,8 +35203,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
                 over: zod.ZodNullable<zod.ZodString>;
             }, "strip", zod.ZodTypeAny, {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34617,8 +35212,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
                 known: string;
             }, {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34636,8 +35231,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
                 over: zod.ZodNullable<zod.ZodString>;
             }, "strip", zod.ZodTypeAny, {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34645,8 +35240,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
                 known: string;
             }, {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34656,8 +35251,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         }, "strip", zod.ZodTypeAny, {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34666,8 +35261,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34677,8 +35272,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         }, {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -34687,8 +35282,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35493,8 +36088,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         month: {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35503,8 +36098,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35515,8 +36110,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         week: {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35525,8 +36120,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35651,8 +36246,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         month: {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35661,8 +36256,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35673,8 +36268,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         week: {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35683,8 +36278,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35871,8 +36466,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         month: {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35881,8 +36476,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35893,8 +36488,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         week: {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -35903,8 +36498,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -36090,8 +36685,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         month: {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -36100,8 +36695,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -36112,8 +36707,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
         week: {
             before: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -36122,8 +36717,8 @@ export declare const ApplyReviewProposalResponse: zod.ZodUnion<[zod.ZodObject<{
             };
             after: {
                 actual: string;
-                unresolved: string;
                 plan: string | null;
+                unresolved: string;
                 start: string;
                 end: string;
                 over: string | null;
@@ -36957,8 +37552,8 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
         type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
         id: string;
         createdAt: Date;
-        outcome: "proposed" | "applied" | "needs_attention";
         undoneAt: Date | null;
+        outcome: "proposed" | "applied" | "needs_attention";
         runId: string;
         targetKind: string;
         targetId: string | null;
@@ -36967,8 +37562,8 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
         type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
         id: string;
         createdAt: Date;
-        outcome: "proposed" | "applied" | "needs_attention";
         undoneAt: Date | null;
+        outcome: "proposed" | "applied" | "needs_attention";
         runId: string;
         targetKind: string;
         targetId: string | null;
@@ -36979,8 +37574,8 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
         type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
         id: string;
         createdAt: Date;
-        outcome: "proposed" | "applied" | "needs_attention";
         undoneAt: Date | null;
+        outcome: "proposed" | "applied" | "needs_attention";
         runId: string;
         targetKind: string;
         targetId: string | null;
@@ -36991,8 +37586,8 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
         type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
         id: string;
         createdAt: Date;
-        outcome: "proposed" | "applied" | "needs_attention";
         undoneAt: Date | null;
+        outcome: "proposed" | "applied" | "needs_attention";
         runId: string;
         targetKind: string;
         targetId: string | null;
@@ -37024,8 +37619,8 @@ export declare const UndoAgentActionResponse: zod.ZodObject<{
     type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
     id: string;
     createdAt: Date;
-    outcome: "proposed" | "applied" | "needs_attention";
     undoneAt: Date | null;
+    outcome: "proposed" | "applied" | "needs_attention";
     runId: string;
     targetKind: string;
     targetId: string | null;
@@ -37034,8 +37629,8 @@ export declare const UndoAgentActionResponse: zod.ZodObject<{
     type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
     id: string;
     createdAt: Date;
-    outcome: "proposed" | "applied" | "needs_attention";
     undoneAt: Date | null;
+    outcome: "proposed" | "applied" | "needs_attention";
     runId: string;
     targetKind: string;
     targetId: string | null;
@@ -37265,8 +37860,8 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
-        transactionId: string;
         undoable: boolean;
+        transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
@@ -37279,8 +37874,8 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
-        transactionId: string;
         undoable: boolean;
+        transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
@@ -37380,8 +37975,8 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
-        transactionId: string;
         undoable: boolean;
+        transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
@@ -37448,8 +38043,8 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
-        transactionId: string;
         undoable: boolean;
+        transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
@@ -37651,8 +38246,8 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
-        transactionId: string;
         undoable: boolean;
+        transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
@@ -37665,8 +38260,8 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
-        transactionId: string;
         undoable: boolean;
+        transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
@@ -37766,8 +38361,8 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
-        transactionId: string;
         undoable: boolean;
+        transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
@@ -37834,8 +38429,8 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         amount: string;
         categoryId: string | null;
         categoryName: string | null;
-        transactionId: string;
         undoable: boolean;
+        transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         band: "queue" | "provisional" | "auto";
         resolvedBy: "user" | "silent" | null;
@@ -38300,9 +38895,9 @@ export declare const ListCategoryDecisionsResponseItem: zod.ZodObject<{
     source: string;
     categoryId: string | null;
     previousCategoryId: string | null;
+    undoneAt: Date | null;
     transactionId: string;
     confidence: number;
-    undoneAt: Date | null;
     resolution: string | null;
     band: "queue" | "provisional" | "auto";
     explanation: string;
@@ -38312,9 +38907,9 @@ export declare const ListCategoryDecisionsResponseItem: zod.ZodObject<{
     source: string;
     categoryId: string | null;
     previousCategoryId: string | null;
+    undoneAt: Date | null;
     transactionId: string;
     confidence: number;
-    undoneAt: Date | null;
     resolution: string | null;
     band: "queue" | "provisional" | "auto";
     explanation: string;
@@ -38337,9 +38932,9 @@ export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
     source: string;
     categoryId: string | null;
     previousCategoryId: string | null;
+    undoneAt: Date | null;
     transactionId: string;
     confidence: number;
-    undoneAt: Date | null;
     resolution: string | null;
     band: "queue" | "provisional" | "auto";
     explanation: string;
@@ -38349,9 +38944,9 @@ export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
     source: string;
     categoryId: string | null;
     previousCategoryId: string | null;
+    undoneAt: Date | null;
     transactionId: string;
     confidence: number;
-    undoneAt: Date | null;
     resolution: string | null;
     band: "queue" | "provisional" | "auto";
     explanation: string;

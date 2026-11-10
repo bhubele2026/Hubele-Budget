@@ -52,6 +52,20 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-10.2",
+    headline: "Mark this week's debt payment as paid",
+    items: [
+      {
+        title: "This week's payment, on the home page",
+        body: "With weekly payments on, the home page shows how much goes to which debt this week, and when. Press We paid it once it is sent, and that debt's balance goes down.",
+      },
+      {
+        title: "Undo if it was a mistake",
+        body: "Undo puts the week and the balance back as they were. A card whose balance comes from the bank updates when the bank shows the payment. The Debt page has the same button.",
+      },
+    ],
+  },
+  {
     id: "2026-11-10",
     headline: "Debt payments can go out every week",
     items: [

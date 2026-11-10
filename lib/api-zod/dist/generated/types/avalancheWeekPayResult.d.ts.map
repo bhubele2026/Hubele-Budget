@@ -1,0 +1,1 @@
+{"version":3,"file":"avalancheWeekPayResult.d.ts","sourceRoot":"","sources":["../../../src/generated/types/avalancheWeekPayResult.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,mBAAmB,EAAE,MAAM,uBAAuB,CAAC;AACjE,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,wBAAwB,CAAC;AAEnE,MAAM,WAAW,sBAAsB;IACrC,OAAO,EAAE,oBAAoB,CAAC;IAC9B,IAAI,EAAE,mBAAmB,CAAC;CAC3B"}

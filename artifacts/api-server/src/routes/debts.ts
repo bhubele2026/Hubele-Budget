@@ -31,6 +31,7 @@ import {
 } from "../lib/debtPending";
 import { loadLatestStatements, type DebtStatementFact } from "../lib/debtLedger";
 import { confirmDebtPaymentClaims } from "../lib/debtPaymentConfirm";
+import { applyDebtPayment } from "../lib/debtPaymentApply";
 import { syncDebtBudgetAfterWrite } from "../lib/budgetDebtSync";
 import { loadCardPayoffModes, type PaidAs } from "../lib/cardPayoffMode";
 
@@ -697,56 +698,20 @@ router.post(
       res.status(400).json({ error: "amount must be > 0" });
       return;
     }
-    const result = await db.transaction(async (tx) => {
-      const [debt] = await tx
-        .select()
-        .from(debtsTable)
-        .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)));
-      if (!debt) return null;
-      const oldBal = Number(debt.balance);
-      const newBal = Math.max(0, oldBal - amount);
-      const killed = oldBal > 0 && newBal === 0 && debt.status === "active";
-      const occurredOn = parsed.data.occurredOn;
-      const userNotes = parsed.data.notes ?? null;
-      const finalNote = killed ? "Final payment — debt paid in full 🎉" : null;
-      const mergedNotes = killed
-        ? userNotes
-          ? `${userNotes}\n${finalNote}`
-          : finalNote
-        : userNotes;
-      const [txn] = await tx
-        .insert(transactionsTable)
-        .values({
-          userId,
-          householdId,
-          occurredOn,
-          description: killed
-            ? `Payment — ${debt.name} (PAID OFF)`
-            : `Payment — ${debt.name}`,
-          amount: (-Math.abs(amount)).toFixed(2),
-          account: parsed.data.account ?? null,
-          notes: mergedNotes,
-          source: "manual",
-          member: null,
-          debtId,
-          // (PR-D) A payment logged here is a CLAIM until a bank row confirms
-          // it (`lib/debtPaymentConfirm.ts`). The balance still drops now, as
-          // it always has.
-          paymentState: "claimed",
-        })
-        .returning();
-      const [updated] = await tx
-        .update(debtsTable)
-        .set({
-          balance: newBal.toFixed(2),
-          lastBalanceUpdate: new Date(),
-          updatedAt: new Date(),
-          ...(killed ? { status: "archived" } : {}),
-        })
-        .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)))
-        .returning();
-      return { debt: updated, transaction: txn, killed };
-    });
+    // The claim and the balance write live in `applyDebtPayment`
+    // (lib/debtPaymentApply.ts), moved there unchanged so the weekly
+    // avalanche's "We paid it" makes the same write.
+    const result = await db.transaction((tx) =>
+      applyDebtPayment(tx, {
+        userId,
+        householdId,
+        debtId,
+        amount,
+        occurredOn: parsed.data.occurredOn,
+        account: parsed.data.account ?? null,
+        notes: parsed.data.notes ?? null,
+      }),
+    );
     if (!result) {
       res.status(404).json({ error: "Not found" });
       return;

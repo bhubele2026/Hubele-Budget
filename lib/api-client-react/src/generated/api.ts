@@ -50,6 +50,9 @@ import type {
   AvalancheSchedule,
   AvalancheSettings,
   AvalancheSettingsInput,
+  AvalancheWeekPayInput,
+  AvalancheWeekPayRefusal,
+  AvalancheWeekPayResult,
   AvalancheWeeklyPlan,
   BadgeCount,
   BankBalanceExplain,
@@ -4089,6 +4092,195 @@ export function useGetAvalancheWeekly<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Any household member. Only with the weekly cadence, for a payment day in
+the current plan that is not answered yet and has something due. In one
+transaction: answers the week `matched` (as POST /forecast/resolutions
+does, keeping the answers it replaced), lowers each debt the week pays by
+its amount exactly as POST /debts/{id}/payments does (a claim
+transaction, the balance, the day's history, archived at $0) — except a
+debt whose balance comes from the bank, which gets no balance write — and
+keeps one record of all of it for the undo. Returns that record and the
+fresh weekly plan.
+
+ * @summary (AVAL-W) "We paid it" — close one week of the weekly avalanche and lower each manual debt's balance
+ */
+export const getPayAvalancheWeekUrl = () => {
+  return `/api/avalanche/weekly/pay`;
+};
+
+export const payAvalancheWeek = async (
+  avalancheWeekPayInput: AvalancheWeekPayInput,
+  options?: RequestInit,
+): Promise<AvalancheWeekPayResult> => {
+  return customFetch<AvalancheWeekPayResult>(getPayAvalancheWeekUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(avalancheWeekPayInput),
+  });
+};
+
+export const getPayAvalancheWeekMutationOptions = <
+  TError = ErrorType<AvalancheWeekPayRefusal>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof payAvalancheWeek>>,
+    TError,
+    { data: BodyType<AvalancheWeekPayInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof payAvalancheWeek>>,
+  TError,
+  { data: BodyType<AvalancheWeekPayInput> },
+  TContext
+> => {
+  const mutationKey = ["payAvalancheWeek"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof payAvalancheWeek>>,
+    { data: BodyType<AvalancheWeekPayInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return payAvalancheWeek(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PayAvalancheWeekMutationResult = NonNullable<
+  Awaited<ReturnType<typeof payAvalancheWeek>>
+>;
+export type PayAvalancheWeekMutationBody = BodyType<AvalancheWeekPayInput>;
+export type PayAvalancheWeekMutationError = ErrorType<AvalancheWeekPayRefusal>;
+
+/**
+ * @summary (AVAL-W) "We paid it" — close one week of the weekly avalanche and lower each manual debt's balance
+ */
+export const usePayAvalancheWeek = <
+  TError = ErrorType<AvalancheWeekPayRefusal>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof payAvalancheWeek>>,
+    TError,
+    { data: BodyType<AvalancheWeekPayInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof payAvalancheWeek>>,
+  TError,
+  { data: BodyType<AvalancheWeekPayInput> },
+  TContext
+> => {
+  return useMutation(getPayAvalancheWeekMutationOptions(options));
+};
+
+/**
+ * Any household member. In one transaction: deletes the week's answer and
+restores the answers it replaced (same ids), deletes the claim
+transactions, and puts each manual debt's balance, status and as-of and
+its day of history back. Refuses, writing nothing, when the record is
+already undone (already_undone), its week is more than 14 days ago
+(too_late), or a debt's balance or the week's answer changed since
+(changed_since).
+
+ * @summary (AVAL-W) Undo one "We paid it", whole and exactly
+ */
+export const getUndoAvalancheWeekPayUrl = (id: string) => {
+  return `/api/avalanche/weekly/pay/${id}/undo`;
+};
+
+export const undoAvalancheWeekPay = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AvalancheWeekPayResult> => {
+  return customFetch<AvalancheWeekPayResult>(getUndoAvalancheWeekPayUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getUndoAvalancheWeekPayMutationOptions = <
+  TError = ErrorType<AvalancheWeekPayRefusal>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoAvalancheWeekPay>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof undoAvalancheWeekPay>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["undoAvalancheWeekPay"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof undoAvalancheWeekPay>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return undoAvalancheWeekPay(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UndoAvalancheWeekPayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof undoAvalancheWeekPay>>
+>;
+
+export type UndoAvalancheWeekPayMutationError =
+  ErrorType<AvalancheWeekPayRefusal>;
+
+/**
+ * @summary (AVAL-W) Undo one "We paid it", whole and exactly
+ */
+export const useUndoAvalancheWeekPay = <
+  TError = ErrorType<AvalancheWeekPayRefusal>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoAvalancheWeekPay>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof undoAvalancheWeekPay>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getUndoAvalancheWeekPayMutationOptions(options));
+};
 
 export const getUpdateDebtUrl = (id: string) => {
   return `/api/debts/${id}`;

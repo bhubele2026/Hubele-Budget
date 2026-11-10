@@ -37,7 +37,7 @@ export type AvalancheCadence = "monthly" | "weekly";
 export const WEEKLY_BASE_HORIZON_DAYS = 400;
 
 /** A payment's answers that settle it: nothing more is paid out of the curve on that day. */
-const SETTLING_ANSWERS = ["skipped", "missed", "dismissed", "matched"] as const;
+export const SETTLING_ANSWERS = ["skipped", "missed", "dismissed", "matched"] as const;
 
 /** The stored cadence and weekday, read safely (anything unknown reads as the defaults). */
 export function cadenceOf(

@@ -12,8 +12,8 @@
 // (owner only — the server refuses a member's change too).
 
 import { useMemo } from "react";
-import type { AvalancheSettings, AvalancheSettingsInput, AvalancheWeeklyWeek } from "@workspace/api-client-react";
-// The lazy `features` module: only this page reads the weekly plan, so its hook
+import type { AvalancheSettings, AvalancheSettingsInput } from "@workspace/api-client-react";
+// The lazy `features` module: only lazy chunks read the weekly plan, so its hook
 // never rides on the landing chunk.
 import { useGetAvalancheWeekly } from "@workspace/api-client-react/features";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,21 +23,18 @@ import { useOwner } from "@/hooks/useOwner";
 import { Foot, Help, fieldLabel, td, tdNum, th } from "@/ui";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { householdToday } from "@/lib/householdDay";
+// ⭐ "We paid it" / "Paid · Undo" for this week: the same state, writes and
+// controls as the home page's avalanche box.
+import { dayName, linkedNote, paidCardLabel, weekCardLabel, weekPayView } from "@/lib/avalancheWeekPay";
+import { useAvalancheWeekPay } from "@/hooks/useAvalancheWeekPay";
+import { WeekPayButton, WeekPayError, WeekUndoButton } from "@/components/avalanche-week-pay";
+
+export { dayName, weekCardLabel };
 
 const MIN = 60_000;
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 /** How many upcoming payments the list shows. */
 export const WEEKLY_LIST_LENGTH = 12;
-
-export function dayName(weekday: number): string {
-  return DAY_NAMES[weekday] ?? "Friday";
-}
-
-/** Where a week's money goes, as words: the debts it pays, else the debt next in line. */
-export function weekCardLabel(w: Pick<AvalancheWeeklyWeek, "targets" | "nextTarget">): string {
-  if (w.targets.length > 0) return w.targets.map((t) => t.name).join(" + ");
-  return w.nextTarget?.name ?? "—";
-}
 
 type Props = {
   settings: AvalancheSettings | undefined;
@@ -57,6 +54,12 @@ export function AvalancheWeeklyPanel({ settings, onUpdate, saving = false }: Pro
   const monthlyTarget = Number(settings?.manualExtra ?? 0) || 0;
 
   const thisWeek = plan?.weeks[0] ?? null;
+  const pay = useAvalancheWeekPay();
+  const view = weekPayView(plan);
+  // Marked paid here: the week reads as answered (it pays $0 more), so the
+  // amount and the cards are the press's own.
+  const paidHere = view.kind === "paid" ? view.paid : null;
+  const shown = paidHere ? paidHere.total : (thisWeek?.paid ?? 0);
   // The next payments that pay something, on the curve; weeks with nothing safe are left out.
   const upcoming = useMemo(
     () => (plan?.weeks ?? []).filter((w) => w.paid > 0).slice(0, WEEKLY_LIST_LENGTH),
@@ -144,19 +147,46 @@ export function AvalancheWeeklyPanel({ settings, onUpdate, saving = false }: Pro
                 <div className={fieldLabel}>{thisLabel}</div>
                 <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
                   <span className="font-mono text-kpi font-semibold tabular-nums text-brand-navy">
-                    {formatCurrency(thisWeek!.paid)}
+                    {formatCurrency(shown)}
                   </span>
                   <span className="text-body text-neutral-600">
-                    {thisWeek!.paid > 0
-                      ? `→ ${weekCardLabel(thisWeek!)}`
-                      : thisWeek!.answered
-                        ? "answered on the Forecast"
-                        : "nothing is safe to pay this week"}
+                    {paidHere
+                      ? `paid to ${paidCardLabel(paidHere)}`
+                      : thisWeek!.paid > 0
+                        ? `→ ${weekCardLabel(thisWeek!)}`
+                        : thisWeek!.answered
+                          ? "answered on the Forecast"
+                          : "nothing is safe to pay this week"}
                   </span>
                 </div>
+                {view.kind === "toPay" && (
+                  <div className="mt-2">
+                    <WeekPayButton controls={pay} date={view.week.date} />
+                  </div>
+                )}
+                {paidHere && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-label text-neutral-600" data-testid="avalanche-week-paid-row">
+                    <span className="font-semibold text-brand-navy">Paid</span>
+                    {paidHere.targets
+                      .filter((t) => t.paidOff)
+                      .map((t) => (
+                        <span key={t.debtId} className="inline-flex items-center gap-1.5">
+                          <span className="chip ok">PAID OFF</span>
+                          <span className="text-neutral-500">{t.name}</span>
+                        </span>
+                      ))}
+                    <WeekUndoButton controls={pay} paid={paidHere} />
+                    {linkedNote(paidHere) && (
+                      <span className="basis-full text-neutral-500" data-testid="avalanche-week-linked">
+                        {linkedNote(paidHere)}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <WeekPayError controls={pay} />
                 <p className="mt-1 text-label text-neutral-500" data-testid="avalanche-target-line">
                   Target <span className="font-mono tabular-nums">{formatCurrency(plan.monthlyTarget)}</span>/mo ·{" "}
-                  {isToday ? "today" : `this ${name}`} <span className="font-mono tabular-nums">{formatCurrency(thisWeek!.paid)}</span>
+                  {isToday ? "today" : `this ${name}`} <span className="font-mono tabular-nums">{formatCurrency(shown)}</span>
                   {" · "}
                   {plan.debtFreeDate ? (
                     <span data-testid="avalanche-debt-free-date">

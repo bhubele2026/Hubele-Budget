@@ -33,6 +33,14 @@ vi.mock("./queriesLazy", () => ({
   RECENT_LIMIT: 100,
 }));
 vi.mock("./RecapPreview", () => ({ default: () => <div data-testid="recap-stub">morning text</div> }));
+// (AVAL-W) The avalanche box's plan and its "We paid it" (AvalancheWeekBox.test.tsx covers its states).
+vi.mock("@workspace/api-client-react/features", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  useGetAvalancheWeekly: () => get("weekly"),
+}));
+vi.mock("@/hooks/useAvalancheWeekPay", () => ({
+  useAvalancheWeekPay: () => ({ pay: () => {}, undo: () => {}, paying: false, undoing: false, error: null }),
+}));
 vi.mock("@/hooks/useSpine", () => ({ useSpine: () => h.spine }));
 vi.mock("@/hooks/use-plaid-sync", () => ({ usePlaidSync: () => ({ runSync: vi.fn(), isPending: false }) }));
 vi.mock("@/components/bank-balance-why", () => ({ BankBalanceWhy: () => <span>why</span> }));
@@ -62,6 +70,7 @@ import ForecastPanel from "./ForecastPanel";
 import DebtPanel from "./DebtPanel";
 import ActivityPanel from "./ActivityPanel";
 import AttentionPanel from "./AttentionPanel";
+import AvalancheWeekBox from "./AvalancheWeekBox";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { bankLines } from "./bankState";
 import { cleanRecap, recapSourceWords } from "./recapWords";
@@ -1349,8 +1358,9 @@ describe("lazy panels match their skeletons", () => {
     h.Q.findings = ok({ findings: [] });
     h.Q.queue = ok({ total: 0 }); h.Q.dups = ok({ duplicateCount: 0 });
     h.Q.txns = ok([]); h.Q.items = ok([]); h.Q.cats = ok([]); h.Q.recurring = ok([]); h.Q.debts = ok([]);
-    wrap(<><ForecastPanel /><UpcomingPanel /><SpendingPanel /><DebtPanel /><AttentionPanel /><ActivityPanel /></>);
-    const ids: Record<string, string> = { forecast: "dash-forecast", upcoming: "dash-upcoming", spending: "dash-spending", debt: "dash-debt", attention: "dash-attention", activity: "dash-activity" };
+    h.Q.weekly = loading;
+    wrap(<><AvalancheWeekBox /><ForecastPanel /><UpcomingPanel /><SpendingPanel /><DebtPanel /><AttentionPanel /><ActivityPanel /></>);
+    const ids: Record<string, string> = { avalanche: "dash-avalanche-week", forecast: "dash-forecast", upcoming: "dash-upcoming", spending: "dash-spending", debt: "dash-debt", attention: "dash-attention", activity: "dash-activity" };
     for (const [k, v] of Object.entries(BELOW_FOLD)) {
       const el = screen.getByTestId(ids[k]!);
       expect(el.className, k).toContain(`span-${v.span}`);
