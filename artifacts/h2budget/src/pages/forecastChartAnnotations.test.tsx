@@ -236,7 +236,8 @@ describe("Forecast — chart cash-buffer line and lowest-point dot", () => {
 
     const buffer = screen.getByTestId("ref-cash-buffer");
     expect(buffer).toBeTruthy();
-    expect(buffer.textContent ?? "").toContain("Cash buffer");
+    // (Clean forecast line) /forecast's clean chart calls the rule the "Cushion".
+    expect(buffer.textContent ?? "").toContain("Cushion");
     expect(buffer.textContent ?? "").toContain("$500");
 
     const dot = screen.getByTestId("ref-lowest-point");
@@ -246,9 +247,8 @@ describe("Forecast — chart cash-buffer line and lowest-point dot", () => {
     expect(dot.getAttribute("data-x")).toBe("2026-06-15");
     expect(dot.getAttribute("data-y")).toBe("250.5");
     const dotText = dot.textContent ?? "";
-    expect(dotText).toContain("Lowest");
-    expect(dotText).toContain("$250.50");
-    expect(dotText).toContain("Jun 15, 2026");
+    // (Clean forecast line) The clean chart's short label: "Low $X · <day>".
+    expect(dotText).toBe("Low $250.50 · Jun 15");
   });
 
   it("omits the buffer line when cashBuffer is not present but still draws the lowest dot", () => {

@@ -545,6 +545,30 @@ describe("T3 — the Forecast screen tells one story from the cash signal", () =
     expect(panel.textContent).toMatch(/Jun 10 · opens \$1,000\.00 · closes \$975\.00 · 90 days/);
   });
 
+  it("(Clean forecast line) /forecast's legend is short until 'Show bills'; /review keeps the full legend", () => {
+    const words = () => [...screen.getByTestId("chart-legend").querySelectorAll("li")].map((li) => li.textContent);
+    localStorage.removeItem("h2.forecast.showBills"); // an earlier test left the bills on
+    const view = mount(<ForecastPage mode="overall" />);
+    // Balance · Cushion · Payday, and a tint only when the chart draws it: this curve dips under the cushion
+    // ($250.50 against $500) and never under zero.
+    expect(words()).toEqual(["Balance", "Cushion", "Payday", "Under cushion", "Show bills"]);
+    expect(screen.queryByTestId("legend-below-zero")).toBeNull();
+    for (const k of ["bill", "card", "debt"]) expect(screen.queryByTestId(`legend-${k}`)).toBeNull();
+    // "Show bills" is the door back to everything, worded as before.
+    fireEvent.click(screen.getByTestId("chart-show-bills"));
+    expect(words()).toEqual(["Actual", "Projected", "Cash buffer", "Payday", "Bill", "Card payment", "Debt payment", "Under buffer", "Below zero", "Show bills"]);
+    view.unmount();
+    localStorage.removeItem("h2.forecast.showBills");
+    // A curve that stays over its cushion names no tint at all.
+    cashSignal = { ...SIGNAL, cashBuffer: "100", lowestProjected: "250.5" };
+    const calm = mount(<ForecastPage mode="overall" />);
+    expect(words()).toEqual(["Balance", "Cushion", "Payday", "Show bills"]);
+    calm.unmount();
+    cashSignal = SIGNAL;
+    mount(<ForecastPage mode="review" />);
+    expect(words()).toEqual(["Actual", "Projected", "Cash buffer", "Payday", "Bill", "Card payment", "Debt payment", "Under buffer", "Below zero"]);
+  });
+
   it("words: the empty day panel is one short line; the review links carry the account and the month", () => {
     mount(<ForecastPage mode="overall" />);
     expect(screen.getByTestId("day-panel-empty").textContent).toBe("Pick a day on the chart.");

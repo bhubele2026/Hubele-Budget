@@ -9,7 +9,8 @@ import { householdToday } from "@/lib/householdDay";
 import { bankReadCaption, openingCaption } from "@/lib/openingWords";
 import { BalanceDetails } from "@/components/checking-balance-note";
 import { shortDate } from "@/lib/dates";
-import { groupMarkers, inOutByDate, kindDayItems, kindEvents, stepDate, type BankDayRow, type KindedEvent } from "@/lib/forecastEventKinds";
+import { groupMarkers, inOutByDate, kindDayItems, kindEvents, runsBelow, stepDate, type BankDayRow, type KindedEvent } from "@/lib/forecastEventKinds";
+import { cn } from "@/lib/utils";
 import { ProjectedBalanceChart } from "../../forecast/ProjectedBalanceChart";
 import { ChartLegend } from "./ChartLegend";
 import type { ForecastNextCtx } from "./types";
@@ -52,6 +53,8 @@ export function useChartModel(ctx: ForecastNextCtx) {
 
 /** (Readable forecast) "Show bills" is remembered per viewer, in this browser only. */
 export const SHOW_BILLS_KEY = "h2.forecast.showBills";
+/** (Clean forecast line) The Forecast page's chart draws in once per visit (the chart's `sessionKey`). */
+export const FORECAST_DRAW_KEY = "forecast-curve";
 function readShowBills(): boolean {
   try {
     return window.localStorage.getItem(SHOW_BILLS_KEY) === "1";
@@ -141,8 +144,18 @@ export function ChartPanel({
       calm={calm}
       showBills={showBills}
       dayTotals={dayTotals}
+      {...(calm ? { sessionKey: FORECAST_DRAW_KEY } : {})}
     />
   );
+  // ⭐ (Clean forecast line) A horizon switch keeps the last curve on screen (the page's query holds it) and the
+  // calm chart mounted: dimmed, with "Loading N days…", until the asked-for horizon answers — then the line
+  // reshapes. `proj.horizonDays` is the horizon the curve on screen was worked out for.
+  const shownHorizon = ctx.proj?.horizonDays ?? null;
+  const horizonLoading = calm && shownHorizon != null && shownHorizon !== ctx.horizonDays;
+  // The legend names a tint only when the chart draws it (the chart's own two runs).
+  const hasUnder = useMemo(() => runsBelow(ctx.dailySeries, ctx.cashBufferNum).length > 0, [ctx.dailySeries, ctx.cashBufferNum]);
+  const hasNegative = useMemo(() => runsBelow(ctx.dailySeries, 0).length > 0, [ctx.dailySeries]);
+  const legend = <ChartLegend {...(calm ? { showBills, onToggleBills: toggleBills, hasUnder, hasNegative } : {})} />;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
@@ -207,12 +220,27 @@ export function ChartPanel({
             role="group"
             aria-label="Projected cash chart. Left and right arrow keys move the selected day; Escape clears it."
             onKeyDown={onKeyDown}
-            className="h-[360px] w-full rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 lg:h-[460px]"
+            className="relative h-[360px] w-full rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 lg:h-[460px]"
             data-testid="chart-surface"
           >
-            {chart}
+            {calm ? (
+              <div className={cn("h-full w-full transition-opacity", horizonLoading && "opacity-60")} aria-busy={horizonLoading} data-testid="chart-hold">
+                {chart}
+              </div>
+            ) : (
+              chart
+            )}
+            {horizonLoading ? (
+              <span
+                role="status"
+                className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-control bg-white px-2 py-0.5 text-micro text-neutral-600 shadow-lift ring-1 ring-brand-line"
+                data-testid="chart-horizon-loading"
+              >
+                Loading {ctx.horizonDays} days…
+              </span>
+            ) : null}
           </div>
-          <ChartLegend {...(calm ? { showBills, onToggleBills: toggleBills } : {})} />
+          {legend}
         </div>
       )}
       <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -224,7 +252,7 @@ export function ChartPanel({
           <div className="min-h-0 flex-1" onKeyDown={onKeyDown}>
             {sheetOpen && chart}
           </div>
-          <ChartLegend {...(calm ? { showBills, onToggleBills: toggleBills } : {})} />
+          {legend}
         </DialogContent>
       </Dialog>
       <span className="sr-only" aria-live="polite" data-testid="selected-day-live">

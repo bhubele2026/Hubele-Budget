@@ -205,6 +205,24 @@ export const ANIM_LINE = ANIM_BAR;
 export const ANIM_AREA = ANIM_BAR;
 
 /**
+ * ⭐ (Clean forecast line) The calm Forecast chart. It draws in ONCE with one slow
+ * left-to-right sweep (the `.area-draw.draw-once` mask; `DRAW_MS` mirrors
+ * `--dur-draw` in index.css), the low point answers with one ring pulse
+ * (`.low-pulse`, `PULSE_MS`), and the hover card follows the pointer in
+ * `FOLLOW_MS`. Stroke widths for its one line, the cushion rule, the hover
+ * hairline and the payday ticks live here too, so the chart file holds none.
+ */
+export const DRAW_MS = Math.round(1100 * SPEED); // 1100
+export const PULSE_MS = Math.round(900 * SPEED); // 900
+export const FOLLOW_MS = Math.round(160 * SPEED); // 160
+export const CALM_STROKE = {
+  balance: 2.25,
+  cushion: 1,
+  hairline: 1,
+  paydayTick: 2,
+} as const;
+
+/**
  * Stagger for mapped series, so a multi-series chart cascades in instead of
  * every series starting at once. `i` is the series index.
  */

@@ -52,6 +52,20 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-11.2",
+    headline: "A cleaner Forecast chart",
+    items: [
+      {
+        title: "One solid line",
+        body: "The Forecast chart is now one solid line with a soft fill. Paydays are small marks along the bottom, and three labels stay on it: Today, the lowest point and the cushion.",
+      },
+      {
+        title: "Point at any day",
+        body: "Move across the chart, or drag on a phone, and a dot follows the line with that day's balance and money in and out. Tap a day to open it. \"Show bills\" brings every marker back.",
+      },
+    ],
+  },
+  {
     id: "2026-11-11",
     headline: "Home is four numbers",
     items: [

@@ -24,7 +24,7 @@ vi.mock("wouter", () => ({
 }));
 
 import { ForecastBody } from "./ForecastBody";
-import { SHOW_BILLS_KEY } from "../next/forecast/ChartPanel";
+import { FORECAST_DRAW_KEY, SHOW_BILLS_KEY } from "../next/forecast/ChartPanel";
 
 const DAYS = ["2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-17", "2026-12-01", "2027-02-08"];
 const BAL = [2475.9, 2341.9, 2290.9, 4120.9, 3500.9, 542.9, 1676.9];
@@ -277,6 +277,44 @@ describe("Readable forecast — the calm chart's 'Show bills'", () => {
     first.unmount();
     show(true);
     expect(screen.getByTestId("chart-show-bills").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("(Clean forecast line) the short legend: Balance · Cushion · Payday, a tint only when the curve has one", () => {
+    const words = () => [...screen.getByTestId("chart-legend").querySelectorAll("li")].map((li) => li.textContent);
+    // The fixture's low ($542.90) stays over its $500 cushion: no tint to name.
+    show(true);
+    expect(words()).toEqual(["Balance", "Cushion", "Payday", "Show bills"]);
+    cleanup();
+    // Under the cushion, and once under zero.
+    show(true, signal({ lowestProjected: "-20.00", status: "not_yet", daily: DAYS.map((date, i) => ({ date, balance: (date === "2026-12-01" ? -20 : date === "2026-11-17" ? 300 : BAL[i]).toFixed(2) })) }));
+    expect(words()).toEqual(["Balance", "Cushion", "Payday", "Under cushion", "Below zero", "Show bills"]);
+    fireEvent.click(screen.getByTestId("chart-show-bills"));
+    expect(words()).toEqual(["Actual", "Projected", "Cash buffer", "Payday", "Bill", "Card payment", "Debt payment", "Under buffer", "Below zero", "Show bills"]);
+  });
+
+  it("(Clean forecast line) a horizon switch holds the last curve, dimmed, under 'Loading N days…' — the chart is not swapped out", () => {
+    // The curve on screen answers 90 days; 30 has just been picked and has not answered yet.
+    const held = { ...(ctx(signal()) as Record<string, unknown>), horizonDays: 30 } as never;
+    const view = render(<ForecastBody ctx={held} tab="plan" selectedDate={null} setSelectedDate={() => {}} title="Forecast" readable />);
+    expect(text("chart-horizon-loading")).toBe("Loading 30 days…");
+    expect(screen.getByTestId("chart-horizon-loading").getAttribute("role")).toBe("status");
+    expect(screen.getByTestId("chart-hold").className).toContain("opacity-60");
+    expect(screen.getByTestId("chart-hold").getAttribute("aria-busy")).toBe("true");
+    const stub = screen.getByTestId("chart-stub");
+    // The chart draws in once per visit under its own key, and keeps the held curve's data.
+    expect(chartProps.at(-1)!.sessionKey).toBe(FORECAST_DRAW_KEY);
+    expect((chartProps.at(-1)!.data as unknown[]).length).toBe(DAYS.length);
+    // The answer lands: the caption goes, the chart element is the same one (never remounted by the panel).
+    view.rerender(<ForecastBody ctx={{ ...(held as Record<string, unknown>), proj: signal({ horizonDays: 30 }) } as never} tab="plan" selectedDate={null} setSelectedDate={() => {}} title="Forecast" readable />);
+    expect(screen.queryByTestId("chart-horizon-loading")).toBeNull();
+    expect(screen.getByTestId("chart-hold").className).not.toContain("opacity-60");
+    expect(screen.getByTestId("chart-stub")).toBe(stub);
+    cleanup();
+    // The old layout has no hold and no session key: its chart is as it was.
+    render(<ForecastBody ctx={held} tab="plan" selectedDate={null} setSelectedDate={() => {}} title="Forecast" readable={false} />);
+    expect(screen.queryByTestId("chart-horizon-loading")).toBeNull();
+    expect(screen.queryByTestId("chart-hold")).toBeNull();
+    expect(chartProps.at(-1)!.sessionKey).toBeUndefined();
   });
 
   it("a blocked storage still lets the toggle work", () => {

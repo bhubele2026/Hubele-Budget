@@ -14,9 +14,14 @@ import {
   RcLabel as RechartsLabel,
   ANIM_AREA,
   AXIS_TICK,
+  CALM_STROKE,
   CHART,
   compactUSD,
+  DRAW_MS,
+  FOLLOW_MS,
   MARKER,
+  MORPH_MS,
+  PULSE_MS,
   niceAxis,
   useXTicks,
 } from "@/lib/charts";
@@ -24,7 +29,8 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { PlanLine } from "@/lib/forecastMatch";
 import { tooltipPlanLine } from "@/lib/forecastPastDue";
 import { runsBelow, type MarkerGroup } from "@/lib/forecastEventKinds";
-import { BUF_CHAR_PX, bufferBox, bufferLabelAbove, LOW_CHAR_PX, placeLowLabel } from "@/lib/chartLabelPlacement";
+import { BUF_CHAR_PX, bufferBox, bufferLabelAbove, LOW_CHAR_PX, PLATE_PAD, placeCalmLabels, placeLowLabel, type Box } from "@/lib/chartLabelPlacement";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 /**
  * ⭐ THE CASH CURVE — the one chart on the most-used screen in the app.
@@ -166,8 +172,8 @@ export function ProjectedBalanceChart({
   /** (C2) The balance at the START of the first day (`cashSignal.opening.balance`); the first-day tooltip says opening and close. */
   openingBalance?: number | null;
   /**
-   * Classic only: the chart sweeps in ONCE per session for this key (the dashboard's "dash-forecast"). A later
-   * mount, or a new horizon's data on the mounted chart, appears without a re-sweep.
+   * Classic and calm: the chart sweeps in ONCE per session for this key (the dashboard's "dash-forecast", the
+   * Forecast page's own). A later mount, or a new horizon's data on the mounted chart, appears without a re-sweep.
    */
   sessionKey?: string;
   /**
@@ -176,6 +182,12 @@ export function ProjectedBalanceChart({
    * legend's "Show bills"), exactly as the chart drew them before. The tooltip is the date, the balance and
    * "In $A · Out $B" (`dayTotals`); the names and their actions live in the day panel. Off (default): the
    * chart as it always was — the dashboard and `/review` keep it.
+   *
+   * ⭐ (Clean forecast line) Calm with the bills hidden is ONE solid navy line over the soft navy fill, paydays
+   * as quiet ticks along the bottom edge, horizontal grid lines only, and three plated labels (Today, the low
+   * point, "Cushion"). Calm also owns its motion: one mask sweep per session (`sessionKey`), no chart-library
+   * first draw stacked on it, no remount on a horizon change (the line reshapes), a hover dot and hairline that
+   * glide, and one ring pulse on the low point after the sweep. All of it is off under reduced motion.
    */
   calm?: boolean;
   showBills?: boolean;
@@ -183,16 +195,29 @@ export function ProjectedBalanceChart({
   dayTotals?: ReadonlyMap<string, { moneyIn: number; moneyOut: number }>;
 }) {
   const expanded = variant === "expanded";
-  // Calm and bills hidden: only paydays rest on the curve. With "Show bills" the chart is the full one.
-  const quiet = expanded && calm && !showBills;
-  const [firstDraw] = useState(() => !(sessionKey && !expanded && DRAWN.has(sessionKey)));
+  // The Forecast page's chart (calm). Its motion rules hold with the bills shown too.
+  const calmX = expanded && calm;
+  // Calm and bills hidden: the clean line. With "Show bills" the chart is the full one.
+  const quiet = calmX && !showBills;
+  // JS-driven motion cannot see the CSS media query: the hover glide, the reshape and the pulse ask here.
+  const reduced = useReducedMotion();
+  const [firstDraw] = useState(() => !(sessionKey && (!expanded || calm) && DRAWN.has(sessionKey)));
   const [swept, setSwept] = useState(false);
   useEffect(() => {
-    if (!sessionKey || expanded) return;
+    if (!sessionKey || (expanded && !calm)) return;
     DRAWN.add(sessionKey);
+    if (expanded) return; // calm: the sweep is the CSS mask alone, nothing to time here
     const t = setTimeout(() => setSwept(true), ANIM_AREA.animationDuration + 150);
     return () => clearTimeout(t);
-  }, [sessionKey, expanded]);
+  }, [sessionKey, expanded, calm]);
+  // (Clean forecast line) The low point's ring is mounted for the first draw only, then taken away: a later
+  // render, a new horizon or a selected day can never play it again.
+  const [pulse, setPulse] = useState(() => calmX && firstDraw && !reduced);
+  useEffect(() => {
+    if (!pulse) return;
+    const t = setTimeout(() => setPulse(false), DRAW_MS + PULSE_MS + 200);
+    return () => clearTimeout(t);
+  }, [pulse]);
   // Content fingerprint — see the draw-restart note above.
   const fp = data.map((d) => `${d.rawDate}:${d.balance}`).join("|");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -223,13 +248,29 @@ export function ProjectedBalanceChart({
   // The draw plays once per content fingerprint: it keeps running through
   // unrelated re-renders (selection, hover) until it has had its time, then
   // stays off until the data changes again.
-  const [settledFp, setSettledFp] = useState<string | null>(null);
+  // (Clean forecast line) Calm starts settled: its first draw is the mask sweep, never the library's reveal.
+  const [settledFp, setSettledFp] = useState<string | null>(() => (calmX ? fp : null));
   useEffect(() => {
     if (!expanded) return;
-    const t = setTimeout(() => setSettledFp(fp), ANIM_AREA.animationDuration + 150);
+    const t = setTimeout(() => setSettledFp(fp), (calmX ? MORPH_MS : ANIM_AREA.animationDuration) + 150);
     return () => clearTimeout(t);
-  }, [expanded, fp]);
+  }, [expanded, calmX, fp]);
   const animateNow = expanded ? settledFp !== fp : !sessionKey || (firstDraw && !swept);
+  // Calm: the line RESHAPES when its data changes (a new horizon, a refetch that moved a number) and at no other
+  // time. "Show bills" swaps the series it is drawn from; a swap in the middle of a reshape ends the reshape
+  // rather than letting the new series draw itself in.
+  const morph = useRef({ fp, showBills, live: true });
+  if (morph.current.fp !== fp) morph.current = { fp, showBills, live: true };
+  else if (morph.current.showBills !== showBills) morph.current = { fp, showBills, live: false };
+  const areaAnim = calmX
+    ? {
+        isAnimationActive: !reduced && settledFp !== fp && morph.current.live,
+        animationDuration: MORPH_MS,
+        animationEasing: "ease-in-out" as const,
+        // The hover dot is the chart's own (it glides); the library's would jump beside it.
+        activeDot: false,
+      }
+    : { ...ANIM_AREA, isAnimationActive: ANIM_AREA.isAnimationActive && animateNow };
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // (E5) A pointer resting where the page loaded is not a choice: Safari fires a mousemove after the page changes
   // under a still cursor, which used to replace the day the reader arrived on (`?day=`). Hover counts only
@@ -305,8 +346,15 @@ export function ProjectedBalanceChart({
   const RIGHT = 16;
   const TOP = 14;
   const BOTTOM = 16 + 30;
-  const lowText = lowestPoint ? `Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}` : "";
-  const bufText = `Cash buffer ${formatCurrency(cashBuffer)}`;
+  // (Clean forecast line) The clean chart says it short ("Low $X · Dec 1"), so the low point and the cushion
+  // label fit side by side on a phone. Everywhere else the words are as they were.
+  const lowText = !lowestPoint
+    ? ""
+    : quiet
+      ? `Low ${formatCurrency(lowestPoint.y)} · ${longTick(lowestPoint.rawDate)}`
+      : `Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`;
+  // (Clean forecast line) On the clean chart the rule is the "Cushion".
+  const bufText = `${quiet ? "Cushion" : "Cash buffer"} ${formatCurrency(cashBuffer)}`;
   const placed = (() => {
     if (!expanded || !box || !lowestPoint) return null;
     const plotW = box.w - LEFT - RIGHT;
@@ -332,21 +380,54 @@ export function ProjectedBalanceChart({
       }),
     };
   })();
-  const lowBelow = placed?.below ?? false;
-  const lowAnchorUsed = placed?.anchor ?? lowAnchor;
+  // ⭐ (Clean forecast line) The clean chart's three plated labels, placed together from the measured plot.
+  const todayIdx = todayISO ? series.findIndex((d) => d.rawDate === todayISO) : -1;
+  const calmPlaced = (() => {
+    if (!quiet || !box) return null;
+    const plotW = box.w - LEFT - RIGHT;
+    const plotH = box.h - TOP - BOTTOM;
+    const [d0, d1] = scale.domain as [number, number];
+    const n = series.length;
+    if (plotW <= 0 || plotH <= 0 || !(d1 > d0) || n < 2) return null;
+    const yPx = (v: number) => TOP + ((d1 - v) / (d1 - d0)) * plotH;
+    const xPx = (i: number) => LEFT + (i / (n - 1)) * plotW;
+    return placeCalmLabels({
+      plot: { x0: LEFT, x1: box.w - RIGHT, y0: TOP, y1: TOP + plotH },
+      todayX: todayIdx >= 0 ? xPx(todayIdx) : null,
+      todayWidth: TODAY_TEXT.length * BUF_CHAR_PX + 2 * PLATE_PAD,
+      low: lowestPoint && lowIdx >= 0 ? { dotX: xPx(lowIdx), dotY: yPx(lowestPoint.y), width: lowText.length * LOW_CHAR_PX, anchor: lowAnchor } : null,
+      cushion: Number.isFinite(cashBuffer) ? { y: yPx(cashBuffer), width: bufText.length * BUF_CHAR_PX + 2 * PLATE_PAD } : null,
+      curveSpan: (x0, x1) => {
+        const a = Math.max(0, Math.floor(((x0 - LEFT) / plotW) * (n - 1)));
+        const b = Math.min(n - 1, Math.ceil(((x1 - LEFT) / plotW) * (n - 1)));
+        let top = Infinity;
+        let bottom = -Infinity;
+        for (let i = a; i <= b; i++) {
+          const v = series[i]?.balance;
+          if (v == null || !Number.isFinite(v)) continue;
+          top = Math.min(top, yPx(v));
+          bottom = Math.max(bottom, yPx(v));
+        }
+        return top <= bottom ? { y0: top, y1: bottom } : null;
+      },
+    });
+  })();
+  const lowBelow = calmPlaced?.low ? calmPlaced.low.below : placed?.below ?? false;
+  const lowAnchorUsed = calmPlaced?.low ? calmPlaced.low.anchor : placed?.anchor ?? lowAnchor;
+  const lowDrop = calmPlaced?.low?.dy ?? 0;
   const bufAbove = placed?.bufAbove ?? false;
-  const hideBufferLabel = placed?.hideBuffer ?? false;
+  const hideBufferLabel = calmPlaced ? calmPlaced.cushion == null && Number.isFinite(cashBuffer) : placed?.hideBuffer ?? false;
   // Only the big-bill days, paydays and the selected / hovered day draw a marker; the lowest point always draws.
   const bigDates = new Set(bigBillMarkers.map((m) => m.date));
+  // (Clean forecast line) Quiet: only the SELECTED day's marker rests on the line; the hovered day has the
+  // gliding dot instead.
   const shownMarkers = (markers ?? []).filter((m) =>
     quiet
-      ? m.date === selectedDate || m.date === hoverDate
+      ? m.date === selectedDate
       : m.kinds.includes("payday") || bigDates.has(m.date) || m.date === selectedDate || m.date === hoverDate,
   );
-  // (Readable forecast) Quiet: a small payday tick on each payday the selected / hovered day does not cover.
-  const paydayTicks = quiet
-    ? (markers ?? []).filter((m) => m.kinds.includes("payday") && m.date !== selectedDate && m.date !== hoverDate)
-    : [];
+  // (Clean forecast line) Quiet: every payday is a small tick on the plot's bottom edge, off the line.
+  const paydayTicks = quiet ? (markers ?? []).filter((m) => m.kinds.includes("payday")) : [];
   const shownBigBills = quiet ? [] : bigBillMarkers;
   // ⭐ (T2) Only a projected NEGATIVE is rust. A low point at or above $0 — even under the buffer — is
   // marked in navy: the buffer line and its tint already say "under the buffer", quietly.
@@ -360,10 +441,194 @@ export function ProjectedBalanceChart({
   // (Readable forecast) The start caption is drawn only where it cannot meet the low-point label (the outer fifth).
   const startLabelShown = !(calm && lowestPoint && lowFrac <= 0.2);
 
+  const tooltipEl = (
+    <RechartsTooltip
+      // Bill names inside the tooltip are clickable — they deep-link
+      // into the register below (#335).
+      // (Readable forecast) The calm tooltip holds no buttons, so it never catches the pointer.
+      wrapperStyle={{ pointerEvents: calm && expanded ? "none" : "auto" }}
+      // (Clean forecast line) Calm: the hairline and the dot are the chart's own and glide between days;
+      // the card follows in FOLLOW_MS. Reduced motion: both simply appear in place.
+      {...(calmX
+        ? {
+            cursor: <HoverCursor domain={scale.domain as [number, number]} glide={!reduced} />,
+            isAnimationActive: !reduced,
+            animationDuration: FOLLOW_MS,
+            animationEasing: "ease-out" as const,
+          }
+        : {})}
+      content={({ active, payload }: { active?: boolean; payload?: any[] }) => {
+        if (!active || !payload || payload.length === 0) return null;
+        const p = payload[0]?.payload as
+          | { rawDate?: string; balance?: number; actual?: number | null }
+          | undefined;
+        const rawDate = p?.rawDate;
+        const balance = Number(p?.balance);
+        if (calm && expanded) {
+          const isFirst = openingBalance != null && Number.isFinite(openingBalance) && !!rawDate && rawDate === data[0]?.rawDate;
+          const t = rawDate ? dayTotals?.get(rawDate) : undefined;
+          return (
+            <div className="min-w-[168px] rounded-card bg-white px-3 py-2 text-micro shadow-lift ring-1 ring-brand-line" data-testid="tooltip-calm" data-date={rawDate}>
+              <div className="font-semibold text-brand-navy">{rawDate ? formatDate(rawDate) : ""}</div>
+              {isFirst ? (
+                <div className="mt-1 flex items-center justify-between gap-4" data-testid="tooltip-opening">
+                  <span className="text-neutral-500">Opening</span>
+                  <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(openingBalance)}</span>
+                </div>
+              ) : null}
+              <div className="mt-1 flex items-center justify-between gap-4">
+                <span className="text-neutral-500">{isFirst ? "Close" : "Balance"}</span>
+                <span className="font-mono tabular-nums text-neutral-700" data-testid="tooltip-balance">
+                  {Number.isFinite(balance) ? formatCurrency(balance) : "—"}
+                </span>
+              </div>
+              {t && (t.moneyIn !== 0 || t.moneyOut !== 0) ? (
+                <div className="mt-1 font-mono tabular-nums text-neutral-600" data-testid="tooltip-in-out">
+                  In {formatCurrency(t.moneyIn)} · Out {formatCurrency(Math.abs(t.moneyOut))}
+                </div>
+              ) : null}
+            </div>
+          );
+        }
+        const dayEvents = rawDate ? eventsByDate.get(rawDate) : undefined;
+        return (
+          <div className="min-w-[188px] rounded-card bg-white px-3 py-2 text-micro shadow-lift ring-1 ring-brand-line">
+            <div className="font-semibold text-brand-navy">
+              {rawDate ? formatDate(rawDate) : ""}
+            </div>
+            {openingBalance != null && Number.isFinite(openingBalance) && rawDate && rawDate === data[0]?.rawDate ? (
+              <div className="mt-1 flex items-center justify-between gap-4" data-testid="tooltip-opening">
+                <span className="text-neutral-500">Opening</span>
+                <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(openingBalance)}</span>
+              </div>
+            ) : null}
+            <div className="mt-1 flex items-center justify-between gap-4">
+              <span className="text-neutral-500">
+                {openingBalance != null && rawDate && rawDate === data[0]?.rawDate ? "Close" : "Balance"}
+              </span>
+              <span className="font-mono tabular-nums text-neutral-700">
+                {Number.isFinite(balance) ? formatCurrency(balance) : "—"}
+              </span>
+            </div>
+            {expanded &&
+              rawDate &&
+              (incomeByDate?.get(rawDate)?.length ?? 0) > 0 && (
+                <div className="mt-2 border-t border-brand-line pt-2">
+                  <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">
+                    Money in
+                  </div>
+                  {incomeByDate!.get(rawDate)!.map((inc, i) => (
+                    <div key={`${inc.label}-${i}`} className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate text-neutral-600">{inc.label}</span>
+                      <span className="font-mono tabular-nums text-ok">{formatCurrency(inc.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            {dayEvents &&
+              dayEvents.length > 0 &&
+              rawDate &&
+              (() => {
+                // (#650) Only events actually PULLED FORWARD from a
+                // pre-snapshot pending plan belong under "dragging";
+                // bills naturally due on this calendar day go under
+                // their own heading.
+                const dragged = dayEvents.filter((b) => b.dragged);
+                const dueToday = dayEvents.filter((b) => !b.dragged);
+                const sections: Array<{ title: string; bills: typeof dayEvents }> = [];
+                if (dragged.length > 0) {
+                  sections.push({ title: "Dragged onto this day", bills: dragged });
+                }
+                if (dueToday.length > 0) {
+                  sections.push({ title: "Due this day", bills: dueToday });
+                }
+                return sections.map((section, sIdx) => (
+                  <div
+                    key={section.title}
+                    className={
+                      sIdx === 0 ? "mt-2 border-t border-brand-line pt-2" : "mt-2"
+                    }
+                  >
+                    <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">
+                      {section.title}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      {section.bills.map((b, idx) => {
+                        const canJump = !!b.itemId;
+                        // (#682) Per-plan "Mark missed" is surfaced only
+                        // for dragged rows — that is the recurring source
+                        // of the day-1 dip this tooltip exists to explain.
+                        const canMarkMissed =
+                          !!b.itemId &&
+                          !!b.originalDate &&
+                          b.dragged &&
+                          !lockedPlanKeys?.has(`${b.itemId}|${b.originalDate}`) &&
+                          // (PR6) …nor by its occurrence key.
+                          !(b.occurrenceDate && lockedPlanKeys?.has(`${b.itemId}|${b.occurrenceDate}`));
+                        return (
+                          <div
+                            key={`${b.itemId ?? "_"}-${idx}`}
+                            className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-neutral-50"
+                          >
+                            <button
+                              type="button"
+                              disabled={!canJump}
+                              onClick={() => {
+                                if (b.itemId) onJumpToPlan(b.itemId, rawDate);
+                              }}
+                              data-testid={`tooltip-bill-${rawDate}-${b.itemId ?? idx}`}
+                              className={`flex min-w-0 flex-1 items-center justify-between gap-3 border-0 bg-transparent p-0 text-left font-[inherit] text-inherit ${
+                                canJump ? "cursor-pointer" : "cursor-default"
+                              }`}
+                            >
+                              <span className="min-w-0 truncate text-neutral-600">
+                                {b.label}
+                              </span>
+                              <span className="font-mono tabular-nums text-bad">
+                                {formatCurrency(b.amount)}
+                              </span>
+                            </button>
+                            {canMarkMissed && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // (PR6) Sends the occurrence key, not the moved-to date.
+                                  onMarkMissed(tooltipPlanLine({ ...b, itemId: b.itemId! }, rawDate));
+                                }}
+                                data-testid={`tooltip-mark-missed-${b.itemId}-${b.originalDate}`}
+                                title="Mark this past-due plan as missed so it stops dragging the projection"
+                                className="press whitespace-nowrap rounded-control bg-white px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-bad ring-1 ring-bad/25 hover:bg-bad-bg"
+                              >
+                                Mark missed
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
+          </div>
+        );
+      }}
+    />
+  );
+
   return (
     // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
     // left→right so the curve reads as being plotted across the horizon.
-    <div ref={boxRef} onPointerMove={expanded ? trackPointer : undefined} key={expanded ? horizonKey : undefined} className={cn(firstDraw && "chart-in area-draw", "h-full w-full")}>
+    // (Clean forecast line) Calm: ONE sweep (the mask alone), and no remount on a horizon change — the node
+    // stays, so the sweep cannot replay and the line reshapes from the curve already on screen.
+    <div
+      ref={boxRef}
+      onPointerMove={expanded ? trackPointer : undefined}
+      key={expanded && !calm ? horizonKey : undefined}
+      // `chart-reshaping`: only while the line tweens to new data — the new curve's marks wait for it (index.css).
+      className={cn(firstDraw && (calmX ? "area-draw draw-once" : "chart-in area-draw"), calmX && "chart-calm", calmX && areaAnim.isAnimationActive && "chart-reshaping", "h-full w-full")}
+      data-first-draw={calmX ? String(firstDraw) : undefined}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={chartData}
@@ -378,7 +643,8 @@ export function ProjectedBalanceChart({
                   const d = st?.activeLabel;
                   if (d == null) return;
                   if (!pointer.current?.moved) return;
-                  setHoverDate((h) => (h === String(d) ? h : String(d)));
+                  // Quiet draws nothing from the hovered day (the cursor glides on its own): no re-render per day.
+                  if (!quiet) setHoverDate((h) => (h === String(d) ? h : String(d)));
                   if (!(hoverSelects && canHover)) return;
                   if (hoverTimer.current) clearTimeout(hoverTimer.current);
                   hoverTimer.current = setTimeout(() => onSelectDate(String(d)), 140);
@@ -397,7 +663,12 @@ export function ProjectedBalanceChart({
               <stop offset="100%" stopColor={CHART.mid} stopOpacity={0.01} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
+          {quiet ? (
+            // (Clean forecast line) Light horizontal lines only.
+            <CartesianGrid vertical={false} stroke={CHART.grid} />
+          ) : (
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
+          )}
           <XAxis
             dataKey="rawDate"
             tick={AXIS_TICK}
@@ -415,168 +686,7 @@ export function ProjectedBalanceChart({
             domain={scale.domain}
             ticks={scale.ticks}
           />
-          <RechartsTooltip
-            // Bill names inside the tooltip are clickable — they deep-link
-            // into the register below (#335).
-            // (Readable forecast) The calm tooltip holds no buttons, so it never catches the pointer.
-            wrapperStyle={{ pointerEvents: calm && expanded ? "none" : "auto" }}
-            content={({ active, payload }: { active?: boolean; payload?: any[] }) => {
-              if (!active || !payload || payload.length === 0) return null;
-              const p = payload[0]?.payload as
-                | { rawDate?: string; balance?: number; actual?: number | null }
-                | undefined;
-              const rawDate = p?.rawDate;
-              const balance = Number(p?.balance);
-              if (calm && expanded) {
-                const isFirst = openingBalance != null && Number.isFinite(openingBalance) && !!rawDate && rawDate === data[0]?.rawDate;
-                const t = rawDate ? dayTotals?.get(rawDate) : undefined;
-                return (
-                  <div className="min-w-[168px] rounded-card bg-white px-3 py-2 text-micro shadow-lift ring-1 ring-brand-line" data-testid="tooltip-calm" data-date={rawDate}>
-                    <div className="font-semibold text-brand-navy">{rawDate ? formatDate(rawDate) : ""}</div>
-                    {isFirst ? (
-                      <div className="mt-1 flex items-center justify-between gap-4" data-testid="tooltip-opening">
-                        <span className="text-neutral-500">Opening</span>
-                        <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(openingBalance)}</span>
-                      </div>
-                    ) : null}
-                    <div className="mt-1 flex items-center justify-between gap-4">
-                      <span className="text-neutral-500">{isFirst ? "Close" : "Balance"}</span>
-                      <span className="font-mono tabular-nums text-neutral-700" data-testid="tooltip-balance">
-                        {Number.isFinite(balance) ? formatCurrency(balance) : "—"}
-                      </span>
-                    </div>
-                    {t && (t.moneyIn !== 0 || t.moneyOut !== 0) ? (
-                      <div className="mt-1 font-mono tabular-nums text-neutral-600" data-testid="tooltip-in-out">
-                        In {formatCurrency(t.moneyIn)} · Out {formatCurrency(Math.abs(t.moneyOut))}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              }
-              const dayEvents = rawDate ? eventsByDate.get(rawDate) : undefined;
-              return (
-                <div className="min-w-[188px] rounded-card bg-white px-3 py-2 text-micro shadow-lift ring-1 ring-brand-line">
-                  <div className="font-semibold text-brand-navy">
-                    {rawDate ? formatDate(rawDate) : ""}
-                  </div>
-                  {openingBalance != null && Number.isFinite(openingBalance) && rawDate && rawDate === data[0]?.rawDate ? (
-                    <div className="mt-1 flex items-center justify-between gap-4" data-testid="tooltip-opening">
-                      <span className="text-neutral-500">Opening</span>
-                      <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(openingBalance)}</span>
-                    </div>
-                  ) : null}
-                  <div className="mt-1 flex items-center justify-between gap-4">
-                    <span className="text-neutral-500">
-                      {openingBalance != null && rawDate && rawDate === data[0]?.rawDate ? "Close" : "Balance"}
-                    </span>
-                    <span className="font-mono tabular-nums text-neutral-700">
-                      {Number.isFinite(balance) ? formatCurrency(balance) : "—"}
-                    </span>
-                  </div>
-                  {expanded &&
-                    rawDate &&
-                    (incomeByDate?.get(rawDate)?.length ?? 0) > 0 && (
-                      <div className="mt-2 border-t border-brand-line pt-2">
-                        <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">
-                          Money in
-                        </div>
-                        {incomeByDate!.get(rawDate)!.map((inc, i) => (
-                          <div key={`${inc.label}-${i}`} className="flex items-center justify-between gap-3">
-                            <span className="min-w-0 truncate text-neutral-600">{inc.label}</span>
-                            <span className="font-mono tabular-nums text-ok">{formatCurrency(inc.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  {dayEvents &&
-                    dayEvents.length > 0 &&
-                    rawDate &&
-                    (() => {
-                      // (#650) Only events actually PULLED FORWARD from a
-                      // pre-snapshot pending plan belong under "dragging";
-                      // bills naturally due on this calendar day go under
-                      // their own heading.
-                      const dragged = dayEvents.filter((b) => b.dragged);
-                      const dueToday = dayEvents.filter((b) => !b.dragged);
-                      const sections: Array<{ title: string; bills: typeof dayEvents }> = [];
-                      if (dragged.length > 0) {
-                        sections.push({ title: "Dragged onto this day", bills: dragged });
-                      }
-                      if (dueToday.length > 0) {
-                        sections.push({ title: "Due this day", bills: dueToday });
-                      }
-                      return sections.map((section, sIdx) => (
-                        <div
-                          key={section.title}
-                          className={
-                            sIdx === 0 ? "mt-2 border-t border-brand-line pt-2" : "mt-2"
-                          }
-                        >
-                          <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">
-                            {section.title}
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            {section.bills.map((b, idx) => {
-                              const canJump = !!b.itemId;
-                              // (#682) Per-plan "Mark missed" is surfaced only
-                              // for dragged rows — that is the recurring source
-                              // of the day-1 dip this tooltip exists to explain.
-                              const canMarkMissed =
-                                !!b.itemId &&
-                                !!b.originalDate &&
-                                b.dragged &&
-                                !lockedPlanKeys?.has(`${b.itemId}|${b.originalDate}`) &&
-                                // (PR6) …nor by its occurrence key.
-                                !(b.occurrenceDate && lockedPlanKeys?.has(`${b.itemId}|${b.occurrenceDate}`));
-                              return (
-                                <div
-                                  key={`${b.itemId ?? "_"}-${idx}`}
-                                  className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-neutral-50"
-                                >
-                                  <button
-                                    type="button"
-                                    disabled={!canJump}
-                                    onClick={() => {
-                                      if (b.itemId) onJumpToPlan(b.itemId, rawDate);
-                                    }}
-                                    data-testid={`tooltip-bill-${rawDate}-${b.itemId ?? idx}`}
-                                    className={`flex min-w-0 flex-1 items-center justify-between gap-3 border-0 bg-transparent p-0 text-left font-[inherit] text-inherit ${
-                                      canJump ? "cursor-pointer" : "cursor-default"
-                                    }`}
-                                  >
-                                    <span className="min-w-0 truncate text-neutral-600">
-                                      {b.label}
-                                    </span>
-                                    <span className="font-mono tabular-nums text-bad">
-                                      {formatCurrency(b.amount)}
-                                    </span>
-                                  </button>
-                                  {canMarkMissed && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        // (PR6) Sends the occurrence key, not the moved-to date.
-                                        onMarkMissed(tooltipPlanLine({ ...b, itemId: b.itemId! }, rawDate));
-                                      }}
-                                      data-testid={`tooltip-mark-missed-${b.itemId}-${b.originalDate}`}
-                                      title="Mark this past-due plan as missed so it stops dragging the projection"
-                                      className="press whitespace-nowrap rounded-control bg-white px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-bad ring-1 ring-bad/25 hover:bg-bad-bg"
-                                    >
-                                      Mark missed
-                                    </button>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ));
-                    })()}
-                </div>
-              );
-            }}
-          />
+          {!calmX && tooltipEl}
           {risk?.below.map((r, i) => (
             <ReferenceArea
               key={`risk-b-${i}-${r.x1}`}
@@ -604,10 +714,9 @@ export function ProjectedBalanceChart({
           {expanded && (scale.domain[0] < 0 || touchesZero) && (
             <ReferenceLine y={0} stroke={CHART.steel} strokeWidth={1} ifOverflow="extendDomain" data-testid="ref-zero" />
           )}
-          {expanded && todayISO && (
+          {expanded && todayISO && !quiet && (
             <Area
-                {...ANIM_AREA}
-                isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
+                {...areaAnim}
                 type="linear"
                 dataKey="past"
                 stroke={CHART.navy}
@@ -617,10 +726,9 @@ export function ProjectedBalanceChart({
                 connectNulls
               />
           )}
-          {expanded && todayISO && (
+          {expanded && todayISO && !quiet && (
             <Area
-                {...ANIM_AREA}
-                isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
+                {...areaAnim}
                 type="linear"
                 dataKey="future"
                 stroke={CHART.mid}
@@ -631,15 +739,39 @@ export function ProjectedBalanceChart({
                 connectNulls
               />
           )}
+          {quiet && (
+            // ⭐ (Clean forecast line) ONE solid navy line across the whole window, look-back days included,
+            // over the same soft navy fill the home chart uses. The "Today" rule marks the split.
+            <Area
+              {...areaAnim}
+              type="linear"
+              dataKey="balance"
+              stroke={CHART.navy}
+              strokeWidth={CALM_STROKE.balance}
+              fill="url(#projectedBalanceGrad)"
+              name="Balance"
+            />
+          )}
           {expanded && todayISO && (
               <ReferenceLine x={todayISO} stroke={CHART.mist} strokeWidth={1.25} data-testid="ref-today">
-                <RechartsLabel value="Today" position="insideTopLeft" fill={CHART.steel} fontSize={10} />
+                {quiet ? (
+                  <RechartsLabel
+                    value={TODAY_TEXT}
+                    content={(p: unknown) => {
+                      const vb = (p as { viewBox?: { x?: number; y?: number } })?.viewBox ?? {};
+                      const w = TODAY_TEXT.length * BUF_CHAR_PX + 2 * PLATE_PAD;
+                      const b = calmPlaced?.today ?? { x0: (vb.x ?? 0) + 5, x1: (vb.x ?? 0) + 5 + w, y0: (vb.y ?? 0) + 2, y1: (vb.y ?? 0) + 16 };
+                      return <LabelPlate box={b} text={TODAY_TEXT} fill={CHART.steel} testid="chart-today-plate" />;
+                    }}
+                  />
+                ) : (
+                  <RechartsLabel value="Today" position="insideTopLeft" fill={CHART.steel} fontSize={10} />
+                )}
               </ReferenceLine>
           )}
-          {!(expanded && todayISO) && (
+          {!(expanded && todayISO) && !quiet && (
             <Area
-              {...ANIM_AREA}
-              isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
+              {...areaAnim}
               type="linear"
               dataKey="balance"
               stroke={CHART.navy}
@@ -652,14 +784,27 @@ export function ProjectedBalanceChart({
             <ReferenceLine
               y={cashBuffer}
               stroke={CHART.orangeDeep}
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
+              // (Clean forecast line) The same dashed orange rule, thin and quiet.
+              strokeDasharray={quiet ? "3 4" : "4 4"}
+              strokeWidth={quiet ? CALM_STROKE.cushion : 1.5}
+              {...(quiet ? { strokeOpacity: 0.8 } : {})}
               ifOverflow="extendDomain"
               data-testid="ref-cash-buffer"
             >
               {/* Expanded: the right end, under the line, and hidden when the low-point label cannot clear it (the
                   legend names the buffer). Classic keeps the left end. */}
-              {!hideBufferLabel && (
+              {!hideBufferLabel && quiet && (
+                <RechartsLabel
+                  value={bufText}
+                  content={(p: unknown) => {
+                    const vb = (p as { viewBox?: { x?: number; y?: number; width?: number } })?.viewBox ?? {};
+                    const w = bufText.length * BUF_CHAR_PX + 2 * PLATE_PAD;
+                    const b = calmPlaced?.cushion?.box ?? bufferBox((vb.x ?? 0) + (vb.width ?? 0), vb.y ?? 0, w, false);
+                    return <LabelPlate box={b} text={bufText} fill={CHART.badInk} testid="chart-cushion-plate" />;
+                  }}
+                />
+              )}
+              {!hideBufferLabel && !quiet && (
                 <RechartsLabel
                   value={bufText}
                   position={expanded ? (bufAbove ? "insideBottomRight" : "insideTopRight") : "insideTopLeft"}
@@ -703,12 +848,16 @@ export function ProjectedBalanceChart({
               data-testid="ref-selected-day"
             />
           )}
+          {/* (Clean forecast line) Calm: the hover hairline and dot draw here, over the line and its rules and
+              under the markers and the plated labels. */}
+          {calmX && tooltipEl}
           {expanded &&
             paydayTicks.map((m) => (
+              // On the plot's bottom edge (the axis's own lowest value), never on the line.
               <ReferenceDot
                 key={`pd-${m.date}`}
                 x={m.date}
-                y={m.balance}
+                y={scale.domain[0]}
                 r={4}
                 ifOverflow="extendDomain"
                 isFront
@@ -771,6 +920,31 @@ export function ProjectedBalanceChart({
               />}
             </ReferenceDot>
           )}
+          {pulse && lowestPoint && (
+            // ONE soft ring after the sweep (`.low-pulse`); unmounted once it has played. Its own key: the chart
+            // library keys a child by its position, and a marker appearing before it must not remount it.
+            <ReferenceDot
+              key="low-pulse"
+              x={lowestPoint.x}
+              y={lowestPoint.y}
+              r={5}
+              ifOverflow="extendDomain"
+              isFront
+              shape={(p: { cx?: number; cy?: number }) => (
+                <circle
+                  className="low-pulse"
+                  cx={p.cx ?? 0}
+                  cy={p.cy ?? 0}
+                  r={6}
+                  fill="none"
+                  stroke={lowFill}
+                  strokeWidth={2}
+                  pointerEvents="none"
+                  data-testid="low-pulse"
+                />
+              )}
+            />
+          )}
           {lowestPoint && (
             <ReferenceDot
               x={lowestPoint.x}
@@ -787,7 +961,7 @@ export function ProjectedBalanceChart({
                   sees the text; `content` is what actually paints, because the
                   anchor has to move when the low point sits on an edge. */}
               <RechartsLabel
-                value={`Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
+                value={lowText}
                 content={(p: unknown) => {
                   const vb =
                     (p as { viewBox?: { cx?: number; cy?: number; x?: number; y?: number } })
@@ -797,12 +971,17 @@ export function ProjectedBalanceChart({
                   // "short" sits BELOW the dot: it is the lowest point, so
                   // the curve is above it everywhere and the words never lie
                   // on the line (above, they crossed the dip's own walls).
-                  const labelY = lowLabel === "short" || (expanded && lowBelow) ? cy + 18 : cy - 12;
+                  const labelY = (lowLabel === "short" || (expanded && lowBelow) ? cy + 18 : cy - 12) + lowDrop;
+                  // (Readable forecast) A plate in the panel's own white behind the words: the selected-day rule
+                  // and the curve's walls pass behind them, never through them.
+                  const w = lowText.length * LOW_CHAR_PX + 6;
+                  const x0 = lowAnchorUsed === "start" ? cx - 3 : lowAnchorUsed === "end" ? cx - w + 3 : cx - w / 2;
                   const label = (
                     <text
-                      x={cx}
+                      // (Clean forecast line) The clean chart centres the words on their plate.
+                      x={quiet ? x0 + w / 2 : cx}
                       y={labelY}
-                      textAnchor={lowAnchorUsed}
+                      textAnchor={quiet ? "middle" : lowAnchorUsed}
                       fill={lowInk}
                       data-tone={lowNegative ? "bad" : "neutral"}
                       data-testid="chart-low-label"
@@ -812,19 +991,17 @@ export function ProjectedBalanceChart({
                       // through the words on a narrow chart.
                       style={calm ? { paintOrder: "stroke", stroke: "var(--color-platinum-0)", strokeWidth: 3, strokeLinejoin: "round" } : undefined}
                     >
-                      {lowLabel === "short"
-                        ? `Low ${formatCurrency(lowestPoint.y)}`
-                        : `Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
+                      {lowLabel === "short" ? `Low ${formatCurrency(lowestPoint.y)}` : lowText}
                     </text>
                   );
                   if (!calm) return label;
-                  // (Readable forecast) A plate in the panel's own white behind the words: the selected-day rule
-                  // and the curve's walls pass behind them, never through them.
-                  const w = lowText.length * LOW_CHAR_PX + 6;
-                  const x0 = lowAnchorUsed === "start" ? cx - 3 : lowAnchorUsed === "end" ? cx - w + 3 : cx - w / 2;
+                  // (Clean forecast line) The clean chart draws the plate where the three labels were placed together.
+                  if (quiet && calmPlaced?.low) {
+                    return <LabelPlate box={calmPlaced.low.box} text={lowText} fill={lowInk} size={11} testid="chart-low-plate" textTestid="chart-low-label" tone={lowNegative ? "bad" : "neutral"} />;
+                  }
                   return (
-                    <g data-testid="chart-low-plate">
-                      <rect x={x0} y={labelY - 11} width={w} height={15} rx={3} style={{ fill: "var(--color-platinum-0)", fillOpacity: 0.92 }} />
+                    <g data-testid="chart-low-plate" data-plate="">
+                      <rect x={x0} y={labelY - 11} width={w} height={15} rx={3} style={{ fill: "var(--color-platinum-0)", fillOpacity: quiet ? 1 : 0.92 }} />
                       {label}
                     </g>
                   );
@@ -903,19 +1080,106 @@ function MarkerShape({
   );
 }
 
-/** (Readable forecast) The calm chart's resting marker: a small payday up-tick. Clicking it selects the day. */
+/**
+ * (Clean forecast line) The calm chart's payday mark: a small quiet tick standing on the plot's bottom edge,
+ * just above the axis. Clicking it selects the day (a wider unseen target makes it easy to hit).
+ */
 function PaydayTick({ cx, cy, date, onSelect }: { cx: number; cy: number; date: string; onSelect?: (iso: string | null) => void }) {
   return (
-    <path
-      d={`M${cx} ${cy - 5} L${cx - 4.5} ${cy + 3} L${cx + 4.5} ${cy + 3} Z`}
-      fill={MARKER.payday}
-      strokeWidth={1.25}
+    <g
       data-testid={`payday-tick-${date}`}
-      style={{ stroke: "var(--color-platinum-0)", cursor: onSelect ? "pointer" : undefined }}
+      data-edge="bottom"
+      style={{ cursor: onSelect ? "pointer" : undefined }}
       onClick={(e) => {
         e.stopPropagation();
         onSelect?.(date);
       }}
-    />
+    >
+      <rect x={cx - 7} y={cy - 16} width={14} height={16} fill="transparent" />
+      <line x1={cx} x2={cx} y1={cy - 9} y2={cy - 2} stroke={MARKER.payday} strokeWidth={CALM_STROKE.paydayTick} strokeLinecap="round" strokeOpacity={0.6} />
+    </g>
+  );
+}
+
+const TODAY_TEXT = "Today";
+
+/** (Clean forecast line) A chart label on a small plate in the panel's own surface colour: rules and the line pass behind the words. */
+function LabelPlate({
+  box,
+  text,
+  fill,
+  testid,
+  size = 10,
+  textTestid,
+  tone,
+}: {
+  box: Box;
+  text: string;
+  fill: string;
+  testid: string;
+  size?: number;
+  textTestid?: string;
+  tone?: "bad" | "neutral";
+}) {
+  return (
+    <g data-testid={testid} data-plate="" pointerEvents="none">
+      <rect x={box.x0} y={box.y0} width={box.x1 - box.x0} height={box.y1 - box.y0} rx={3} style={{ fill: "var(--color-platinum-0)" }} />
+      <text x={(box.x0 + box.x1) / 2} y={(box.y0 + box.y1) / 2 + size * 0.36} textAnchor="middle" fill={fill} fontSize={size} fontWeight={600} data-testid={textTestid} data-tone={tone}>
+        {text}
+      </text>
+    </g>
+  );
+}
+
+/**
+ * (Clean forecast line) The calm chart's hover cursor: a thin hairline and a dot ON the line. The chart library
+ * hands it the active day's x (`points`) and row (`payload`); both nodes stay mounted while the pointer is on
+ * the plot and move by `transform`, so with `glide` they travel between days (`.chart-glide`) instead of
+ * jumping. No layout is read or written.
+ */
+function HoverCursor({
+  domain,
+  glide,
+  points,
+  payload,
+}: {
+  domain: readonly [number, number];
+  glide: boolean;
+  points?: ReadonlyArray<{ x: number; y: number }>;
+  payload?: ReadonlyArray<{ payload?: { balance?: number | null } }>;
+}) {
+  const top = points?.[0];
+  const bottom = points?.[1];
+  if (!top || !bottom) return null;
+  const [d0, d1] = domain;
+  const bal = Number(payload?.[0]?.payload?.balance);
+  const y = Number.isFinite(bal) && d1 > d0 ? top.y + ((d1 - bal) / (d1 - d0)) * (bottom.y - top.y) : null;
+  const cls = glide ? "chart-glide" : undefined;
+  return (
+    <g pointerEvents="none" data-testid="hover-cursor">
+      <line
+        className={cls}
+        x1={0}
+        x2={0}
+        y1={top.y}
+        y2={bottom.y}
+        stroke={CHART.mist}
+        strokeWidth={CALM_STROKE.hairline}
+        style={{ transform: `translateX(${top.x}px)` }}
+        data-testid="hover-hairline"
+      />
+      {y != null && (
+        <circle
+          className={cls}
+          cx={0}
+          cy={0}
+          r={4.5}
+          fill={CHART.navy}
+          strokeWidth={2}
+          style={{ stroke: "var(--color-platinum-0)", transform: `translate(${top.x}px, ${y}px)` }}
+          data-testid="hover-dot"
+        />
+      )}
+    </g>
   );
 }

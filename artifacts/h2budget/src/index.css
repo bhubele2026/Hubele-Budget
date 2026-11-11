@@ -291,6 +291,8 @@
   --dur-soft: calc(240ms * var(--anim-speed));
   --dur-slow: calc(280ms * var(--anim-speed));
   --dur-grand: calc(700ms * var(--anim-speed));
+  /* The Forecast chart's one slow first sweep (DRAW_MS in the chart kit). */
+  --dur-draw: calc(1100ms * var(--anim-speed));
 
   /* ── The bridged palette ─────────────────────────────────────────────────
      HSL triplets, every one round-tripping exactly to its hex so the built
@@ -867,6 +869,40 @@
     mask-image: linear-gradient(to right, #000 var(--reveal), transparent calc(var(--reveal) + 7%));
     animation: areaFill calc(600ms * var(--anim-speed)) var(--ease-move) both;
   }
+  /* ⭐ (Clean forecast line) The Forecast chart draws in ONCE: the same mask
+     sweep, slower and on the glide curve, and nothing else stacked on it (no
+     wrapper rise, no chart-library reveal). */
+  .area-draw.draw-once {
+    animation-duration: var(--dur-draw);
+    animation-timing-function: var(--ease-glide);
+  }
+  /* The low point answers the sweep with ONE soft ring: it waits for the sweep
+     (the delay is the sweep's own dial), plays once and ends invisible. The
+     chart mounts it only for the first draw, so a re-render cannot replay it. */
+  @keyframes lowPulse {
+    0% { opacity: 0; transform: scale(1); }
+    18% { opacity: 0.5; }
+    100% { opacity: 0; transform: scale(3.6); }
+  }
+  .low-pulse {
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: lowPulse calc(900ms * var(--anim-speed)) var(--ease-glide) var(--dur-draw) 1 both;
+  }
+  /* The hover dot and hairline GLIDE between days: a transform transition on
+     nodes that stay mounted (never a re-position by attribute, which jumps). */
+  .chart-glide { transition: transform var(--dur-quick) var(--ease-glide); }
+  /* While the line reshapes to a new horizon, the marks that belong to the NEW
+     curve (low point, payday ticks, labels, tints) step out, then ease back in
+     where they now belong. The chart library moves them at once and tweens only
+     the line, so without this they float off a line that has not arrived yet. */
+  .chart-calm .recharts-reference-dot,
+  .chart-calm .recharts-reference-area,
+  .chart-calm [data-plate] { transition: opacity var(--dur-soft) var(--ease-glide); }
+  .chart-calm.chart-reshaping .recharts-reference-dot,
+  .chart-calm.chart-reshaping .recharts-reference-area,
+  .chart-calm.chart-reshaping [data-plate] { opacity: 0; transition: none; }
   .sweep-in { animation: chartIn var(--dur-grand) var(--ease-enter) backwards; }
   .spark-fill-in { animation: chartIn var(--dur-grand) var(--ease-enter) backwards; }
 
@@ -996,11 +1032,12 @@
   @media (prefers-reduced-motion: reduce) {
     .tile-in, .rise-in, .reveal, .page-in, .page-out, .chart-in, .area-draw,
     .sweep-in, .spark-fill-in, .grow-x, .tab-underline, .skeleton,
-    .stagger > *, .stagger-children > *, .section-enter {
+    .stagger > *, .stagger-children > *, .section-enter, .low-pulse {
       animation: none !important;
     }
     .bar-sweep, .bar-morph, .row-morph, .list-morph, .card-bleed::before,
-    .surface-lift {
+    .surface-lift, .chart-glide, .chart-calm .recharts-reference-dot,
+    .chart-calm .recharts-reference-area, .chart-calm [data-plate] {
       transition: none !important;
     }
     /* Animation off would leave --reveal at 0% and mask most of the chart. */
