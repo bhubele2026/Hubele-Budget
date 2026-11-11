@@ -104,20 +104,22 @@ function SpentThisWeek({ s }: { s: Spine }) {
   const of = cap != null ? cap : weekly?.basis === "stored_amount" ? (weekly.storedAmount ?? weekly.amount) : null;
   // The plan against what counts toward it: the spine's own remaining figure (negative when over), said by sign.
   const w = weekStory(s.position);
-  const rem = w.planSet ? w.remainingKnown : null;
   const known = Number(w.known);
+  // No plan set: the same subtraction against the forecast's weekly amount, so an over week still says "over".
+  const ofN = of != null ? Number(of) : NaN;
+  const rem = w.planSet ? w.remainingKnown : Number.isFinite(ofN) ? Math.round((ofN - known) * 100) / 100 : null;
   return (
     <Tile testid="four-spent" title="Spent this week" href="/spending/week" accent="checking" index={4} box={FOUR_BOX_BAR} body={FOUR_BODY}>
       <Fig big testid="four-spent-value" value={money(w.known)} />
-      {/* The bar's length only: spent against (spent + what is left), which is the week's plan. No figure is printed from it. */}
+      {/* The bar's length only: spent against (spent + what is left), which is the week's amount. */}
       <Bar testid="four-spent-bar" value={rem != null ? known : undefined} ceiling={rem != null ? known + rem : undefined} />
       {rem != null ? (
         <Line testid="four-spent-line" bad={rem < 0}>
           {rem < 0 ? `${short(-rem)} over` : `${short(rem)} left`}
-          {cap != null ? <span className="sr-only"> of the {short(cap)} planned for this week</span> : null}
+          {of != null ? <span className="sr-only"> of the {short(of)} {cap != null ? "planned" : "the forecast sets aside"} for this week</span> : null}
         </Line>
       ) : (
-        <Line testid="four-spent-line">{of != null ? `of ${short(of)}` : null}</Line>
+        <Line testid="four-spent-line">{null}</Line>
       )}
     </Tile>
   );

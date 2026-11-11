@@ -196,7 +196,7 @@ describe("Spent this week", () => {
     setup({ position: { ...position, knownWeek: "40.25", remainingWeekKnown: "159.75" } });
     expect(screen.getByTestId("four-spent-line").firstChild!.textContent).toBe("$159.75 left");
   });
-  it("no plan: 'of' the forecast's own weekly amount (the first weekly occurrence), and no bar", () => {
+  it("no plan: left or over against the forecast's own weekly amount (the first weekly occurrence), with a bar", () => {
     h.Q.pos = ok({ weekCap: null });
     h.Q.cash = ok({ hookReserves: [
       { hook: "weekly", occurrenceDate: "2026-11-21", basis: "stored_amount", storedAmount: "175.00", amount: "175.00" },
@@ -205,8 +205,13 @@ describe("Spent this week", () => {
     ] });
     setup({ position: { ...position, remainingWeekKnown: null, remainingWeek: null, withinPlan: null } });
     expect(text("four-spent-value")).toBe("$40.00");
-    expect(text("four-spent-line")).toBe("of $150");
-    expect(screen.queryByTestId("four-spent-bar")).toBeNull();
+    expect(screen.getByTestId("four-spent-line").firstChild!.textContent).toBe("$110 left");
+    expect(screen.getByTestId("four-spent-line").querySelector(".sr-only")!.textContent).toBe(" of the $150 the forecast sets aside for this week");
+    expect(screen.getByTestId("four-spent-bar")).not.toBeNull();
+    cleanup();
+    setup({ position: { ...position, knownWeek: "626.66", remainingWeekKnown: null, remainingWeek: null, withinPlan: null } });
+    expect(screen.getByTestId("four-spent-line").firstChild!.textContent).toBe("$476.66 over");
+    expect(screen.getByTestId("four-spent-line").parentElement!.className).toContain("text-bad-ink");
   });
   it("no amount known (no plan, a forecast that holds a plan of $0, or nothing at all): no line and no bar", () => {
     const noPlan = { position: { ...position, remainingWeekKnown: null, remainingWeek: null, withinPlan: null } };
