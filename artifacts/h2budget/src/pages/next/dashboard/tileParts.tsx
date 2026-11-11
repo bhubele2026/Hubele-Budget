@@ -26,7 +26,7 @@ const CHIP: Record<Tone, string> = {
 export interface TileStatus { word: string; tone: Tone }
 
 export function Tile({
-  testid, title, sub, href, accent, status, children, why, index,
+  testid, title, sub, href, accent, status, children, why, index, box = "span-4 min-h-[11.5rem]",
 }: {
   testid: string;
   title: string;
@@ -38,13 +38,16 @@ export function Tile({
   children: ReactNode;
   why?: ReactNode;
   index: number;
+  /** The tile's place and size in its grid. The six tiles keep the default; the four numbers pass their own. */
+  box?: string;
 }) {
   const qc = useQueryClient();
   return (
     <div
       data-testid={`tile-${testid}`}
       className={cn(
-        "panel group span-4 relative flex min-h-[11.5rem] flex-col gap-3 border-l-4 p-4",
+        "panel group relative flex flex-col gap-3 border-l-4 p-4",
+        box,
         EDGE[accent],
         "transition-[transform,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:shadow-[var(--shadow-milled-lift)] focus-within:shadow-[var(--shadow-milled-lift)]",
         rise(index),
@@ -79,13 +82,13 @@ export function Tile({
   );
 }
 
-/** One named figure. `value` null draws an em dash; `tone` bad takes the rust. */
+/** One named figure. `value` null draws an em dash; `tone` bad takes the rust. No `label`: the tile's title names it. */
 export function Fig({ label, value, tone = "neutral", big = false, testid }: {
-  label: string; value: ReactNode; tone?: "neutral" | "bad"; big?: boolean; testid?: string;
+  label?: string; value: ReactNode; tone?: "neutral" | "bad"; big?: boolean; testid?: string;
 }) {
   return (
     <div className="min-w-0">
-      <div className={figLabel}>{label}</div>
+      {label ? <div className={figLabel}>{label}</div> : null}
       <div
         data-testid={testid}
         className={cn("font-mono font-semibold tabular-nums", big ? "text-kpi" : "text-body", tone === "bad" ? "text-bad-ink" : "text-brand-navy")}
@@ -95,6 +98,11 @@ export function Fig({ label, value, tone = "neutral", big = false, testid }: {
     </div>
   );
 }
+
+/** (Home is four numbers) The four boxes' own grid: two by two on a phone, one row of four from 1024 px. */
+export const FOUR_GRID = "span-12 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4";
+/** One of the four boxes: shorter than a tile (one number, one line), tighter padding on a phone. */
+export const FOUR_BOX = "min-h-[7.5rem] p-3 sm:p-4";
 
 export const Skel = () => <span className="skeleton block h-7 w-28 rounded" aria-busy="true" />;
 

@@ -8,10 +8,11 @@
  * construction (a test pins it).
  */
 export const BELOW_FOLD = {
-  // (AVAL-W) "Avalanche this week", above the forecast: sized for one card's
-  // payment and its button (taller on a phone, where the button sits below).
-  // With the monthly cadence the box draws nothing once the plan says so.
-  avalanche: { span: 12, minH: "min-h-[11.25rem] sm:min-h-[9rem]", rise: 3, slot: "forecast" },
+  // (AVAL-W) "Pay this week": sized for one card's payment and its button
+  // (taller on a phone, where the button sits below). With the monthly cadence
+  // the box draws nothing once the plan says so. (Home is four numbers,
+  // 2026-11-11) Its own lazy chunk and slot now, directly under the header.
+  avalanche: { span: 12, minH: "min-h-[11.25rem] sm:min-h-[9rem]", rise: 1, slot: "pay" },
   forecast: { span: 12, minH: "min-h-[29rem]", rise: 3, slot: "forecast" },
   upcoming: { span: 4, minH: "min-h-[29rem]", rise: 4, slot: "off" },
   spending: { span: 6, minH: "min-h-[19rem]", rise: 5, slot: "off" },

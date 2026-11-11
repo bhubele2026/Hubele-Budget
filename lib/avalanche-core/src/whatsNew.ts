@@ -52,6 +52,20 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-11",
+    headline: "Home is four numbers",
+    items: [
+      {
+        title: "What to pay, then four numbers",
+        body: "The home page now opens with what to pay this week and four numbers: checking, the lowest point ahead, what is spent this week, and how much debt is paid. Tap a number to see more.",
+      },
+      {
+        title: "Everything else is under More",
+        body: "Nothing went away. The six boxes, each bank's last update, Can we afford something? and the morning text are under More, just below the four numbers.",
+      },
+    ],
+  },
+  {
     id: "2026-11-10.3",
     headline: "The Forecast reads in one line",
     items: [

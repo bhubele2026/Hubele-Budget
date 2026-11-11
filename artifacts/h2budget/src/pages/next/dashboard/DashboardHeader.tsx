@@ -1,45 +1,38 @@
-import { Suspense, useMemo, useState } from "react";
-import { lazyWithPreload } from "@/lib/lazyWithPreload";
+import { useMemo } from "react";
 import { Link } from "wouter";
-import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
 import { attentionItems, headerActionOf } from "@/lib/attention";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { useSpine } from "@/hooks/useSpine";
 import { knownWithinPlan, weekStory } from "@/lib/weekFigures";
-import { btn, btnSecondary } from "@/ui";
+import { btn } from "@/ui";
 import { cn } from "@/lib/utils";
 import { requestWhatsNewOpen, useWhatsNewUnread } from "@/lib/whatsNewSignal";
 import { useCashSignalQ, usePlaidItemsQ } from "./queries";
-import { dueSoonOf, obligationLine, upcomingRows } from "./obligations";
+import { dueSoonOf, upcomingRows } from "./obligations";
 import { bankLines, hasLinkedBank } from "./bankState";
-import { money, rise, weekdayLabel } from "./shared";
+import { rise, weekdayLabel } from "./shared";
 
-/** The quiet second control beside a more urgent action: Afford stays one tap away. */
-const QUIET = "bg-transparent px-1 text-label font-semibold text-brand-navy ring-0 hover:bg-transparent hover:underline";
-/** The second row's text buttons (Morning text, What's new). */
+/** The second row's text button (What's new). */
 const QUIET_TEXT =
   "rounded-control text-label font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
 
-/** The morning text preview (and the request behind it) load on first open only. */
-const RecapPreview = lazyWithPreload(() => import("./RecapPreview"));
-
 /**
- * ⭐ THE HEADER: what day it is, how fresh each bank connection is (the check and
- * the pending count live on the Banking tile, once), and ONE action. Eager (first screen), no panel chrome:
- * it is the page's own head, not a card.
+ * ⭐ THE HEADER: what day it is, the way back to What's new, and ONE action
+ * (only when something needs doing). Eager (first screen), no panel chrome: it
+ * is the page's own head, not a card. (Home is four numbers, 2026-11-11) The
+ * bank sync lines, "Can we afford something?" and the morning text moved,
+ * unchanged, into the "More" drawer (`MoreDrawer.tsx`).
  */
 export default function DashboardHeader() {
   const spine = useSpine();
   const items = usePlaidItemsQ();
   // The same hook-aware cash-signal events Coming up lists (shared by key).
   const cash = useCashSignalQ(90);
-  const [recapOpen, setRecapOpen] = useState(false);
   // (WN) Unread notes from the lazy What's new host; null until it has asked.
   const whatsNewUnread = useWhatsNewUnread();
   const today = householdToday(new Date());
   const s = spine.data;
-  const now = Date.now();
   const obligations = useMemo(() => upcomingRows({ signal: cash.data, today, count: 50 }), [cash.data, today]);
 
   const attention = useMemo(() => {
@@ -60,7 +53,6 @@ export default function DashboardHeader() {
   }, [s, obligations, today, items.data]);
   const noBank = items.data !== undefined && !hasLinkedBank(items.data);
   const action = headerActionOf(attention ?? [], { noBank });
-  const banks = bankLines(items.data, now);
 
   return (
     <header className={cn("span-12", rise(0))} data-testid="dash-header">
@@ -69,21 +61,6 @@ export default function DashboardHeader() {
           <h1 className="text-display font-semibold text-brand-navy" data-testid="dash-today">
             Today <span className="font-normal text-neutral-500">· {weekdayLabel(today)}</span>
           </h1>
-          {banks.length ? (
-            <ul className="mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-label text-neutral-600" data-testid="dash-bank-fresh">
-              {banks.map((b) => (
-                <li key={b.itemId} data-state={b.state}>
-                  <span
-                    aria-hidden
-                    className={cn("mr-1.5 inline-block size-1.5 rounded-full align-middle", b.state === "ok" ? "bg-acct-checking" : b.state === "stale" || b.state === "never" ? "bg-neutral-400" : "bg-bad")}
-                  />
-                  <span className="font-semibold text-neutral-700">{b.institution}</span>{" "}
-                  {/* Small alarm words take the rust (--color-bad-ink, 4.6–5.2:1); the dot keeps #e16d3e. */}
-                  <span className={cn(b.state === "reauth" || b.state === "failed" ? "font-semibold text-bad-ink" : undefined)}>· {b.words}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>
           {/* ONE action: the most actionable issue. With none, nothing shouts. */}
@@ -99,17 +76,6 @@ export default function DashboardHeader() {
         </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <AffordLauncher className={QUIET} />
-        <button
-          type="button"
-          className={QUIET_TEXT}
-          aria-expanded={recapOpen}
-          aria-controls="dash-recap"
-          onClick={() => setRecapOpen((o) => !o)}
-          data-testid="dash-recap-toggle"
-        >
-          {recapOpen ? "Hide morning text" : "Morning text"}
-        </button>
         {/* (WN) The way back to What's new — a quiet link, not a tile; "New" while a note is unread. */}
         <button type="button" className={QUIET_TEXT} onClick={requestWhatsNewOpen} data-testid="dash-whats-new">
           What's new
@@ -119,13 +85,6 @@ export default function DashboardHeader() {
             </span>
           ) : null}
         </button>
-        {recapOpen ? (
-          <div id="dash-recap" className="mt-2">
-            <Suspense fallback={<div className="skeleton h-12 w-full max-w-2xl rounded-control" aria-busy="true" />}>
-              <RecapPreview />
-            </Suspense>
-          </div>
-        ) : null}
       </div>
     </header>
   );

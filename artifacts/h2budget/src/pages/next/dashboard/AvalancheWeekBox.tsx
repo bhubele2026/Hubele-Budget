@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import type { AvalancheWeeklyLastPaid, AvalancheWeeklyWeek } from "@workspace/api-client-react";
-// The lazy `features` module: this box lives in the below-the-fold chunk, never on the landing path.
+// The lazy `features` module: this box is its own lazy chunk, never on the landing path.
 import { getGetAvalancheWeeklyQueryKey, useGetAvalancheWeekly } from "@workspace/api-client-react/features";
 import { Panel } from "@/components/next";
 import { cn } from "@/lib/utils";
@@ -150,8 +150,8 @@ function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls 
 
 /**
  * ⭐ (AVAL-W) "Which avalanche we are paying, when, and a button to say we did"
- * (owner, 2026-11-10). Sits in the below-the-fold chunk above the forecast:
- * this week's payment and the card it goes to, "We paid it" (closes the week
+ * (owner, 2026-11-10). (Home is four numbers, 2026-11-11) Titled "Pay this week"
+ * and directly under the header, in its own lazy chunk: this week's payment and the card it goes to, "We paid it" (closes the week
  * and lowers that card's balance), then "Paid $X to <card>" with Undo and the
  * next payment. Nothing at all with the monthly cadence.
  *
@@ -166,7 +166,7 @@ export default function AvalancheWeekBox() {
   if (q.data !== undefined && weekPayView(q.data).kind === "hidden") return null;
   return (
     <Panel
-      title="Avalanche this week"
+      title="Pay this week"
       span={BELOW_FOLD.avalanche.span}
       variant="static"
       className={cn(rise(BELOW_FOLD.avalanche.rise), minH)}

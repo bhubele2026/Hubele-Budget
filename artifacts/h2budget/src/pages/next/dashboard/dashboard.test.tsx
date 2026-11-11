@@ -135,41 +135,32 @@ describe("header", () => {
         { lastSyncErrorCode: "ITEM_LOGIN_REQUIRED", lastSyncError: "login" }),
     ]);
   });
-  it("says the day and each bank's freshness; no figures of its own (the tiles carry them)", () => {
+  it("says the day and nothing else of its own: no figures, no bank lines (those are under More now)", () => {
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-today").textContent).toBe("Today · Thu Oct 8");
     expect(screen.queryByTestId("dash-facts")).toBeNull();
     expect(screen.getByTestId("dash-header").textContent).not.toMatch(/\$/);
-    const banks = screen.getByTestId("dash-bank-fresh").textContent!;
-    expect(banks).toContain("Chase · synced 2 h ago");
-    expect(banks).toContain("American Express · needs reconnecting");
+    // (Home is four numbers, 2026-11-11) The sync lines, Afford and the morning text moved into the More drawer,
+    // unchanged; MoreDrawer.test.tsx holds what these tests used to say about them.
+    expect(screen.queryByTestId("dash-bank-fresh")).toBeNull();
+    expect(screen.queryByTestId("afford-open")).toBeNull();
+    expect(screen.queryByTestId("dash-recap-toggle")).toBeNull();
+    expect(screen.getByTestId("dash-header").textContent).not.toMatch(/synced|reconnecting|afford|morning/i);
   });
-  it("(Q5 fix) the bank dots and the confidence line cannot disagree: a connection the server calls ok is never 'not synced yet' for a null lastSyncedAt", () => {
-    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })], { lastSyncedAt: null, freshness: { state: "ok", stale: false, staleReason: null, fetchedAt: "2026-10-08T15:00:00Z", lastContactAt: null, lastFailureAt: null } })]);
-    wrap(<DashboardHeader />);
-    const li = screen.getByTestId("dash-bank-fresh").querySelector("li")!;
-    expect(li.getAttribute("data-state")).toBe("ok");
-    expect(li.textContent).not.toContain("not synced yet");
-  });
-  it("the header carries the bank connection lines only: the check, updated and pending live once, on the Banking tile", () => {
+  it("the check, updated and pending are not the header's: they live once, on the Banking tile", () => {
     h.spine.data = spine({ bankConfidence: { fetchedAt: "2026-10-08T15:00:00Z", bankBalance: "4180.50", bankAsOf: null, h2Balance: "4200.50", pendingCount: 1, check: { status: "matches", reason: null, stale: false, staleReason: null, checkedAt: "2026-10-08T14:00:00Z", difference: "0.00", direction: null } } });
     wrap(<DashboardHeader />);
     expect(screen.queryByTestId("dash-bank-confidence")).toBeNull();
     expect(screen.queryByTestId("dash-bank-updated")).toBeNull();
     expect(screen.queryByTestId("dash-bank-check")).toBeNull();
     expect(screen.queryByTestId("dash-bank-pending")).toBeNull();
-    expect(screen.getByTestId("dash-bank-fresh").textContent).toContain("Chase · synced 2 h ago");
-    // the connection lines are label size now
-    expect(screen.getByTestId("dash-bank-fresh").className).toContain("text-label");
   });
-  it("ONE action by priority: Reconnect beats a week over plan, which beats Afford", () => {
+  it("ONE action by priority: Reconnect beats a week over plan, which beats nothing at all", () => {
     h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "refresh_failed" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00", remainingWeekKnown: "-25.00" } });
     const a = wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("reconnect");
     expect(screen.getByTestId("dash-reconnect").getAttribute("href")).toBe("/settings");
     expect(screen.queryByTestId("ways-back-open")).toBeNull();
-    // Afford stays one tap away, as a quiet second control.
-    expect(screen.getByTestId("afford-open")).toBeTruthy();
     a.unmount();
     // A CARD's bank needing a new login is a reconnect too (Amex here)…
     h.spine.data = spine({ position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00", remainingWeekKnown: "-25.00" } });
@@ -187,7 +178,7 @@ describe("header", () => {
     h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "old" }, forecast: { ...spine().forecast, lowPoint: "1500.00", status: "ready" } });
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("afford");
-    expect(screen.getByTestId("afford-open").textContent).toBe("Can we afford something?");
+    expect(screen.getByTestId("dash-header-action").textContent).toBe("");
   });
   it("no bank linked: the one action is the app's link path", () => {
     h.Q.items = ok([]);
@@ -196,8 +187,6 @@ describe("header", () => {
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("link");
     expect(screen.getByTestId("dash-link-bank").getAttribute("href")).toBe("/settings");
-    // Afford stays reachable as the quiet second control (parity with the old dashboard).
-    expect(screen.getByTestId("afford-open").textContent).toBe("Can we afford something?");
   });
   it("the forecast running short takes the one action (after Reconnect, before Pick a way back)", () => {
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
@@ -207,24 +196,13 @@ describe("header", () => {
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("short");
     expect(screen.getByTestId("dash-runs-short").getAttribute("href")).toBe("/forecast?day=2026-10-20");
     expect(screen.getByTestId("dash-runs-short").textContent).toBe("See where it runs short");
-    expect(screen.getByTestId("afford-open")).toBeTruthy();
     a.unmount();
     // Above the buffer: back to the week's way back.
     h.spine.data = spine({ forecast: { ...spine().forecast, lowPoint: "1500.00", status: "ready" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00", remainingWeekKnown: "-25.00" } });
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("wayBack");
   });
-  it("the morning text is behind a disclosure and only loads when opened", async () => {
-    wrap(<DashboardHeader />);
-    expect(screen.queryByTestId("recap-stub")).toBeNull();
-    const t = screen.getByTestId("dash-recap-toggle");
-    expect(t.textContent).toBe("Morning text");
-    expect(t.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(t);
-    await waitFor(() => expect(screen.getByTestId("recap-stub")).toBeTruthy());
-    expect(t.getAttribute("aria-expanded")).toBe("true");
-  });
-  it("(WN) a quiet What's new link in the second row; New only while a note is unread; it opens the sheet", () => {
+  it("(WN) a quiet What's new link under the day; New only while a note is unread; it opens the sheet", () => {
     const opened = vi.fn();
     const off = onWhatsNewOpen(opened);
     try {
@@ -239,8 +217,6 @@ describe("header", () => {
       act(() => setWhatsNewUnread(1));
       expect(screen.getByTestId("dash-whats-new-new").textContent).toBe("New");
       expect(link.textContent).toBe("What's newNew");
-      // Same row as Afford and Morning text, after them.
-      expect(screen.getByTestId("dash-recap-toggle").parentElement).toBe(link.parentElement);
       fireEvent.click(link);
       expect(opened).toHaveBeenCalledTimes(1);
     } finally {
@@ -248,15 +224,15 @@ describe("header", () => {
       act(() => _resetWhatsNewSignalForTests());
     }
   });
-  it("with nothing to act on there is no action button, only the small links", () => {
+  it("with nothing to act on there is no action button, only What's new", () => {
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
     h.spine.data = spine({ forecast: { ...spine().forecast, lowPoint: "1500.00", status: "ready" }, position: { ...spine().position, withinPlan: "yes", remainingWeek: "100.00", remainingWeekKnown: "100.00" } });
     wrap(<DashboardHeader />);
     const act = screen.getByTestId("dash-header-action");
     expect(act.getAttribute("data-kind")).toBe("afford");
     expect(act.textContent).toBe("");
-    expect(screen.getByTestId("afford-open")).toBeTruthy();
-    expect(screen.getByTestId("dash-recap-toggle")).toBeTruthy();
+    expect(screen.getByTestId("dash-header").querySelectorAll("button, a").length).toBe(1);
+    expect(screen.getByTestId("dash-whats-new")).toBeTruthy();
   });
 });
 

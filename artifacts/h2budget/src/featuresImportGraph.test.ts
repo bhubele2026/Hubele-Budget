@@ -184,6 +184,12 @@ describe("the entry path and the generated client's sub-modules", () => {
     const files = new Set(Array.from(graph.keys(), rel));
     for (const lazyFile of [
       "pages/next/dashboard/BelowFold.tsx",
+      // (Home is four numbers, 2026-11-11) "Pay this week" reads the lazy features module from its own chunk; the
+      // six tiles and the header's old small print (sync lines, Afford, morning text) are the lazy "More" drawer.
+      "pages/next/dashboard/AvalancheWeekBox.tsx",
+      "pages/next/dashboard/MoreDrawer.tsx",
+      "pages/next/dashboard/Tiles.tsx",
+      "components/afford/AffordLauncher.tsx",
       "pages/next/dashboard/ForecastPanel.tsx",
       "pages/next/dashboard/UpcomingPanel.tsx",
       "pages/next/dashboard/SpendingPanel.tsx",
@@ -196,8 +202,8 @@ describe("the entry path and the generated client's sub-modules", () => {
     ]) {
       expect(files.has(lazyFile), `${lazyFile} must stay off the open path`).toBe(false);
     }
-    // …while the first screen (header, the six tiles) is on it.
-    for (const eager of ["DashboardHeader", "Tiles"]) {
+    // …while the first screen (header, the four numbers) is on it.
+    for (const eager of ["DashboardHeader", "FourNumbers"]) {
       expect(files.has(`pages/next/dashboard/${eager}.tsx`), `${eager} is the first screen`).toBe(true);
     }
     // No chart library is imported by anything on the open path.

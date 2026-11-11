@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { AvalancheWeeklyLastPaid, AvalancheWeeklyPlan, AvalancheWeeklyWeek } from "@workspace/api-client-react";
 
-// ⭐ (AVAL-W) The home page's "Avalanche this week" box: which debt this week's
+// ⭐ (AVAL-W) The home page's "Pay this week" box: which debt this week's
 // payment goes to, how much and when, "We paid it", then "Paid $X to <card>"
 // with Undo and the next payment. Every figure is the server's plan; the box
 // only picks the state and the words (`lib/avalancheWeekPay.ts`).
@@ -105,10 +105,10 @@ afterEach(() => {
 
 const box = () => screen.getByTestId("dash-avalanche-week");
 
-describe("Avalanche this week — to pay", () => {
+describe("Pay this week — to pay", () => {
   it("says how much goes to which card and when, and the button marks that day paid", () => {
     render(<AvalancheWeekBox />);
-    expect(box().textContent).toContain("Avalanche this week");
+    expect(box().textContent).toContain("Pay this week");
     expect(screen.getByTestId("avalanche-week-line").textContent).toBe("$400.00 → Card A");
     expect(screen.getByTestId("avalanche-week-when").textContent).toBe("Friday, Nov 13");
     const button = screen.getByTestId("week-pay-button");
@@ -153,7 +153,7 @@ describe("Avalanche this week — to pay", () => {
   });
 });
 
-describe("Avalanche this week — paid", () => {
+describe("Pay this week — paid", () => {
   it("Paid $X to the card, Undo, and the next payment", () => {
     h.q = ok({ ...answeredFirst(plan()), lastPaid: paidRec() });
     render(<AvalancheWeekBox />);
@@ -213,7 +213,7 @@ describe("Avalanche this week — paid", () => {
   });
 });
 
-describe("Avalanche this week — other states", () => {
+describe("Pay this week — other states", () => {
   it("nothing safe this week: says so, and the next payment", () => {
     h.q = ok(plan({ weeks: [week({ date: "2026-11-13", paid: 0 }), week({ date: "2026-11-20", paid: 450 })] }));
     render(<AvalancheWeekBox />);

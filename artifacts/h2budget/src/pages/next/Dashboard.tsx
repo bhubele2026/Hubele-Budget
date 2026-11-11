@@ -6,27 +6,27 @@ import { useSpine } from "@/hooks/useSpine";
 import { useLandingWarmup } from "@/hooks/useLandingWarmup";
 import { APP_VERSION } from "@/lib/version";
 import DashboardHeader from "./dashboard/DashboardHeader";
-import Tiles from "./dashboard/Tiles";
+import FourNumbers from "./dashboard/FourNumbers";
 import { BelowFoldSkeleton } from "./dashboard/BelowFoldSkeleton";
 import { CompactFold } from "./dashboard/foldDensity";
 import { usePlaidItemsQ } from "./dashboard/queries";
 import { hasLinkedBank } from "./dashboard/bankState";
 
-// (C11b, refinement) Everything after the first screen is ONE lazy chunk with
-// two slots: the forecast row (forecast + coming up) above the account list,
-// and the lower rows (spending pace, debt progress, needs attention, recent
-// activity) below it. Each slot stands behind same-size skeletons. The chart
-// library is a further lazy chunk inside the forecast panel.
-// One promise for both slots and the idle warm-up: the chunk is asked for once.
-let belowFold: Promise<typeof import("./dashboard/BelowFold")> | null = null;
-const loadBelowFold = () =>
-  (belowFold ??= import("./dashboard/BelowFold").catch((e: unknown) => {
-    belowFold = null; // a failed fetch may be retried by the next ask
-    throw e;
-  }));
-// (W4) The Amex tile's "Purchases this week": its own chunk, after first paint.
-const AmexWeekCharges = lazyWithPreload(() => import("./dashboard/AmexWeekCharges"));
-const ForecastRow = lazyWithPreload(() => loadBelowFold().then((m) => ({ default: m.ForecastRow })));
+// (Home is four numbers, 2026-11-11) Three lazy chunks behind same-size
+// skeletons, none on the open path: "Pay this week" (directly under the header,
+// asked for at once), the "More" drawer (the six tiles and the header's old
+// small print, mounted when opened) and the forecast graph (after first paint;
+// the chart library is a further lazy chunk inside it).
+const PayThisWeek = lazyWithPreload(() => import("./dashboard/AvalancheWeekBox"));
+const MoreDrawer = lazyWithPreload(() => import("./dashboard/MoreDrawer"));
+const ForecastRow = lazyWithPreload(() => import("./dashboard/BelowFold").then((m) => ({ default: m.ForecastRow })));
+
+/** The closed drawer's own height (its one line), so nothing moves when it arrives. */
+const MoreSkeleton = () => (
+  <div className="span-12 flex h-10 items-center" data-testid="dash-more-skeleton" aria-busy="true">
+    <div className="skeleton h-4 w-16 rounded" />
+  </div>
+);
 
 /** Start the chunk when the browser is idle after first paint, then show it. */
 export function useBelowFoldReady(): boolean {
@@ -64,13 +64,11 @@ function DashboardRefreshBanner() {
 }
 
 /**
- * The landing: the household's whole position on one screen, in the order the
- * owner asks it — what cash do we have; what can we spend before payday; will
- * we run short, and when; are we making progress on debt; what needs us today.
- * The header and the summary row answer the first four at a glance; every
- * panel below is the detail one look further down. On a phone it reads top to
- * bottom in the same order. No `Page` wrapper: the shell already pads the
- * page, and the header is this page's title.
+ * The landing, in four numbers (owner, 2026-11-11): the day, what to pay this
+ * week, then checking · lowest · spent this week · debt paid. Everything the
+ * page used to open with is one tap away under "More", unchanged; the forecast
+ * graph follows. No `Page` wrapper: the shell already pads the page, and the
+ * header is this page's title.
  */
 export default function DashboardPage() {
   // Warm the area pages' chunks (and the forecast data) on idle, after the
@@ -85,15 +83,17 @@ export default function DashboardPage() {
       <PageGrid>
         <DashboardHeader />
         <DashboardRefreshBanner />
-        <Tiles
-          weekCharges={
-            below ? (
-              <Suspense fallback={null}>
-                <AmexWeekCharges />
-              </Suspense>
-            ) : undefined
-          }
-        />
+        <Suspense fallback={<BelowFoldSkeleton slot="pay" />}>
+          <PayThisWeek />
+        </Suspense>
+        <FourNumbers />
+        {below ? (
+          <Suspense fallback={<MoreSkeleton />}>
+            <MoreDrawer />
+          </Suspense>
+        ) : (
+          <MoreSkeleton />
+        )}
         {below ? (
           <Suspense fallback={<BelowFoldSkeleton slot="forecast" />}>
             <ForecastRow />
