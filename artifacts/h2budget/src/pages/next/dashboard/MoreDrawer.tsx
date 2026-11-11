@@ -76,14 +76,16 @@ function MoreBody() {
  * default, holding everything the home page used to open with — the six tiles
  * (`Tiles.tsx`, as it was), each bank's sync line, "Can we afford something?"
  * and the morning text. Nothing was dropped and no word changed; it is one tap
- * further away. Its own lazy chunk (the six tiles left the open path), and the
+ * further away. (Home says less, 2026-11-11) Its summary names what is inside,
+ * "Accounts, allowances and tools", and the body slides open (`.disclose`,
+ * off for reduced motion). Its own lazy chunk (the six tiles left the open path), and the
  * contents mount, and ask for what they read, only once it is first opened.
  */
 export default function MoreDrawer() {
   const [ever, setEver] = useState(false);
   return (
     <details
-      className="span-12"
+      className="disclose span-12"
       data-testid="dash-more"
       onToggle={(e) => {
         if (e.currentTarget.open) setEver(true);
@@ -93,7 +95,7 @@ export default function MoreDrawer() {
         className="w-fit cursor-pointer rounded-control py-2.5 text-body font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
         data-testid="dash-more-summary"
       >
-        More
+        Accounts, allowances and tools
       </summary>
       {ever ? <MoreBody /> : null}
     </details>

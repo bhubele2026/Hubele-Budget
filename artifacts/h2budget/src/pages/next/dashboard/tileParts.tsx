@@ -26,10 +26,10 @@ const CHIP: Record<Tone, string> = {
 export interface TileStatus { word: string; tone: Tone }
 
 export function Tile({
-  testid, title, sub, href, accent, status, children, why, index, box = "span-4 min-h-[11.5rem]",
+  testid, title, sub, href, accent, status, children, why, index, box = "span-4 min-h-[11.5rem]", body,
 }: {
   testid: string;
-  title: string;
+  title: ReactNode;
   /** Account identity or one short line under the title. */
   sub?: ReactNode;
   href: string;
@@ -40,6 +40,8 @@ export function Tile({
   index: number;
   /** The tile's place and size in its grid. The six tiles keep the default; the four numbers pass their own. */
   box?: string;
+  /** Extra classes for the tile's body (the four numbers sit their figure at the bottom on a phone, so a two-line title beside a one-line one still leaves the row's figures level). */
+  body?: string;
 }) {
   const qc = useQueryClient();
   return (
@@ -76,7 +78,7 @@ export function Tile({
           <span aria-hidden className="text-neutral-400 transition-transform motion-safe:group-hover:translate-x-0.5">→</span>
         </div>
       </div>
-      <div className="flex flex-1 flex-col gap-2">{children}</div>
+      <div className={cn("flex flex-1 flex-col gap-2", body)}>{children}</div>
       {why ? <div className="relative z-10 text-micro text-neutral-600">{why}</div> : null}
     </div>
   );
@@ -102,7 +104,36 @@ export function Fig({ label, value, tone = "neutral", big = false, testid }: {
 /** (Home is four numbers) The four boxes' own grid: two by two on a phone, one row of four from 1024 px. */
 export const FOUR_GRID = "span-12 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4";
 /** One of the four boxes: shorter than a tile (one number, one line), tighter padding on a phone. */
-export const FOUR_BOX = "min-h-[7.5rem] p-3 sm:p-4";
+export const FOUR_BOX = "min-h-[7.625rem] p-3 sm:p-4";
+/** (Home says less) A box that also carries a thin bar under its number: the bar's height and gap, held from the skeleton on. */
+export const FOUR_BOX_BAR = "min-h-[8.375rem] p-3 sm:p-4 lg:min-h-[8.75rem]";
+/** On a phone the four boxes are two by two and a title may take two lines: the number and its line sit at the bottom, level across the row. */
+export const FOUR_BODY = "max-lg:justify-end";
+
+/**
+ * (Home says less, 2026-11-11) ONE quantity against ONE ceiling as a thin bar: the landing's own small copy of
+ * `CssFillMeter` (`lib/cssBars.tsx`), same look and same two motion classes, written with colour tokens only so
+ * the open path does not carry the chart tokens. Navy under the plan; past it, the one deep orange, the track
+ * rescales to the actual and a hairline marks where the plan ran out. `aria-hidden`: the box says the state in
+ * words beside it. `.grow-x` sweeps once when the bar mounts; `.bar-sweep` tweens a later change of width, so a
+ * background refresh never replays the sweep. Both are off under reduced motion (`index.css`).
+ */
+export function FillBar({ value, ceiling }: { value: number; ceiling: number }) {
+  const v = Math.max(0, Number(value) || 0);
+  const plan = Number(ceiling) || 0;
+  const ratio = plan > 0 ? v / plan : 0;
+  const over = ratio > 1;
+  const fillPct = plan <= 0 ? 0 : over ? 100 : Math.min(100, ratio * 100);
+  return (
+    <div aria-hidden="true" data-over={over ? "true" : undefined} className="relative h-1.5 w-full overflow-hidden rounded-full bg-brand-line">
+      <span
+        className={cn("bar-sweep grow-x absolute inset-y-0 left-0 rounded-full", over ? "bg-brand-orange-deep" : "bg-brand-navy")}
+        style={{ width: `${fillPct}%` }}
+      />
+      {over ? <span className="absolute inset-y-0 w-px bg-white/75" style={{ left: `${(1 / ratio) * 100}%` }} /> : null}
+    </div>
+  );
+}
 
 export const Skel = () => <span className="skeleton block h-7 w-28 rounded" aria-busy="true" />;
 

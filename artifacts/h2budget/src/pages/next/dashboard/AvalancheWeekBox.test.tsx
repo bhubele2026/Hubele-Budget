@@ -3,8 +3,9 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { AvalancheWeeklyLastPaid, AvalancheWeeklyPlan, AvalancheWeeklyWeek } from "@workspace/api-client-react";
 
 // ⭐ (AVAL-W) The home page's "Pay this week" box: which debt this week's
-// payment goes to, how much and when, "We paid it", then "Paid $X to <card>"
-// with Undo and the next payment. Every figure is the server's plan; the box
+// payment goes to, how much and when, "We paid it", then two compact rows:
+// "Paid · $X · card" with Undo, and "Next payment · Fri Nov 27 · $X · card"
+// ("2 cards" opens to each card's line). Every figure is the server's plan; the box
 // only picks the state and the words (`lib/avalancheWeekPay.ts`).
 
 const h = vi.hoisted(() => ({
@@ -154,13 +155,18 @@ describe("Pay this week — to pay", () => {
 });
 
 describe("Pay this week — paid", () => {
-  it("Paid $X to the card, Undo, and the next payment", () => {
+  it("two labelled rows: Paid (amount, card, Undo) and Next payment (day, amount, card)", () => {
     h.q = ok({ ...answeredFirst(plan()), lastPaid: paidRec() });
     render(<AvalancheWeekBox />);
-    expect(screen.getByTestId("avalanche-week-paid-line").textContent).toBe("Paid $400.00 to Card A");
+    expect(screen.getByTestId("avalanche-week-paid-row").textContent).toBe("Paid$400.00·Card AUndo");
+    expect(screen.getByTestId("avalanche-week-paid-line").textContent).toBe("$400.00·Card A");
     expect(screen.queryByTestId("week-pay-button")).toBeNull();
     expect(box().textContent).not.toContain("PAID OFF");
-    expect(screen.getByTestId("avalanche-week-next").textContent).toBe("Next: $450.00 → Card A on Friday, Nov 27");
+    expect(screen.getByTestId("avalanche-week-next").textContent).toBe("Next paymentFri Nov 27·$450.00·Card A");
+    // One card each: the name is inline and nothing opens.
+    expect(box().querySelector("details")).toBeNull();
+    // The rows are compact, not a second headline figure.
+    expect(box().querySelector(".text-kpi")).toBeNull();
     expect(screen.queryByTestId("avalanche-week-linked")).toBeNull();
     fireEvent.click(screen.getByTestId("week-pay-undo"));
     expect(h.undo).toEqual(["rec-1"]);
@@ -178,7 +184,7 @@ describe("Pay this week — paid", () => {
     expect(screen.getByTestId("avalanche-week-linked").textContent).toBe("Its balance updates when the bank shows the payment.");
   });
 
-  it("two cards paid: each on its line, PAID OFF on the one it cleared, the bank note names the bank's card", () => {
+  it("two cards paid: '2 cards', and the row opens to each card's line, PAID OFF on the one it cleared, and the bank note", () => {
     h.q = ok({
       ...answeredFirst(plan()),
       lastPaid: paidRec({
@@ -190,10 +196,52 @@ describe("Pay this week — paid", () => {
       }),
     });
     render(<AvalancheWeekBox />);
-    expect(screen.getByTestId("avalanche-week-paid-line").textContent).toBe("Paid $1,000.00 to Card A + Card B");
+    expect(screen.getByTestId("avalanche-week-paid-line").textContent).toBe("$1,000.00·2 cards");
+    const d = screen.getByTestId("avalanche-week-paid-cards") as HTMLDetailsElement;
+    expect(d.tagName).toBe("DETAILS");
+    expect(d.open).toBe(false);
+    expect(d.className).toContain("disclose");
+    // The summary is the row's own words; Undo sits outside it, so a press on Undo never toggles the row.
+    expect(d.querySelector("summary")!.textContent).toBe("$1,000.00·2 cards");
+    expect(d.querySelector("summary button")).toBeNull();
+    expect(d.contains(screen.getByTestId("week-pay-undo"))).toBe(false);
+    d.open = true;
+    fireEvent(d, new Event("toggle"));
     const lines = screen.getAllByTestId("avalanche-week-target");
+    expect(lines.every((l) => d.contains(l))).toBe(true);
     expect(lines.map((e) => e.textContent)).toEqual(["$600.00 to Card APAID OFF", "$400.00 to Card B"]);
-    expect(screen.getByTestId("avalanche-week-linked").textContent).toBe("Card B: its balance updates when the bank shows the payment.");
+    const note = screen.getByTestId("avalanche-week-linked");
+    expect(d.contains(note)).toBe(true);
+    expect(note.textContent).toBe("Card B: its balance updates when the bank shows the payment.");
+  });
+
+  it("one card paid from the bank: the note stays in sight under the Paid row, with nothing to open", () => {
+    h.q = ok({ ...answeredFirst(plan()), lastPaid: paidRec({ targets: [{ ...CARD_B, amount: 400, linked: true, paidOff: false }] }) });
+    render(<AvalancheWeekBox />);
+    expect(screen.queryByTestId("avalanche-week-paid-cards")).toBeNull();
+    expect(screen.getByTestId("avalanche-week-paid-row").contains(screen.getByTestId("avalanche-week-linked"))).toBe(true);
+  });
+
+  it("a next payment to two cards: '2 cards', and the row opens to each card's amount", () => {
+    const p = answeredFirst(plan());
+    const two = week({
+      date: "2026-11-27",
+      paid: 1000,
+      targets: [
+        { ...CARD_A, amount: 600, paidOff: true },
+        { ...CARD_B, amount: 400, paidOff: false },
+      ],
+    });
+    h.q = ok({ ...p, weeks: [p.weeks[0]!, p.weeks[1]!, two], lastPaid: paidRec() });
+    render(<AvalancheWeekBox />);
+    expect(screen.getByTestId("avalanche-week-next-line").textContent).toBe("Fri Nov 27·$1,000.00·2 cards");
+    const d = screen.getByTestId("avalanche-week-next-cards") as HTMLDetailsElement;
+    expect(d.tagName).toBe("DETAILS");
+    expect(d.open).toBe(false);
+    expect(d.className).toContain("disclose");
+    expect(screen.getAllByTestId("avalanche-week-next-target").map((e) => e.textContent)).toEqual(["$600.00 → Card A", "$400.00 → Card B"]);
+    // The Paid row above it is one card: plain.
+    expect(screen.queryByTestId("avalanche-week-paid-cards")).toBeNull();
   });
 
   it("no Undo once it cannot be undone (a balance changed, or too long ago)", () => {
@@ -218,7 +266,7 @@ describe("Pay this week — other states", () => {
     h.q = ok(plan({ weeks: [week({ date: "2026-11-13", paid: 0 }), week({ date: "2026-11-20", paid: 450 })] }));
     render(<AvalancheWeekBox />);
     expect(screen.getByTestId("avalanche-week-nothing").textContent).toBe(
-      "Nothing is safe to pay this week.Next: $450.00 → Card A on Friday, Nov 20",
+      "Nothing is safe to pay this week.Next paymentFri Nov 20·$450.00·Card A",
     );
     expect(screen.queryByTestId("week-pay-button")).toBeNull();
   });
@@ -227,7 +275,7 @@ describe("Pay this week — other states", () => {
     h.q = ok(answeredFirst(plan()));
     render(<AvalancheWeekBox />);
     expect(screen.getByTestId("avalanche-week-answered").textContent).toBe(
-      "Answered on the ForecastNext: $450.00 → Card A on Friday, Nov 27",
+      "Answered on the ForecastNext paymentFri Nov 27·$450.00·Card A",
     );
     expect(screen.queryByTestId("week-pay-button")).toBeNull();
   });

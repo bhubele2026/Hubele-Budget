@@ -96,8 +96,10 @@ describe("More", () => {
     expect(d.open).toBe(false);
     expect(d.className).toContain("span-12");
     expect(screen.getByTestId("dash-more-summary").tagName).toBe("SUMMARY");
-    expect(screen.getByTestId("dash-more-summary").textContent).toBe("More");
-    expect(d.textContent).toBe("More");
+    expect(screen.getByTestId("dash-more-summary").textContent).toBe("Accounts, allowances and tools");
+    expect(d.textContent).toBe("Accounts, allowances and tools");
+    // The body slides open (index.css `.disclose`; off under reduced motion).
+    expect(d.className).toContain("disclose");
     expect(screen.queryByTestId("dash-more-body")).toBeNull();
     expect(screen.queryByTestId("tile-banking")).toBeNull();
     expect(h.asked).toEqual([]);

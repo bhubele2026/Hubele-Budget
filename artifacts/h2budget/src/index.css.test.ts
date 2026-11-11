@@ -145,6 +145,27 @@ describe("index.css — the literal-duration kills stay, because dials cannot re
     expect(kills).toMatch(/\.stagger\s*>\s*\*/);
   });
 
+  /**
+   * (Home says less, 2026-11-11) A `<details class="disclose">` slides its body
+   * in when it opens. It reads a dial (`--dur-soft`, which the switch zeroes),
+   * AND it is named in the `!important` list, so neither half alone is what
+   * keeps a disclosure still for someone who asked for no motion. Only the
+   * entrance is animated, and only while [open]: the closed state is the
+   * browser's own.
+   */
+  it("a disclosure slides open on the soft dial, and not at all under reduced motion", () => {
+    const rule = SRC.match(/\.disclose\[open\]\s*>\s*:not\(summary\)\s*\{([^}]*)\}/);
+    expect(rule, "the .disclose entrance rule").not.toBeNull();
+    expect(rule![1]).toMatch(/animation:\s*discloseIn\s+var\(--dur-soft\)\s+var\(--ease-enter\)/);
+    // No literal duration: the dial is the only clock.
+    expect(rule![1]).not.toMatch(/\d+m?s\b/);
+    // Nothing styles the CLOSED details (no height, no display), so closed layout is untouched.
+    expect(SRC).not.toMatch(/\.disclose(?!\[open\])\s*[{,>]/);
+    expect(SRC).toMatch(/--dur-soft:\s*calc\(240ms \* var\(--anim-speed\)\)/);
+    const kills = SRC.slice(SRC.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(kills).toMatch(/\.disclose\[open\]\s*>\s*:not\(summary\)[^{]*\{[^}]*animation:\s*none\s*!important/s);
+  });
+
   it("collapses Radix overlay lifecycles instead of removing them", () => {
     // An animation removed outright never fires `animationend`, so a Radix
     // overlay would stay mounted. Near-instant, not `none`.

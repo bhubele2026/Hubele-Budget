@@ -52,6 +52,24 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-11.3",
+    headline: "Home says less",
+    items: [
+      {
+        title: "Bars for spending and debt",
+        body: "Spent this week now has a thin bar and one line: what is left, or how far over. Debt paid has a bar too. Lowest is now named Lowest cash, 90 days.",
+      },
+      {
+        title: "Paid, then the next payment",
+        body: "Once this week is paid, the box is two short rows: Paid and Next payment. A row for more than one card says 2 cards. Tap it to see each one.",
+      },
+      {
+        title: "A cleaner chart, and a clearer name",
+        body: "The home chart is now the same clean line as the Forecast page, with the lowest point marked on it. More is now named Accounts, allowances and tools. Nothing went away.",
+      },
+    ],
+  },
+  {
     id: "2026-11-11.2",
     headline: "A cleaner Forecast chart",
     items: [

@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { BelowFoldSkeleton } from "./BelowFoldSkeleton";
-import { FOUR_BOX, FOUR_GRID } from "./tileParts";
+import { FOUR_BOX, FOUR_BOX_BAR, FOUR_GRID } from "./tileParts";
 
 /**
  * ⭐ THE SHELL THAT PAINTS BEFORE CLERK ANSWERS. The dashboard's layout with
@@ -26,7 +26,7 @@ export function DashboardSkeleton() {
         <BelowFoldSkeleton slot="pay" />
         <div className={FOUR_GRID}>
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className={cn("panel tile-in border-l-4", FOUR_BOX)} data-testid="dashboard-skeleton-tile">
+            <div key={i} className={cn("panel tile-in border-l-4", i < 2 ? FOUR_BOX : FOUR_BOX_BAR)} data-testid="dashboard-skeleton-tile">
               <div className="skeleton h-4 w-24 max-w-full rounded" />
               <div className="skeleton mt-4 h-7 w-28 max-w-full rounded" />
             </div>

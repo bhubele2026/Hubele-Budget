@@ -55,8 +55,10 @@ vi.mock("@/components/agent/FindingsList", () => ({
   ),
 }));
 vi.mock("@/pages/forecast/ProjectedBalanceChart", () => ({
-  ProjectedBalanceChart: (p: { data: unknown[]; cashBuffer: number; lowLabel?: string }) => (
-    <div data-testid="chart-stub">{p.data.length} points, buffer {p.cashBuffer}, {p.lowLabel} label</div>
+  ProjectedBalanceChart: (p: { data: unknown[]; cashBuffer: number; variant?: string; calm?: boolean; sessionKey?: string; markers?: Array<{ date: string; kinds: string[] }>; lowestPoint?: { y: number; rawDate: string } | null }) => (
+    <div data-testid="chart-stub" data-paydays={(p.markers ?? []).filter((m) => m.kinds.includes("payday")).map((m) => m.date).join(",")} data-low={p.lowestPoint ? `${p.lowestPoint.y}@${p.lowestPoint.rawDate}` : ""}>
+      {p.data.length} points, buffer {p.cashBuffer}, {p.variant} {p.calm ? "calm" : "classic"}, {p.sessionKey}
+    </div>
   ),
 }));
 
@@ -66,7 +68,7 @@ import AccountsPanel from "./AccountsPanel";
 import SpendingPanel from "./SpendingPanel";
 import UpcomingPanel, { upcomingRows } from "./UpcomingPanel";
 import { obligationLine } from "./obligations";
-import ForecastPanel from "./ForecastPanel";
+import ForecastPanel, { chartWords } from "./ForecastPanel";
 import DebtPanel from "./DebtPanel";
 import ActivityPanel from "./ActivityPanel";
 import AttentionPanel from "./AttentionPanel";
@@ -814,24 +816,44 @@ describe("cash-flow forecast", () => {
     status: "ready", cashBuffer: "500.00", lowestProjected: "350.00", lowestDate: "2026-10-20", events: [],
     daily: [{ date: "2026-10-09", balance: "4000.00" }, { date: "2026-10-20", balance: "350.00" }, { date: "2026-10-21", balance: "-20.00" }], ...o,
   });
-  it("loads the chart lazily with the 90-day default; the legend names the low point in THESE days", async () => {
-    h.Q.cash = ok(signal());
+  it("loads the clean chart lazily with the 90-day default; the low point is said on the chart box, not in a sentence", async () => {
+    h.Q.cash = ok(signal({ events: [{ date: "2026-10-20", label: "Pay A", amount: "900.00" }, { date: "2026-10-21", label: "Bill A", amount: "-370.00" }] }));
     wrap(<ForecastPanel />);
     expect(h.horizons[0]).toBe(90);
-    expect(screen.getByTestId("dash-forecast-low").textContent).toBe("Low point in these 90 days: $350.00 on Tue Oct 20");
-    // (T2) Under the $500 buffer but above $0: quiet, never rust.
-    expect(screen.getByTestId("dash-forecast-low").querySelector("[data-tone]")!.getAttribute("data-tone")).toBe("neutral");
-    await waitFor(() => expect(screen.getByTestId("chart-stub").textContent).toBe("3 points, buffer 500, short label"));
+    // (Home says less) One heading, no sub-line, and the sentence is gone: the chart's own label carries the low point.
+    const panel = screen.getByTestId("dash-forecast");
+    expect(panel.querySelector("h2, h3")!.textContent).toBe("Checking forecast");
+    expect(panel.textContent).not.toContain("Cash-flow forecast");
+    expect(panel.textContent).not.toContain("Projected checking balance");
+    expect(panel.textContent).not.toContain("Low point in these");
+    expect(screen.queryByTestId("dash-forecast-low")).toBeNull();
+    // ...and a screen reader loses nothing: amount and day are the chart box's name.
+    const chart = screen.getByTestId("dash-forecast-chart");
+    expect(chart.getAttribute("role")).toBe("group");
+    expect(chart.getAttribute("aria-label")).toBe("Checking forecast, next 90 days. Lowest $350.00 on Tue Oct 20.");
+    // The clean line of the Forecast page: calm, drawn once a session, paydays as its only marks.
+    await waitFor(() => expect(screen.getByTestId("chart-stub").textContent).toBe("3 points, buffer 500, expanded calm, dash-forecast"));
+    expect(screen.getByTestId("chart-stub").getAttribute("data-paydays")).toBe("2026-10-20");
+    expect(screen.getByTestId("chart-stub").getAttribute("data-low")).toBe("350@2026-10-20");
     expect(screen.getByTestId("dash-forecast-link").getAttribute("href")).toBe("/forecast");
-    expect(screen.getByTestId("dash-forecast-chart").className).toContain("h-80");
+    expect(chart.className).toContain("h-80");
+    // The short legend, with a tint named only because this curve has such days; no "Show bills" here.
+    const legend = screen.getByTestId("dash-forecast-legend");
+    expect(Array.from(legend.querySelectorAll("li"), (li) => li.textContent)).toEqual(["Balance", "Cushion", "Payday", "Under cushion", "Below zero"]);
+    expect(screen.queryByTestId("chart-show-bills")).toBeNull();
   });
-  it("⭐ at 90 days the legend's low point equals the summary row's (one figure, two places)", () => {
+  it("the legend names no tint the curve does not have", () => {
+    h.Q.cash = ok(signal({ lowestProjected: "900.00", daily: [{ date: "2026-10-09", balance: "4000.00" }, { date: "2026-10-20", balance: "900.00" }] }));
+    wrap(<ForecastPanel />);
+    expect(Array.from(screen.getByTestId("dash-forecast-legend").querySelectorAll("li"), (li) => li.textContent)).toEqual(["Balance", "Cushion", "Payday"]);
+  });
+  it("⭐ at 90 days the chart box's low point equals the summary row's (one figure, two places)", () => {
     h.Q.cash = ok({ ...signal(), lowestProjected: "350.00", lowestDate: "2026-10-20", account: cashAcct });
     h.Q.pos = ok({ reservesHeld: "0.00" });
     h.Q.debts = ok([]);
     wrap(<><SummaryRow /><ForecastPanel /></>);
     const kpi = screen.getByTestId("dash-kpi-low-value").textContent!;
-    expect(screen.getByTestId("dash-forecast-low").textContent).toContain(kpi);
+    expect(screen.getByTestId("dash-forecast-chart").getAttribute("aria-label")).toContain(`Lowest ${kpi} on`);
   });
   it("switches horizon and says which", () => {
     h.Q.cash = ok(signal());
@@ -839,7 +861,14 @@ describe("cash-flow forecast", () => {
     fireEvent.click(screen.getByTestId("dash-horizon-30"));
     expect(h.horizons.at(-1)).toBe(30);
     expect(screen.getByTestId("dash-horizon-30").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("dash-forecast-low").textContent).toContain("these 30 days");
+    expect(screen.getByTestId("dash-forecast-chart").getAttribute("aria-label")).toBe("Checking forecast, next 30 days. Lowest $350.00 on Tue Oct 20.");
+  });
+  it("a below-zero low point and a curve with no low point both read plainly", () => {
+    expect(chartWords(120, { y: -40, rawDate: "2026-10-21" })).toBe("Checking forecast, next 120 days. Lowest -$40.00 on Wed Oct 21.");
+    expect(chartWords(90, null)).toBe("Checking forecast, next 90 days.");
+    h.Q.cash = ok(signal({ lowestDate: null }));
+    wrap(<ForecastPanel />);
+    expect(screen.getByTestId("dash-forecast-chart").getAttribute("aria-label")).toBe("Checking forecast, next 90 days.");
   });
   it("offers 30, 90 and 120 days (the server's horizons), never 180", () => {
     h.Q.cash = ok(signal());
@@ -847,13 +876,15 @@ describe("cash-flow forecast", () => {
     expect(screen.getByTestId("dash-horizon-120")).toBeTruthy();
     expect(screen.queryByTestId("dash-horizon-180")).toBeNull();
   });
-  it("a horizon switch keeps the last answer mounted, dimmed and busy, and says 'Loading N days…' instead of the old low point", () => {
-    h.Q.cash = { ...ok(signal()), isPlaceholderData: true };
+  it("a horizon switch keeps the last answer mounted, dimmed and busy, and says 'Loading N days…'; the box still names the curve on screen", () => {
+    h.Q.cash = { ...ok(signal({ horizonDays: 30 })), isPlaceholderData: true };
     wrap(<ForecastPanel />);
     expect(screen.getByTestId("dash-forecast-chart").className).toContain("opacity-60");
     expect(screen.getByTestId("dash-forecast-chart").getAttribute("aria-busy")).toBe("true");
     expect(screen.getByTestId("dash-forecast-loading").textContent).toBe("Loading 90 days…");
-    expect(screen.queryByTestId("dash-forecast-low")).toBeNull();
+    expect(screen.getByTestId("dash-forecast-loading").getAttribute("role")).toBe("status");
+    // The curve on screen is still the 30-day one, so that is what the box is called until 90 answers.
+    expect(screen.getByTestId("dash-forecast-chart").getAttribute("aria-label")).toBe("Checking forecast, next 30 days. Lowest $350.00 on Tue Oct 20.");
     expect(screen.getByTestId("chart-stub")).toBeTruthy();
   });
   it("draws nothing false when there is no bank balance", () => {

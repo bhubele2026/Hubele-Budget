@@ -10,18 +10,56 @@ import { useAvalancheWeekPay, type AvalancheWeekPayControls } from "@/hooks/useA
 import { WeekPayButton, WeekPayError, WeekUndoButton } from "@/components/avalanche-week-pay";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
-import { LINK, money, rise } from "./shared";
+import { LINK, money, rise, weekdayLabel } from "./shared";
 
 const MIN = 60_000;
 
-/** "Next: $450 → Card A on Friday, Nov 20" — the next week that pays something. */
-function NextLine({ next, today }: { next: AvalancheWeeklyWeek | null; today: string }) {
+/** A row's small label ("Paid", "Next payment"): one column on a desktop, so the two rows line up. */
+const ROW_LABEL = "shrink-0 text-label font-semibold text-neutral-600 sm:w-28";
+/** A row's own words: the money in mono tabular numerals, the card in the text face. */
+const ROW_VALUE = "min-w-0 text-body font-semibold text-brand-navy";
+/** A row that opens: the native marker, then the row's words. */
+const ROW_SUMMARY =
+  "w-fit cursor-pointer rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
+const Dot = () => <span aria-hidden className="px-1.5 font-normal text-neutral-400">·</span>;
+
+/** "2 cards" — a row that pays more than one debt names how many; its detail names each. */
+const cardCount = (n: number) => `${n} cards`;
+
+/**
+ * "Next payment · Fri Nov 20 · $450.00 · Card A" — the next week that pays something, as one compact row.
+ * More than one card: "2 cards", and the row opens to each card's own line.
+ */
+function NextRow({ next }: { next: AvalancheWeeklyWeek | null }) {
   if (!next) return null;
+  const many = next.targets.length > 1;
+  const words = (
+    <span className={ROW_VALUE} data-testid="avalanche-week-next-line">
+      {weekdayLabel(next.date) ?? next.date}
+      <Dot />
+      <span className={NUM}>{money(next.paid)}</span>
+      <Dot />
+      {many ? cardCount(next.targets.length) : weekCardLabel(next)}
+    </span>
+  );
   return (
-    <p className="text-label text-neutral-600" data-testid="avalanche-week-next">
-      Next: <span className={NUM}>{money(next.paid)}</span> → {weekCardLabel(next)} on{" "}
-      {payDayLabel(next.date, today)}
-    </p>
+    <div className="flex items-baseline gap-x-2 sm:gap-x-3" data-testid="avalanche-week-next">
+      <span className={ROW_LABEL}>Next payment</span>
+      {many ? (
+        <details className="disclose min-w-0 flex-1" data-testid="avalanche-week-next-cards">
+          <summary className={ROW_SUMMARY}>{words}</summary>
+          <div className="mt-1 space-y-0.5">
+            {next.targets.map((t) => (
+              <p key={t.debtId} className="text-label text-neutral-600" data-testid="avalanche-week-next-target">
+                <span className={NUM}>{money(t.amount)}</span> → {t.name}
+              </p>
+            ))}
+          </div>
+        </details>
+      ) : (
+        words
+      )}
+    </div>
   );
 }
 
@@ -103,32 +141,53 @@ function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls 
     }
     case "paid": {
       const { paid } = view;
+      const many = paid.targets.length > 1;
+      const note = linkedNote(paid);
+      const words = (
+        <span className={ROW_VALUE} data-testid="avalanche-week-paid-line">
+          <span className={NUM}>{money(paid.total)}</span>
+          <Dot />
+          {many ? cardCount(paid.targets.length) : paidCardLabel(paid)}
+        </span>
+      );
+      const linked = note ? (
+        <p className="text-label text-neutral-500" data-testid="avalanche-week-linked">
+          {note}
+        </p>
+      ) : null;
       return (
         <div className="space-y-2" data-testid="avalanche-week-paid">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <span className={BIG} data-testid="avalanche-week-paid-line">
-                Paid <span className={NUM}>{money(paid.total)}</span> to {paidCardLabel(paid)}
-              </span>
-              {paid.targets.length === 1 && paid.targets[0]!.paidOff && <span className="chip ok">PAID OFF</span>}
+          <div className="flex items-start justify-between gap-3" data-testid="avalanche-week-paid-row">
+            <div className="flex min-w-0 flex-1 items-baseline gap-x-2 sm:gap-x-3">
+              <span className={ROW_LABEL}>Paid</span>
+              {many ? (
+                <details className="disclose min-w-0 flex-1" data-testid="avalanche-week-paid-cards">
+                  <summary className={ROW_SUMMARY}>{words}</summary>
+                  <div className="mt-1 space-y-0.5">
+                    {paid.targets.map((t) => (
+                      <p key={t.debtId} className="flex flex-wrap items-center gap-2 text-label text-neutral-600" data-testid="avalanche-week-target">
+                        <span>
+                          <span className={NUM}>{money(t.amount)}</span> to {t.name}
+                        </span>
+                        {t.paidOff && <span className="chip ok">PAID OFF</span>}
+                      </p>
+                    ))}
+                    {linked}
+                  </div>
+                </details>
+              ) : (
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {words}
+                    {paid.targets.length === 1 && paid.targets[0]!.paidOff && <span className="chip ok">PAID OFF</span>}
+                  </div>
+                  {linked}
+                </div>
+              )}
             </div>
             <WeekUndoButton controls={controls} paid={paid} />
           </div>
-          {paid.targets.length > 1 &&
-            paid.targets.map((t) => (
-              <p key={t.debtId} className="flex flex-wrap items-center gap-2 text-label text-neutral-600" data-testid="avalanche-week-target">
-                <span>
-                  <span className={NUM}>{money(t.amount)}</span> to {t.name}
-                </span>
-                {t.paidOff && <span className="chip ok">PAID OFF</span>}
-              </p>
-            ))}
-          {linkedNote(paid) && (
-            <p className="text-label text-neutral-500" data-testid="avalanche-week-linked">
-              {linkedNote(paid)}
-            </p>
-          )}
-          <NextLine next={view.next} today={today} />
+          <NextRow next={view.next} />
           <WeekPayError controls={controls} />
         </div>
       );
@@ -140,7 +199,7 @@ function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls 
           <p className="text-body font-semibold text-brand-navy">
             {view.kind === "answered" ? "Answered on the Forecast" : "Nothing is safe to pay this week."}
           </p>
-          <NextLine next={view.next} today={today} />
+          <NextRow next={view.next} />
           <EarlierLine earlier={view.earlier} controls={controls} today={today} />
           <WeekPayError controls={controls} />
         </div>
@@ -152,8 +211,10 @@ function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls 
  * ⭐ (AVAL-W) "Which avalanche we are paying, when, and a button to say we did"
  * (owner, 2026-11-10). (Home is four numbers, 2026-11-11) Titled "Pay this week"
  * and directly under the header, in its own lazy chunk: this week's payment and the card it goes to, "We paid it" (closes the week
- * and lowers that card's balance), then "Paid $X to <card>" with Undo and the
- * next payment. Nothing at all with the monthly cadence.
+ * and lowers that card's balance). (Home says less, 2026-11-11) Once paid, two
+ * compact labelled rows: "Paid · $X · card" with Undo, and "Next payment ·
+ * Fri Nov 20 · $X · card". A row for more than one card says "2 cards" and
+ * opens to each card's own line. Nothing at all with the monthly cadence.
  *
  * Its size: the same `BELOW_FOLD.avalanche` minimum height as the slot's
  * skeleton, so nothing below it moves when it arrives. Presentation only: every

@@ -57,15 +57,18 @@ export function ChartLegend({
   onToggleBills,
   hasUnder = false,
   hasNegative = false,
+  short = false,
 }: {
   showBills?: boolean;
   onToggleBills?: () => void;
   hasUnder?: boolean;
   hasNegative?: boolean;
+  /** (Home says less) The clean chart's short legend with no "Show bills" switch: the home page's chart. */
+  short?: boolean;
 } = {}) {
   const item = "inline-flex items-center gap-1.5 text-micro text-neutral-600";
   const calm = !!onToggleBills;
-  const clean = calm && !showBills;
+  const clean = short || (calm && !showBills);
   const kinds = (Object.keys(MARKER) as MarkerKind[]).filter((k) => !calm || showBills || k === "payday");
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5" data-testid="chart-legend" aria-label="Chart legend">
