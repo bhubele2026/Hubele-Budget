@@ -381,6 +381,12 @@ export function NeedsYou({
                           </button>
                           <span className="text-micro text-neutral-600" data-testid={`ny-account-${item.id}`}>{accountOf(item)}</span>
                           {item.pending ? <span className="chip gray">Pending</span> : null}
+                          {item.categoryName !== undefined ? (
+                            <span className="text-micro text-neutral-600" data-testid={`ny-cat-${item.id}`}>
+                              <span className="sr-only">Category: </span>
+                              {item.categoryName ?? "No category"}
+                            </span>
+                          ) : null}
                           <span className="chip info">{item.kind === "match" ? "Match" : "Category"}</span>
                         </div>
                         <p className="mt-1 text-label text-neutral-700" data-testid={`ny-think-${item.id}`}>{thinkWords(item)}</p>
@@ -394,6 +400,12 @@ export function NeedsYou({
                 );
               })}
             </ul>
+            {q.data.truncated && count > items.length ? (
+              <p className="border-t border-brand-line px-4 py-2 text-micro text-neutral-600" data-testid="ny-more">
+                Showing <span className="font-mono tabular-nums">{items.length}</span> of{" "}
+                <span className="font-mono tabular-nums">{count}</span>. Answer these and the next ones come up.
+              </p>
+            ) : null}
           </>
         )}
       </section>

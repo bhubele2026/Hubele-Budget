@@ -4,7 +4,8 @@ export const PAGES = [
   { id: "home", path: "/home", ready: ['[data-testid="four-checking-value"]', '[data-testid="dash-forecast-chart"] .recharts-surface', '[data-testid="dash-more-summary"]'] },
   { id: "banking", path: "/banking", ready: ['[data-testid="br-summary"]', '[data-testid="ny-items"]', '[data-testid="ny-autodone"]'] },
   // Banking's Details opened (a link that names a pill opens it): the proposed fixes, the five pills and their rows.
-  { id: "banking-details", path: "/banking?bucket=unmatched", ready: ['[data-testid="br-summary"]', '[data-testid="br-rows"]'] },
+  // "Unclear" is the bucket the invented household fills this month.
+  { id: "banking-details", path: "/banking?bucket=uncertain", ready: ['[data-testid="br-summary"]', '[data-testid="br-rows"]'] },
   { id: "amex", path: "/amex", ready: ['[data-testid="amex-fig-owed"]', '[data-testid^="row-amex-"]'] },
   { id: "spending-week", path: "/spending/week", ready: ['[data-testid="spending-week"] [data-testid="sp-known-amount"]'] },
   { id: "spending-month", path: "/spending/month", ready: ['[data-testid="spending-month"] [data-testid="sp-known-amount"]'] },

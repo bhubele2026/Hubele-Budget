@@ -33,11 +33,12 @@ function build() {
     name: p.t.displayName || p.t.description,
     amount: p.t.amount,
     pending: !!p.t.pending,
+    categoryName: p.t.categoryId ? (fx.categories.find((c) => c.id === p.t.categoryId)?.name ?? null) : null,
     kind: p.kind,
     suggestion: p.suggestion,
     reason: p.reason,
   }));
-  return { throughDate: fx.TODAY, count: items.length, items, autoDone: { matched: 9, categorized: 14, since: "2026-11-03" } };
+  return { throughDate: fx.TODAY, count: items.length, truncated: false, items, autoDone: { matched: 9, categorized: 14, since: "2026-11-03" } };
 }
 
 export const needsYou = () => build();

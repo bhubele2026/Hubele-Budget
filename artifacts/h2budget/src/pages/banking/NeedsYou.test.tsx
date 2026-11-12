@@ -41,7 +41,7 @@ const ITEMS = [
     reason: "The amount fits, the day is two days off.",
   },
   {
-    id: "n2", txId: "tx-2", accountName: "Card A", mask: "9876", date: "2026-11-04", name: "Corner Market", amount: "-42.10", pending: false,
+    id: "n2", txId: "tx-2", accountName: "Card A", mask: "9876", date: "2026-11-04", name: "Corner Market", amount: "-42.10", pending: false, categoryName: null,
     kind: "category", suggestion: { label: "Groceries", categoryId: "cat-g", reviewItemId: "rv-2", confidence: "medium" },
     reason: "A new merchant.",
   },
@@ -50,7 +50,7 @@ const ITEMS = [
     kind: "match", suggestion: null, reason: "Two planned bills could fit.",
   },
   {
-    id: "n4", txId: "tx-4", accountName: "Card A", mask: "9876", date: "2026-11-06", name: "Fill Up Station", amount: "-38.00", pending: false,
+    id: "n4", txId: "tx-4", accountName: "Card A", mask: "9876", date: "2026-11-06", name: "Fill Up Station", amount: "-38.00", pending: false, categoryName: "Dining out",
     kind: "category", suggestion: { label: "Fuel", categoryId: "cat-f", confidence: "low" },
     reason: "Seen once before.",
   },
@@ -130,6 +130,26 @@ describe("Needs you — the list", () => {
     expect(within(rows()[0]!).queryByText("Pending")).toBeNull();
     // Only the one bounded read: the list, no transactions until a row is opened.
     expect(calls.filter((c) => c.path === "/api/transactions").length).toBe(0);
+  });
+
+  it("each row says its category today when the server sends it ('No category' for none)", async () => {
+    mount();
+    await waitFor(() => expect(rows().length).toBe(4));
+    expect(screen.getByTestId("ny-cat-n2").textContent).toBe("Category: No category");
+    expect(screen.getByTestId("ny-cat-n4").textContent).toBe("Category: Dining out");
+    // A row the server sent without the field (the older shape) claims nothing.
+    expect(screen.queryByTestId("ny-cat-n1")).toBeNull();
+  });
+
+  it("a truncated list says how many it shows of how many wait; the count is the server's", async () => {
+    needsYou = { ...body(), count: 30, truncated: true };
+    mount();
+    await waitFor(() => expect(rows().length).toBe(4));
+    expect(screen.getByTestId("ny-count").textContent).toBe(" (30)");
+    expect(screen.getByTestId("ny-more").textContent).toContain("Showing 4 of 30.");
+    fireEvent.click(screen.getByTestId("ny-ok-n1"));
+    expect(screen.getByTestId("ny-count").textContent).toBe(" (29)");
+    expect(screen.getByTestId("ny-more").textContent).toContain("Showing 3 of 29.");
   });
 
   it("OK is off with no suggestion, and then Change is the primary button", async () => {

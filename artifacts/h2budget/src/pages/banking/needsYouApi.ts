@@ -38,6 +38,8 @@ export interface NeedsYouItem {
   /** Signed, the bank's sign (money out is negative). */
   amount: string;
   pending: boolean;
+  /** The row's category today (null: none). Optional until the generated type lands. */
+  categoryName?: string | null;
   kind: NeedsYouKind;
   suggestion: NeedsYouSuggestion | null;
   /** One short line on why it waits for the household. */
@@ -52,8 +54,11 @@ export interface NeedsYouAutoDone {
 
 export interface NeedsYou {
   throughDate: string;
+  /** Every row that waits; may be more than `items` when `truncated`. */
   count: number;
   items: NeedsYouItem[];
+  /** True when the server sent only the first `items.length` of `count`. */
+  truncated?: boolean;
   autoDone: NeedsYouAutoDone;
 }
 
