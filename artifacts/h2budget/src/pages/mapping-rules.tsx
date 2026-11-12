@@ -1778,7 +1778,8 @@ export default function MappingRulesPage() {
         <Help>
           A rule categorizes a transaction from its description. When more than
           one matches, the highest priority wins. Categorizing a transaction by
-          hand also creates one.
+          hand teaches H2 the merchant, so its next charges are filed the same
+          way.
         </Help>
       </div>
 
