@@ -24,6 +24,15 @@ const ACCENT: Record<AccountAccentName, string> = {
   card2: "panel-accent-card2",
   other: "panel-accent-other",
 };
+/** (2026-11-12) An account's identity on a panel: a small dot before the title, not a 4 px edge. */
+const DOT: Record<AccountAccentName, string> = {
+  checking: "bg-acct-checking",
+  amex: "bg-acct-amex",
+  card2: "bg-acct-card2",
+  other: "bg-acct-other",
+};
+/** The one panel heading voice: 15/600 charcoal. */
+const TITLE = "text-title font-semibold text-foreground";
 
 export type PanelProps = {
   /** Usually a string. (C13) A node lets a page hide the words visually on a
@@ -51,23 +60,29 @@ function variantsOf(v: PanelProps["variant"]): ReadonlySet<PanelVariant> {
   return new Set(v == null ? [] : typeof v === "string" ? [v] : v);
 }
 
-/** A titled card on the grid. `accent` paints the 4 px identity edge; `to`
- *  turns the title into a link to the full page; `actions` sit in the head. */
+/** A titled section on the grid (flat white, hairline border, 8 px corner).
+ *  `accent` puts the account's identity dot before the title; `to` turns the
+ *  title into a link to the full page; `actions` sit in the head. */
 export function Panel(props: PanelProps) {
   const v = variantsOf(props.variant);
+  const dot = props.accent ? (
+    <span aria-hidden data-testid="panel-accent-dot" className={cn("mr-2 inline-block size-2 shrink-0 rounded-full align-middle", DOT[props.accent])} />
+  ) : null;
   const title = props.to ? (
     <Link
       href={props.to}
-      className="rounded-control text-title font-semibold text-brand-navy hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+      className={cn("rounded-control hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40", TITLE)}
     >
+      {dot}
       {props.title}
     </Link>
   ) : (
     <h2
       ref={props.titleRef}
       tabIndex={props.titleRef ? -1 : undefined}
-      className={cn("text-title font-semibold text-brand-navy", props.titleRef && "rounded-control focus:outline-none focus:ring-2 focus:ring-brand-navy/40")}
+      className={cn(TITLE, props.titleRef && "rounded-control focus:outline-none focus:ring-2 focus:ring-brand-navy/40")}
     >
+      {dot}
       {props.title}
     </h2>
   );
@@ -76,7 +91,7 @@ export function Panel(props: PanelProps) {
       data-testid={props["data-testid"]}
       className={cn(
         "panel",
-        !v.has("static") && "panel-link",
+        !v.has("static") && props.to && "panel-link",
         v.has("sticky-safe") && "panel-sticky-safe",
         v.has("flush") && "panel-flush",
         props.accent && ACCENT[props.accent],
@@ -87,7 +102,7 @@ export function Panel(props: PanelProps) {
       <header className="panel-head">
         <div className="min-w-0 flex-1">
           {title}
-          {props.sub ? <p className="text-micro text-neutral-500">{props.sub}</p> : null}
+          {props.sub ? <p className="text-micro text-neutral-600">{props.sub}</p> : null}
         </div>
         {props.actions ? <div className="flex shrink-0 items-center gap-2">{props.actions}</div> : null}
       </header>
@@ -139,7 +154,7 @@ export function TablePanel({
       {head ? (
         <div
           data-testid="table-panel-head"
-          className="border-b border-brand-line bg-platinum-2 px-4 py-2 text-micro font-semibold uppercase tracking-wide text-neutral-500"
+          className="border-b border-brand-line px-4 py-2 text-micro font-medium text-neutral-500"
         >
           {head}
         </div>
@@ -152,5 +167,38 @@ export function TablePanel({
         {children}
       </div>
     </Panel>
+  );
+}
+
+/**
+ * ⭐ A SECTION INSIDE A PANEL (2026-11-12): sections are split by a hairline,
+ * never by a card inside a card. An optional small heading row; the body pads
+ * itself unless `flush`.
+ */
+export function PanelSection({
+  title,
+  actions,
+  flush = false,
+  className,
+  children,
+  "data-testid": testId,
+}: {
+  title?: ReactNode;
+  actions?: ReactNode;
+  flush?: boolean;
+  className?: string;
+  children: ReactNode;
+  "data-testid"?: string;
+}) {
+  return (
+    <section className={cn("border-t border-brand-line first:border-t-0", className)} data-testid={testId}>
+      {title || actions ? (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 pt-3">
+          {title ? <h3 className="text-label font-semibold text-foreground">{title}</h3> : <span />}
+          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+        </div>
+      ) : null}
+      <div className={cn(!flush && "px-4 py-3")}>{children}</div>
+    </section>
   );
 }

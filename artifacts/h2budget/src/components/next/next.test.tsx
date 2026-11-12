@@ -98,10 +98,12 @@ describe("next primitives", () => {
 
 describe("Panel variants (C0)", () => {
   const body = (section: Element) => section.querySelector(":scope > div")!;
-  it("default: padded body, hover lift, clipped by .panel's overflow: hidden", () => {
+  // (2026-11-12, flat panels) Only a panel that IS a link (`to`) answers the pointer; a section does not lift.
+  it("default: padded body, no hover lift, clipped by .panel's overflow: hidden; a linked panel lifts", () => {
     const { container } = render(<Panel title="Plain">x</Panel>);
     const p = container.querySelector("section")!;
-    expect(p.className.split(" ")).toEqual(expect.arrayContaining(["panel", "panel-link"]));
+    expect(p.className.split(" ")).toContain("panel");
+    expect(p.className).not.toContain("panel-link");
     expect(p.className).not.toContain("panel-sticky-safe");
     expect(body(p).className).toBe("p-4");
   });
@@ -116,7 +118,7 @@ describe("Panel variants (C0)", () => {
     const { container } = render(<Panel title="Activity" variant="sticky-safe">x</Panel>);
     const p = container.querySelector("section")!;
     expect(p.className).toContain("panel-sticky-safe");
-    expect(p.className).toContain("panel-link");
+    expect(p.className).not.toContain("panel-link");
     expect(body(p).className).toBe("p-4");
   });
   it("ChartPanel gives the chart a fixed-height, full-width box", () => {
