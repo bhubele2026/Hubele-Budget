@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import type { BillsSummary } from "@workspace/api-client-react";
-import { Help, Stat, td } from "@/ui";
+import { Help, td } from "@/ui";
+import { StatusBadge } from "@/components/next/StatusBadge";
+import { SUMMARY_LABEL, SUMMARY_SUPPORT } from "@/components/next/SummaryGroup";
 
 // Sentinel debtId for the synthetic "Avalanche extra payment" row — it's not a
 // real obligation to dedup against, so we exclude it from the checks.
@@ -95,9 +97,11 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
   const clean = issues.length === 0;
 
   return (
-    <section className="space-y-3" data-testid="bills-health-check">
-      <div className="flex items-center gap-2">
-        <h2 className="text-label font-semibold text-brand-navy">Forecast health</h2>
+    // (2026-11-12) ONE panel: the two figures split by a hairline, the findings a section under them — no
+    // floating heading over two small cards.
+    <section className="panel" data-testid="bills-health-check">
+      <div className="panel-head">
+        <h2 className="text-title font-semibold text-foreground">Forecast health</h2>
         <Help>
           Audits what Bills sends to the cash forecast. It flags a recurring bill
           and a debt minimum that look like one obligation but aren't linked (so
@@ -106,31 +110,29 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
         </Help>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Stat
-          index={0}
+      <div className="grid grid-cols-2 divide-x divide-brand-line">
+        <HealthFigure
           data-testid="stat-obligations"
           label="Obligations"
           value={obligationCount}
           hint="bills + minimums"
         />
-        <Stat
-          index={1}
+        <HealthFigure
           data-testid="stat-to-review"
           label="To review"
           value={issues.length}
-          tone={clean ? "ok" : "bad"}
+          bad={!clean}
           hint={clean ? "none flagged" : "fix on Debts"}
         />
       </div>
 
       {/* Findings are never collapsed. A flagged double-count behind a chevron
-          is the same as no check at all — the card only exists when there is
-          something to read. */}
+          is the same as no check at all — the section only exists when there
+          is something to read. */}
       {!clean && (
-        <div className="panel">
-          <div className="panel-head">
-            <h3 className="text-label font-semibold text-brand-navy">Findings</h3>
+        <div className="border-t border-brand-line">
+          <div className="flex items-center gap-2 px-4 pt-3">
+            <h3 className="text-label font-semibold text-foreground">Findings</h3>
             <span className="ml-auto text-micro text-neutral-500">
               {issues.length} flagged
             </span>
@@ -140,11 +142,9 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
               {issues.map((iss, i) => (
                 <tr key={i} data-testid={`health-issue-${iss.kind}`}>
                   <td className={`${td} w-px whitespace-nowrap align-top`}>
-                    <span
-                      className={`chip ${iss.kind === "duplicate" ? "bad" : "warn"}`}
-                    >
+                    <StatusBadge state="warning">
                       {iss.kind === "duplicate" ? "Double-count" : "No due date"}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className={td}>
                     <span className="flex items-center gap-1.5">
@@ -159,5 +159,18 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
         </div>
       )}
     </section>
+  );
+}
+
+/** One figure of the health check: label · count · one support line (the summary-group voice, smaller). */
+function HealthFigure(props: { label: string; value: number; hint: string; bad?: boolean; "data-testid"?: string }) {
+  return (
+    <div className="min-w-0 px-4 py-3" data-testid={props["data-testid"]}>
+      <div className={SUMMARY_LABEL}>{props.label}</div>
+      <div className={`fig mt-1 text-title font-semibold ${props.bad ? "text-bad-ink" : "text-foreground"}`}>
+        {Math.round(props.value)}
+      </div>
+      <div className={SUMMARY_SUPPORT}>{props.hint}</div>
+    </div>
   );
 }

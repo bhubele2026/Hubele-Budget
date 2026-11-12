@@ -75,7 +75,7 @@ import {
   tdNum,
   th,
 } from "@/ui";
-import { PageGrid, StatTile } from "@/components/next";
+import { PageGrid, PageHeader, SummaryGroup, SUMMARY_FIGURE, SUMMARY_LABEL, SUMMARY_SUPPORT } from "@/components/next";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import { invalidateForecastFamily } from "@/lib/invalidateForecast";
@@ -129,7 +129,7 @@ function formatDatePill(iso: string | null): { month: string; day: string } | nu
   const d = parseISODate(iso);
   if (!d) return null;
   return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+    month: d.toLocaleDateString("en-US", { month: "short" }),
     day: String(d.getDate()),
   };
 }
@@ -182,6 +182,17 @@ const MY_BUDGET_GROUP = "My budget";
  * only the box does.
  */
 const scrollX = "overflow-x-auto";
+
+/** One cell of the headline summary group: label · figure · one support line. */
+function SummaryFigure({ label, value, hint, tone = "neutral" }: { label: string; value: string; hint?: string; tone?: "neutral" | "bad" }) {
+  return (
+    <div className="min-w-0">
+      <div className={SUMMARY_LABEL}>{label}</div>
+      <div className={tone === "bad" ? SUMMARY_FIGURE.replace("text-foreground", "text-bad") : SUMMARY_FIGURE}>{value}</div>
+      {hint ? <div className={SUMMARY_SUPPORT}>{hint}</div> : null}
+    </div>
+  );
+}
 
 /** The due-date cell shared by every row table on this page. */
 function DueCell({ iso }: { iso: string | null }) {
@@ -698,89 +709,92 @@ export default function BillsPage() {
   return (
     <PageGrid>
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div className="span-12 flex flex-wrap items-center justify-between gap-3">
-        {/* ⚠️ EXACTLY "Bills". Five e2e specs gate on
-            getByRole("heading", { name: /^bills$/i }), and four more on the
-            loose /bills/i — which is also why no other heading on this page may
-            contain the word. */}
-        <h1 className="text-display font-semibold text-brand-navy">Bills</h1>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-control bg-white px-1 py-0.5 ring-1 ring-brand-line">
-            <button
-              type="button"
-              className={btnLink}
-              onClick={() => changeMonth(-1)}
-              disabled={atFloor}
-              aria-disabled={atFloor}
-              aria-label="Previous month"
-              title={atFloor ? "April 2026 is the earliest month" : undefined}
-              data-testid="button-prev-month"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span
-              className="w-32 text-center text-label font-semibold text-brand-navy"
-              data-testid="text-current-month"
-            >
-              {monthName}
-            </span>
-            {billsSwitching ? (
-              <span role="status" className="text-micro text-neutral-600" data-testid="bills-switching">
-                Showing {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date(shownMonth + "T00:00:00"))} while {monthName} loads
+      {/* ⚠️ EXACTLY "Bills". Five e2e specs gate on
+          getByRole("heading", { name: /^bills$/i }), and four more on the
+          loose /bills/i — which is also why no other heading on this page may
+          contain the word. (2026-11-12) The shared PageHeader: the month
+          stepper and Add are its actions. */}
+      <PageHeader
+        className="span-12"
+        title="Bills"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-control bg-white px-1 py-0.5 ring-1 ring-brand-line">
+              <button
+                type="button"
+                className={btnLink}
+                onClick={() => changeMonth(-1)}
+                disabled={atFloor}
+                aria-disabled={atFloor}
+                aria-label="Previous month"
+                title={atFloor ? "April 2026 is the earliest month" : undefined}
+                data-testid="button-prev-month"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span
+                className="w-32 text-center text-label font-medium text-foreground"
+                data-testid="text-current-month"
+              >
+                {monthName}
               </span>
-            ) : null}
+              {billsSwitching ? (
+                <span role="status" className="text-micro text-neutral-600" data-testid="bills-switching">
+                  Showing {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date(shownMonth + "T00:00:00"))} while {monthName} loads
+                </span>
+              ) : null}
+              <button
+                type="button"
+                className={btnLink}
+                onClick={() => changeMonth(1)}
+                aria-label="Next month"
+                data-testid="button-next-month"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
             <button
               type="button"
-              className={btnLink}
-              onClick={() => changeMonth(1)}
-              aria-label="Next month"
-              data-testid="button-next-month"
+              className={btn}
+              onClick={openNew}
+              data-testid="button-add-bill"
             >
-              <ChevronRight className="h-4 w-4" />
+              <Plus className="mr-1 inline h-4 w-4 align-[-2px]" />
+              Add
             </button>
           </div>
-          <button
-            type="button"
-            className={btn}
-            onClick={openNew}
-            data-testid="button-add-bill"
-          >
-            <Plus className="mr-1 inline h-4 w-4 align-[-2px]" />
-            Add
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Headline ─────────────────────────────────────────────────────── */}
-        <StatTile
-          span={4}
-          index={0}
-          label={`Due ${windowWord}`}
-          value={formatCurrency(dueTotal)}
-          hint={`${dueRows.length} item${dueRows.length === 1 ? "" : "s"} · ${dueRange.label}`}
-        />
-        <StatTile
-          span={4}
-          index={1}
-          label={net >= 0 ? "Net this month" : "Net · short"}
-          value={formatCurrency(net)}
-          tone={net >= 0 ? "neutral" : "bad"}
-          hint={`${committedPct}% of income committed`}
-        />
-        <StatTile
-          span={4}
-          index={2}
-          label="Active items"
-          value={String(activeCount)}
-          hint="income + bills"
-        />
+        {/* (2026-11-12) The three headline figures are ONE summary group, split by hairlines. */}
+        <SummaryGroup
+          className="span-12 lg:grid-cols-3 [&>:last-child]:col-span-2 [&>:last-child]:border-r-0 lg:[&>:last-child]:col-span-1"
+          data-testid="bills-summary"
+        >
+          <SummaryFigure
+            label={`Due ${windowWord}`}
+            value={formatCurrency(dueTotal)}
+            hint={`${dueRows.length} item${dueRows.length === 1 ? "" : "s"} · ${dueRange.label}`}
+          />
+          <SummaryFigure
+            label={net >= 0 ? "Net this month" : "Net · short"}
+            value={formatCurrency(net)}
+            tone={net >= 0 ? "neutral" : "bad"}
+            hint={`${committedPct}% of income committed`}
+          />
+          <SummaryFigure
+            label="Active items"
+            value={String(activeCount)}
+            hint="income + bills"
+          />
+        </SummaryGroup>
 
         <div className="span-8 space-y-4">
           {/* ── Due window ───────────────────────────────────────────────── */}
           <div className="panel" data-testid="bills-due-lead">
             <div className="panel-head">
-              <div className="text-label font-semibold text-brand-navy">
+              <div className="text-title font-semibold text-foreground">
                 Due {windowWord}
               </div>
               <Help>
@@ -876,7 +890,7 @@ export default function BillsPage() {
             <div className="panel" data-testid="card-archived-debts">
               <div className="panel-head">
                 <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
-                <div className="text-label font-semibold text-neutral-500">
+                <div className="text-title font-semibold text-neutral-600">
                   Archived debts
                 </div>
                 <span className="chip gray">Paid off</span>
@@ -916,7 +930,7 @@ export default function BillsPage() {
         <div className="span-4 space-y-4">
           <div className="panel">
             <div className="panel-head">
-              <div className="text-label font-semibold text-brand-navy">Per month</div>
+              <div className="text-title font-semibold text-foreground">Per month</div>
               <Help>
                 Recurring items at their monthly rate. The smaller figure beside
                 income and bills is what has actually been matched to those items
@@ -944,12 +958,12 @@ export default function BillsPage() {
                 <SummaryRow label="Debt minimums" amount={-debtMin} tone="bill" />
                 <SummaryRow label="Total outflow" amount={-totalOutflow} tone="bill" />
                 <tr>
-                  <td className={`${td} border-b-0 font-semibold text-brand-navy`}>
+                  <td className={`${td} border-b-0 font-semibold text-foreground`}>
                     Net
                   </td>
                   <td
                     className={`${tdNum} border-b-0 text-title font-semibold ${
-                      net >= 0 ? "text-brand-navy" : "text-bad"
+                      net >= 0 ? "text-foreground" : "text-bad-ink"
                     }`}
                     data-testid="text-net-monthly"
                   >
@@ -963,7 +977,7 @@ export default function BillsPage() {
 
           <div className="panel" data-testid="card-actual-this-month">
             <div className="panel-head">
-              <div className="text-label font-semibold text-brand-navy">Actual</div>
+              <div className="text-title font-semibold text-foreground">Actual</div>
               <Help>
                 Every real transaction in the month, not just the ones matched to
                 a bill. Transfers are excluded.
@@ -993,12 +1007,12 @@ export default function BillsPage() {
                   valueTestId="text-actual-spend"
                 />
                 <tr>
-                  <td className={`${td} border-b-0 font-semibold text-brand-navy`}>
+                  <td className={`${td} border-b-0 font-semibold text-foreground`}>
                     Net
                   </td>
                   <td
                     className={`${tdNum} border-b-0 text-title font-semibold ${
-                      actualThisMonth.net >= 0 ? "text-brand-navy" : "text-bad"
+                      actualThisMonth.net >= 0 ? "text-foreground" : "text-bad-ink"
                     }`}
                     data-testid="text-actual-net"
                   >
@@ -1015,7 +1029,7 @@ export default function BillsPage() {
             <div className="flex items-center justify-between px-4 py-3">
               <div>
                 <div className={fieldLabel}>Next</div>
-                <div className="text-body font-semibold text-brand-navy">
+                <div className="text-body font-medium text-brand-navy">
                   Cash forecast
                 </div>
               </div>
@@ -1418,7 +1432,7 @@ function BillGroupCard({
           getByRole("heading", { name: /bills/i }) and a second heading
           containing "Bills" would be a strict-mode violation. */}
       <div className="panel-head">
-        <div className="text-label font-semibold text-brand-navy">{title}</div>
+        <div className="text-title font-semibold text-foreground">{title}</div>
         <span className="text-micro text-neutral-500">
           {rows.length} item{rows.length === 1 ? "" : "s"}
         </span>
@@ -1515,7 +1529,7 @@ function BillGroupCard({
                         <span className="whitespace-nowrap">{frequencyLabel(item)}</span>
                         {linkedDebt ? (
                           <span
-                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-[4px] bg-neutral-100 px-2 py-0.5 text-neutral-600"
                             title="Managed by the Debt Tracker — category comes from the matching Debt — Minimum Payments row."
                             data-testid={`chip-category-${item.id}`}
                           >
@@ -1527,7 +1541,7 @@ function BillGroupCard({
                           // textContent === the category name, so no icon, no
                           // group prefix, no separator may live in here.
                           <span
-                            className="inline-flex shrink-0 items-center rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600"
+                            className="inline-flex shrink-0 items-center rounded-[4px] bg-neutral-100 px-2 py-0.5 text-neutral-600"
                             title={`${linkedCategory.groupName} · ${linkedCategory.name}`}
                             data-testid={`chip-category-${item.id}`}
                           >
@@ -1536,7 +1550,7 @@ function BillGroupCard({
                         ) : (
                           <button
                             type="button"
-                            className="press shrink-0 rounded-full border border-dashed border-brand-line px-2 py-0.5 text-neutral-500 hover:border-brand-navy/40 hover:text-brand-navy"
+                            className="press shrink-0 rounded-[4px] border border-dashed border-brand-line px-2 py-0.5 text-neutral-600 hover:border-brand-navy/40 hover:text-brand-navy"
                             onClick={(e) => {
                               e.stopPropagation();
                               onEdit(item, { focus: "category" });
@@ -1550,7 +1564,7 @@ function BillGroupCard({
                       </div>
                     </td>
                     <td className={`${tdNum} whitespace-nowrap align-top`}>
-                      <div className="font-semibold text-brand-navy">
+                      <div className="font-medium text-foreground">
                         {display.amountText}
                       </div>
                       {display.monthlyHint ? (
@@ -1653,7 +1667,7 @@ function DebtMinimumsCard({
     <div className="panel" data-testid="card-debt-minimums">
       <div className="panel-head">
         <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
-        <div className="text-label font-semibold text-brand-navy">Debt minimums</div>
+        <div className="text-title font-semibold text-foreground">Debt minimums</div>
         <Help>
           Synced from Debts and edited on the Debt page, never here. Each minimum
           stops on the month the avalanche pays that debt off.

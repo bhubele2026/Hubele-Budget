@@ -9,7 +9,8 @@ import { RefreshBanner } from "@/components/data-state";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import { dataState } from "@/lib/queryState";
 import { emptyNote, Foot, Help, td, tdNum } from "@/ui";
-import { PageGrid, StatTile } from "@/components/next";
+import { StatusBadge } from "@/components/next/StatusBadge";
+import { PageGrid, PageHeader, SummaryGroup, SUMMARY_FIGURE, SUMMARY_LABEL, SUMMARY_SUPPORT } from "@/components/next";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 const num = (v: string | number | null | undefined): number => {
@@ -75,33 +76,27 @@ export default function BillsOverviewPage() {
 
   return (
     <PageGrid data-testid="bills-overview">
-      {/* The ribbon above already says "Bills · Overview" — a second copy of it
-          as an <h1> is a word the page does not need. Screen readers still get
-          one. */}
-      <h1 className="sr-only">Bills overview</h1>
+      {/* (2026-11-12) The shared page header — the same title every page carries. */}
+      <PageHeader className="span-12" title="Bills overview" />
 
-      {/* ── Headline: the spine's two numbers ──────────────────────────────── */}
-        <StatTile
-          index={0}
-          data-testid="stat-next-bill"
-          label="Next bill"
-          value={nextBill ? formatCurrency(nextBill.amount) : "—"}
-          hint={
-            // A hint is a claim too: "nothing scheduled" only once the spine has answered.
-            nextBill
-              ? `${nextBill.name} · ${formatDate(nextBill.dueDate)}`
-              : spine
-                ? "nothing scheduled"
-                : undefined
-          }
-        />
-        <StatTile
-          index={1}
-          data-testid="stat-bills-due"
-          label="Bills due"
-          value={billsDueCount != null ? String(billsDueCount) : "—"}
-          hint="rest of this month"
-        />
+      {/* ── Headline: the spine's two numbers, as ONE summary group ─────────── */}
+      <SummaryGroup className="span-4 lg:grid-cols-2 lg:self-start" data-testid="bills-headline">
+        <div className="min-w-0" data-testid="stat-next-bill">
+          <div className={SUMMARY_LABEL}>Next bill</div>
+          <div className={SUMMARY_FIGURE}>{nextBill ? formatCurrency(nextBill.amount) : "—"}</div>
+          {/* A hint is a claim too: "nothing scheduled" only once the spine has answered. */}
+          {nextBill ? (
+            <div className={SUMMARY_SUPPORT}>{`${nextBill.name} · ${formatDate(nextBill.dueDate)}`}</div>
+          ) : spine ? (
+            <div className={SUMMARY_SUPPORT}>nothing scheduled</div>
+          ) : null}
+        </div>
+        <div className="min-w-0" data-testid="stat-bills-due">
+          <div className={SUMMARY_LABEL}>Bills due</div>
+          <div className={SUMMARY_FIGURE}>{billsDueCount != null ? String(billsDueCount) : "—"}</div>
+          <div className={SUMMARY_SUPPORT}>rest of this month</div>
+        </div>
+      </SummaryGroup>
 
       {/* Under the headline, not above it: that row is the spine's and has
           likely loaded. This banner speaks for the month below. */}
@@ -122,21 +117,22 @@ export default function BillsOverviewPage() {
       )}
 
         {/* ── This month ──────────────────────────────────────────────────── */}
-        <div className="panel span-4" data-testid="bills-month-card">
+        <div className="panel span-4 lg:self-start" data-testid="bills-month-card">
           <div className="panel-head">
-            <h2 className="text-label font-semibold text-brand-navy">This month</h2>
+            <h2 className="text-title font-semibold text-foreground">This month</h2>
             <Help>
               Recurring income and bills at their monthly rate plus debt
               minimums, computed server-side by /bills/summary. Net is income
               less everything that goes out.
             </Help>
             {m && (
-              <span
-                className={`chip ml-auto ${short ? "bad" : "ok"}`}
+              <StatusBadge
+                state={short ? "warning" : "confirmed"}
+                className="ml-auto"
                 data-testid="chip-net-state"
               >
                 {short ? "Short" : "Surplus"}
-              </span>
+              </StatusBadge>
             )}
           </div>
 
@@ -170,12 +166,12 @@ export default function BillsOverviewPage() {
                 </td>
               </tr>
               <tr>
-                <td className={`${td} border-b-0 font-semibold text-brand-navy`}>
+                <td className={`${td} border-b-0 font-semibold text-foreground`}>
                   Net
                 </td>
                 <td
                   className={`${tdNum} border-b-0 text-title font-semibold ${
-                    m && short ? "text-bad" : "text-brand-navy"
+                    m && short ? "text-bad-ink" : "text-foreground"
                   }`}
                   data-testid="text-overview-net"
                 >
@@ -191,7 +187,7 @@ export default function BillsOverviewPage() {
                   magnitude is the only thing being said. */}
               <div className="px-4 pb-3">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
+                  <span className="text-micro font-medium text-neutral-600">
                     Committed
                   </span>
                   <span
@@ -215,9 +211,9 @@ export default function BillsOverviewPage() {
         </div>
 
         {/* ── Biggest recurring bills ─────────────────────────────────────── */}
-        <div className="panel span-8" data-testid="bills-biggest-card">
+        <div className="panel span-8 lg:col-start-5 lg:row-span-2 lg:row-start-2 lg:self-start" data-testid="bills-biggest-card">
           <div className="panel-head">
-            <h2 className="text-label font-semibold text-brand-navy">
+            <h2 className="text-title font-semibold text-foreground">
               Biggest recurring bills
             </h2>
             <Help>
