@@ -207,16 +207,43 @@ export function instrumentPool(pool: object): void {
       s.poolWaitMs += w;
       if (rec) rec.wait = w;
     };
+    // A hand-checked-out client: its transaction is over when it goes back to the pool, so the memo is dropped
+    // again then (its writes are committed and visible from that moment).
+    const onRelease = (client: unknown) => {
+      if (rec || !client || typeof (client as { release?: unknown }).release !== "function") return;
+      const c = client as { release: (...a: unknown[]) => unknown };
+      const own = Object.prototype.hasOwnProperty.call(c, "release") ? c.release : null;
+      const orig = c.release;
+      c.release = function (this: unknown, ...a: unknown[]) {
+        if (own) c.release = own;
+        else delete (c as { release?: unknown }).release;
+        s.memo.clear();
+        return orig.apply(this, a);
+      };
+    };
     const cb = args[0];
     if (typeof cb === "function") {
       args[0] = function (this: unknown, ...cbArgs: unknown[]) {
         done();
+        onRelease(cbArgs[1]);
+        const rel = cbArgs[2];
+        if (!rec && typeof rel === "function") {
+          cbArgs[2] = (...ra: unknown[]) => {
+            s.memo.clear();
+            return (rel as (...x: unknown[]) => unknown)(...ra);
+          };
+        }
         return (cb as (...a: unknown[]) => unknown).apply(this, cbArgs);
       };
       return origConnect.apply(this, args);
     }
     const out = origConnect.apply(this, args);
-    if (out && typeof (out as Promise<unknown>).then === "function") (out as Promise<unknown>).then(done, done);
+    if (out && typeof (out as Promise<unknown>).then === "function") {
+      (out as Promise<unknown>).then((client) => {
+        done();
+        onRelease(client);
+      }, done);
+    }
     return out;
   };
 
@@ -228,10 +255,13 @@ export function instrumentPool(pool: object): void {
     const rec: QueryRec = { wait: 0 };
     const t0 = performance.now();
     let finished = false;
+    const writes = WRITE_SQL.test(textOf(args[0]));
     const finish = () => {
       if (finished) return;
       finished = true;
       s.dbMs += Math.max(0, performance.now() - t0 - rec.wait);
+      // Committed now (a pool query is its own transaction): a revision read while it ran is stale.
+      if (writes) s.memo.clear();
     };
     const last = args[args.length - 1];
     if (typeof last === "function") {

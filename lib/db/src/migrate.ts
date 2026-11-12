@@ -106,6 +106,9 @@ export async function runMigrations(
       await client.query("BEGIN");
       try {
         await client.query(`SET LOCAL lock_timeout = ${Math.trunc(lockTimeoutMs)}`);
+        // (PERF, 0251) The data-revision triggers are DEFERRED to commit. A file that writes rows and then ALTERs the
+        // same table would fail ("pending trigger events"); inside a migration they fire after each statement.
+        await client.query("SET CONSTRAINTS ALL IMMEDIATE");
         await client.query(f.sql);
         await client.query(
           "INSERT INTO schema_migrations (name, checksum) VALUES ($1, $2)",

@@ -26,8 +26,8 @@ import { LEDGER_READ_TABLES } from "../lib/ledgerCache";
 import { findMigrationsDir } from "../lib/migrationsDir";
 import { RICH_NOW, cleanupRichHouseholds, seedRichHousehold } from "./_fixtures/richHousehold";
 
-/** Read by the builds but never the household's money data: who owns which household. */
-const EXEMPT = new Set(["households", "household_data_revisions"]);
+/** The revision table itself. */
+const EXEMPT = new Set(["household_data_revisions"]);
 const LIB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../lib");
 const ROOTS = ["forecastLedger.ts", "cashSignal.ts", "avalancheWeeklyPlan.ts"];
 
@@ -50,8 +50,7 @@ afterAll(async () => {
 async function triggered(): Promise<Set<string>> {
   const { rows } = await pool.query<{ relname: string }>(
     `SELECT c.relname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
-      WHERE t.tgname IN ('h2_data_rev_ins','h2_data_rev_upd','h2_data_rev_del') AND c.relnamespace = to_regnamespace(current_schema())
-      GROUP BY c.relname HAVING count(DISTINCT t.tgname) = 3`,
+      WHERE t.tgname = 'h2_data_rev_row' AND t.tgdeferrable AND t.tginitdeferred AND c.relnamespace = to_regnamespace(current_schema())`,
   );
   return new Set(rows.map((r) => r.relname));
 }

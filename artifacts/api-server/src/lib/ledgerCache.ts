@@ -30,7 +30,8 @@
 
 import { pool } from "@workspace/db";
 import { hookObligationsModelOn } from "./everydayHooks";
-import { noteCacheRead, requestMemo } from "./requestTiming";
+import { addSpan, noteCacheRead, requestMemo } from "./requestTiming";
+import { deepFreeze } from "./ledgerShare";
 
 export const LEDGER_CACHE_MAX_ENTRIES = 24;
 export const LEDGER_CACHE_MAX_AGE_MS = 5 * 60_000;
@@ -62,6 +63,8 @@ export const LEDGER_READ_TABLES = [
   "merchant_memory",
   "category_decisions",
   "goals",
+  // Who owns the household (the money context reads owner_user_id).
+  "households",
 ] as const;
 
 /** False when `LEDGER_CACHE=off` (read per call). */
@@ -74,17 +77,14 @@ let triggersCheck: Promise<boolean> | null = null;
 
 async function checkTriggers(): Promise<boolean> {
   try {
-    // Each table needs its INSERT, UPDATE and DELETE triggers, enabled, on the bump function.
+    // Each table needs its commit-time (deferred) row trigger, enabled, on the bump function.
     const { rows } = await pool.query<{ n: string }>(
-      `SELECT count(*)::text AS n FROM (
-         SELECT c.relname
-           FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_proc p ON p.oid = t.tgfoid
-          WHERE p.proname = 'h2_data_rev_bump' AND t.tgenabled <> 'D'
-            AND t.tgname IN ('h2_data_rev_ins', 'h2_data_rev_upd', 'h2_data_rev_del')
-            AND c.relname = ANY($1::text[])
-            AND c.relnamespace = to_regnamespace(current_schema())
-          GROUP BY c.relname
-         HAVING count(DISTINCT t.tgname) = 3) ok`,
+      `SELECT count(DISTINCT c.relname)::text AS n
+         FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_proc p ON p.oid = t.tgfoid
+        WHERE p.proname = 'h2_data_rev_bump' AND t.tgname = 'h2_data_rev_row' AND t.tgenabled <> 'D'
+          AND t.tgdeferrable AND t.tginitdeferred
+          AND c.relname = ANY($1::text[])
+          AND c.relnamespace = to_regnamespace(current_schema())`,
       [LEDGER_READ_TABLES as unknown as string[]],
     );
     return Number(rows[0]?.n ?? 0) === LEDGER_READ_TABLES.length;
@@ -172,6 +172,13 @@ export async function cachedLedgerRead<T>(
   // Kept only if nothing was written while it was built (a fresh read, never the request's memo).
   const after = await readHouseholdRevision(householdId).catch(() => NaN);
   if (after === rev) {
+    // ⭐ Frozen once, as it is kept: every later request shares this object, so a consumer that wrote to it would
+    // change the next request's answer. (The API suite freezes every shared result as well.)
+    if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+      const f0 = performance.now();
+      deepFreeze(value);
+      addSpan("cache.freeze", performance.now() - f0);
+    }
     entries.set(full, { value, at: Date.now() });
     ledgerCacheStats.stored += 1;
     while (entries.size > LEDGER_CACHE_MAX_ENTRIES) entries.delete(entries.keys().next().value!);

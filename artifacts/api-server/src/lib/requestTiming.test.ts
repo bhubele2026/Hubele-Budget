@@ -53,7 +53,7 @@ function fakePool(queryMs: number): FakePool {
         hand((c) => cb(null, c, release));
         return undefined;
       }
-      return new Promise<object>((res) => hand(res));
+      return new Promise<object>((res) => hand(() => res({ release })));
     },
     query(this: FakePool, text: string, ...rest: unknown[]) {
       const cb = typeof rest[rest.length - 1] === "function" ? (rest[rest.length - 1] as (e: Error | null, r?: unknown) => void) : null;
@@ -128,8 +128,9 @@ describe("requestTiming store", () => {
         }),
       );
       await expect(pool.query("fail")).rejects.toThrow("boom");
-      const c = await (pool.connect() as Promise<object>);
-      expect(c).toEqual({});
+      const c = (await (pool.connect() as Promise<object>)) as { release: () => void };
+      expect(typeof c.release).toBe("function");
+      c.release();
     });
     expect(s.queries).toBe(2);
     expect(s.poolWaits).toBe(3);
@@ -220,15 +221,19 @@ describe("requestMemo", () => {
       expect(await requestMemo("rev", read)).toBe(1);
       await pool.query("UPDATE transactions SET amount = 1");
       expect(await requestMemo("rev", read)).toBe(2);
-      await (pool.connect() as Promise<object>);
+      const client = (await (pool.connect() as Promise<object>)) as { release: () => void };
       expect(await requestMemo("rev", read)).toBe(3);
+      expect(await requestMemo("rev", read)).toBe(3);
+      // The transaction is over when the client goes back: what it wrote is visible now, so the memo goes again.
+      client.release();
+      expect(await requestMemo("rev", read)).toBe(4);
     });
     const post = { ...newRequestTiming(), method: "POST" };
     await runWithTiming(post, async () => {
-      expect(await requestMemo("rev", read)).toBe(4);
       expect(await requestMemo("rev", read)).toBe(5);
+      expect(await requestMemo("rev", read)).toBe(6);
     });
-    expect(await requestMemo("rev", read)).toBe(6);
+    expect(await requestMemo("rev", read)).toBe(7);
   });
 });
 

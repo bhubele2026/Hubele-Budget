@@ -142,6 +142,8 @@ describe("migration 0116", () => {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      // As the migration runner does (lib/db/src/migrate.ts): the 0251 revision triggers fire per statement here.
+      await client.query("SET CONSTRAINTS ALL IMMEDIATE");
       // The shape production has before this file: the 0020 check.
       await client.query("ALTER TABLE category_decisions DROP CONSTRAINT category_decisions_resolution_ck");
       await client.query(

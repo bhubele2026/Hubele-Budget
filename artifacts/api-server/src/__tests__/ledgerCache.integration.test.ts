@@ -212,7 +212,7 @@ describe("(PERF) cachedLedgerRead", () => {
   });
 
   it("with the triggers gone, nothing is cached", async () => {
-    await pool.query("ALTER TABLE debts DISABLE TRIGGER h2_data_rev_upd");
+    await pool.query("ALTER TABLE debts DISABLE TRIGGER h2_data_rev_row");
     try {
       _resetLedgerCacheForTests();
       expect(await revisionTriggersReady()).toBe(false);
@@ -221,7 +221,7 @@ describe("(PERF) cachedLedgerRead", () => {
       await cachedLedgerRead("probe", HH[A]!, "k", async () => ++n);
       expect(n).toBe(2);
     } finally {
-      await pool.query("ALTER TABLE debts ENABLE TRIGGER h2_data_rev_upd");
+      await pool.query("ALTER TABLE debts ENABLE TRIGGER h2_data_rev_row");
       _resetLedgerCacheForTests();
     }
   });
@@ -344,5 +344,82 @@ describe("(PERF) the 90-day cash signal, cached — every kind of write is seen"
     await pool.query("UPDATE forecast_settings SET bank_snapshot_mask = coalesce(bank_snapshot_mask, '') || '.' WHERE user_id = $1", [A]);
     expect(await readHouseholdRevision(HH[A]!)).toBe(rev + 1);
     expect((await get("/spine")).t.ledger!.n).toBe(1);
+  });
+});
+
+describe("(PERF) the revision moves at COMMIT — no lock held through a transaction, no deadlock", () => {
+  it("a job writing several statements and a person editing a row the job needs next both commit, and the revision rises after", async () => {
+    const r0 = await readHouseholdRevision(HH[A]!);
+    const plan = (await pool.query<{ id: string }>("SELECT id FROM recurring_items WHERE household_id = $1 LIMIT 1", [HH[A]])).rows[0]!.id;
+    const txn = (await pool.query<{ id: string }>("SELECT id FROM transactions WHERE household_id = $1 LIMIT 1", [HH[A]])).rows[0]!.id;
+    const job = await pool.connect();
+    const person = await pool.connect();
+    try {
+      await job.query("BEGIN");
+      await job.query("UPDATE recurring_items SET amount = amount + 1 WHERE id = $1", [plan]); // the job's first write
+      await person.query("BEGIN");
+      await person.query("UPDATE transactions SET description = description || '!' WHERE id = $1", [txn]); // the person holds row Y
+      // Nothing is visible, and nothing is locked on the revision, while both are open.
+      expect(await readHouseholdRevision(HH[A]!)).toBe(r0);
+      const jobNeedsY = job.query("UPDATE transactions SET description = description || '?' WHERE id = $1", [txn]); // waits for the person
+      await person.query("COMMIT"); // an immediate trigger would wait here on the job's revision lock: a deadlock
+      await jobNeedsY;
+      await job.query("COMMIT");
+    } finally {
+      job.release();
+      person.release();
+    }
+    expect(await readHouseholdRevision(HH[A]!)).toBe(r0 + 2); // one bump per committed transaction
+  });
+
+  it("a build that started before a transaction committed is not kept", async () => {
+    const tx = await pool.connect();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    try {
+      await tx.query("BEGIN");
+      await tx.query("UPDATE debts SET name = name || '#' WHERE household_id = $1", [HH[A]]);
+      const pending = cachedLedgerRead("probe-commit", HH[A]!, "k", async () => {
+        await gate;
+        return { built: true };
+      });
+      await new Promise((r) => setTimeout(r, 20)); // the read has its revision (the uncommitted write unseen)
+      await tx.query("COMMIT");
+      release();
+      await pending;
+    } finally {
+      tx.release();
+    }
+    expect(ledgerCacheSize()).toBe(0);
+    expect(ledgerCacheStats.discarded).toBe(1);
+  });
+
+  it("a statement over many rows bumps once", async () => {
+    const r0 = await readHouseholdRevision(HH[A]!);
+    await pool.query(
+      `INSERT INTO forecast_closed_months (user_id, household_id, month_key)
+       SELECT $1, $2, to_char(DATE '2020-01-01' + (g || ' months')::interval, 'YYYY-MM') FROM generate_series(0, 49) g
+       ON CONFLICT DO NOTHING`,
+      [A, HH[A]],
+    );
+    expect(await readHouseholdRevision(HH[A]!)).toBe(r0 + 1);
+    await pool.query("DELETE FROM forecast_closed_months WHERE household_id = $1 AND month_key < '2025-01'", [HH[A]]);
+    expect(await readHouseholdRevision(HH[A]!)).toBe(r0 + 2);
+  });
+
+  it("cached results are frozen (outside the test suite's own freeze too)", async () => {
+    const prev = process.env.LEDGER_SHARING_FREEZE;
+    delete process.env.LEDGER_SHARING_FREEZE;
+    try {
+      const v = await cachedLedgerRead("probe-freeze", HH[A]!, "k", async () => ({ rows: [{ n: 1 }], at: new Date(0), m: new Map([["a", 1]]) }));
+      expect(Object.isFrozen(v)).toBe(true);
+      expect(() => {
+        (v.rows as Array<{ n: number }>)[0]!.n = 2;
+      }).toThrow();
+      expect(() => v.m.set("b", 2)).toThrow();
+      expect(() => v.at.setTime(5)).toThrow();
+    } finally {
+      if (prev !== undefined) process.env.LEDGER_SHARING_FREEZE = prev;
+    }
   });
 });
