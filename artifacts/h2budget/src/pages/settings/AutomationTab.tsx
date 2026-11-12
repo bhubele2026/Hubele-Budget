@@ -122,7 +122,7 @@ function DecisionRow({
     >
       <div className="min-w-0">
         <div className="flex items-baseline justify-between gap-3 md:justify-start">
-          <span className="truncate text-body font-medium text-brand-navy" data-testid="decision-name">
+          <span className="truncate text-body font-medium text-foreground" data-testid="decision-name">
             {d.description}
           </span>
           {amt == null ? (
