@@ -5,6 +5,7 @@ import path from "path";
 import { createRequire } from "module";
 // @ts-expect-error -- plain .mjs shared module, no type declarations
 import { resolveBuildId } from "../../scripts/build-id.mjs";
+import { clerkOrigin, clerkPreconnectHtml } from "./src/lib/clerkOrigin.ts"; // the extension: Node loads this file as is (theme guard, perf rig)
 
 // (#823/#833) Per-deploy build identifier baked into the web bundle. The
 // API server (artifacts/api-server/build.mjs) resolves it the SAME way
@@ -89,6 +90,27 @@ function interPreload(): Plugin {
   };
 }
 
+/**
+ * (perf phase 2) Opens the connection to Clerk's host from the document's head, before
+ * any script has run: every open without the auth hint waits for clerk-js from there.
+ * The host is worked out exactly as App.tsx hands Clerk its key (`src/lib/clerkOrigin.ts`);
+ * the publishable key and proxy URL are public build-time values, nothing secret.
+ */
+function clerkPreconnect(): Plugin {
+  // The same values `import.meta.env` gives App.tsx (the environment and any .env file).
+  let env: Record<string, string | undefined> = process.env;
+  return {
+    name: "h2-clerk-preconnect",
+    configResolved(config) {
+      env = { ...config.env, ...process.env };
+    },
+    transformIndexHtml(html) {
+      const tags = clerkPreconnectHtml(clerkOrigin(env.VITE_CLERK_PUBLISHABLE_KEY, env.VITE_CLERK_PROXY_URL));
+      return tags ? html.replace(/(<meta charset="UTF-8" \/>)/, `$1\n    ${tags}`) : html;
+    },
+  };
+}
+
 export default defineConfig({
   base: basePath,
   define: {
@@ -99,7 +121,7 @@ export default defineConfig({
   // of CSS on a 90 KB budget, and the single largest render-blocking asset on
   // the open path. Turning it on is a byte-for-byte-equivalent minify (Lightning
   // CSS), not a rewrite: same cascade, same output, ~60% smaller.
-  plugins: [react(), tailwindcss(), interPreload()],
+  plugins: [react(), tailwindcss(), interPreload(), clerkPreconnect()],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
