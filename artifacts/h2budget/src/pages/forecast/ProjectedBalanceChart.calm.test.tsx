@@ -351,18 +351,13 @@ describe("ProjectedBalanceChart — calm motion (clean forecast line)", () => {
     expect(b.container.querySelectorAll("[data-line-slot]").length).toBe(0);
   });
 
-  it("the low point pulses ONCE after the first draw, then the ring is gone for good", () => {
+  // (2026-11-12) No entrance: the low-point ring that answered the old sweep never plays.
+  it("the low point never pulses: no ring on the first draw or after", () => {
     motionOn();
     vi.useFakeTimers();
     const a = render(<ProjectedBalanceChart {...props} calm sessionKey="calm-pulse" />);
-    const ring = screen.getByTestId("low-pulse");
-    expect(ring.getAttribute("class")).toBe("low-pulse");
-    // A re-render while it plays keeps the same node (the keyframe cannot restart).
-    a.rerender(<ProjectedBalanceChart {...props} calm sessionKey="calm-pulse" selectedDate="2026-11-13" />);
-    expect(screen.getByTestId("low-pulse")).toBe(ring);
-    act(() => { vi.advanceTimersByTime(DRAW_MS + PULSE_MS + 250); });
     expect(screen.queryByTestId("low-pulse")).toBeNull();
-    a.rerender(<ProjectedBalanceChart {...props} calm sessionKey="calm-pulse" data={longer} />);
+    act(() => { vi.advanceTimersByTime(DRAW_MS + PULSE_MS + 250); });
     a.rerender(<ProjectedBalanceChart {...props} calm sessionKey="calm-pulse" data={longer} showBills />);
     expect(screen.queryByTestId("low-pulse")).toBeNull();
   });

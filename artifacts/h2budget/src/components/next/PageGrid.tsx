@@ -18,13 +18,3 @@ export function PageGrid({
     </div>
   );
 }
-
-/**
- * (2026-11-12) NO ENTRANCES: a page is simply there when it opens (owner's
- * brief: "remove decorative entrance movement"). `rise(i)` was the per-cell
- * stagger; it now returns no class, so its ~40 call sites need no edit and
- * nothing rises. Kept as a function so a call site still type-checks.
- */
-export function rise(_i: number): string {
-  return "";
-}

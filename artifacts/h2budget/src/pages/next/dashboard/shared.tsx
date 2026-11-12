@@ -29,9 +29,6 @@ export function ordinal(n: number): string {
   return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
-/** Entry stagger on the existing dial (shared with the account pages). */
-export { rise } from "@/components/next/PageGrid";
-
 export function PanelSkeleton({ rows = 3 }: { rows?: number }) {
   return (
     <div data-testid="panel-skeleton" className="space-y-2" aria-busy="true">

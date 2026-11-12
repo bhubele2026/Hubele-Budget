@@ -219,7 +219,8 @@ export type AccountAccent = keyof AccountAccents;
  * Forecast event markers (the expanded chart). One colour per kind, each also
  * told apart by SHAPE and by the legend label, so colour is never alone:
  * payday = navy up-tick, bill = steel dot, card payment = the Amex accent
- * square, debt payment = orange diamond.
+ * square, debt payment = navy diamond (owner, 2026-11-12: orange is for warnings; the SHAPE and the legend say
+ * which mark is which, the second navy keeps it apart from the payday triangle).
  */
 interface Markers {
   readonly payday: string;
@@ -228,8 +229,8 @@ interface Markers {
   readonly debt: string;
 }
 export const MARKER: Markers = byTheme<Markers>(
-  { payday: "#19315b", bill: "#4d5d73", card: "#0f766e", debt: "#f68d2e" },
-  { payday: "#eef1f6", bill: "#aab3c2", card: "#3fb8a9", debt: "#f68d2e" },
+  { payday: "#19315b", bill: "#4d5d73", card: "#0f766e", debt: "#22406e" },
+  { payday: "#eef1f6", bill: "#aab3c2", card: "#3fb8a9", debt: "#c9d3e6" },
 );
 export type MarkerKind = keyof Markers;
 

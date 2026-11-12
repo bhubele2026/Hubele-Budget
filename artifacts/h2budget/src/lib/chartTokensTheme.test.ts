@@ -79,7 +79,8 @@ describe("light is exactly what it was", () => {
     expect([...CAT8]).toEqual(["#19315b", "#3b5c8f", "#2f7f7a", "#4d5d73", "#8fa3bf", "#22406e", "#8e5b8c", "#a9bad2"]);
     expect([...NAVY_RAMP]).toEqual(["#e1e8f0", "#c4d0e2", "#a9bad2", "#8fa3bf", "#3b5c8f", "#19315b"]);
     expect({ ...ACCOUNT_ACCENT }).toEqual({ checking: "#19315b", amex: "#0f766e", card2: "#5b4bb3", other: "#5d6674" });
-    expect({ ...MARKER }).toEqual({ payday: "#19315b", bill: "#4d5d73", card: "#0f766e", debt: "#f68d2e" });
+    // (2026-11-12, owner) the debt-payment diamond is navy, not orange.
+    expect({ ...MARKER }).toEqual({ payday: "#19315b", bill: "#4d5d73", card: "#0f766e", debt: "#22406e" });
     expect({ ...AXIS_TICK }).toEqual({ fontSize: 12, fill: "#6b7280" });
     expect(OTHER_GREY).toBe("#767b83");
     // The literals these replaced in charts.tsx, reportsShared.tsx and ProjectedBalanceChart.tsx.

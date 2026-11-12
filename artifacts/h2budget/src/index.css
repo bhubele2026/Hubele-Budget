@@ -830,9 +830,8 @@
      `grow-x`) are inert hooks on their call sites; no rule here animates
      them. What moves is FUNCTIONAL and brief: a disclosure opening, a sheet
      sliding, a row's hover, a selection, a chart reshaping to a new horizon.
-
-     The low-point ring that answered the old chart sweep never shows. */
-  .low-pulse { display: none; }
+     (Every call site is clean of those names now; `.tab-underline` stays as a
+     plain hook for the lit-tab mark, which does not move.) */
 
   /* ── Charts ──────────────────────────────────────────────────────────────
      (2026-11-12) QUIET FURNITURE on every chart: the axis line and its tick
@@ -913,7 +912,6 @@
       transition: opacity var(--dur-soft) var(--ease-enter), transform var(--dur-soft) var(--ease-enter);
     }
   }
-  .disclose .tile-in { animation: none; }
 
   /* The active-tab underline is simply THERE (2026-11-12): it no longer
      sweeps in. `.tab-underline` stays as the hook. */

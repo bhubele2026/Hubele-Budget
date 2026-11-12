@@ -150,7 +150,7 @@ describe("index.css — the literal-duration kills stay, because dials cannot re
       expect(SRC, k).not.toMatch(new RegExp(`@keyframes\\s+${k}\\b`));
     }
     expect(SRC).not.toMatch(/animation-delay:\s*[1-9]\d*ms/);
-    expect(SRC).toMatch(/\.low-pulse\s*\{\s*display:\s*none;\s*\}/);
+    expect(SRC).not.toMatch(/\.(low-pulse|tile-in|stagger|area-draw|chart-in)\b/); // the inert hooks are gone too
   });
 
   /**
@@ -196,8 +196,6 @@ describe("index.css — the literal-duration kills stay, because dials cannot re
     expect(kills).toMatch(/@supports selector\(::details-content\)\s*\{\s*\.disclose\[open\]::details-content\s*\{\s*transition:\s*none\s*!important/);
     // Outside @supports the pseudo-element never shares a selector list.
     for (const m of SRC.matchAll(/([^{}]*)::details-content[^{]*\{/g)) expect(m[1]).not.toContain(",");
-    // A tile inside a disclosure takes the slide as its entrance, not its own rise on top.
-    expect(SRC).toMatch(/\.disclose \.tile-in\s*\{\s*animation:\s*none;\s*\}/);
   });
 
   it("collapses Radix overlay lifecycles instead of removing them", () => {

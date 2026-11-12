@@ -221,7 +221,8 @@ export function ProjectedBalanceChart({
   }, [sessionKey, expanded, calm]);
   // (Clean forecast line) The low point's ring is mounted for the first draw only, then taken away: a later
   // render, a new horizon or a selected day can never play it again.
-  const [pulse, setPulse] = useState(() => calmX && firstDraw && !reduced);
+  // (2026-11-12) No entrance: the low-point ring that answered the old sweep never plays.
+  const [pulse, setPulse] = useState(false);
   useEffect(() => {
     if (!pulse) return;
     const t = setTimeout(() => setPulse(false), DRAW_MS + PULSE_MS + 200);

@@ -1759,12 +1759,11 @@ export default function MappingRulesPage() {
   //   - The strip is NOT sticky and the cards are NOT moved into a panel-sized
   //     scroller: dnd-kit reaches the strip by auto-scrolling `<main>`, the
   //     nearest scroller, and a sticky strip or a new scroller strands it.
-  //   - NO entrance animation on the rules panel or anything around it
-  //     (`tile-in`, `rise-in`, …): they animate a transform, and any ancestor
-  //     with a transform, filter or `contain` becomes the containing block of
-  //     the fixed-position DragOverlay, which then draws away from the
-  //     pointer. (The Add preview and the test result may rise in: they are
-  //     not ancestors of the overlay.) The rules panel is
+  //   - NO transform, filter or `contain` on the rules panel or any ancestor
+  //     (the app has no entrance animations since 2026-11-12; keep it that
+  //     way here): such an ancestor becomes the containing block of the
+  //     fixed-position DragOverlay, which then draws away from the pointer.
+  //     The rules panel is
   //     `sticky-safe` (`overflow: clip`, not a scroll container) and `static`
   //     (no hover lift); its inner grid is viewport-responsive, not a container
   //     query, because `container-type` applies layout containment too.
