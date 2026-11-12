@@ -502,7 +502,10 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     .from(forecastClosedMonthsTable)
     .where(eq(forecastClosedMonthsTable.householdId, householdId));
 
-  const cashSignal = await computeCashSignal(householdId, ownerUserId);
+  // (PERF) The horizon the ledger would default to (`buildForecastLedger`: the owner's saved daysAhead, else 90),
+  // passed explicitly so this build shares one key with every other 90-day read (the spine, the cash signal):
+  // the same row, the same number, one build.
+  const cashSignal = await computeCashSignal(householdId, ownerUserId, { horizonDays: settings.daysAhead ?? 90 });
   const plaidCheckingAccounts = await listCheckingAccounts(
     userId,
     householdId,
