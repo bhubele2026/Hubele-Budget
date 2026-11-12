@@ -13,7 +13,7 @@
 // ⚠️ This module writes `forecast_resolutions` only. It does not validate.
 
 import { and, eq, inArray, ne, or, type SQL } from "drizzle-orm";
-import { db, forecastResolutionsTable } from "@workspace/db";
+import { bankAutoMatchDeclinesTable, db, forecastResolutionsTable } from "@workspace/db";
 import type { Exec } from "./categorizer/db";
 
 export type ForecastResolutionRow = typeof forecastResolutionsTable.$inferSelect;
@@ -26,6 +26,8 @@ export interface ForecastResolutionInput {
   status: string;
   matchedTxnId?: string | null;
   rescheduledTo?: string | null;
+  /** ⭐ (BANK-AUTO) 'auto' for the bank auto-sort's answer; omitted = a person's ('user'). */
+  source?: "user" | "auto";
 }
 
 /**
@@ -112,6 +114,7 @@ export async function writeForecastResolution(
       status: input.status,
       matchedTxnId: input.matchedTxnId ?? null,
       rescheduledTo: input.rescheduledTo ?? null,
+      ...(input.source ? { source: input.source } : {}),
     })
     .returning();
   return { row: row!, deleted };
@@ -141,7 +144,10 @@ export async function resolutionNeighbours(
  * and created_at. The caller (an undo) has already checked that nothing has
  * taken their place.
  */
-export async function restoreForecastResolutions(exec: Exec, rows: readonly ForecastResolutionRow[]): Promise<void> {
+export async function restoreForecastResolutions(
+  exec: Exec,
+  rows: ReadonlyArray<Omit<ForecastResolutionRow, "source"> & { source?: string | null }>,
+): Promise<void> {
   if (rows.length === 0) return;
   await exec.insert(forecastResolutionsTable).values(
     rows.map((r) => ({
@@ -154,6 +160,8 @@ export async function restoreForecastResolutions(exec: Exec, rows: readonly Fore
       matchedTxnId: r.matchedTxnId,
       rescheduledTo: r.rescheduledTo,
       createdAt: r.createdAt,
+      // (BANK-AUTO) An answer keeps who gave it; one stored before 0250 was a person's.
+      source: r.source === "auto" ? "auto" : "user",
     })),
   );
 }
@@ -203,7 +211,8 @@ export async function undoForecastResolution(
   exec: Exec,
   householdId: string,
   resolutionId: string,
-  restore: readonly ForecastResolutionRow[],
+  restore: ReadonlyArray<Omit<ForecastResolutionRow, "source"> & { source?: string | null }>,
+  actor = "user",
 ): Promise<{ ok: true; restored: number } | { ok: false; code: UndoResolutionRefusal }> {
   const t = forecastResolutionsTable;
   const [answer] = await exec.select().from(t).where(and(eq(t.id, resolutionId), eq(t.householdId, householdId)));
@@ -227,5 +236,30 @@ export async function undoForecastResolution(
   }
   await exec.delete(t).where(and(eq(t.id, resolutionId), eq(t.householdId, householdId)));
   await restoreForecastResolutions(exec, restore);
+  await declineAutoMatchOf(exec, answer, actor);
   return { ok: true, restored: restore.length };
+}
+
+/**
+ * ⭐ (BANK-AUTO) A person took back an AUTOMATIC match (undo or delete): the
+ * bank row goes back to them, and the auto-sort never matches it again
+ * (`bank_auto_match_declines`). A person's own answer records nothing. Pass the
+ * same transaction as the delete.
+ */
+export async function declineAutoMatchOf(
+  exec: Exec,
+  answer: Pick<ForecastResolutionRow, "householdId" | "matchedTxnId" | "recurringItemId" | "occurrenceDate" | "source">,
+  actor: string,
+): Promise<void> {
+  if (answer.source !== "auto" || !answer.matchedTxnId || !answer.householdId) return;
+  await exec
+    .insert(bankAutoMatchDeclinesTable)
+    .values({
+      householdId: answer.householdId,
+      txnId: answer.matchedTxnId,
+      recurringItemId: answer.recurringItemId,
+      occurrenceDate: answer.occurrenceDate,
+      declinedBy: actor,
+    })
+    .onConflictDoNothing();
 }

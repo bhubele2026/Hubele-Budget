@@ -32,6 +32,7 @@ import {
 import { cadenceOf, loadWeeklyAvalanchePlan, minimumsStopAfterOf } from "../lib/avalancheWeeklyPlan";
 import { remapOrphanResolutions } from "../lib/resolutionRemap";
 import {
+  declineAutoMatchOf,
   undoForecastResolution,
   writeForecastResolution,
   type ForecastResolutionRow,
@@ -411,6 +412,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       status: forecastResolutionsTable.status,
       matchedTxnId: forecastResolutionsTable.matchedTxnId,
       rescheduledTo: forecastResolutionsTable.rescheduledTo,
+      source: forecastResolutionsTable.source,
       txnDate: transactionsTable.occurredOn,
       txnDescription: transactionsTable.description,
       txnAmount: transactionsTable.amount,
@@ -1198,6 +1200,8 @@ const replacedView = (r: ForecastResolutionRow) => ({
   matchedTxnId: r.matchedTxnId,
   rescheduledTo: r.rescheduledTo,
   createdAt: r.createdAt.toISOString(),
+  // (BANK-AUTO) Who gave it ('user' or 'auto'), so an undo puts it back as it was.
+  source: r.source,
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1254,6 +1258,7 @@ router.post("/forecast/resolutions/:id/undo", requireAuth, async (req, res): Pro
       matchedTxnId,
       rescheduledTo,
       createdAt,
+      source: r.source === "auto" ? "auto" : "user",
     });
   }
   // The author stays when that person is in the household; else the person undoing.
@@ -1265,7 +1270,7 @@ router.post("/forecast/resolutions/:id/undo", requireAuth, async (req, res): Pro
   members.add(req.householdOwnerId!);
   members.add(req.userId!);
   const rows = parsed.map((r) => (members.has(r.userId) ? r : { ...r, userId: req.userId! }));
-  const out = await db.transaction((tx) => undoForecastResolution(tx, householdId, id, rows));
+  const out = await db.transaction((tx) => undoForecastResolution(tx, householdId, id, rows, req.userId!));
   if (!out.ok) {
     res.status(out.code === "invalid_restore" ? 400 : 409).json({ error: UNDO_WORDS[out.code], code: out.code });
     return;
@@ -1277,14 +1282,20 @@ router.delete(
   "/forecast/resolutions/:id",
   requireAuth,
   async (req, res): Promise<void> => {
-    await db
-      .delete(forecastResolutionsTable)
-      .where(
-        and(
-          eq(forecastResolutionsTable.id, String(req.params.id)),
-          eq(forecastResolutionsTable.householdId, req.householdId!),
-        ),
-      );
+    // (BANK-AUTO) Deleting an automatic match hands the row back to the
+    // household for good: the auto-sort never matches it again.
+    await db.transaction(async (tx) => {
+      const gone = await tx
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.id, String(req.params.id)),
+            eq(forecastResolutionsTable.householdId, req.householdId!),
+          ),
+        )
+        .returning();
+      for (const g of gone) await declineAutoMatchOf(tx, g, req.userId!);
+    });
     res.sendStatus(204);
   },
 );
