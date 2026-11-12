@@ -80,6 +80,8 @@ if (!process.env.SKIP_BUILD) {
 let server: ChildProcess | null = null;
 async function startServer(jobs: string): Promise<void> {
   mkdirSync(join(OUT, jobs), { recursive: true });
+  // Another server on this port would answer instead of ours (and with other code): refuse to measure it.
+  if (await fetch(`${BASE}/api/healthz`).then(() => true, () => false)) throw new Error(`port ${PORT} is already serving: stop that server or pass PORT=`);
   const log = openSync(join(OUT, jobs, "server.log"), "w");
   server = spawn("node", ["--enable-source-maps", join(SERVER_OUT, "index.mjs")], {
     cwd: ROOT,

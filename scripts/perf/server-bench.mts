@@ -45,6 +45,8 @@ if (!process.env.SKIP_BUILD) {
 
 // ── SERVER ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 mkdirSync(PERF, { recursive: true });
+// Another server on this port would answer instead of ours (and with other code): refuse to measure it.
+if (await fetch(`${BASE}/healthz`).then(() => true, () => false)) throw new Error(`port ${PORT} is already serving: stop that server or pass PORT=`);
 const log = openSync(join(PERF, "server-bench.log"), "w");
 const server: ChildProcess = spawn("node", [join(SERVER_OUT, "index.mjs")], {
   cwd: ROOT,
@@ -61,7 +63,7 @@ process.on("exit", kill);
 process.on("SIGINT", () => { kill(); process.exit(130); });
 for (let i = 0; ; i++) {
   if (server.exitCode !== null) throw new Error(`server exited ${server.exitCode}: see ${join(PERF, "server-bench.log")}`);
-  try { if ((await fetch(`${BASE}/healthz`)).ok) break; } catch { /* not yet */ }
+  try { if ((await fetch(`${BASE}/healthz`)).ok && server.exitCode === null) break; } catch { /* not yet */ }
   if (i > 120) throw new Error("server did not come up");
   await new Promise((r) => setTimeout(r, 250));
 }
