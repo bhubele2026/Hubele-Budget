@@ -176,6 +176,18 @@ describe("Chase page — the panel grid (C9)", () => {
     );
   });
 
+  it("(2026-11-12) the register opens on its list: the two figure panels and the trend chart come AFTER the ledger, and stay", async () => {
+    show();
+    await ready();
+    const ledger = screen.getByTestId("chase-ledger");
+    const after = ["chase-stats-in-out", "chase-stats-balance"].map((id) => screen.getByTestId(id));
+    const slot = screen.queryByTestId("chase-chart-slot");
+    if (slot) after.push(slot);
+    for (const el of after) expect(ledger.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING, el.dataset.testid).toBeTruthy();
+    // Before the household strip, which stays last.
+    for (const el of after) expect(el.compareDocumentPosition(screen.getByTestId("chase-household")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("(W3) the household strip: titled 'Household · all accounts', closed, and after the ledger", async () => {
     show();
     await ready();

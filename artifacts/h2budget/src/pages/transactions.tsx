@@ -115,6 +115,7 @@ import {
 } from "@/components/account-page";
 import { ChaseLogo } from "@/components/brand-logos";
 import { PageGrid, rise } from "@/components/next/PageGrid";
+import { bucketPatchOf } from "@/lib/bucketPatch";
 import { Panel } from "@/components/next/Panel";
 import { identityOf } from "@/lib/accountIdentity";
 import { accountPageHref } from "@/lib/accountPage";
@@ -2330,19 +2331,9 @@ export default function TransactionsPage({
     bucket: BucketKey,
     next: boolean,
   ) => {
-    const data: Record<string, boolean | string | null> = {};
-    if (bucket === "reimbursable") {
-      // Reimbursable is an orthogonal flag — leave the spend bucket alone.
-      data.reimbursable = next;
-    } else {
-      // Weekly / Monthly / Unplanned are mutually exclusive: marking one clears
-      // the others so a charge lives in exactly one bucket (or none).
-      data.weeklyAllowance = bucket === "weekly" ? next : false;
-      data.monthlyAllowance = bucket === "monthly" ? next : false;
-      data.unplannedAllowance = bucket === "unplanned" ? next : false;
-      data.weeklyBucket =
-        bucket === "weekly" && next ? (tx.weeklyBucket ?? "misc") : null;
-    }
+    // Reimbursable is an orthogonal flag; Weekly / Monthly / Unplanned are
+    // mutually exclusive (`bucketPatchOf`, shared with the row drawer).
+    const data = bucketPatchOf(tx, bucket, next);
     updateTx.mutate(
       { id: tx.id, data },
       {
@@ -2557,74 +2548,9 @@ export default function TransactionsPage({
   // The register's row actions: date controls, send to Forecast, review, edit
   // and delete. Icon buttons are 32 px so a one-line row stays 40 px.
 
-  return (
-    <div
-      className="space-y-4"
-      data-testid="chase-page"
-      style={{ ["--page-sticky-top" as string]: `${paneH}px` } as React.CSSProperties}
-    >
-      {/* (#357) Suppress the global Plaid re-auth banner while the user
-          is viewing a Manual account — the failing item isn't this view's
-          data, so the banner is misleading noise here. The banner is
-          still rendered on every other tab and on Settings. */}
-      {!isManualAccount && <PlaidReauthBanner />}
-      {/* (#379) Shared post-link import banner — published from
-          PlaidLinkButton.pollAfterLink and rendered above the header so
-          users see "waiting on bank → syncing → done — N imported"
-          (or failed + Retry) instead of staring at silence after the
-          link toast. */}
-      <PostLinkProgressBanner viewTransactionsPath="/transactions" />
-      {register.isRefetchError && <div role="alert" className={errorBanner}>Chase refresh failed. Showing the last loaded transactions. <button className={btnLink} onClick={() => void register.refetch()}>Retry transactions</button></div>}
-
-      {/* (C9) The account page on the 12-column grid: head, controls, the two
-          range figures, the household strip, the trend chart, then the ledger
-          panel. The same layout standalone and embedded (`/next/accounts/:id`),
-          where the account's own page supplies the title. */}
-      <PageGrid>
-        <div className="span-12">
-          {embedded ? (
-            <div className="flex flex-wrap items-start justify-end gap-2" data-testid="chase-embedded-actions">
-              {pageActions}
-            </div>
-          ) : (
-            <AccountPageHeader
-              title="Chase"
-              icon={<ChaseLogo className="h-7 w-7" />}
-              identity={accountIdentity}
-              meta={manualMeta}
-              actions={pageActions}
-            />
-          )}
-        </div>
-
-        {/* Weekly-first range control (Month stepper only in Month mode), the
-            account picker and the Review drilldown. */}
-        <div className="span-12 flex flex-wrap items-center justify-between gap-3" data-testid="chase-controls">
-          <div className="flex flex-wrap items-center gap-3">
-            <TimeRangeToggle value={rangeMode} onChange={setRangeMode} />
-            <span className="text-sm font-medium tabular-nums text-muted-foreground">
-              {range.label}
-            </span>
-            {rangeMode === "mo" && (
-              <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
-            )}
-            {rangeMode === "mo" &&
-            rowLinkMonthRef.current &&
-            compareMonth(selectedMonth, rowLinkMonthRef.current) === 0 ? (
-              <span role="status" className="text-label text-neutral-600" data-testid="chase-row-link-status">
-                {rowDeepLinkStatus(selectedMonth)}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {embedded ? manualMeta : null}
-            {accountPicker}
-            {bucketSummary}
-          </div>
-        </div>
-
-        {lead}
-
+  // The range figures (Money in vs out, the balance) and the actual-vs-forecast chart, placed below.
+  const figures = (
+    <>
         {hasLinkedChecking ? (
           <>
             {/* Money in vs out + net */}
@@ -2802,6 +2728,79 @@ export default function TransactionsPage({
           />
           </div>
         )}
+    </>
+  );
+
+  return (
+    <div
+      className="space-y-4"
+      data-testid="chase-page"
+      style={{ ["--page-sticky-top" as string]: `${paneH}px` } as React.CSSProperties}
+    >
+      {/* (#357) Suppress the global Plaid re-auth banner while the user
+          is viewing a Manual account — the failing item isn't this view's
+          data, so the banner is misleading noise here. The banner is
+          still rendered on every other tab and on Settings. */}
+      {!isManualAccount && <PlaidReauthBanner />}
+      {/* (#379) Shared post-link import banner — published from
+          PlaidLinkButton.pollAfterLink and rendered above the header so
+          users see "waiting on bank → syncing → done — N imported"
+          (or failed + Retry) instead of staring at silence after the
+          link toast. */}
+      <PostLinkProgressBanner viewTransactionsPath="/transactions" />
+      {register.isRefetchError && <div role="alert" className={errorBanner}>Chase refresh failed. Showing the last loaded transactions. <button className={btnLink} onClick={() => void register.refetch()}>Retry transactions</button></div>}
+
+      {/* (C9) The account page on the 12-column grid: head, controls, the two
+          range figures, the household strip, the trend chart, then the ledger
+          panel. The same layout standalone and embedded (`/next/accounts/:id`),
+          where the account's own page supplies the title. */}
+      <PageGrid>
+        <div className="span-12">
+          {embedded ? (
+            <div className="flex flex-wrap items-start justify-end gap-2" data-testid="chase-embedded-actions">
+              {pageActions}
+            </div>
+          ) : (
+            <AccountPageHeader
+              title="Chase"
+              icon={<ChaseLogo className="h-7 w-7" />}
+              identity={accountIdentity}
+              meta={manualMeta}
+              actions={pageActions}
+            />
+          )}
+        </div>
+
+        {/* Weekly-first range control (Month stepper only in Month mode), the
+            account picker and the Review drilldown. */}
+        <div className="span-12 flex flex-wrap items-center justify-between gap-3" data-testid="chase-controls">
+          <div className="flex flex-wrap items-center gap-3">
+            <TimeRangeToggle value={rangeMode} onChange={setRangeMode} />
+            <span className="text-sm font-medium tabular-nums text-muted-foreground">
+              {range.label}
+            </span>
+            {rangeMode === "mo" && (
+              <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+            )}
+            {rangeMode === "mo" &&
+            rowLinkMonthRef.current &&
+            compareMonth(selectedMonth, rowLinkMonthRef.current) === 0 ? (
+              <span role="status" className="text-label text-neutral-600" data-testid="chase-row-link-status">
+                {rowDeepLinkStatus(selectedMonth)}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {embedded ? manualMeta : null}
+            {accountPicker}
+            {bucketSummary}
+          </div>
+        </div>
+
+        {lead}
+
+        {/* (C9) Beside a host's `lead` (the account page) the figures stay one row of three, above the ledger. */}
+        {lead ? figures : null}
 
         <LedgerPanel
           title="Transactions"
@@ -3173,6 +3172,10 @@ export default function TransactionsPage({
             </div>
           )}
         </LedgerPanel>
+
+        {/* (2026-11-12) The Chase register opens on its LIST: a row a link names (?tx=) lands in view, not under two
+            chart cards. The range figures and the actual-vs-forecast chart follow the ledger; nothing was removed. */}
+        {lead ? null : figures}
 
         {/* (W3) The HOUSEHOLD's week, every account (CH-15): it is not this
             account, so it comes after the Chase-only panels, closed, and says
