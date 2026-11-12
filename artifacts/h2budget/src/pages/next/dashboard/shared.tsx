@@ -47,7 +47,7 @@ export function PanelError({ what, onRetry }: { what: string; onRetry?: () => vo
     <div data-testid="panel-error" role="alert" className="text-body text-neutral-600">
       <p>{what} did not load.</p>
       {onRetry ? (
-        <button type="button" onClick={onRetry} className="mt-1 text-label font-semibold text-brand-navy underline">
+        <button type="button" onClick={onRetry} className="mt-1 text-label font-medium text-brand-navy underline">
           Try again
         </button>
       ) : null}
@@ -81,10 +81,10 @@ export function LinkRow({ children }: { children: ReactNode }) {
 }
 
 /** The quiet link style every dashboard link uses. */
-export const LINK = "font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control";
+export const LINK = "font-medium text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control";
 
-/** The label voice: 11 px, uppercase, tracked, muted. */
-export const LABEL = "text-micro font-semibold uppercase tracking-wide text-neutral-500";
+/** The label voice: 12 px, medium, readable grey, sentence case (2026-11-12: no shouting caps). */
+export const LABEL = "text-micro font-medium text-neutral-600";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /** "Fri Oct 9" from a household ISO day, with no timezone in the way. */
@@ -95,8 +95,8 @@ export function weekdayLabel(iso: string | null | undefined): string | null {
 }
 
 /**
- * ONE figure on a multi-figure surface: an 11 px label, the figure at
- * `--text-kpi` in mono tabular numerals, and at most two short sublines.
+ * ONE figure on a multi-figure surface: a 12 px label, the figure at
+ * `--text-kpi` in tabular lining figures, and at most two short sublines.
  * `missing` is the words that replace the figure when the data is not there
  * (never $0): the figure becomes an em dash and the words say why.
  */
@@ -117,9 +117,9 @@ export function Kpi({
       <div
         data-testid={testid ? `${testid}-value` : undefined}
         className={cn(
-          "mt-1 whitespace-nowrap font-mono text-kpi font-semibold tabular-nums",
+          "fig mt-1 whitespace-nowrap text-kpi font-semibold",
           // neutral-500, not 400: the dash is still information (2.6:1 at 400).
-          missing || tone === "muted" ? "text-neutral-500" : tone === "bad" ? "text-bad" : "text-brand-navy",
+          missing || tone === "muted" ? "text-neutral-500" : tone === "bad" ? "text-bad-ink" : "text-foreground",
         )}
       >
         {missing ? "—" : value}

@@ -115,7 +115,7 @@ describe("ProjectedBalanceChart — calm (readable forecast)", () => {
     // One series for the whole window, look-back days included (today is the third day here).
     expect(areas.map((a) => a.dataKey)).toEqual(["balance"]);
     expect(last().stroke).toBe(CHART.navy);
-    expect(last().strokeWidth).toBe(2.25);
+    expect(last().strokeWidth).toBe(1.75); // (2026-11-12) restrained line weight
     expect(last().strokeDasharray).toBeUndefined();
     expect(last().fill).toBe("url(#projectedBalanceGrad)");
     expect(last().name).toBe("Balance");

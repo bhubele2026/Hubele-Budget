@@ -40,8 +40,8 @@ export function warmPayThisWeek(qc: QueryClient): void {
 
 /** The closed drawer's own height (its one line), so nothing moves when it arrives. */
 const MoreSkeleton = () => (
-  <div className="span-12 flex h-10 items-center" data-testid="dash-more-skeleton" aria-busy="true">
-    <div className="skeleton h-4 w-16 rounded" />
+  <div className="span-12 flex min-h-11 items-center rounded-card border border-brand-line bg-white px-4" data-testid="dash-more-skeleton" aria-busy="true">
+    <div className="skeleton h-4 w-56 rounded" />
   </div>
 );
 
@@ -118,7 +118,7 @@ export default function DashboardPage() {
         ) : (
           <BelowFoldSkeleton slot="forecast" />
         )}
-        <div data-testid="dash-version" className="span-12 font-mono text-micro tabular-nums text-neutral-500">
+        <div data-testid="dash-version" className="fig span-12 text-micro text-neutral-500">
           Version {APP_VERSION}
         </div>
       </PageGrid>

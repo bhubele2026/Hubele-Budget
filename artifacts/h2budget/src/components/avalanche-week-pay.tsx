@@ -9,12 +9,12 @@ import { cn } from "@/lib/utils";
 import type { AvalancheWeekPayControls } from "@/hooks/useAvalancheWeekPay";
 
 /**
- * The call to action: brand orange (CLAUDE.md §3) with navy words — white on
- * #f68d2e fails contrast. Flat and matte like every button; no deep-orange
- * hover, which means "something is wrong".
+ * The call to action: NAVY with white words, the app's one primary button
+ * (owner, 2026-11-12 — orange is kept for warnings and the H2 mark). Flat and
+ * matte; at least 36 px tall so a thumb finds it.
  */
 export const WEEK_PAY_CTA =
-  "press inline-flex min-h-9 items-center justify-center rounded-control bg-brand-orange px-4 py-1.5 text-body font-semibold text-on-orange hover:bg-brand-orange/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:opacity-55";
+  "press inline-flex min-h-9 items-center justify-center rounded-control bg-brand-navy px-4 py-1.5 text-body font-medium text-white hover:bg-brand-navy2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-55";
 
 export function WeekPayButton({ controls, date, className }: { controls: AvalancheWeekPayControls; date: string; className?: string }) {
   return (

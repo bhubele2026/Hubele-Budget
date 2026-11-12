@@ -676,12 +676,13 @@ export function ProjectedBalanceChart({
         >
           <defs>
             <linearGradient id="projectedBalanceGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={CHART.navy} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={CHART.navy} stopOpacity={0.02} />
+              {/* (2026-11-12) A flat, faint tint under the line — no gradient wash. */}
+              <stop offset="0%" stopColor={CHART.navy} stopOpacity={0.06} />
+              <stop offset="100%" stopColor={CHART.navy} stopOpacity={0.06} />
             </linearGradient>
             <linearGradient id="projectedBalanceGradFuture" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={CHART.mid} stopOpacity={0.14} />
-              <stop offset="100%" stopColor={CHART.mid} stopOpacity={0.01} />
+              <stop offset="0%" stopColor={CHART.mid} stopOpacity={0.05} />
+              <stop offset="100%" stopColor={CHART.mid} stopOpacity={0.05} />
             </linearGradient>
           </defs>
           {quiet ? (

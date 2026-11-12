@@ -6,21 +6,22 @@ import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { useSpine } from "@/hooks/useSpine";
 import { knownWithinPlan, weekStory } from "@/lib/weekFigures";
 import { btn } from "@/ui";
-import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/next/PageHeader";
 import { requestWhatsNewOpen, useWhatsNewUnread } from "@/lib/whatsNewSignal";
 import { useCashSignalQ, usePlaidItemsQ } from "./queries";
 import { dueSoonOf, upcomingRows } from "./obligations";
 import { bankLines, hasLinkedBank } from "./bankState";
-import { rise, weekdayLabel } from "./shared";
+import { weekdayLabel } from "./shared";
 
 /** The second row's text button (What's new). */
 const QUIET_TEXT =
-  "rounded-control text-label font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
+  "rounded-control text-label font-medium text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
 
 /**
  * ⭐ THE HEADER: what day it is, the way back to What's new, and ONE action
- * (only when something needs doing). Eager (first screen), no panel chrome: it
- * is the page's own head, not a card. (Home is four numbers, 2026-11-11) The
+ * (only when something needs doing). Eager (first screen), the shared
+ * `PageHeader` (title · context · meta · actions, 2026-11-12): it is the
+ * page's own head, not a card. (Home is four numbers, 2026-11-11) The
  * bank sync lines, "Can we afford something?" and the morning text moved,
  * unchanged, into the "More" drawer (`MoreDrawer.tsx`).
  */
@@ -55,14 +56,25 @@ export default function DashboardHeader() {
   const action = headerActionOf(attention ?? [], { noBank });
 
   return (
-    <header className={cn("span-12", rise(0))} data-testid="dash-header">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-display font-semibold text-brand-navy" data-testid="dash-today">
-            Today <span className="font-normal text-neutral-500">· {weekdayLabel(today)}</span>
-          </h1>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>
+    <PageHeader
+      className="span-12"
+      data-testid="dash-header"
+      titleTestId="dash-today"
+      title="Today"
+      context={weekdayLabel(today)}
+      meta={
+        /* (WN) The way back to What's new — a quiet link, not a tile; "New" while a note is unread. */
+        <button type="button" className={QUIET_TEXT} onClick={requestWhatsNewOpen} data-testid="dash-whats-new">
+          What's new
+          {whatsNewUnread ? (
+            <span className="ml-1.5 rounded-[4px] bg-count-bg px-1.5 py-px align-middle text-micro font-medium text-count-ink" data-testid="dash-whats-new-new">
+              New
+            </span>
+          ) : null}
+        </button>
+      }
+      actions={
+        <div className="flex flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>
           {/* ONE action: the most actionable issue. With none, nothing shouts. */}
           {action.kind === "link" ? (
             <Link href={action.href} className={btn} data-testid="dash-link-bank">{action.label}</Link>
@@ -74,18 +86,7 @@ export default function DashboardHeader() {
             <WaysBackLauncher />
           ) : null}
         </div>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-        {/* (WN) The way back to What's new — a quiet link, not a tile; "New" while a note is unread. */}
-        <button type="button" className={QUIET_TEXT} onClick={requestWhatsNewOpen} data-testid="dash-whats-new">
-          What's new
-          {whatsNewUnread ? (
-            <span className="ml-1.5 rounded-full bg-brand-orange px-1.5 py-px align-middle text-micro font-semibold text-on-orange" data-testid="dash-whats-new-new">
-              New
-            </span>
-          ) : null}
-        </button>
-      </div>
-    </header>
+      }
+    />
   );
 }

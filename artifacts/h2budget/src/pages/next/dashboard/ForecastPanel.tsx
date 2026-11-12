@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { useCashSignalQ } from "./queries";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
-import { toggle } from "@/ui";
+import { Segmented, segment } from "@/components/next/Toolbar";
 import { Gate, LINK, money, weekdayLabel } from "./shared";
 
 /**
@@ -113,17 +113,18 @@ export default function ForecastPanel() {
       className={minH}
       data-testid="dash-forecast"
       actions={
-        <div className="flex gap-1" role="group" aria-label="Forecast horizon">
+        // (2026-11-12) A quiet toolbar: the horizon as ONE segmented control.
+        <Segmented label="Forecast horizon">
           {HORIZONS.map((h) => (
             <button key={h} type="button" onClick={() => setDays(h)} aria-pressed={days === h}
               data-testid={`dash-horizon-${h}`}
-              className={cn(toggle(days === h), "px-2 py-0.5 text-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40")}>
+              className={cn(segment(days === h), "px-2.5 text-micro")}>
               <span className="sm:hidden" aria-hidden>{h}d</span>
               <span className="hidden sm:inline">{h} days</span>
               <span className="sr-only sm:hidden">{h} days</span>
             </button>
           ))}
-        </div>
+        </Segmented>
       }
     >
       <Gate q={q} what="The forecast" rows={6}>
@@ -134,7 +135,7 @@ export default function ForecastPanel() {
                 The forecast needs a bank balance before it can draw a line.
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="relative h-80 w-full">
                   <div
                     role="group"
@@ -171,21 +172,27 @@ export default function ForecastPanel() {
                   {loading ? (
                     <span
                       role="status"
-                      className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-control bg-white px-2 py-0.5 text-micro text-neutral-600 shadow-lift ring-1 ring-brand-line"
+                      className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-control bg-white px-2 py-0.5 text-micro text-neutral-600 ring-1 ring-brand-line"
                       data-testid="dash-forecast-loading"
                     >
                       Loading {days} days…
                     </span>
                   ) : null}
                 </div>
-                <div data-testid="dash-forecast-legend">
-                  <ChartLegend short hasUnder={view!.hasUnder} hasNegative={view!.hasNegative} />
+                {/* The legend and the way to the full forecast share one quiet foot row, over a hairline. */}
+                <div className="-mx-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-brand-line px-4 pt-3">
+                  <div data-testid="dash-forecast-legend">
+                    <ChartLegend short hasUnder={view!.hasUnder} hasNegative={view!.hasNegative} />
+                  </div>
+                  <Link href="/forecast" className={cn(LINK, "text-label")} data-testid="dash-forecast-link">Open the forecast →</Link>
                 </div>
               </div>
             )}
-            <div className="mt-3 flex gap-4 text-label">
-              <Link href="/forecast" className={LINK} data-testid="dash-forecast-link">Open the forecast</Link>
-            </div>
+            {!ready ? (
+              <div className="mt-3 flex gap-4 text-label">
+                <Link href="/forecast" className={LINK} data-testid="dash-forecast-link">Open the forecast</Link>
+              </div>
+            ) : null}
           </div>
         )}
       </Gate>

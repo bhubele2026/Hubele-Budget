@@ -4,18 +4,19 @@ import { Link } from "wouter";
 import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { cn } from "@/lib/utils";
 import { figLabel } from "@/ui";
-import { money, rise } from "./shared";
+import { money } from "./shared";
 
 /** The tile shell and its small parts, shared by Tiles.tsx and the lazy week tile. */
 
 type Tone = "ok" | "bad" | "neutral";
 type Accent = "checking" | "amex" | "other";
 
-// Literal class names so Tailwind sees them.
-const EDGE: Record<Accent, string> = {
-  checking: "border-l-acct-checking",
-  amex: "border-l-acct-amex",
-  other: "border-l-acct-other",
+// Literal class names so Tailwind sees them. (2026-11-12) An account's
+// identity is a small dot before the title, no longer a 4 px card edge.
+const DOT: Record<Accent, string> = {
+  checking: "bg-acct-checking",
+  amex: "bg-acct-amex",
+  other: "bg-acct-other",
 };
 const CHIP: Record<Tone, string> = {
   ok: "bg-acct-checking-bg text-brand-navy",
@@ -26,7 +27,7 @@ const CHIP: Record<Tone, string> = {
 export interface TileStatus { word: string; tone: Tone }
 
 export function Tile({
-  testid, title, sub, href, accent, status, children, why, index, box = "span-4 min-h-[11.5rem]", body,
+  testid, title, sub, href, accent, status, children, why, index, box = "span-4 min-h-[11.5rem]", body, cell = false,
 }: {
   testid: string;
   title: ReactNode;
@@ -42,27 +43,32 @@ export function Tile({
   box?: string;
   /** Extra classes for the tile's body (the four numbers sit their figure at the bottom on a phone, so a two-line title beside a one-line one still leaves the row's figures level). */
   body?: string;
+  /** (2026-11-12) A CELL of one summary group (`FOUR_GRID`): no panel of its own — the group is the panel and
+   *  hairlines split the cells. The title becomes the figure's label. */
+  cell?: boolean;
 }) {
   const qc = useQueryClient();
+  void index; // (2026-11-12) no entrance stagger: the box is simply there.
   return (
     <div
       data-testid={`tile-${testid}`}
       className={cn(
-        "panel group relative flex flex-col gap-3 border-l-4 p-4",
+        "group relative flex flex-col",
+        cell
+          ? "gap-2 transition-colors hover:bg-brand-tint focus-within:bg-brand-tint"
+          : "panel gap-3 p-4 transition-colors hover:border-neutral-300 focus-within:border-neutral-300",
         box,
-        EDGE[accent],
-        "transition-[transform,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:shadow-[var(--shadow-milled-lift)] focus-within:shadow-[var(--shadow-milled-lift)]",
-        rise(index),
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="text-body font-semibold text-brand-navy">
+          <h2 className={cell ? "text-micro font-medium text-neutral-600" : "text-body font-semibold text-foreground"}>
+            <span aria-hidden className={cn("mr-1.5 inline-block size-2 rounded-full align-[0.05em]", DOT[accent])} />
             <Link
               href={href}
               data-testid={`tile-${testid}-link`}
               {...warmHandlers((h) => warmRoute(qc, h), href)}
-              className="rounded-control after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand-navy/50 focus-visible:after:rounded-[inherit]"
+              className="rounded-control after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-brand-navy/50 focus-visible:after:rounded-[inherit]"
             >
               {title}
             </Link>
@@ -71,11 +77,11 @@ export function Tile({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {status ? (
-            <span data-testid={`tile-${testid}-status`} data-tone={status.tone} className={cn("rounded-full px-2 py-0.5 text-micro font-semibold", CHIP[status.tone])}>
+            <span data-testid={`tile-${testid}-status`} data-tone={status.tone} className={cn("rounded-[4px] px-1.5 py-px text-micro font-medium", CHIP[status.tone])}>
               {status.word}
             </span>
           ) : null}
-          <span aria-hidden className="text-neutral-400 transition-transform motion-safe:group-hover:translate-x-0.5">→</span>
+          <span aria-hidden className="text-neutral-400 transition-colors group-hover:text-brand-navy">→</span>
         </div>
       </div>
       <div className={cn("flex flex-1 flex-col gap-2", body)}>{children}</div>
@@ -93,7 +99,7 @@ export function Fig({ label, value, tone = "neutral", big = false, testid }: {
       {label ? <div className={figLabel}>{label}</div> : null}
       <div
         data-testid={testid}
-        className={cn("font-mono font-semibold tabular-nums", big ? "text-kpi" : "text-body", tone === "bad" ? "text-bad-ink" : "text-brand-navy")}
+        className={cn("fig font-semibold", big ? "text-kpi" : "text-body", tone === "bad" ? "text-bad-ink" : "text-foreground")}
       >
         {value}
       </div>
@@ -101,12 +107,13 @@ export function Fig({ label, value, tone = "neutral", big = false, testid }: {
   );
 }
 
-/** (Home is four numbers) The four boxes' own grid: two by two on a phone, one row of four from 1024 px. */
-export const FOUR_GRID = "span-12 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4";
-/** One of the four boxes: shorter than a tile (one number, one line), tighter padding on a phone. */
-export const FOUR_BOX = "min-h-[7.625rem] p-3 sm:p-4";
-/** (Home says less) A box that also carries a thin bar under its number: the bar's height and gap, held from the skeleton on. */
-export const FOUR_BOX_BAR = "min-h-[8.375rem] p-3 sm:p-4 lg:min-h-[8.75rem]";
+/** (Home is four numbers; ONE summary group, 2026-11-12) The four figures in ONE flat panel, split by hairlines
+ *  (`.kpi-grid`): two by two on a phone, one row of four from 1024 px. */
+export const FOUR_GRID = "span-12 panel kpi-grid grid grid-cols-2 lg:grid-cols-4";
+/** One of the four cells: label · figure · one line, the same height across the row. */
+export const FOUR_BOX = "min-h-[7rem]";
+/** (Home says less) A cell that also carries a thin bar under its number: the bar's height and gap, held from the skeleton on. */
+export const FOUR_BOX_BAR = "min-h-[7.75rem] lg:min-h-[7.5rem]";
 /** On a phone the four boxes are two by two and a title may take two lines: the number and its line sit at the bottom, level across the row. */
 export const FOUR_BODY = "max-lg:justify-end";
 
@@ -115,8 +122,8 @@ export const FOUR_BODY = "max-lg:justify-end";
  * `CssFillMeter` (`lib/cssBars.tsx`), same look and same two motion classes, written with colour tokens only so
  * the open path does not carry the chart tokens. Navy under the plan; past it, the one deep orange, the track
  * rescales to the actual and a hairline marks where the plan ran out. `aria-hidden`: the box says the state in
- * words beside it. `.grow-x` sweeps once when the bar mounts; `.bar-sweep` tweens a later change of width, so a
- * background refresh never replays the sweep. Both are off under reduced motion (`index.css`).
+ * words beside it. No entrance sweep (2026-11-12); `.bar-sweep` tweens a later change of width (off under reduced
+ * motion, `index.css`).
  */
 export function FillBar({ value, ceiling }: { value: number; ceiling: number }) {
   const v = Math.max(0, Number(value) || 0);
@@ -127,7 +134,7 @@ export function FillBar({ value, ceiling }: { value: number; ceiling: number }) 
   return (
     <div aria-hidden="true" data-over={over ? "true" : undefined} className="relative h-1.5 w-full overflow-hidden rounded-full bg-brand-line">
       <span
-        className={cn("bar-sweep grow-x absolute inset-y-0 left-0 rounded-full", over ? "bg-brand-orange-deep" : "bg-brand-fill")}
+        className={cn("bar-sweep absolute inset-y-0 left-0 rounded-full", over ? "bg-brand-orange-deep" : "bg-brand-fill")}
         style={{ width: `${fillPct}%` }}
       />
       {over ? <span className="absolute inset-y-0 w-px bg-white/75" style={{ left: `${(1 / ratio) * 100}%` }} /> : null}
@@ -140,7 +147,7 @@ export const Skel = () => <span className="skeleton block h-7 w-28 rounded" aria
 export function Why({ children }: { children: ReactNode }) {
   return (
     <details className="group/why">
-      <summary className="inline cursor-pointer list-none font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control">
+      <summary className="inline cursor-pointer list-none font-medium text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control">
         Why?
       </summary>
       <p className="mt-1 max-w-xs">{children}</p>

@@ -70,7 +70,7 @@ const LOADING = {
 } as const;
 
 function Checking({ s, older }: { s: Spine | undefined; older?: string | null }) {
-  if (!s) return <Tile {...LOADING.checking} index={2} body={FOUR_BODY}><Skel /></Tile>;
+  if (!s) return <Tile cell {...LOADING.checking} index={2} body={FOUR_BODY}><Skel /></Tile>;
   const v = bankBalanceView(s.bank);
   const bal = Number(s.bank.balance);
   const n = s.reviewCount;
@@ -79,7 +79,7 @@ function Checking({ s, older }: { s: Spine | undefined; older?: string | null })
   const base = v.account?.rowId ? `/banking?account=${encodeURIComponent(v.account.rowId)}` : "/banking";
   const href = n > 0 && v.balance != null ? `${base}#needs-you` : base;
   return (
-    <Tile testid="four-checking" title="Checking" href={href} accent="checking" index={2} box={FOUR_BOX} body={FOUR_BODY}>
+    <Tile cell testid="four-checking" title="Checking" href={href} accent="checking" index={2} box={FOUR_BOX} body={FOUR_BODY}>
       <Fig
         big testid="four-checking-value"
         value={v.balance == null ? "—" : money(s.bank.balance)}
@@ -91,7 +91,7 @@ function Checking({ s, older }: { s: Spine | undefined; older?: string | null })
 }
 
 function Lowest({ s }: { s: Spine | undefined }) {
-  if (!s) return <Tile {...LOADING.lowest} index={3} body={FOUR_BODY}><Skel /></Tile>;
+  if (!s) return <Tile cell {...LOADING.lowest} index={3} body={FOUR_BODY}><Skel /></Tile>;
   const f = s.forecast;
   const v = lowPointView(f, { buffer: f.cashBuffer, stale: s.bank.stale });
   const below = v.value != null && v.value < 0;
@@ -99,7 +99,7 @@ function Lowest({ s }: { s: Spine | undefined }) {
   // The Forecast tile's own link: below zero, it opens the day it happens.
   const href = `/forecast?horizon=90${below && v.date ? `&day=${encodeURIComponent(v.date.slice(0, 10))}` : ""}`;
   return (
-    <Tile testid="four-lowest" title={LOWEST} href={href} accent="other" index={3} box={FOUR_BOX} body={FOUR_BODY}>
+    <Tile cell testid="four-lowest" title={LOWEST} href={href} accent="other" index={3} box={FOUR_BOX} body={FOUR_BODY}>
       <Fig big testid="four-lowest-value" value={v.kind === "none" ? "—" : money(v.value)} tone={v.tone} />
       <Line testid="four-lowest-line" bad={below}>
         {v.kind === "none" ? v.words : below ? `Below zero${day ? ` · ${day}` : ""}` : day}
@@ -111,7 +111,7 @@ function Lowest({ s }: { s: Spine | undefined }) {
 /** The box is one node from skeleton to figure; what it reads (and asks for) mounts with the spine, as before. */
 function SpentThisWeek({ s }: { s: Spine | undefined }) {
   return (
-    <Tile {...LOADING.spent} index={4} body={FOUR_BODY}>
+    <Tile cell {...LOADING.spent} index={4} body={FOUR_BODY}>
       {s ? <SpentBody s={s} /> : <Skel />}
     </Tile>
   );
@@ -148,10 +148,10 @@ function SpentBody({ s }: { s: Spine }) {
 }
 
 function DebtPaid({ s }: { s: Spine | undefined }) {
-  if (!s) return <Tile {...LOADING.debt} index={5} body={FOUR_BODY}><Skel /></Tile>;
+  if (!s) return <Tile cell {...LOADING.debt} index={5} body={FOUR_BODY}><Skel /></Tile>;
   const pct = s.debt.payoffPct;
   return (
-    <Tile testid="four-debt" title="Debt paid" href="/avalanche" accent="other" index={5} box={FOUR_BOX_BAR} body={FOUR_BODY}>
+    <Tile cell testid="four-debt" title="Debt paid" href="/avalanche" accent="other" index={5} box={FOUR_BOX_BAR} body={FOUR_BODY}>
       <Fig big testid="four-debt-value" value={pct == null ? "—" : `${Math.round(pct)}%`} />
       <Bar testid="four-debt-bar" value={pct ?? undefined} ceiling={pct == null ? undefined : 100} />
       <Line testid="four-debt-line">{pct == null ? "No debt has a starting balance yet." : `${short(s.debt.paidDownMtd)} this month`}</Line>

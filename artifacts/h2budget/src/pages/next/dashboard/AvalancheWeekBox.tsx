@@ -12,14 +12,18 @@ import { WeekPayButton, WeekPayError, WeekUndoButton } from "@/components/avalan
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
 import { LINK, money, weekdayLabel } from "./shared";
+import { Check, Clock } from "lucide-react";
+import { StatusBadge } from "@/components/next/StatusBadge";
 import { useReadyMark } from "@/lib/perfMarks";
 
 const MIN = 60_000;
 
-/** A row's small label ("Paid", "Next payment"): one column on a desktop, so the two rows line up. */
-const ROW_LABEL = "shrink-0 text-label font-semibold text-neutral-600 sm:w-28";
-/** A row's own words: the money in mono tabular numerals, the card in the text face. */
-const ROW_VALUE = "min-w-0 text-body font-semibold text-brand-navy";
+/** A row's small label ("Paid", "Next payment") with its state icon: one column on a desktop, so the rows line up. */
+const ROW_LABEL = "inline-flex shrink-0 items-center gap-1.5 text-micro font-medium text-neutral-600 sm:w-32";
+/** A row's own words: the money in tabular figures, the card in the text face. */
+const ROW_VALUE = "min-w-0 text-body font-medium text-foreground";
+/** A small label above a column of the payment row (Amount and card · Date · Status). */
+const COL_LABEL = "mb-1 text-micro font-medium text-neutral-600";
 /** A row that opens: the native marker, then the row's words. */
 const ROW_SUMMARY =
   "w-fit cursor-pointer rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
@@ -46,7 +50,7 @@ function NextRow({ next }: { next: AvalancheWeeklyWeek | null }) {
   );
   return (
     <div className="flex items-baseline gap-x-2 sm:gap-x-3" data-testid="avalanche-week-next">
-      <span className={ROW_LABEL}>Next payment</span>
+      <span className={ROW_LABEL}><Clock aria-hidden className="size-3.5 text-neutral-500" />Next payment</span>
       {many ? (
         <details className="disclose min-w-0 flex-1" data-testid="avalanche-week-next-cards">
           <summary className={ROW_SUMMARY}>{words}</summary>
@@ -79,9 +83,10 @@ function EarlierLine({ earlier, controls, today }: { earlier: AvalancheWeeklyLas
   );
 }
 
-/** The box's one figure line: the money in mono tabular numerals, the cards in the text face. */
-const BIG = "text-kpi font-semibold text-brand-navy";
-const NUM = "font-mono tabular-nums";
+/** The box's one figure line: the money in tabular lining figures, the card in the text face. */
+const BIG = "text-title font-medium text-foreground";
+const NUM = "fig";
+const AMOUNT = "fig mr-1 text-kpi font-semibold text-foreground";
 
 type WeeklyQ = ReturnType<typeof useWeeklyQ>;
 
@@ -110,7 +115,7 @@ function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls 
       return (
         <div role="alert" className="text-body text-neutral-600" data-testid="avalanche-week-error">
           <p>This week's avalanche did not load.</p>
-          <button type="button" onClick={() => void q.refetch()} className="mt-1 text-label font-semibold text-brand-navy underline">
+          <button type="button" onClick={() => void q.refetch()} className="mt-1 text-label font-medium text-brand-navy underline">
             Retry
           </button>
         </div>
@@ -131,12 +136,14 @@ function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls 
       return <p className="text-body text-neutral-600" data-testid="avalanche-week-none">No debt left for the avalanche to pay.</p>;
     case "toPay": {
       const { week } = view;
+      // (2026-11-12) ONE aligned action row: amount and card · date · status · the button.
       return (
         <div className="space-y-2" data-testid="avalanche-week-topay">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
+          <div className="grid grid-cols-2 items-end gap-x-8 gap-y-3 sm:grid-cols-[minmax(0,auto)_auto_auto_minmax(0,1fr)_auto]">
+            <div className="col-span-2 min-w-0 sm:col-span-1">
+              <div className={COL_LABEL} aria-hidden>Amount and card</div>
               <div className={BIG} data-testid="avalanche-week-line">
-                <span className={NUM}>{money(week.paid)}</span> → {weekCardLabel(week)}
+                <span className={AMOUNT}>{money(week.paid)}</span> → {weekCardLabel(week)}
               </div>
               {week.targets.length > 1 &&
                 week.targets.map((t) => (
@@ -144,11 +151,19 @@ function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls 
                     <span className={NUM}>{money(t.amount)}</span> → {t.name}
                   </p>
                 ))}
-              <p className="mt-1 text-label font-semibold text-neutral-600" data-testid="avalanche-week-when">
+            </div>
+            <div className="sm:pb-1.5">
+              <div className={COL_LABEL} aria-hidden>Pay on</div>
+              <p className="text-body font-medium text-foreground" data-testid="avalanche-week-when">
                 {payDayLabel(week.date, today)}
               </p>
             </div>
-            <WeekPayButton controls={controls} date={week.date} className="w-full sm:w-auto" />
+            <div className="sm:pb-1.5">
+              <div className={COL_LABEL} aria-hidden>Status</div>
+              <StatusBadge state="unresolved">Not paid yet</StatusBadge>
+            </div>
+            <span aria-hidden className="hidden sm:block" />
+            <WeekPayButton controls={controls} date={week.date} className="col-span-2 w-full sm:col-span-1 sm:w-auto" />
           </div>
           <WeekPayError controls={controls} />
           <EarlierLine earlier={view.earlier} controls={controls} today={today} />
@@ -172,10 +187,10 @@ function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls 
         </p>
       ) : null;
       return (
-        <div className="space-y-2" data-testid="avalanche-week-paid">
+        <div className="divide-y divide-brand-line [&>*]:py-2 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0" data-testid="avalanche-week-paid">
           <div className="flex items-start justify-between gap-3" data-testid="avalanche-week-paid-row">
             <div className="flex min-w-0 flex-1 items-baseline gap-x-2 sm:gap-x-3">
-              <span className={ROW_LABEL}>Paid</span>
+              <span className={ROW_LABEL}><Check aria-hidden className="size-3.5 text-brand-navy" strokeWidth={2.5} />Paid</span>
               {many ? (
                 <details className="disclose min-w-0 flex-1" data-testid="avalanche-week-paid-cards">
                   <summary className={ROW_SUMMARY}>{words}</summary>
@@ -212,7 +227,7 @@ function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls 
     case "nothingSafe":
       return (
         <div className="space-y-1" data-testid={`avalanche-week-${view.kind === "answered" ? "answered" : "nothing"}`}>
-          <p className="text-body font-semibold text-brand-navy">
+          <p className="text-body font-medium text-foreground">
             {view.kind === "answered" ? "Answered on the Forecast" : "Nothing is safe to pay this week."}
           </p>
           <NextRow next={view.next} />

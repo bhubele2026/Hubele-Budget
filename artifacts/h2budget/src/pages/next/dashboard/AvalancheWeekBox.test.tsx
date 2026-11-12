@@ -114,7 +114,8 @@ describe("Pay this week — to pay", () => {
     expect(screen.getByTestId("avalanche-week-when").textContent).toBe("Friday, Nov 13");
     const button = screen.getByTestId("week-pay-button");
     expect(button.textContent).toBe("We paid it");
-    expect(button.className).toContain("bg-brand-orange");
+    // (2026-11-12) Navy is the primary action; orange is kept for warnings.
+    expect(button.className).toContain("bg-brand-navy");
     fireEvent.click(button);
     expect(h.pay).toEqual(["2026-11-13"]);
     expect(screen.queryByTestId("week-pay-undo")).toBeNull();

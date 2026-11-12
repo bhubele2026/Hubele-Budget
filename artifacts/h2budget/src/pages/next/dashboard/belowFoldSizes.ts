@@ -12,7 +12,9 @@ export const BELOW_FOLD = {
   // (taller on a phone, where the button sits below). With the monthly cadence
   // the box draws nothing once the plan says so. (Home is four numbers,
   // 2026-11-11) Its own lazy chunk and slot now, directly under the header.
-  avalanche: { span: 12, minH: "min-h-[11.25rem] sm:min-h-[9rem]", rise: 1, slot: "pay" },
+  // (2026-11-12) One aligned action row on a desktop; amount, then date and status side by side, then the button on
+  // a phone.
+  avalanche: { span: 12, minH: "min-h-[14rem] sm:min-h-[8.25rem]", rise: 1, slot: "pay" },
   forecast: { span: 12, minH: "min-h-[29rem]", rise: 3, slot: "forecast" },
   upcoming: { span: 4, minH: "min-h-[29rem]", rise: 4, slot: "off" },
   spending: { span: 6, minH: "min-h-[19rem]", rise: 5, slot: "off" },

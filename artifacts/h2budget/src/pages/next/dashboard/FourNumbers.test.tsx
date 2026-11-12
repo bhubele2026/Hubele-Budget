@@ -108,7 +108,8 @@ describe("four numbers", () => {
     const before = Array.from(screen.getByTestId("dash-four").children);
     expect(before.length).toBe(4);
     const classes = before.map((b) => b.className);
-    expect(classes.every((c) => c.includes("tile-in"))).toBe(true);
+    // (2026-11-12) No entrance animation at all now; the boxes must still be the same nodes.
+    expect(classes.some((c) => c.includes("tile-in"))).toBe(false);
     h.spine = { ...h.spine, data: spine() };
     r.rerender(tree());
     const after = Array.from(screen.getByTestId("dash-four").children);
@@ -191,7 +192,8 @@ describe("Spent this week", () => {
     // $40 of $200 is a fifth of the track.
     expect(fill("four-spent-bar").style.width).toBe("20%");
     expect(fill("four-spent-bar").className).toContain("bg-brand-fill");
-    expect(fill("four-spent-bar").className).toContain("grow-x");
+    // (2026-11-12) No entrance sweep; a later change of width still tweens.
+    expect(fill("four-spent-bar").className).toContain("bar-sweep");
     // The bar is a picture of words already in the box.
     expect(screen.getByTestId("four-spent-bar").firstElementChild!.getAttribute("aria-hidden")).toBe("true");
   });

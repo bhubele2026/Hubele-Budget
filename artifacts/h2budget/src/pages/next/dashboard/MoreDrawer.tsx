@@ -2,14 +2,15 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { cn } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
 import Tiles, { warmTileNotes } from "./Tiles";
 import { usePlaidItemsQ } from "./queries";
 import { bankLines } from "./bankState";
 
 /** The quiet control beside the morning text: Afford stays one tap away. */
-const QUIET = "bg-transparent px-1 text-label font-semibold text-brand-navy ring-0 hover:bg-transparent hover:underline";
+const QUIET = "bg-transparent px-1 text-label font-medium text-brand-navy ring-0 hover:bg-transparent hover:underline";
 const QUIET_TEXT =
-  "rounded-control text-label font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
+  "rounded-control text-label font-medium text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
 
 /** The morning text preview (and the request behind it) load on first open only. */
 const RecapPreview = lazyWithPreload(() => import("./RecapPreview"));
@@ -39,7 +40,7 @@ function MoreBody() {
                   aria-hidden
                   className={cn("mr-1.5 inline-block size-1.5 rounded-full align-middle", b.state === "ok" ? "bg-acct-checking" : b.state === "stale" || b.state === "never" ? "bg-neutral-400" : "bg-bad")}
                 />
-                <span className="font-semibold text-neutral-700">{b.institution}</span>{" "}
+                <span className="font-medium text-neutral-800">{b.institution}</span>{" "}
                 {/* Small alarm words take the rust (--color-bad-ink, 4.6–5.2:1); the dot keeps #e16d3e. */}
                 <span className={cn(b.state === "reauth" || b.state === "failed" ? "font-semibold text-bad-ink" : undefined)}>· {b.words}</span>
               </li>
@@ -88,16 +89,18 @@ export default function MoreDrawer() {
   useEffect(() => warmTileNotes(), []);
   return (
     <details
-      className="disclose span-12"
+      className="disclose group/more span-12"
       data-testid="dash-more"
       onToggle={(e) => {
         if (e.currentTarget.open) setEver(true);
       }}
     >
+      {/* (2026-11-12) A clearly labelled, full-width row — easy to find and reach — that opens to the tiles. */}
       <summary
-        className="w-fit cursor-pointer rounded-control py-2.5 text-body font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+        className="press flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-card border border-brand-line bg-white px-4 text-body font-medium text-foreground hover:bg-brand-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 [&::-webkit-details-marker]:hidden"
         data-testid="dash-more-summary"
       >
+        <ChevronRight aria-hidden className="size-4 shrink-0 text-neutral-500 transition-transform group-open/more:rotate-90" />
         Accounts, allowances and tools
       </summary>
       {ever ? <MoreBody /> : null}
