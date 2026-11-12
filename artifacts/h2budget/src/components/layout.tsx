@@ -336,7 +336,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   aria-label={reviewPillWords(reviewCount, queueTotal)}
                   title={reviewPillWords(reviewCount, queueTotal)}
                   data-testid="topnav-review-badge"
-                  className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-label font-medium text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink"
+                  className="press flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-control px-2 py-1 text-label font-medium text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink"
                 >
                   <span className="hidden sm:inline">Needs you</span>
                   <span className="fig rounded-[4px] bg-count-bg px-1.5 py-0.5 text-micro font-medium leading-none text-count-ink">
@@ -353,7 +353,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 aria-label="Ask H2"
                 aria-current={location === "/ask" ? "page" : undefined}
                 {...warmHandlers(prefetch, "/ask")}
-                className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-label font-medium text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink aria-[current=page]:bg-chrome-press aria-[current=page]:text-chrome-ink"
+                className="press flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-control px-2 py-1 text-label font-medium text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink aria-[current=page]:bg-chrome-press aria-[current=page]:text-chrome-ink"
               >
                 <MessageCircleQuestion className="h-4 w-4" aria-hidden />
                 <span className="hidden sm:inline">Ask</span>
