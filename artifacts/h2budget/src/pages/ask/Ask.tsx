@@ -10,7 +10,7 @@ import {
   type AiConversation,
   type AiMessage,
 } from "@workspace/api-client-react/features";
-import { PageGrid, Panel } from "@/components/next";
+import { PageGrid, PageHeader, Panel } from "@/components/next";
 import { FreshnessLine } from "@/components/data-state";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useSpine } from "@/hooks/useSpine";
@@ -77,7 +77,7 @@ function Line({ text }: { text: string }) {
           <Link
             key={i}
             href={refHref(p.id)}
-            className="text-label font-semibold text-brand-navy underline underline-offset-4 hover:text-brand-navy2"
+            className="text-label font-medium text-brand-navy underline underline-offset-4 hover:text-brand-navy2"
             data-testid="answer-ref"
           >
             {`Charge ${++n}`}
@@ -109,7 +109,7 @@ export function AnswerText({ text }: { text: string }) {
 function Bubble({ who, children, testId }: { who: "you" | "h2"; children: ReactNode; testId: string }) {
   return (
     <div className={cn("flex flex-col gap-1", who === "you" && "items-end")} data-testid={testId}>
-      <span className="text-micro font-semibold uppercase tracking-wide text-neutral-400">{who === "you" ? "You" : "H2"}</span>
+      <span className="text-micro font-medium text-neutral-500">{who === "you" ? "You" : "H2"}</span>
       <div
         className={cn(
           "max-w-full",
@@ -154,7 +154,7 @@ function ConversationList({
                 )}
                 data-testid="conversation-item"
               >
-                <span className="truncate text-label font-semibold text-brand-navy">{c.title?.trim() || "New conversation"}</span>
+                <span className="truncate text-label font-medium text-foreground">{c.title?.trim() || "New conversation"}</span>
                 <span className="text-micro text-neutral-500">{relativeTime(c.lastMessageAt)}</span>
               </button>
             </li>
@@ -384,22 +384,27 @@ export function AskView({ m }: { m: AskModel }) {
 
   return (
     <div className="space-y-4" data-testid="ask">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-display font-semibold text-brand-navy">Ask</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/review/suggestions" className={btnLink} data-testid="ask-suggestions-link">
-            Suggestions{m.openCount ? ` (${m.openCount})` : ""}
-          </Link>
-          <Link href="/settings?tab=memory" className={btnLink} data-testid="ask-memory-link">
-            What H2 remembers
-          </Link>
-        </div>
-      </div>
-      {m.bank?.stale && (
-        <div className="text-micro text-neutral-500" data-testid="ask-fresh">
-          <FreshnessLine bank={m.bank} fetchedAt={m.fetchedAt} />
-        </div>
-      )}
+      {/* (2026-11-12) The shared page header: a stale bank reading is its meta, the two links its actions. */}
+      <PageHeader
+        title="Ask"
+        meta={
+          m.bank?.stale ? (
+            <div data-testid="ask-fresh">
+              <FreshnessLine bank={m.bank} fetchedAt={m.fetchedAt} />
+            </div>
+          ) : null
+        }
+        actions={
+          <>
+            <Link href="/review/suggestions" className={btnLink} data-testid="ask-suggestions-link">
+              Suggestions{m.openCount ? ` (${m.openCount})` : ""}
+            </Link>
+            <Link href="/settings?tab=memory" className={btnLink} data-testid="ask-memory-link">
+              What H2 remembers
+            </Link>
+          </>
+        }
+      />
 
       <PageGrid className="items-start">
         <Panel title="Conversations" span={4} variant="static" className="hidden lg:block" data-testid="conversation-index">
@@ -480,7 +485,7 @@ export function AskView({ m }: { m: AskModel }) {
               >
                 <span>{failure.message}</span>
                 {failure.code === "budget_exceeded" && (
-                  <Link href="/settings?tab=ai" className="font-semibold text-brand-navy underline underline-offset-2">
+                  <Link href="/settings?tab=ai" className="font-medium text-brand-navy underline underline-offset-2">
                     AI cost
                   </Link>
                 )}
@@ -520,7 +525,7 @@ export function AskView({ m }: { m: AskModel }) {
             {aiOff && (
               <p className="rounded-control bg-platinum-3 px-3 py-2 text-body text-neutral-600" data-testid="ask-ai-off">
                 {AI_OFF}{" "}
-                <Link href="/settings?tab=automation" className="font-semibold text-brand-navy underline underline-offset-2">
+                <Link href="/settings?tab=automation" className="font-medium text-brand-navy underline underline-offset-2">
                   Settings › Automation
                 </Link>
               </p>

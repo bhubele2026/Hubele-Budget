@@ -50,7 +50,10 @@ export function decisionError(e: unknown, verb: "apply" | "reject"): string {
 export function ProposalCard({
   proposal,
   categories,
+  flat = false,
 }: {
+  /** (2026-11-12) A row of a list inside a panel (Suggestions): no box of its own — the list draws hairlines. */
+  flat?: boolean;
   proposal: AgentProposal;
   categories: ReadonlyMap<string, string>;
 }) {
@@ -86,13 +89,17 @@ export function ProposalCard({
 
   return (
     <article
-      className="flex flex-col gap-2 rounded-control bg-platinum-1 px-3 py-3 ring-1 ring-brand-line"
+      className={
+        flat
+          ? "flex flex-col gap-2 px-4 py-3"
+          : "flex flex-col gap-2 rounded-control bg-white px-3 py-3 ring-1 ring-brand-line"
+      }
       data-testid="proposal-card"
       data-status={proposal.status}
       data-kind={proposal.kind}
     >
       <div className="flex items-baseline justify-between gap-4">
-        <h3 className="text-label font-semibold text-brand-navy">{KIND_WORD[proposal.kind]}</h3>
+        <h3 className="text-label font-semibold text-foreground">{KIND_WORD[proposal.kind]}</h3>
         <StatusChip tone={TONE[proposal.status]}>{PROPOSAL_STATUS_WORD[proposal.status]}</StatusChip>
       </div>
       <p className="text-body text-brand-ink" data-testid="proposal-change">
@@ -104,13 +111,13 @@ export function ProposalCard({
       {change.txnId && (
         <Link
           href={refHref(change.txnId)}
-          className="self-start text-micro font-semibold text-brand-navy underline-offset-2 hover:underline"
+          className="self-start text-micro font-medium text-brand-navy underline-offset-2 hover:underline"
         >
           See the charge
         </Link>
       )}
       <details className="text-micro text-neutral-600">
-        <summary className="cursor-pointer select-none font-semibold text-neutral-500 hover:text-brand-navy">
+        <summary className="cursor-pointer select-none font-medium text-neutral-600 hover:text-foreground">
           Why H2 suggests this
         </summary>
         <p className="mt-1 text-body text-brand-ink" data-testid="proposal-rationale">

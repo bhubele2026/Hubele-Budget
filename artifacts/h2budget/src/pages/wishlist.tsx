@@ -10,7 +10,7 @@ import {
   type WishlistItem,
 } from "@workspace/api-client-react/features";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PageGrid, Panel } from "@/components/next";
+import { PageGrid, PageHeader, Panel } from "@/components/next";
 import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { btn, btnLink, btnSecondary, emptyNote, fieldLabel, input } from "@/ui";
 import { OWN_INVALIDATION } from "@/lib/mutationInvalidation";
@@ -116,9 +116,9 @@ export default function WishlistPage() {
         data-decision={i.decision}
       >
         <div className="flex items-baseline justify-between gap-4">
-          <span className="min-w-0 truncate text-body font-medium text-brand-navy">{i.title}</span>
+          <span className="min-w-0 truncate text-body font-medium text-foreground">{i.title}</span>
           {amt == null ? (
-            <span className="text-label text-neutral-400">—</span>
+            <span className="text-label text-neutral-500">—</span>
           ) : (
             <data value={centsValue(amt)} className="shrink-0 fig text-label font-semibold text-foreground">
               {fmtMoney(amt)}
@@ -178,10 +178,7 @@ export default function WishlistPage() {
   const cold = list.isLoading && !list.data;
   return (
     <div className="space-y-4" data-testid="wishlist">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-display font-semibold text-brand-navy">Wish list</h1>
-        <AffordLauncher />
-      </div>
+      <PageHeader title="Wish list" actions={<AffordLauncher />} />
       <PageGrid>
         <Panel
           title="Wish list"

@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import type { AgentProposal } from "@workspace/api-client-react/features";
-import { PageGrid, Panel } from "@/components/next";
+import { PageGrid, PageHeader, Panel } from "@/components/next";
 import { dataState, type DataState } from "@/lib/queryState";
 import { Crumbs, btnLink, emptyNote } from "@/ui";
 import { RetryNote, TabSkeleton } from "@/pages/settings/parts";
@@ -51,16 +51,18 @@ export function SuggestionsView({ data }: { data: SuggestionsData }) {
     <div className="space-y-4" data-testid="suggestions-page">
       <div>
         <Crumbs trail={[{ label: "Review", href: "/review" }, { label: "Suggestions" }]} />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-display font-semibold text-brand-navy">Suggestions</h1>
-          <Link href="/ask" className={btnLink} data-testid="suggestions-ask-link">
-            Ask
-          </Link>
-        </div>
-        <p className="mt-1 text-label text-neutral-500">Changes Ask suggested. Nothing changes until you approve it.</p>
+        <PageHeader
+          title="Suggestions"
+          actions={
+            <Link href="/ask" className={btnLink} data-testid="suggestions-ask-link">
+              Ask
+            </Link>
+          }
+        />
+        <p className="mt-1 text-label text-neutral-600">Changes Ask suggested. Nothing changes until you approve it.</p>
       </div>
       <PageGrid className="items-start">
-        <Panel title="Waiting for you" span={history.length > 0 ? 8 : 12} variant="static" data-testid="proposals-open-panel">
+        <Panel title="Waiting for you" span={history.length > 0 ? 8 : 12} variant={["static", "flush"]} data-testid="proposals-open-panel">
           {open.state === "cold" ? (
             <TabSkeleton testId="proposals-skeleton" rows={2} />
           ) : open.state === "failed" ? (
@@ -72,18 +74,18 @@ export function SuggestionsView({ data }: { data: SuggestionsData }) {
               Nothing is waiting. When Ask suggests a change, it shows up here.
             </p>
           ) : (
-            <div className="space-y-3" data-testid="proposals-open">
+            <div className="divide-y divide-brand-line" data-testid="proposals-open">
               {open.data!.map((p) => (
-                <ProposalCard key={p.id} proposal={p} categories={categories} />
+                <ProposalCard key={p.id} proposal={p} categories={categories} flat />
               ))}
             </div>
           )}
         </Panel>
         {history.length > 0 && (
-          <Panel title="History" span={4} variant="static" data-testid="proposals-history-panel">
-            <div className="space-y-3" data-testid="proposals-history">
+          <Panel title="History" span={4} variant={["static", "flush"]} data-testid="proposals-history-panel">
+            <div className="divide-y divide-brand-line" data-testid="proposals-history">
               {history.map((p) => (
-                <ProposalCard key={p.id} proposal={p} categories={categories} />
+                <ProposalCard key={p.id} proposal={p} categories={categories} flat />
               ))}
             </div>
           </Panel>

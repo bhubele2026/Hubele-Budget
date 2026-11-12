@@ -9,7 +9,7 @@ import {
   useSkipCategorizationDecision,
   type ReviewResolution,
 } from "@workspace/api-client-react/features";
-import { PageGrid, Panel } from "@/components/next";
+import { PageGrid, PageHeader, Panel, StatusBadge, badgeLook } from "@/components/next";
 import { HandledByH2 } from "@/components/agent/HandledByH2";
 import { CategoryPickerDialog } from "@/components/review/CategoryPickerDialog";
 import { useCategorizationQueue } from "@/hooks/useCategorizationQueue";
@@ -125,12 +125,14 @@ export default function ReviewCategoriesPage() {
 
   return (
     <div className="space-y-4" data-testid="review-categories">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-display font-semibold text-brand-navy">Categories to confirm</h1>
-        <Link href="/settings?tab=automation" className={btnLink} data-testid="automation-link">
-          How filing works and what the model may do
-        </Link>
-      </div>
+      <PageHeader
+        title="Categories to confirm"
+        actions={
+          <Link href="/settings?tab=automation" className={btnLink} data-testid="automation-link">
+            How filing works and what the model may do
+          </Link>
+        }
+      />
       <PageGrid>
         <Panel
           title="Review queue"
@@ -181,13 +183,13 @@ export default function ReviewCategoriesPage() {
                       onClick={() => setAt(i)}
                       className={cn(
                         "relative border-t border-l-2 border-t-brand-line px-4 py-3 first:border-t-0",
-                        here ? "border-l-brand-orange bg-platinum-3/60" : "border-l-transparent",
+                        here ? "border-l-brand-navy bg-brand-tint" : "border-l-transparent",
                       )}
                       data-testid="review-item"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <p className="truncate text-body font-medium text-brand-navy">{item.description}</p>
+                          <p className="truncate text-body font-medium text-foreground">{item.description}</p>
                           <p className="text-micro text-neutral-500">
                             {shortDate(item.occurredOn)}
                             {item.account ? ` · ${item.account}` : ""}
@@ -200,11 +202,13 @@ export default function ReviewCategoriesPage() {
                         )}
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {/* (2026-11-12) The shared state look: a provisional category is "suggested", none is "unresolved". */}
                         <span
-                          className={cn("chip gray", proposed != null && "border border-dotted border-neutral-400")}
+                          className={badgeLook(proposed != null ? "suggested" : "unresolved").cls}
                           data-provisional={proposed != null ? "" : undefined}
                           data-testid="review-chip"
                         >
+                          <ChipIcon state={proposed != null ? "suggested" : "unresolved"} />
                           {proposed ?? "Not filed"}
                           {proposed != null && <span className="sr-only"> (provisional)</span>}
                         </span>
@@ -212,9 +216,9 @@ export default function ReviewCategoriesPage() {
                           {reviewWhy(item)}
                         </span>
                         {flags.map((f) => (
-                          <span key={f} className="chip warn" data-testid="review-flag">
+                          <StatusBadge key={f} state="warning" data-testid="review-flag">
                             {f}
-                          </span>
+                          </StatusBadge>
                         ))}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -254,4 +258,10 @@ export default function ReviewCategoriesPage() {
       />
     </div>
   );
+}
+
+/** The state badge's icon for a badge that must carry its own attributes. */
+function ChipIcon({ state }: { state: "suggested" | "unresolved" }) {
+  const { Icon } = badgeLook(state);
+  return <Icon aria-hidden className="size-3 shrink-0" strokeWidth={2.25} />;
 }

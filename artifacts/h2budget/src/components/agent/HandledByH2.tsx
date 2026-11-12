@@ -71,7 +71,7 @@ export function HandledByH2({ now }: { now?: Date }) {
                 data-testid="trail-item"
               >
                 <span className="min-w-0">
-                  <span className="text-body text-brand-navy">{g.title}</span>
+                  <span className="text-body text-foreground">{g.title}</span>
                   <span className="ml-2 text-micro text-neutral-500">{relativeTime(g.at, now)}</span>
                   {g.undone && <span className="chip gray ml-2">Undone</span>}
                 </span>
@@ -101,9 +101,9 @@ export function HandledByH2({ now }: { now?: Date }) {
               <div className="flex flex-col gap-4" data-testid="why-sheet">
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-body">
                   <dt className="text-neutral-600">Outcome</dt>
-                  <dd className="text-brand-navy">{OUTCOME[why.actions[0]!.outcome]}</dd>
+                  <dd className="text-foreground">{OUTCOME[why.actions[0]!.outcome]}</dd>
                   <dt className="text-neutral-600">Undo</dt>
-                  <dd className="text-brand-navy">{why.undone ? "Already undone" : why.undoable.length > 0 ? "Available" : "Not available for this"}</dd>
+                  <dd className="text-foreground">{why.undone ? "Already undone" : why.undoable.length > 0 ? "Available" : "Not available for this"}</dd>
                   <dt className="text-neutral-600">Items</dt>
                   <dd className="fig text-foreground">{why.actions.length}</dd>
                 </dl>
