@@ -66,6 +66,8 @@ describe.skipIf(process.env.LEDGER_TIMING !== "1")("P2 timing harness", () => {
   it(
     "times the dashboard's first requests and the /amex summaries, sharing off and on",
     async () => {
+      // (PERF) The in-flight sharing is what this times; the result cache (lib/ledgerCache.ts) is off.
+      process.env.LEDGER_CACHE = "off";
       const RUNS = Number(process.env.LEDGER_TIMING_RUNS ?? 7);
       const SCALE = Number(process.env.LEDGER_TIMING_SCALE ?? 3);
       vi.setSystemTime(RICH_NOW);

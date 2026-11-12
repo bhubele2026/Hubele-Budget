@@ -113,6 +113,9 @@ async function unshared<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 beforeAll(async () => {
+  // (PERF) These tests count in-flight sharing; the revision-keyed result cache (lib/ledgerCache.ts, tested in
+  // ledgerCache.integration.test.ts) would answer repeats without a build, so it is off here.
+  process.env.LEDGER_CACHE = "off";
   vi.setSystemTime(RICH_NOW);
   rich = await seedRichHousehold(OWNER);
   HOUSEHOLD_ID = rich.householdId;
@@ -131,6 +134,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  delete process.env.LEDGER_CACHE;
   vi.useRealTimers();
   if (server) await new Promise<void>((res) => server.close(() => res()));
   await cleanupRichHouseholds([OWNER]);

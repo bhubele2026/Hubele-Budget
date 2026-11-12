@@ -18,11 +18,13 @@
 --     once) and TRUNCATE (bumps every household). It bumps the household_id
 --     of every row written, before and after an update; for tables that also
 --     carry user_id, the households that user belongs to as well (a row whose
---     household_id is still null is caught that way).
+--     household_id is still null is caught that way). An UPDATE that writes a
+--     row back unchanged moves nothing (a read that keeps a row in sync).
 --
--- The tables are every table the forecast ledger, the cash signal, the weekly
--- avalanche plan, the money position and the spine read, and the money tables
--- around them. `householdDataRevision.integration.test.ts` fails if anything
+-- The tables are every table the forecast ledger, the cash signal and the weekly
+-- avalanche plan can read, and the money tables around them. Not
+-- debt_balance_history: GET /debts writes the day's balance snapshot on a read,
+-- and no cached build reads it. `householdDataRevision.integration.test.ts` fails if anything
 -- those builds read has no trigger.
 --
 -- Additive and idempotent: CREATE TABLE IF NOT EXISTS, CREATE OR REPLACE
@@ -54,19 +56,22 @@ BEGIN
       SELECT array_agg(DISTINCT household_id) INTO ids FROM new_rows WHERE household_id IS NOT NULL;
     END IF;
   ELSIF TG_OP = 'UPDATE' THEN
-    IF by_user THEN
-      SELECT array_agg(DISTINCT x) INTO ids FROM (
-        SELECT household_id AS x FROM new_rows WHERE household_id IS NOT NULL
-        UNION SELECT household_id FROM old_rows WHERE household_id IS NOT NULL
-        UNION SELECT hm.household_id FROM household_members hm JOIN new_rows n ON n.user_id = hm.user_id
-        UNION SELECT hm.household_id FROM household_members hm JOIN old_rows o ON o.user_id = hm.user_id
-      ) s;
-    ELSE
-      SELECT array_agg(DISTINCT x) INTO ids FROM (
-        SELECT household_id AS x FROM new_rows WHERE household_id IS NOT NULL
-        UNION SELECT household_id FROM old_rows WHERE household_id IS NOT NULL
-      ) s;
-    END IF;
+    -- Only rows that actually changed: an UPDATE (or an upsert's DO UPDATE) that writes the same values back — a
+    -- read path keeping a row "in sync" — moves nothing. Compared as jsonb (every column type has equality there).
+    SELECT array_agg(DISTINCT x) INTO ids FROM (
+      SELECT (d.j->>'household_id')::uuid AS x FROM (
+        SELECT to_jsonb(n) AS j FROM new_rows n EXCEPT ALL SELECT to_jsonb(o) FROM old_rows o
+        UNION ALL
+        (SELECT to_jsonb(o) FROM old_rows o EXCEPT ALL SELECT to_jsonb(n) FROM new_rows n)
+      ) d
+      UNION
+      SELECT hm.household_id FROM household_members hm
+        JOIN (
+          SELECT to_jsonb(n) AS j FROM new_rows n EXCEPT ALL SELECT to_jsonb(o) FROM old_rows o
+          UNION ALL
+          (SELECT to_jsonb(o) FROM old_rows o EXCEPT ALL SELECT to_jsonb(n) FROM new_rows n)
+        ) c ON by_user AND hm.user_id = c.j->>'user_id'
+    ) s WHERE x IS NOT NULL;
   ELSE -- DELETE
     IF by_user THEN
       SELECT array_agg(DISTINCT x) INTO ids FROM (
@@ -94,7 +99,7 @@ DECLARE
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'transactions', 'transaction_splits', 'forecast_resolutions', 'forecast_settings', 'forecast_closed_months',
-    'recurring_items', 'debts', 'debt_ledger_events', 'debt_statements', 'debt_balance_history',
+    'recurring_items', 'debts', 'debt_ledger_events', 'debt_statements',
     'avalanche_settings', 'avalanche_week_payments', 'allowance_plans', 'plan_adjustments',
     'budget_categories', 'budget_lines', 'budget_months', 'dashboard_budgets', 'mapping_rules', 'merchant_aliases',
     'settings', 'plaid_items', 'plaid_accounts', 'bank_auto_match_declines', 'category_decisions',

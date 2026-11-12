@@ -7,6 +7,7 @@ import type { SnapshotAccountResolution } from "./resolveSnapshotAccount";
 import { householdTodayISO } from "./householdClock";
 import { expiredHoldsRuleOn } from "./supersededPending";
 import { deepFreeze, ledgerFreezeEnabled, ledgerSharingEnabled, shareInFlight } from "./ledgerShare";
+import { cachedLedgerRead } from "./ledgerCache";
 
 type Cadence =
   | "weekly"
@@ -488,9 +489,10 @@ export function cashSignalShareKey(
  * ⭐ (P2) BUILT ONCE PER MOMENT. Concurrent callers with the same inputs
  * (`cashSignalShareKey`) await the same build — the spine, the money position,
  * the cash signal, the Amex summaries, the period breakdowns and the banking
- * review of one page load build ONE ledger instead of one each. Nothing is kept
- * once the build settles (`ledgerShare.ts`). ⚠️ The result may be shared:
- * never mutate it. `LEDGER_SHARING=off` builds every call on its own.
+ * review of one page load build ONE ledger instead of one each (`ledgerShare.ts`).
+ * ⭐ (PERF) And it is KEPT while the household's data revision holds
+ * (`ledgerCache.ts`; `LEDGER_CACHE=off` turns that off). ⚠️ The result is
+ * shared: never mutate it. `LEDGER_SHARING=off` stops the in-flight sharing.
  */
 export async function computeCashSignalDetailed(
   householdId: string,
@@ -504,8 +506,12 @@ export async function computeCashSignalDetailed(
     const built = buildCashSignalDetailed(householdId, ownerUserId, opts);
     return ledgerFreezeEnabled() ? built.then((r) => deepFreeze(r)) : built;
   };
-  if (!ledgerSharingEnabled()) return build();
-  return shareInFlight(cashSignalShareKey(householdId, ownerUserId, opts), build);
+  const key = cashSignalShareKey(householdId, ownerUserId, opts);
+  // ⭐ (PERF) Kept while the household's data revision holds (`ledgerCache.ts`): a page's later reads and the next
+  // load read this build instead of making their own. Underneath, concurrent callers still share one build.
+  return cachedLedgerRead("cashSignal", householdId, key, (rev) =>
+    ledgerSharingEnabled() ? shareInFlight(rev == null ? key : `${key}\u0001${rev}`, build) : build(),
+  );
 }
 
 /**
