@@ -34,6 +34,7 @@ import { useRefetchMoneyOnReturn } from "@/hooks/useRefetchMoneyOnReturn";
 import { confirmAppearance } from "@/lib/theme";
 import { ThemeRepaint } from "@/components/theme-repaint";
 import { startPerfNavigation } from "@/lib/perfMarks";
+import { mustClearForClerkUser } from "@/lib/clerkUserSwitch";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -663,18 +664,31 @@ function ClerkQueryClientCacheInvalidator() {
   }, [isLoaded, isSignedIn, qc]);
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
+    const fetchedFor = () => qc.getQueryData<{ userId?: string }>(getGetMeQueryKey())?.userId ?? null;
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
-      if (
-        prevUserIdRef.current !== undefined &&
-        prevUserIdRef.current !== userId
-      ) {
+      // (perf phase 2) Clerk's first word too: what the cookie fetched early must be this user's (/me says whose).
+      if (mustClearForClerkUser(prevUserIdRef.current, userId, fetchedFor())) {
         qc.clear();
         resetDataAsOf();
       }
       prevUserIdRef.current = userId;
     });
-    return unsubscribe;
+    // /me landing after Clerk's first word, for someone other than Clerk's user: empty the cache then.
+    const offMe = qc.getQueryCache().subscribe((e) => {
+      const meKey = getGetMeQueryKey();
+      if (e.type !== "updated" || e.query.queryKey.length !== meKey.length || e.query.queryKey[0] !== meKey[0]) return;
+      const who = prevUserIdRef.current;
+      const me = fetchedFor();
+      if (who && me && me !== who) {
+        qc.clear();
+        resetDataAsOf();
+      }
+    });
+    return () => {
+      unsubscribe();
+      offMe();
+    };
   }, [addListener, qc]);
   // (T1) Back to this tab: the balance reads older than a minute are asked again.
   useRefetchMoneyOnReturn();
