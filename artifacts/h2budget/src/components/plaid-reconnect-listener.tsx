@@ -177,20 +177,33 @@ export function PlaidReconnectListener() {
     }
   }, [pending, qc, runSync, toast, freshMode, exchange]);
 
-  const { open, ready } = usePlaidLink({
-    token: linkToken,
-    onSuccess,
-    onExit: () => {
-      setLinkToken(null);
-      setPending(null);
-      setFreshMode(false);
-    },
-  });
+  const onExit = useCallback(() => {
+    setLinkToken(null);
+    setPending(null);
+    setFreshMode(false);
+  }, []);
 
+  // (perf phase 2) Plaid's own script (~35 KB from Plaid's CDN) loads only when a
+  // reconnect has its link token: `usePlaidLink` fetches it as soon as it mounts, and
+  // this listener is on every page from the first frame, so it used to share the
+  // link with the open's first numbers for a flow that is rare.
+  return linkToken ? <PlaidLinkOpener token={linkToken} onSuccess={onSuccess} onExit={onExit} /> : null;
+}
+
+/** Opens Plaid Link for `token` as soon as Plaid's script is ready. */
+function PlaidLinkOpener({
+  token,
+  onSuccess,
+  onExit,
+}: {
+  token: string;
+  onSuccess: (publicToken: string, metadata: { institution?: { institution_id?: string; name?: string } | null }) => void | Promise<void>;
+  onExit: () => void;
+}) {
+  const { open, ready } = usePlaidLink({ token, onSuccess, onExit });
   useEffect(() => {
-    if (linkToken && ready) open();
-  }, [linkToken, ready, open]);
-
+    if (ready) open();
+  }, [ready, open]);
   return null;
 }
 
