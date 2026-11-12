@@ -9,6 +9,7 @@ import {
   instrumentPool,
   newRequestTiming,
   noteShareJoined,
+  requestMemo,
   requestTiming,
   runWithTiming,
   serverTimingValue,
@@ -174,7 +175,7 @@ describe("requestTiming store", () => {
     expect(v).toBe(
       'total;dur=1234.6, db;dur=120;desc="41 queries", poolwait;dur=8.3;desc="41 waits", ' +
         'ledger;dur=900.5;desc="2 builds", base400;dur=610;desc="1 build", share;desc="1 joined", auth;dur=2.3, ' +
-        "sp.cash;dur=950, bad_name_;dur=1",
+        'cache;desc="0 hits", cachemiss;desc="0 misses", sp.cash;dur=950, bad_name_;dur=1',
     );
     // Every entry: a token, then only dur= numbers and desc= "<count> <word>".
     for (const part of v.split(", ")) {
@@ -205,6 +206,32 @@ function fakeRes() {
   return em;
 }
 
+describe("requestMemo", () => {
+  it("reads once per GET request, every time on a write request or outside one, and forgets after a write", async () => {
+    const pool = fakePool(1);
+    instrumentPool(pool);
+    let n = 0;
+    const read = async () => ++n;
+    const get = { ...newRequestTiming(), method: "GET" };
+    await runWithTiming(get, async () => {
+      expect(await Promise.all([requestMemo("rev", read), requestMemo("rev", read)])).toEqual([1, 1]);
+      expect(await requestMemo("rev", read)).toBe(1);
+      await pool.query("SELECT 1");
+      expect(await requestMemo("rev", read)).toBe(1);
+      await pool.query("UPDATE transactions SET amount = 1");
+      expect(await requestMemo("rev", read)).toBe(2);
+      await (pool.connect() as Promise<object>);
+      expect(await requestMemo("rev", read)).toBe(3);
+    });
+    const post = { ...newRequestTiming(), method: "POST" };
+    await runWithTiming(post, async () => {
+      expect(await requestMemo("rev", read)).toBe(4);
+      expect(await requestMemo("rev", read)).toBe(5);
+    });
+    expect(await requestMemo("rev", read)).toBe(6);
+  });
+});
+
 describe("requestTiming middleware", () => {
   it("opens a store for the request, stamps the header as headers go out, and logs one debug line", async () => {
     const lines: Array<{ obj: Record<string, unknown>; msg: string }> = [];
@@ -225,7 +252,7 @@ describe("requestTiming middleware", () => {
     expect(seen).toBeDefined();
     expect(seen!.authMs).toBeGreaterThan(3);
     res.writeHead(200);
-    expect(res.headers["server-timing"]).toMatch(/^total;dur=[\d.]+, db;dur=0;desc="0 queries", .*auth;dur=[\d.]+$/);
+    expect(res.headers["server-timing"]).toMatch(/^total;dur=[\d.]+, db;dur=0;desc="0 queries", .*auth;dur=[\d.]+, cache;desc="0 hits", cachemiss;desc="0 misses"$/);
     res.emit("finish");
     expect(lines).toHaveLength(1);
     expect(lines[0]!.msg).toBe("request timing");

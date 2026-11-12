@@ -74,6 +74,7 @@ of the reinvention owns a range so parallel branches never collide:
 | | | 0230s | WN (What's new reads) |
 | | | 0240s | AVAL-W (weekly avalanche payments) |
 | | | 0250s | BANK-AUTO (bank rows arrive sorted) |
+| | | 0251 | PERF (household data revision: the ledger cache's invalidation triggers) |
 
 Packages may merge out of numeric order. The runner applies any file it has not
 recorded, whatever its number, so a lower-numbered file that lands later still

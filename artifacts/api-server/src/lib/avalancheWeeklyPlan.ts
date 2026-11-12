@@ -28,6 +28,7 @@ import { isPastOneTime } from "./cashSignal";
 import { householdTodayISO } from "./householdClock";
 import { expiredHoldsRuleOn } from "./supersededPending";
 import { deepFreeze, ledgerFreezeEnabled, ledgerSharingEnabled, shareInFlight } from "./ledgerShare";
+import { cachedLedgerRead } from "./ledgerCache";
 
 type AvalancheSettingsRow = typeof avalancheSettingsTable.$inferSelect;
 
@@ -84,9 +85,13 @@ export async function loadWeeklyAvalanchePlan(
     const built = await buildWeeklyAvalanchePlan(householdId, ownerUserId, opts);
     return ledgerFreezeEnabled() && built ? deepFreeze(built) : built;
   };
-  if (dryRun || !ledgerSharingEnabled()) return build();
+  if (dryRun) return build();
   const key = JSON.stringify(["avalancheWeekly", householdId, ownerUserId, householdTodayISO(), expiredHoldsRuleOn()]);
-  return shareInFlight(key, build);
+  // ⭐ (PERF) The plan — and the 400-day base it is priced on — is kept while the household's data revision holds
+  // (`ledgerCache.ts`): every ledger of a page load and the loads after it price it once, not once per build.
+  return cachedLedgerRead("avalancheWeekly", householdId, key, (rev) =>
+    ledgerSharingEnabled() ? shareInFlight(rev == null ? key : `${key}\u0001${rev}`, build) : build(),
+  );
 }
 
 async function buildWeeklyAvalanchePlan(

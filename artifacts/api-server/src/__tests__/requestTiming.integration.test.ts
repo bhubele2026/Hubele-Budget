@@ -50,6 +50,8 @@ let server: Server;
 let base = "";
 
 beforeAll(async () => {
+  // These tests count builds; the result cache (lib/ledgerCache.ts) is tested on its own.
+  process.env.LEDGER_CACHE = "off";
   vi.setSystemTime(RICH_NOW);
   const rich = await seedRichHousehold(OWNER, { scale: 1, weekly: true });
   HOUSEHOLD_ID = rich.householdId;
@@ -71,6 +73,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.LEDGER_SHARING;
+  delete process.env.LEDGER_CACHE;
   await new Promise<void>((res) => server.close(() => res()));
   vi.useRealTimers();
   await cleanupRichHouseholds([OWNER]);

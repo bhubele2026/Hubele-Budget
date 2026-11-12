@@ -5842,5 +5842,6 @@ export * from "./goals";
 export * from "./whatsNew";
 export * from "./avalancheWeekPayments";
 export * from "./bankAutoSort";
+export * from "./householdDataRevisions";
 export * from "./money";
 //# sourceMappingURL=index.d.ts.map

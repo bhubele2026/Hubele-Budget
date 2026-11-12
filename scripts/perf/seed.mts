@@ -37,6 +37,11 @@ const sh = (cmd: string, args: string[], env: NodeJS.ProcessEnv = process.env) =
 const exists = sh("psql", ["-h", "localhost", "-d", "postgres", "-Atc", `select 1 from pg_database where datname='${DB}'`]).trim() === "1";
 if (!exists) sh("createdb", ["-h", "localhost", DB]);
 sh("pnpm", ["--filter", "@workspace/db", "run", "push"], { ...process.env, DATABASE_URL });
+// drizzle-kit push makes tables only: the data-revision triggers the ledger cache needs come from their migration
+// (idempotent). Without them the server simply runs with no cache.
+for (const f of ["0251_household_data_revisions.sql"]) {
+  sh("psql", ["-h", "localhost", "-d", DB, "-v", "ON_ERROR_STOP=1", "-q", "-f", join(ROOT, "lib/db/migrations", f)]);
+}
 console.log(`schema pushed → ${DB}`);
 
 // 2. The households (the db client reads DATABASE_URL when it loads).

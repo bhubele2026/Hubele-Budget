@@ -41,8 +41,20 @@ export interface RequestTiming {
   baseMs: number;
   shareJoined: number;
   authMs: number;
+  /** (PERF) Ledger-cache reads served from the cache / built (`lib/ledgerCache.ts`). */
+  cacheHits: number;
+  cacheMisses: number;
   /** Named spans in first-seen order (name → summed ms). */
   spans: Map<string, number>;
+  /** The request's method ("" outside a request handler). */
+  method: string;
+  /**
+   * (PERF) Values read once per request (the household's data revision). Only a
+   * GET/HEAD keeps them, and any write the request makes (an INSERT / UPDATE /
+   * DELETE through the pool, or a checked-out client for a transaction) clears
+   * them, so a request never reads its own write through an older memo.
+   */
+  memo: Map<string, Promise<unknown>>;
 }
 
 const als = new AsyncLocalStorage<RequestTiming>();
@@ -60,9 +72,44 @@ export function newRequestTiming(): RequestTiming {
     baseMs: 0,
     shareJoined: 0,
     authMs: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
     spans: new Map(),
+    method: "",
+    memo: new Map(),
   };
 }
+
+/**
+ * (PERF) `read()` once per GET request under `key`, shared by every caller in
+ * that request; outside a request, or on a write request, it runs every time.
+ */
+export function requestMemo<T>(key: string, read: () => Promise<T>): Promise<T> {
+  const s = als.getStore();
+  if (!s || (s.method !== "GET" && s.method !== "HEAD")) return read();
+  const have = s.memo.get(key);
+  if (have) return have as Promise<T>;
+  const p = read();
+  s.memo.set(key, p);
+  // A failed read is not kept.
+  p.catch(() => {
+    if (s.memo.get(key) === p) s.memo.delete(key);
+  });
+  return p;
+}
+
+/** A ledger-cache read in this request: served from the cache, or built. */
+export function noteCacheRead(hit: boolean): void {
+  const s = als.getStore();
+  if (!s) return;
+  if (hit) s.cacheHits += 1;
+  else s.cacheMisses += 1;
+}
+
+/** Any statement that may write (a CTE that writes included); a false positive only clears the memo. */
+const WRITE_SQL = /\b(insert\s+into|update\s+\S+\s+set|delete\s+from|merge\s+into|truncate)\b/i;
+const textOf = (arg: unknown): string =>
+  typeof arg === "string" ? arg : arg && typeof arg === "object" && typeof (arg as { text?: unknown }).text === "string" ? (arg as { text: string }).text : "";
 
 /** The current request's store, or undefined outside a request. */
 export function currentTiming(): RequestTiming | undefined {
@@ -151,6 +198,8 @@ export function instrumentPool(pool: object): void {
     const s = als.getStore();
     if (!s) return origConnect.apply(this, args);
     const rec = pendingQuery;
+    // A client checked out by hand is a transaction (or a session): treat it as a write.
+    if (!rec) s.memo.clear();
     const t0 = performance.now();
     const done = () => {
       const w = performance.now() - t0;
@@ -175,6 +224,7 @@ export function instrumentPool(pool: object): void {
     const s = als.getStore();
     if (!s) return origQuery.apply(this, args);
     s.queries += 1;
+    if (s.memo.size && WRITE_SQL.test(textOf(args[0]))) s.memo.clear();
     const rec: QueryRec = { wait: 0 };
     const t0 = performance.now();
     let finished = false;
@@ -222,6 +272,8 @@ export function serverTimingValue(s: RequestTiming, now = performance.now()): st
     `base400;dur=${ms(s.baseMs)};desc="${plural(s.baseBuilds, "build", "builds")}"`,
     `share;desc="${s.shareJoined} joined"`,
     `auth;dur=${ms(s.authMs)}`,
+    `cache;desc="${plural(s.cacheHits, "hit", "hits")}"`,
+    `cachemiss;desc="${plural(s.cacheMisses, "miss", "misses")}"`,
   ];
   for (const [name, d] of s.spans) parts.push(`${token(name)};dur=${ms(d)}`);
   return parts.join(", ");
@@ -241,6 +293,8 @@ export function timingFields(s: RequestTiming, now = performance.now()) {
     baseMs: Math.round(s.baseMs),
     shareJoined: s.shareJoined,
     authMs: Math.round(s.authMs),
+    cacheHits: s.cacheHits,
+    cacheMisses: s.cacheMisses,
     ...(s.spans.size ? { spans: Object.fromEntries([...s.spans].map(([k, v]) => [k, Math.round(v)])) } : {}),
   };
 }
@@ -259,6 +313,7 @@ interface DebugLogger {
 export function requestTiming(opts: { log?: DebugLogger } = {}): RequestHandler {
   return (req: Request, res: Response, next: NextFunction): void => {
     const store = newRequestTiming();
+    store.method = req.method;
     const origWriteHead = res.writeHead;
     let stamped = false;
     res.writeHead = function (this: Response, ...args: unknown[]) {
