@@ -14,12 +14,12 @@ import { knownWithinPlan, weekStory } from "@/lib/weekFigures";
 import { useCashSignalQ, usePlaidItemsQ } from "./queries";
 import { dueSoonOf, upcomingRows } from "./obligations";
 import { bankLines } from "./bankState";
-import { RECENT_LIMIT, RECENT_WINDOW_DAYS, useCategoriesQ, useDuplicateCountQ, useRecentTxnsQ, useReviewQueueQ } from "./queriesLazy";
+import { RECENT_LIMIT, RECENT_WINDOW_DAYS, useCategoriesQ, useDuplicateCountQ, useRecentTxnsQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
 import { Empty, LABEL, rise } from "./shared";
 
-/** (F1) The categorization queue's own screen, Review › Categories. */
+/** (F1) The categorization queue's own screen, Review › Categories (still in the nav; the panel now points at Needs you). */
 export const CATEGORIZATION_QUEUE_HREF = "/review/categories";
 
 const ROW_CLASS =
@@ -93,7 +93,6 @@ export default function AttentionPanel() {
   const minH = useFoldMinH("attention");
   const spine = useSpine();
   const cash = useCashSignalQ(90);
-  const queue = useReviewQueueQ();
   const dups = useDuplicateCountQ();
   const findingsQ = useOpenFindings();
   const items = usePlaidItemsQ();
@@ -147,17 +146,18 @@ export default function AttentionPanel() {
 
   const spineKnown = s !== undefined;
   const cashKnown = cash.data !== undefined;
-  const catKnown = queue.data !== undefined;
   const dupKnown = dups.data !== undefined;
   const incomeKnown = misfiled !== null;
   const findingsKnown = findingsQ.data !== undefined;
 
+  // (2026-11-12) ONE count for the bank rows: the spine's reviewCount (server computeReviewCount) already holds the
+  // charges to match AND the categories to confirm, so the queue is never listed beside it (that counted each twice).
+  // Both are answered in Banking's Needs you.
   const review = s?.reviewCount ?? 0;
-  const cat = queue.data?.total ?? 0;
   const dup = dups.data?.duplicateCount ?? 0;
   const income = misfiled?.length ?? 0;
-  const decisions = review + cat + dup + income;
-  const allKnown = spineKnown && cashKnown && catKnown && dupKnown && incomeKnown && findingsKnown;
+  const decisions = review + dup + income;
+  const allKnown = spineKnown && cashKnown && dupKnown && incomeKnown && findingsKnown;
   // Never "nothing" while a source is out, or while the income check was cut short.
   const allClear = allKnown && !misfiledCapped && now.length === 0 && decisions === 0 && findings.length === 0;
   const retry = (q: { refetch?: () => unknown }) => (q.refetch ? () => void q.refetch!() : undefined);
@@ -184,17 +184,17 @@ export default function AttentionPanel() {
               ) : null}
             </Group>
           ) : null}
-          {decisions > 0 || misfiledCapped || !spineKnown || !catKnown || !dupKnown || !incomeKnown ? (
+          {decisions > 0 || misfiledCapped || !spineKnown || !dupKnown || !incomeKnown ? (
             <Group title="Decisions waiting">
               {!spineKnown ? (
-                <PendingRow failed={spineFailed} label="Charges to match to the forecast" testid="dash-review-forecast-pending" onRetry={spine.refetch} />
+                <PendingRow failed={spineFailed} label="Bank rows that need you" testid="dash-review-needs-you-pending" onRetry={spine.refetch} />
               ) : review > 0 ? (
-                <Row href="/review" count={review} label="Charges to match to the forecast" testid="dash-review-forecast" />
-              ) : null}
-              {!catKnown ? (
-                <PendingRow failed={!!queue.isError} label="Categories to confirm" testid="dash-review-cats-pending" onRetry={retry(queue)} />
-              ) : cat > 0 ? (
-                <Row href={CATEGORIZATION_QUEUE_HREF} count={cat} label="Categories to confirm" testid="dash-review-cats" />
+                <Row
+                  href="/banking#needs-you"
+                  label={`${review} ${review === 1 ? "needs" : "need"} you`}
+                  detail="Charges to match and categories to confirm, each with OK or Change"
+                  testid="dash-review-needs-you"
+                />
               ) : null}
               {!dupKnown ? (
                 <PendingRow failed={!!dups.isError} label="Possible duplicates" testid="dash-review-dups-pending" onRetry={retry(dups)} />

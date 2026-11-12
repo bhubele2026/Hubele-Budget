@@ -85,11 +85,11 @@ const AmexCardTabsFeed = lazy(() => import("@/components/amex-card-tabs-feed"));
 /**
  * The Review pill's words for a screen reader. The number is the spine's `reviewCount`, which (2026-11-12) already
  * counts the categories to confirm with the charges to match; the queue's own total is named inside it, never added
- * to it: "36 to review, including 34 categories to confirm". An unknown queue is left out, never a zero.
+ * to it: "36 need you, including 34 categories to confirm". An unknown queue is left out, never a zero.
  */
 function reviewPillWords(total: number, queue: number | null | undefined): string {
   const q = queue ?? 0;
-  return `${total} to review${q > 0 ? `, including ${q} categor${q === 1 ? "y" : "ies"} to confirm` : ""}`;
+  return `${total} ${total === 1 ? "needs" : "need"} you${q > 0 ? `, including ${q} categor${q === 1 ? "y" : "ies"} to confirm` : ""}`;
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -331,7 +331,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   data-testid="topnav-review-badge"
                   className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink"
                 >
-                  <span className="hidden sm:inline">Review</span>
+                  <span className="hidden sm:inline">Needs you</span>
                   <span className="rounded-full bg-brand-orange/20 px-1.5 py-0.5 font-mono leading-none tabular-nums text-brand-orange">
                     {reviewCount}
                   </span>

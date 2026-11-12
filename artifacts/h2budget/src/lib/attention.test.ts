@@ -45,8 +45,8 @@ describe("attentionItems", () => {
     expect(two.title).toBe("2 bills are due today or tomorrow");
   });
   it("review count", () => {
-    expect(attentionItems({ ...base, reviewCount: 1 })[0]!.title).toBe("1 charge needs a look");
-    expect(attentionItems({ ...base, reviewCount: 4 })[0]!.title).toBe("4 charges need a look");
+    expect(attentionItems({ ...base, reviewCount: 1 })[0]!.title).toBe("1 bank row needs you");
+    expect(attentionItems({ ...base, reviewCount: 4 })[0]!.title).toBe("4 bank rows need you");
   });
 });
 

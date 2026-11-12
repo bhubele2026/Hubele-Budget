@@ -115,7 +115,7 @@ describe("More", () => {
     expect(Array.from(body.querySelectorAll("h2"), (e) => e.textContent)).toEqual(["Banking", "Amex", "This week", "Monthly allowance", "Forecast", "Debt"]);
     for (const t of tiles) expect(screen.getByTestId(`tile-${t}`).className, t).toContain("span-4");
     // The words the four boxes left out are all still here.
-    expect(screen.getByTestId("tile-banking-status").textContent).toBe("2 charges to match");
+    expect(screen.getByTestId("tile-banking-status").textContent).toBe("2 need you");
     expect(screen.getByTestId("tile-banking-account").textContent).toBe("Checking A ••0001");
     expect(screen.getByTestId("tile-banking-balance").textContent).toBe("$1,234.00");
     expect(screen.getByTestId("tile-week-status").textContent).toBe("On plan");

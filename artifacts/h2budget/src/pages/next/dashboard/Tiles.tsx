@@ -60,7 +60,8 @@ function BankingTile({ s, older }: { s: Spine | undefined; older?: string | null
     <Tile
       testid="banking" title="Banking" href={href} accent="checking" index={1}
       sub={identity ? <span data-testid="tile-banking-account">{identity.label}{identity.mask4 ? ` ••${identity.mask4}` : ""}</span> : "Checking"}
-      status={{ word: n === 1 ? "1 charge to match" : n > 0 ? `${n} charges to match` : "Nothing to match", tone: n > 0 ? "bad" : "ok" }}
+      // (2026-11-12) The spine's count holds the charges to match AND the categories to confirm: "N need you".
+      status={{ word: n === 1 ? "1 needs you" : n > 0 ? `${n} need you` : "Nothing needs you", tone: n > 0 ? "bad" : "ok" }}
     >
       {/* (C1) The one presentation: label, figure, calculated line, Details — halves from the spine's bank. */}
       <Fig

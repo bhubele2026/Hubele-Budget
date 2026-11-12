@@ -155,8 +155,10 @@ export function attentionItems(i: {
   if (i.reviewCount > 0) {
     out.push({
       kind: "review",
-      title: i.reviewCount === 1 ? "1 charge needs a look" : `${i.reviewCount} charges need a look`,
-      action: { label: "Open review", href: "/review" },
+      // (2026-11-12) The spine's count holds the charges to match and the categories to confirm; both are answered in
+      // Banking's Needs you.
+      title: i.reviewCount === 1 ? "1 bank row needs you" : `${i.reviewCount} bank rows need you`,
+      action: { label: "Open Needs you", href: "/banking#needs-you" },
     });
   }
   if (out.length === 0) out.push({ kind: "nothing", title: "Nothing needs you today" });

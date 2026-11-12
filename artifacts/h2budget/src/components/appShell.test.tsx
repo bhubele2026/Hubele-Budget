@@ -744,7 +744,7 @@ describe("the review count is a finding or it is nothing", () => {
     mount("/transactions");
     const pill = screen.getByTestId("topnav-review-badge");
     expect(pill.getAttribute("href")).toBe("/banking#needs-you");
-    expect(pill.getAttribute("aria-label")).toBe("4 to review");
+    expect(pill.getAttribute("aria-label")).toBe("4 need you");
   });
 
   it("shows no badge anywhere while the count is unknown, not a zero pill", () => {
@@ -770,7 +770,7 @@ describe("(2026-11-12) the Review pill is the spine's reviewCount alone: it alre
     const pill = screen.getByTestId("topnav-review-badge");
     expect(pill.textContent).toContain("7");
     expect(pill.textContent).not.toContain("10");
-    expect(pill.getAttribute("aria-label")).toBe("7 to review, including 3 categories to confirm");
+    expect(pill.getAttribute("aria-label")).toBe("7 need you, including 3 categories to confirm");
   });
 
   it("each count sits on the item that owns its page: Review = forecast, Categories (in More) = queue", () => {
@@ -791,14 +791,14 @@ describe("(2026-11-12) the Review pill is the spine's reviewCount alone: it alre
     reviewCount = 3;
     mount("/banking");
     expect(screen.getByTestId("topnav-review-badge").getAttribute("href")).toBe("/banking#needs-you");
-    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("3 to review, including 3 categories to confirm");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("3 need you, including 3 categories to confirm");
   });
 
   it("a queue that has not answered adds nothing and is not a zero", () => {
     reviewCount = 4;
     queueTotal = null;
     mount("/banking");
-    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("4 to review");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("4 need you");
   });
 });
 

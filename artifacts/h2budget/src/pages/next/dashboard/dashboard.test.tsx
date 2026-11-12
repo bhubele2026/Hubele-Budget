@@ -1051,24 +1051,22 @@ describe("needs attention", () => {
     wrap(<AttentionPanel />);
     expect(screen.getByTestId("findings-names").textContent).toBe("names: Dining & Coffee");
   });
-  it("one list: the bank, the week, and the two review queues worded distinctly", () => {
+  it("one list: the bank, the week, and the bank rows that need you as ONE line", () => {
     h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "refresh_failed" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00", remainingWeekKnown: "-25.00" } });
     h.Q.queue = ok({ total: 7 });
     h.Q.dups = ok({ duplicateCount: 2 });
     wrap(<AttentionPanel />);
     expect(screen.getByTestId("dash-att-reconnect").getAttribute("href")).toBe("/settings");
     expect(screen.getByTestId("dash-att-over").textContent).toContain("Over this week's plan by $25.00");
-    expect(screen.getByTestId("dash-review-forecast").textContent).toContain("Charges to match to the forecast");
-    expect(screen.getByTestId("dash-review-forecast").getAttribute("href")).toBe("/review");
-    expect(screen.getByTestId("dash-review-cats").textContent).toContain("Categories to confirm");
-    expect(screen.getByTestId("dash-review-cats").getAttribute("href")).toBe("/review/categories");
+    // (2026-11-12) ONE line for the bank rows: the spine's reviewCount (it already holds the categories), never the
+    // queue's total beside it. It opens Banking's Needs you.
+    expect(screen.getByTestId("dash-review-needs-you").textContent).toContain("3 need you");
+    expect(screen.getByTestId("dash-review-needs-you").getAttribute("href")).toBe("/banking#needs-you");
+    expect(screen.queryByTestId("dash-review-forecast")).toBeNull();
+    expect(screen.queryByTestId("dash-review-cats")).toBeNull();
+    expect(screen.getByTestId("dash-attention").textContent).not.toContain("7");
     expect(screen.getByTestId("dash-review-dups").getAttribute("href")).toBe("/transactions");
-    // Each count beside its own queue (spine.reviewCount 3 · categories 7 · duplicates 2).
-    expect(screen.getByTestId("dash-review-forecast").textContent).toContain("3");
-    expect(screen.getByTestId("dash-review-cats").textContent).toContain("7");
     expect(screen.getByTestId("dash-review-dups").textContent).toContain("2");
-    expect(screen.getByTestId("dash-review-forecast").textContent).not.toContain("7");
-    expect(screen.getByTestId("dash-review-cats").textContent).not.toContain("3");
   });
   const incomeRow = (o: Record<string, unknown>) => ({
     id: "t1", occurredOn: "2026-10-08", description: "ACME PAYROLL DIRECT DEP", amount: "2100.00", source: "plaid:chase", plaidAccountId: "p-c1", categoryId: "dining",
@@ -1153,17 +1151,13 @@ describe("needs attention", () => {
     wrap(<AttentionPanel />);
     expect(screen.getByTestId("findings-stub").textContent).toBe("1 findings");
   });
-  it("(D20) a queue that is loading or failed is never 'nothing needs you'", () => {
+  it("(2026-11-12) the categories queue is not read here: its rows are inside the spine's one count", () => {
     h.spine.data = calmSpine();
     h.Q.dups = ok({ duplicateCount: 0 });
     h.Q.queue = loading;
-    const { unmount } = wrap(<AttentionPanel />);
-    expect(screen.queryByText("Nothing needs you today.")).toBeNull();
-    expect(screen.getByTestId("dash-review-cats-pending").textContent).toContain("loading");
-    unmount();
-    h.Q.queue = failed;
     wrap(<AttentionPanel />);
-    expect(screen.getByTestId("dash-review-cats-pending").textContent).toContain("did not load");
+    expect(screen.queryByTestId("dash-review-cats-pending")).toBeNull();
+    expect(screen.getByText("Nothing needs you today.")).toBeTruthy();
   });
   it("an all-clear only when every source answered", () => {
     h.spine.data = calmSpine();
@@ -1191,15 +1185,14 @@ describe("needs attention", () => {
       h.Q[key] = keep;
     }
   });
-  it("a spine failure hides only the spine's rows: the queues and the findings (with their actions) still show", () => {
+  it("a spine failure hides only the spine's rows: the findings (with their actions) still show", () => {
     h.spine = { data: undefined, state: "failed", refetch: () => {} };
     h.Q.queue = ok({ total: 7 });
     h.Q.dups = ok({ duplicateCount: 0 });
     h.Q.findings = ok({ findings: [{ id: "f1" }] });
     wrap(<AttentionPanel />);
     expect(screen.getByTestId("dash-att-spine-pending").textContent).toContain("did not load");
-    expect(screen.getByTestId("dash-review-forecast-pending").textContent).toContain("did not load");
-    expect(screen.getByTestId("dash-review-cats").textContent).toContain("7");
+    expect(screen.getByTestId("dash-review-needs-you-pending").textContent).toContain("did not load");
     expect(screen.getByTestId("findings-stub").textContent).toBe("1 findings");
     expect(screen.queryByTestId("panel-error")).toBeNull();
   });

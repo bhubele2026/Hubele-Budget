@@ -85,7 +85,7 @@ function Checking({ s, older }: { s: Spine | undefined; older?: string | null })
         value={v.balance == null ? "—" : money(s.bank.balance)}
         tone={!older && v.balance != null && Number.isFinite(bal) && bal < 0 ? "bad" : "neutral"}
       />
-      <Line testid="four-checking-line">{v.balance == null ? "No bank balance yet." : n > 0 ? `${n} to match` : null}</Line>
+      <Line testid="four-checking-line">{v.balance == null ? "No bank balance yet." : n > 0 ? `${n} ${n === 1 ? "needs" : "need"} you` : null}</Line>
     </Tile>
   );
 }
