@@ -24,7 +24,7 @@
  *   4. EVERY PAGE, DARK, at 1440 and 390: (a) no near-white ground larger than 40×40; (b) no chart line left in the light navy;
  *      (c) every visible text node ≥ 4.5:1 against its real ground (3:1 for large text), found by walking up the ancestors and
  *      compositing translucent layers; (d) nothing brown (a dark, half-saturated orange ground or edge); (e) no sideways scroll.
- *      The top bar and the phone drawer (white in light, the card colour in dark since 2026-11-12) are measured and reported as INFO.
+ *      The top bar and the phone drawer (white in light, the card colour in dark since 2026-11-12) are held to the same checks.
  *   5. THE OPEN STATES, dark: a dialog, a select list, the Ask thread, the home drawer, a chart tooltip, a toast, the phone
  *      drawer, the More menu, the Appearance menu: same scan.
  *   6. LIGHT is still light: no data-theme and the light token values on every page (the owner-approved 2026-11-12 neutrals:
@@ -69,7 +69,7 @@ const DAY = NOW.slice(0, 10);
 const AT = (hhmm: string) => `${DAY}T${hhmm}:00-06:00`; // America/Chicago in November
 /** What may keep a near-white ground on a dark page. Extend with a selector, and the reason, when something is meant to. */
 const ALLOW_LIGHT = "img, picture, video, canvas, iframe, svg image";
-/** The chrome (top bar, phone drawer). Measured, reported as INFO. */
+/** The chrome (top bar, phone drawer). Its text is measured in its own bucket and held to pass/fail (2026-11-12). */
 const CHROME = '[data-testid="app-header"], [role="dialog"]:has([data-testid="drawer-version"])';
 
 // ── RESULTS ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -271,7 +271,7 @@ const SCAN_JS = String.raw`(function (o) {
     let hit = big && bg && bg.a >= 0.5 && lum(bg) > 0.9 ? ["background-color", bg] : null;
     if (big && !hit) { const g = stops(s.backgroundImage).find((c) => c.a >= 0.5 && lum(c) > 0.9); if (g) hit = ["gradient stop", g]; }
     if (hit && shown(el)) nearWhite.push({ sel: sel(el), where: where(el), area: Math.round(r.width * r.height), detail: Math.round(r.width) + "×" + Math.round(r.height) + " " + hit[0] + " " + rgb(hit[1]) });
-    if (el.closest(o.chrome)) continue;
+    // (2026-11-12) The chrome follows the theme now, so it is held to every check like the page (no skip).
     // brown: this element's own ground, composited; and its border
     if (bg && bg.a > 0.02 && r.width * r.height >= 60) {
       const under = el.parentElement ? groundsOf(el.parentElement, r.left + r.width / 2, r.top + r.height / 2) : { grounds: [canvas] };
@@ -288,7 +288,6 @@ const SCAN_JS = String.raw`(function (o) {
   }
   // …and inside charts: a translucent fill, or a gradient stop, composited over the card.
   for (const el of root.querySelectorAll("svg rect, svg path, svg circle, svg polygon, svg stop")) {
-    if (el.closest(o.chrome)) continue;
     const s = cs(el);
     const isStop = el.tagName.toLowerCase() === "stop";
     const c0 = parse(isStop ? s.stopColor : s.fill);
@@ -410,6 +409,8 @@ async function measure(page: Page, tag: string, textRoot?: string): Promise<void
   check(r.contrast.failing === 0 && r.contrast.measured > 0, `4c · ${tag}: every visible text node meets 4.5:1 (3:1 large)`,
     `${r.contrast.failing} of ${r.contrast.measured} text nodes below${r.contrast.disabled ? ` · ${r.contrast.disabled} disabled exempt` : ""}${r.contrast.unmeasurable ? ` · ${r.contrast.unmeasurable} on an image, not measured` : ""}${r.contrast.top.length ? `; worst:${list(r.contrast.top)}` : ""}`);
   check(r.brown.count === 0, `4d · ${tag}: nothing brown (no dark, part-saturated orange ground or edge)`, r.brown.count ? `${r.brown.count}:${list(r.brown.top)}` : undefined);
+  // (2026-11-12) PASS/FAIL, no longer INFO: the top bar and the phone drawer are themed tokens like the page.
+  check(r.contrast.chrome === 0, `4c · ${tag}: the top bar and phone drawer meet 4.5:1 too`, r.contrast.chrome ? `${r.contrast.chrome} below; worst:${list(r.contrast.chromeTop)}` : undefined);
   for (const c of r.contrast.chromeTop) if (!chromeSeen.has(c.sel + c.detail.replace(/^"[^"]*"/, ""))) chromeSeen.set(c.sel + c.detail.replace(/^"[^"]*"/, ""), c);
 }
 
@@ -739,7 +740,7 @@ try {
       rmSync(dir, { recursive: true, force: true });
     }
   }
-  if (chromeSeen.size) info("4c · the navy top bar and phone drawer (the SAME in light and dark, by design): text below 4.5:1 there", `${chromeSeen.size} kinds:${list([...chromeSeen.values()].slice(0, 8))}`);
+  check(chromeSeen.size === 0, "4c · the top bar and phone drawer: no text below 4.5:1 on any page or open state", chromeSeen.size ? `${chromeSeen.size} kinds:${list([...chromeSeen.values()].slice(0, 8))}` : undefined);
   await browser.close();
 } catch (e) {
   check(false, "the rig ran to the end", (e as Error).stack ?? String(e));
