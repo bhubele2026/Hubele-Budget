@@ -70,7 +70,7 @@ export function AvalancheWeeklyPanel({ settings, onUpdate, saving = false }: Pro
   const thisLabel = isToday ? "Today" : `This ${name}`;
 
   return (
-    <div className="panel tile-in span-12" data-testid="panel-avalanche-weekly">
+    <div className="panel span-12" data-testid="panel-avalanche-weekly">
       <div className="panel-head">
         <span className="text-title font-semibold text-brand-navy">Avalanche payments</span>
         <Help className="ml-auto">
@@ -129,7 +129,7 @@ export function AvalancheWeeklyPanel({ settings, onUpdate, saving = false }: Pro
         <div className="min-w-0 md:col-span-8">
           {cadence === "monthly" ? (
             <p className="text-body text-neutral-600" data-testid="avalanche-monthly-line">
-              Paying <span className="font-mono tabular-nums text-brand-navy">{formatCurrency(monthlyTarget)}</span> at
+              Paying <span className="fig text-foreground">{formatCurrency(monthlyTarget)}</span> at
               the end of each month. Weekly pays the most that is safe every week instead.
             </p>
           ) : q.isLoading && !plan ? (
@@ -146,7 +146,7 @@ export function AvalancheWeeklyPanel({ settings, onUpdate, saving = false }: Pro
               <div data-testid="avalanche-this-week">
                 <div className={fieldLabel}>{thisLabel}</div>
                 <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-mono text-kpi font-semibold tabular-nums text-brand-navy">
+                  <span className="fig text-kpi font-semibold text-foreground">
                     {formatCurrency(shown)}
                   </span>
                   <span className="text-body text-neutral-600">
@@ -185,12 +185,12 @@ export function AvalancheWeeklyPanel({ settings, onUpdate, saving = false }: Pro
                 )}
                 <WeekPayError controls={pay} />
                 <p className="mt-1 text-label text-neutral-500" data-testid="avalanche-target-line">
-                  Target <span className="font-mono tabular-nums">{formatCurrency(plan.monthlyTarget)}</span>/mo ·{" "}
-                  {isToday ? "today" : `this ${name}`} <span className="font-mono tabular-nums">{formatCurrency(shown)}</span>
+                  Target <span className="fig">{formatCurrency(plan.monthlyTarget)}</span>/mo ·{" "}
+                  {isToday ? "today" : `this ${name}`} <span className="fig">{formatCurrency(shown)}</span>
                   {" · "}
                   {plan.debtFreeDate ? (
                     <span data-testid="avalanche-debt-free-date">
-                      debt-free <span className="font-mono tabular-nums">{formatDate(plan.debtFreeDate)}</span>
+                      debt-free <span className="fig">{formatDate(plan.debtFreeDate)}</span>
                     </span>
                   ) : (
                     <span data-testid="avalanche-debt-free-date">no debt-free date yet</span>
@@ -225,7 +225,7 @@ export function AvalancheWeeklyPanel({ settings, onUpdate, saving = false }: Pro
                                   <span className="text-neutral-500">{p.name}</span>
                                   {p.freedWeekly > 0 && (
                                     <span className="text-neutral-500">
-                                      goes up <span className="font-mono tabular-nums">{formatCurrency(p.freedWeekly)}</span> a
+                                      goes up <span className="fig">{formatCurrency(p.freedWeekly)}</span> a
                                       week
                                     </span>
                                   )}

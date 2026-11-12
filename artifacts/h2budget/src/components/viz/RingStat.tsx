@@ -75,7 +75,7 @@ export function RingStat({
           <div className="text-center leading-none">
             <div className="text-xs font-bold tabular-nums">{label}</div>
             {centerSub && (
-              <div className="text-[9px] uppercase tracking-widest text-muted-foreground mt-0.5">
+              <div className="text-[9px] text-muted-foreground mt-0.5">
                 {centerSub}
               </div>
             )}

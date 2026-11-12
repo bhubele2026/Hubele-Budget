@@ -177,7 +177,7 @@ export function SplitTransactionDialog({
                 step="0.01"
                 value={p.amount}
                 onChange={(e) => setPart(i, { amount: e.target.value })}
-                className={`${inputControl} w-28 font-mono tabular-nums`}
+                className={`${inputControl} w-28 fig `}
                 data-testid={`split-amount-${i}`}
               />
               <Select

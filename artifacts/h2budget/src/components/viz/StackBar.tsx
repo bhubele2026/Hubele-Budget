@@ -51,7 +51,7 @@ export function StackBar({
           (the gap is the background showing through, per the dataviz spacer
           rule) — reads as one measured bar, not a pill of candy stripes. */}
       <div
-        className="grow-x flex w-full gap-[2px] overflow-hidden rounded bg-muted"
+        className="flex w-full gap-[2px] overflow-hidden rounded bg-muted"
         style={{ height }}
         role="img"
         aria-label="Spend mix"
@@ -68,7 +68,7 @@ export function StackBar({
         ))}
       </div>
       {showLegend && (
-        <div className="stagger-children mt-3 space-y-1.5">
+        <div className="mt-3 space-y-1.5" data-testid="stackbar-legend">
           {segs.filter((s, i) => i < legendMax || s.pinned).map((s, i) => (
             <div key={`${s.label}-${i}`} className="flex items-center gap-2 text-xs" data-share-name={s.label}>
               <span

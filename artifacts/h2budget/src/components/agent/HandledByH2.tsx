@@ -105,7 +105,7 @@ export function HandledByH2({ now }: { now?: Date }) {
                   <dt className="text-neutral-600">Undo</dt>
                   <dd className="text-brand-navy">{why.undone ? "Already undone" : why.undoable.length > 0 ? "Available" : "Not available for this"}</dd>
                   <dt className="text-neutral-600">Items</dt>
-                  <dd className="font-mono tabular-nums text-brand-navy">{why.actions.length}</dd>
+                  <dd className="fig text-foreground">{why.actions.length}</dd>
                 </dl>
                 {whyFinding ? (
                   <PayloadList payload={whyFinding.payload} />

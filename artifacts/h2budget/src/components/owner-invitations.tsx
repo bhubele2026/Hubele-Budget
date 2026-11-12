@@ -240,7 +240,7 @@ export function OwnerInvitationsSection() {
                       <td className={td}>
                         <span className={statusChip(inv.status)}>{inv.status}</span>
                       </td>
-                      <td className={`${td} font-mono tabular-nums text-neutral-500`}>
+                      <td className={`${td} fig text-neutral-500`}>
                         {formatDate(inv.createdAt)}
                       </td>
                       <td className={`${td} text-right`}>
@@ -309,7 +309,7 @@ export function OwnerInvitationsSection() {
                           <span className="chip gray">Member</span>
                         )}
                       </td>
-                      <td className={`${td} font-mono tabular-nums text-neutral-500`}>
+                      <td className={`${td} fig text-neutral-500`}>
                         {formatDate(m.createdAt)}
                       </td>
                       <td className={`${td} text-right`}>

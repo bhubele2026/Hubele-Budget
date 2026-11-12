@@ -10,7 +10,7 @@ function Money({ value }: { value: string | number | null | undefined }) {
   const n = toAmount(value);
   if (n == null) return <span className="text-neutral-400">—</span>;
   return (
-    <data value={centsValue(n)} className="font-mono tabular-nums">
+    <data value={centsValue(n)} className="fig">
       {fmtMoney(n)}
     </data>
   );
@@ -51,7 +51,7 @@ function Comparison({ plan, chosen }: { plan: DebtPlan; chosen: "avalanche" | "s
               {label}
             </th>
             {cols.map((c) => (
-              <td key={c.key} className="py-1.5 pl-2 text-right font-mono tabular-nums text-brand-navy">
+              <td key={c.key} className="py-1.5 pl-2 text-right fig text-foreground">
                 {cell(c.s)}
               </td>
             ))}
@@ -105,7 +105,7 @@ export function DebtRangePanel() {
               <p className="mt-1 text-body text-neutral-500">Not enough on file to project a finish yet.</p>
             ) : (
               <>
-                <p className="mt-1 font-mono text-title font-semibold text-brand-navy" data-testid="range-line">
+                <p className="mt-1 fig text-title font-semibold text-foreground" data-testid="range-line">
                   Debt-free around {monthWords(range.earliestMonth)}
                   {range.latestMonth ? ` to ${monthWords(range.latestMonth)}` : " or later"}
                 </p>

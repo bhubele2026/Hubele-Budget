@@ -110,7 +110,7 @@ function Explanation({ explain, onReviewDifference }: { explain: BankBalanceExpl
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-label font-semibold text-brand-navy">Checking today</div>
         <div
-          className="font-mono text-label font-semibold tabular-nums text-brand-navy"
+          className="fig text-label font-semibold text-foreground"
           data-testid="bank-why-displayed"
         >
           {moneyFace(displayed.bankToday)}
@@ -136,7 +136,7 @@ function Explanation({ explain, onReviewDifference }: { explain: BankBalanceExpl
                 {readingName}{ledger.anchorDay ? `, ${formatDate(ledger.anchorDay)}` : ""}{readTime ? `, ${readTime}` : ""}
                 {where ? ` (${where})` : ""}
               </dt>
-              <dd className="font-mono tabular-nums text-neutral-700">
+              <dd className="fig text-neutral-700">
                 {moneyFace(snapshot.balance)}
               </dd>
             </div>
@@ -145,7 +145,7 @@ function Explanation({ explain, onReviewDifference }: { explain: BankBalanceExpl
                 <dt>
                   {since.rowCount} row{since.rowCount === 1 ? "" : "s"} since then
                 </dt>
-                <dd className="font-mono tabular-nums text-neutral-700">
+                <dd className="fig text-neutral-700">
                   {net > 0 ? "+" : ""}
                   {moneyFace(since.net)}
                 </dd>
@@ -161,7 +161,7 @@ function Explanation({ explain, onReviewDifference }: { explain: BankBalanceExpl
                 {typed ? "Typed balance" : "Bank's last reading"} {moneyFace(snapshot.balance)} + {since.rowCount} row
                 {since.rowCount === 1 ? "" : "s"} = Checking today
               </span>
-              <span className="font-mono tabular-nums">{moneyFace(displayed.bankToday)}</span>
+              <span className="fig">{moneyFace(displayed.bankToday)}</span>
             </p>
           )}
           {addsUp === false && (
@@ -235,7 +235,7 @@ function RowList({ rows, testid }: { rows: readonly BankBalanceExplainRow[]; tes
           <li key={r.id} className="flex items-start justify-between gap-2" data-testid="bank-why-row" data-row-id={r.id}>
             <div className="min-w-0">
               <div className="flex min-w-0 items-baseline gap-1.5">
-                <span className="shrink-0 font-mono tabular-nums text-neutral-400">{shortDay(r.date)}</span>
+                <span className="shrink-0 fig text-neutral-400">{shortDay(r.date)}</span>
                 {href ? (
                   <Link href={href} className="truncate font-medium text-brand-navy underline" data-testid="bank-why-row-link">
                     {name}
@@ -252,7 +252,7 @@ function RowList({ rows, testid }: { rows: readonly BankBalanceExplainRow[]; tes
               </div>
             </div>
             <span
-              className={`shrink-0 font-mono tabular-nums ${r.counted ? "text-neutral-700" : "text-neutral-400"}`}
+              className={`shrink-0 fig ${r.counted ? "text-neutral-700" : "text-neutral-400"}`}
               data-testid="bank-why-row-amount"
             >
               {signed(r.counted ? r.contribution : r.amount)}

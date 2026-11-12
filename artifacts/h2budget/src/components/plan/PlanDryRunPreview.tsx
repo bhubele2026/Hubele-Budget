@@ -28,7 +28,7 @@ function Row({ o }: { o: AllowancePlanDryRunOccurrencesItem }) {
   return (
     <li className="py-1.5" data-testid="dry-occurrence">
       <div className="text-micro font-semibold text-neutral-600">{startWords(o.occurrenceDate)}</div>
-      <div className="font-mono text-label tabular-nums text-brand-ink" data-testid="dry-reserve">{reserveLine(o)}</div>
+      <div className="fig text-label text-foreground" data-testid="dry-reserve">{reserveLine(o)}</div>
     </li>
   );
 }
@@ -49,7 +49,7 @@ export function PlanDryRunPreview({ dry }: { dry: AllowancePlanDryRun }) {
       ) : null}
       <div className="flex flex-wrap justify-between gap-x-3 text-label" data-testid="dry-low">
         <span className="text-neutral-600">Lowest point</span>
-        <span className="font-mono tabular-nums text-brand-ink">{low(lp.before)} → {low(lp.after)}</span>
+        <span className="fig text-foreground">{low(lp.before)} → {low(lp.after)}</span>
       </div>
     </div>
   );

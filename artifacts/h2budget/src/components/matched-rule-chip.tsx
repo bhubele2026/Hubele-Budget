@@ -69,13 +69,13 @@ export function MatchedRuleChip({
             title={`Matched by rule "${matched.pattern}" (${label}). Jump to it.`}
           >
             <Wand2 className={compact ? "h-2.5 w-2.5 shrink-0" : "h-3 w-3 shrink-0"} />
-            <span className="truncate font-mono font-normal">{matched.pattern}</span>
+            <span className="truncate fig font-normal">{matched.pattern}</span>
           </Link>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="text-[11px] max-w-xs">
           Auto-categorized by mapping rule
           {" "}
-          <span className="font-mono">{matched.pattern}</span>
+          <span className="fig">{matched.pattern}</span>
           {" "}
           ({label}). Click to jump to it on the Mapping Rules page.
         </TooltipContent>

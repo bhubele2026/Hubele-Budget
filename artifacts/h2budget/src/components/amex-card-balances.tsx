@@ -42,7 +42,7 @@ export function AmexCardBalances({
   onSelect: (accountId: string) => void;
 }) {
   const cards = summary?.scope.kind === "all" ? summary.scope.cards : null;
-  const head = "text-micro font-semibold uppercase tracking-wide text-neutral-600";
+  const head = "text-micro font-medium text-neutral-600";
   return (
     <section aria-labelledby="amex-by-card-title" className="space-y-1" data-testid="amex-card-balances">
       <h3 id="amex-by-card-title" className="text-label text-neutral-600">
@@ -90,10 +90,10 @@ export function AmexCardBalances({
                     aria-label={`${label}: owed ${owed}, purchases ${bought}${word ? `, ${word.text}` : ""}`}
                   >
                     <span className="min-w-0 text-label font-medium text-brand-navy [overflow-wrap:anywhere]">{label}</span>
-                    <span className="text-right font-mono text-label font-semibold tabular-nums text-brand-navy" data-testid={`amex-card-owed-${c.accountId}`}>
+                    <span className="text-right fig text-label font-semibold text-foreground" data-testid={`amex-card-owed-${c.accountId}`}>
                       {owed}
                     </span>
-                    <span className="text-micro text-neutral-600 sm:text-right sm:font-mono sm:text-label sm:tabular-nums sm:text-brand-ink" data-testid={`amex-card-purchases-${c.accountId}`}>
+                    <span className="fig text-micro text-neutral-600 sm:text-right sm:text-label sm:text-foreground" data-testid={`amex-card-purchases-${c.accountId}`}>
                       <span className="sm:hidden">Purchases </span>
                       {bought}
                     </span>

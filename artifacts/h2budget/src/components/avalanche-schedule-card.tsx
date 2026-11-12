@@ -33,7 +33,7 @@ export function AvalancheScheduleCard() {
 
   if (isLoading || !data) {
     return (
-      <div className="panel tile-in" data-testid="card-avalanche-schedule">
+      <div className="panel" data-testid="card-avalanche-schedule">
         <div className="panel-head">
           <Skeleton className="h-4 w-44" />
         </div>
@@ -51,11 +51,11 @@ export function AvalancheScheduleCard() {
   const target = data.currentAvalancheTarget;
 
   return (
-    <div className="panel tile-in" data-testid="card-avalanche-schedule">
+    <div className="panel" data-testid="card-avalanche-schedule">
       <div className="panel-head">
         <span className="text-title font-semibold text-brand-navy">Schedule</span>
         {target && (
-          <span className="truncate text-micro uppercase tracking-wide text-neutral-400">
+          <span className="truncate text-micro text-neutral-400">
             {target.debtName} · {(target.apr * 100).toFixed(2)}% APR
           </span>
         )}
@@ -74,13 +74,13 @@ export function AvalancheScheduleCard() {
             data-testid="button-toggle-avalanche-schedule"
             className="press flex w-full items-center gap-2 px-4 py-2.5 text-left text-body text-neutral-600 hover:text-brand-navy"
           >
-            <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+            <span className="fig text-label font-semibold text-foreground">
               {formatCurrency(data.totalProposed)}
             </span>
-            <span className="text-micro uppercase tracking-wide text-neutral-400">
+            <span className="text-micro text-neutral-400">
               over {payments.length} payment{payments.length === 1 ? "" : "s"}
             </span>
-            <span className="ml-auto inline-flex items-center gap-1 text-micro font-semibold uppercase tracking-wide">
+            <span className="ml-auto inline-flex items-center gap-1 text-micro font-medium">
               {expanded ? "Hide" : "Show"}
               {expanded ? (
                 <ChevronUp className="h-3.5 w-3.5" />
@@ -124,7 +124,7 @@ export function AvalancheScheduleCard() {
                   </tbody>
                   <tfoot>
                     <tr data-testid="text-avalanche-total">
-                      <td className={`${td} text-micro font-semibold uppercase tracking-wide text-neutral-400`}>
+                      <td className={`${td} text-micro font-medium text-neutral-400`}>
                         Total
                       </td>
                       <td className={`${tdNum} font-semibold`}>

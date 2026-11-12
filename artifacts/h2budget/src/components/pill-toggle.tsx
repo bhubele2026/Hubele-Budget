@@ -28,7 +28,7 @@ export function PillToggle<T extends string>({
             <div className="text-body font-semibold leading-tight">{opt.label}</div>
             <div
               className={cn(
-                "mt-0.5 text-micro uppercase tracking-wide",
+                "mt-0.5 text-micro",
                 active ? "text-white/70" : "text-neutral-600",
               )}
             >

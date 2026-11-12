@@ -94,19 +94,19 @@ export function OwnerBankHealthSweepSection() {
 
         {result && (
           <div
-            className="section-enter space-y-3 rounded-control bg-platinum-2 p-3 text-body ring-1 ring-brand-line"
+            className="space-y-3 rounded-control bg-platinum-2 p-3 text-body ring-1 ring-brand-line"
             data-testid="bank-health-sweep-result"
           >
             <div className="flex flex-wrap gap-x-6 gap-y-1">
               <div>
                 <span className="text-neutral-500">Scanned: </span>
-                <span className="font-mono font-semibold tabular-nums text-brand-navy" data-testid="text-sweep-scanned">
+                <span className="fig font-semibold text-foreground" data-testid="text-sweep-scanned">
                   {result.scanned}
                 </span>
               </div>
               <div>
                 <span className="text-neutral-500">Flagged: </span>
-                <span className="font-mono font-semibold tabular-nums text-brand-navy" data-testid="text-sweep-flagged">
+                <span className="fig font-semibold text-foreground" data-testid="text-sweep-flagged">
                   {result.flagged}
                 </span>
               </div>

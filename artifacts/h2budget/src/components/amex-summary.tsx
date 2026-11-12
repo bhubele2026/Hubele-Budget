@@ -84,7 +84,7 @@ function Figure({
   const body = (
     <>
       <span className={figLabel}>{label}</span>
-      <span className="font-mono text-kpi font-semibold tabular-nums text-brand-navy">{moneyFace(amount)}</span>
+      <span className="fig text-kpi font-semibold text-foreground">{moneyFace(amount)}</span>
       {sub ? <span className="text-micro text-neutral-600">{sub}</span> : null}
       {!onClick && extra ? extra : null}
     </>
@@ -266,7 +266,7 @@ export function AmexSummaryPanel({
           <div className="space-y-1 text-body text-brand-ink" data-testid="amex-plan-lines">
             {plan ? (
               <p data-testid="amex-plan-line">
-                {plan.label} <span className="font-mono font-semibold tabular-nums">{moneyFace(plan.amount)}</span>
+                {plan.label} <span className="fig font-semibold">{moneyFace(plan.amount)}</span>
                 {" · "}
                 <Link href={plan.to} className={LINK} data-testid="amex-plan-link">{plan.linkText}</Link>
               </p>
@@ -330,7 +330,7 @@ function ToReview({
               on && "bg-brand-tint ring-2 ring-brand-navy/40",
             )}
           >
-            {grp.count} {g.words} · <span className="ml-1 font-mono tabular-nums">{moneyFace(grp.amount)}</span>
+            {grp.count} {g.words} · <span className="ml-1 fig">{moneyFace(grp.amount)}</span>
           </button>
         );
       })}

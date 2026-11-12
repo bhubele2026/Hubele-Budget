@@ -70,7 +70,7 @@ export function CategoryPickerDialog({
           <div className="flex flex-col gap-4" data-testid="category-list">
             {groups.map(([group, items]) => (
               <div key={group}>
-                <h3 className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">{group}</h3>
+                <h3 className="mb-1 text-micro font-medium text-neutral-500">{group}</h3>
                 <ul>
                   {items.map((c) => (
                     <li key={c.id} className="border-t border-brand-line first:border-t-0">

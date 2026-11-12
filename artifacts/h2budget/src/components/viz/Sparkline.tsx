@@ -76,7 +76,7 @@ export function Sparkline({
     // Never dash-animate the path itself: stroke-dasharray combined with
     // vector-effect:non-scaling-stroke computes dashes in SCREEN pixels, which
     // turned every sparkline into 1px specks (the "broken graphs" bug).
-    <div className={cn("sweep-in w-full", className)} style={{ height }}>
+    <div className={cn("w-full", className)} style={{ height }}>
       <svg
         width="100%"
         height="100%"

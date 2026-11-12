@@ -174,7 +174,7 @@ export function ChaseInsightStrip({
       <div className="grid gap-5 p-4 sm:grid-cols-[minmax(0,15rem)_1fr] sm:gap-8">
         <div>
           <div
-            className="font-mono text-display font-semibold tabular-nums text-brand-navy"
+            className="fig text-display font-semibold text-foreground"
             data-testid="strip-spend-total"
           >
             {cur ? formatCurrency(curTotal) : "—"}
@@ -206,7 +206,7 @@ export function ChaseInsightStrip({
             >
               Includes{" "}
               <span
-                className="font-mono tabular-nums"
+                className="fig"
                 data-testid="strip-uncategorized-amount"
               >
                 {formatCurrency(cur!.uncategorized.total)}
@@ -268,7 +268,7 @@ export function ChaseInsightStrip({
                   {t.description}
                   <span className="ml-2 text-neutral-500">{t.date}</span>
                 </span>
-                <span className="font-mono tabular-nums">
+                <span className="fig">
                   {formatCurrency(t.amount)}
                 </span>
               </li>

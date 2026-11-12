@@ -55,7 +55,7 @@ export function StatChip({
       )}
       data-testid={testId}
     >
-      <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+      <div className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground">
         {label}
       </div>
       <div
@@ -127,7 +127,7 @@ export function StatChipUnavailable({
       className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3.5 text-warning flex flex-col gap-1.5"
       data-testid={testId}
     >
-      <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-warning flex items-center gap-1">
+      <div className="text-[11px] font-medium tracking-[0.1em] text-warning flex items-center gap-1">
         <AlertTriangle className="h-3 w-3" /> {label}
       </div>
       <div className="tabular-nums font-semibold text-lg leading-none">

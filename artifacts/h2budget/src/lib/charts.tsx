@@ -332,7 +332,7 @@ function SeriesTooltip({
                 {r.name}
               </span>
             </span>
-            <span className="shrink-0 font-mono tabular-nums text-foreground">
+            <span className="shrink-0 fig text-foreground">
               {r.text}
             </span>
           </div>
@@ -404,7 +404,7 @@ export function LineTrend({
   const xtk = useXTicks(data, xKey);
   return (
     <div
-      className={cn("chart-in", className)}
+      className={className}
       style={{ width: "100%", height }}
       role="img"
       aria-label={ariaLabel}
@@ -518,7 +518,7 @@ export function HBar({
   }, [fp, valueKey]);
   return (
     <div
-      className={cn("chart-in", className)}
+      className={className}
       style={{ width: "100%", height }}
       role="img"
       aria-label={ariaLabel}
@@ -612,7 +612,7 @@ export function Donut({
   const fmt = axisFmtFn(valueFmt);
   return (
     <div
-      className={cn("chart-in flex items-center gap-4", className)}
+      className={cn("flex items-center gap-4", className)}
       style={{ width: "100%", height }}
     >
       <div
@@ -661,11 +661,11 @@ export function Donut({
             pointerEvents: "none",
           }}
         >
-          <span className="font-mono tabular-nums text-xl font-semibold text-foreground">
+          <span className="fig text-xl font-semibold text-foreground">
             {fmt(total)}
           </span>
           {centerLabel && (
-            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground">
               {centerLabel}
             </span>
           )}
@@ -712,7 +712,7 @@ function DonutLegendRow({
           {item.label}
         </span>
       </span>
-      <span className="shrink-0 font-mono tabular-nums text-foreground">
+      <span className="shrink-0 fig text-foreground">
         {fmt(item.value)}
       </span>
     </>

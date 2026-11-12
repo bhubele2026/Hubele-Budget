@@ -76,14 +76,14 @@ function TileFigures({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {head}
-          <div className="mt-2 font-mono text-title font-semibold leading-none tabular-nums text-brand-navy" data-testid={`amex-owed-${accountId}`}>
+          <div className="mt-2 fig text-title font-semibold leading-none text-foreground" data-testid={`amex-owed-${accountId}`}>
             {loading ? <span className="inline-block h-5 w-24 animate-pulse rounded bg-platinum-2 align-middle" aria-busy="true" /> : moneyFace(figures.owed)}
           </div>
           <div className="mt-1 text-micro text-neutral-500">Owed</div>
           {showPurchases ? (
             <div className="mt-2 text-micro text-neutral-500" data-testid={`amex-band-purchases-${accountId}`}>
               Purchases{" "}
-              <span className="font-mono font-semibold tabular-nums text-brand-navy">
+              <span className="fig font-semibold text-foreground">
                 {loading ? "…" : moneyFace(figures.purchases)}
               </span>
             </div>
@@ -223,7 +223,7 @@ export function AmexCardBand({
                       {names[c.accountId] || BRAND_LABEL[tier] || c.name}
                     </span>
                     {mask ? (
-                      <span className="shrink-0 font-mono normal-case tracking-normal tabular-nums text-neutral-500">
+                      <span className="shrink-0 fig normal-case tracking-normal text-neutral-500">
                         ••{mask}
                       </span>
                     ) : null}
@@ -267,7 +267,7 @@ export function AmexCardBand({
                 {names[c.accountId] || BRAND_LABEL[tier] || c.name}
               </span>
               {mask ? (
-                <span className="shrink-0 font-mono normal-case tracking-normal tabular-nums text-neutral-500">••{mask}</span>
+                <span className="shrink-0 fig normal-case tracking-normal text-neutral-500">••{mask}</span>
               ) : null}
             </span>
               }

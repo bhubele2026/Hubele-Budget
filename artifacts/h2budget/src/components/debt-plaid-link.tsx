@@ -79,7 +79,7 @@ export function DebtPlaidIndicator({
   if (source === "plaid") {
     return (
       <span
-        className={`text-[10px] uppercase tracking-wide text-positive ${className}`}
+        className={`text-[10px] text-positive ${className}`}
         title="Synced from Plaid"
       >
         • plaid
@@ -91,7 +91,7 @@ export function DebtPlaidIndicator({
   if (debt.plaidAccountId) {
     return (
       <span
-        className={`text-[10px] uppercase tracking-wide text-warning ${className}`}
+        className={`text-[10px] text-warning ${className}`}
         title="Plaid didn't provide this — kept your manual value"
       >
         • manual

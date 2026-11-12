@@ -22,14 +22,14 @@ export function StatBlock(props: {
       <div className={figLabel}>{props.label}</div>
       <div
         className={cn(
-          "mt-0.5 font-mono text-title font-semibold tabular-nums",
+          "mt-0.5 fig text-title font-semibold",
           props.tone === "bad" ? "text-bad" : "text-brand-navy",
         )}
       >
         {shown}
       </div>
       {d != null && Number.isFinite(d) && d !== 0 ? (
-        <div className="font-mono text-micro tabular-nums text-neutral-600" data-testid="stat-delta">
+        <div className="fig text-micro text-neutral-600" data-testid="stat-delta">
           {d > 0 ? "+" : "-"}
           {formatCurrency(Math.abs(d))}
         </div>
@@ -48,7 +48,7 @@ export function StatTile({
 }: Parameters<typeof StatBlock>[0] & { span?: 3 | 4 | 6 | 8 | 12; index?: number }) {
   return (
     <div
-      className={cn("panel tile-in p-4", `span-${span}`)}
+      className={cn("panel p-4", `span-${span}`)}
       style={index != null ? { animationDelay: `calc(${Math.min(index, 12)} * var(--stagger))` } : undefined}
     >
       <StatBlock {...props} />

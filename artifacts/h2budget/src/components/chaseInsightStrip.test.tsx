@@ -59,11 +59,11 @@ describe("ChaseInsightStrip — the comparison says what it knows", () => {
     expect(screen.getByTestId("strip-uncategorized-note").textContent).toContain(
       "$40.00",
     );
-    // (PR7b) Money renders in mono numerals, like every other figure.
+    // (PR7b) Money renders in figure numerals, like every other figure.
     const amount = screen.getByTestId("strip-uncategorized-amount");
     expect(amount.textContent).toBe("$40.00");
-    expect(amount.className).toContain("font-mono");
-    expect(amount.className).toContain("tabular-nums");
+    // (2026-11-12) Money is Inter's tabular lining figures (`.fig`), no longer the mono face.
+    expect(amount.className).toContain("fig");
   });
 
   it("shows no uncategorized note when everything is categorized", () => {

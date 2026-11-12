@@ -30,7 +30,7 @@ function Money({ value }: { value: string | number | null | undefined }) {
   const n = toAmount(value);
   if (n == null) return <span className="text-neutral-400">—</span>;
   return (
-    <data value={centsValue(n)} className="font-mono tabular-nums">
+    <data value={centsValue(n)} className="fig">
       {fmtMoney(n)}
     </data>
   );
@@ -59,7 +59,7 @@ function MemberRow({
           <label className="min-w-0 flex-1">
             <span className={fieldLabel}>{`${name}, ${word}`}</span>
             <input
-              className={`${input} mt-1 font-mono tabular-nums`}
+              className={`${input} mt-1 fig `}
               inputMode="decimal"
               value={value}
               onChange={(e) => {
@@ -216,7 +216,7 @@ export function WeekPlanPanel() {
       <div className="grid gap-6 lg:grid-cols-3">
         <section data-testid="plan-limit">
           <div className={fieldLabel}>Weekly limit</div>
-          <div className="mt-1 font-mono text-display font-semibold tabular-nums text-brand-navy" data-testid="plan-limit-figure">
+          <div className="mt-1 fig text-display font-semibold text-foreground" data-testid="plan-limit-figure">
             {currentWeekly == null ? "—" : <Money value={currentWeekly} />}
           </div>
           <p className="mt-1 text-micro text-neutral-500">
@@ -255,7 +255,7 @@ export function WeekPlanPanel() {
                 <label className="min-w-0 flex-1">
                   <span className={fieldLabel}>Set your own</span>
                   <input
-                    className={`${input} mt-1 font-mono tabular-nums`}
+                    className={`${input} mt-1 fig `}
                     inputMode="decimal"
                     value={own}
                     placeholder={currentWeekly != null ? plainDollars(currentWeekly) : "350"}

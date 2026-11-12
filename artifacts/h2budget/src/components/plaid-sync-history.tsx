@@ -135,10 +135,10 @@ function PendingCleanupDetail({
                     {it.occurredOn}
                   </td>
                   <td className="px-2 py-1">{it.description ?? "—"}</td>
-                  <td className="px-2 py-1 text-right whitespace-nowrap font-mono">
+                  <td className="px-2 py-1 text-right whitespace-nowrap fig">
                     {it.amount}
                   </td>
-                  <td className="px-2 py-1 font-mono text-neutral-500 break-all">
+                  <td className="px-2 py-1 fig text-neutral-500 break-all">
                     {it.plaidTransactionId}
                   </td>
                 </tr>
@@ -366,7 +366,7 @@ export function PlaidSyncHistory({
                           </span>
                           {(a.requestId || a.httpStatus !== null) && (
                             <span
-                              className="text-[10px] text-neutral-400 font-mono"
+                              className="text-[10px] text-neutral-400 fig"
                               data-testid={`sync-attempt-meta-${a.id}`}
                             >
                               {a.httpStatus !== null && a.httpStatus !== undefined

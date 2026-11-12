@@ -50,7 +50,7 @@ export function BankBalanceWhy({ trigger, onReviewDifference, defaultOpen = fals
         {trigger ?? (
         <button
           type="button"
-          className="tile-in press absolute right-1 top-1 rounded-control p-1 text-neutral-500 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+          className="press absolute right-1 top-1 rounded-control p-1 text-neutral-500 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40"
           aria-label="Why this number?"
           title="Why this number?"
           data-testid="button-bank-why"

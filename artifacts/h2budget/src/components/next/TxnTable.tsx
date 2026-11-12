@@ -105,12 +105,12 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
                 <span className="min-w-0 text-body text-brand-ink [overflow-wrap:anywhere]">
                   {r.href ? <RowLink href={r.href}>{r.description}</RowLink> : r.description}
                 </span>
-                <span className={cn("shrink-0 font-mono text-label tabular-nums", r.amount < 0 ? "text-brand-ink" : "text-brand-navy")}>
+                <span className={cn("shrink-0 fig text-label", r.amount < 0 ? "text-brand-ink" : "text-brand-navy")}>
                   {formatDisplayAmount(r.amount)}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-neutral-500">
-                <span className="font-mono tabular-nums">{shortDate(r.date)}</span>
+                <span className="fig">{shortDate(r.date)}</span>
                 <AccountChip identity={r.identity} size="sm" wrap />
                 <CategoryWord value={r.category} />
                 <span aria-hidden>·</span>
@@ -152,7 +152,7 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
                   go && "cursor-pointer hover:bg-platinum-3 focus-within:bg-platinum-3",
                 )}
               >
-                <td className={cn(td, "whitespace-nowrap py-1 font-mono tabular-nums text-neutral-600")}>{shortDate(r.date)}</td>
+                <td className={cn(td, "whitespace-nowrap py-1 fig text-neutral-600")}>{shortDate(r.date)}</td>
                 <td className={cn(td, "max-w-[22rem] truncate py-1")}>
                   {r.href ? <RowLink href={r.href}>{r.description}</RowLink> : r.description}
                   {!r.href && r.note ? <span className="block text-micro text-neutral-600" data-testid="txn-note">{r.note}</span> : null}

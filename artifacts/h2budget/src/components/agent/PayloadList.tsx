@@ -12,7 +12,7 @@ export function PayloadList({ payload }: { payload: Record<string, unknown> }) {
           <dt className="text-neutral-600">{l.label}</dt>
           <dd className="text-brand-navy">
             {typeof l.value === "number" ? (
-              <span className="font-mono tabular-nums">{l.money ? fmtMoney(l.value, { whole: true }) : l.value}</span>
+              <span className="fig">{l.money ? fmtMoney(l.value, { whole: true }) : l.value}</span>
             ) : (
               l.value
             )}

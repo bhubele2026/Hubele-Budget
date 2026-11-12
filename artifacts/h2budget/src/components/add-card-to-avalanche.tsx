@@ -59,7 +59,7 @@ export function AddToAvalanche({
         type="button"
         onClick={() => setOpen(true)}
         data-testid="amex-add-to-avalanche"
-        className="rounded-md border border-brand-navy/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-navy transition-colors hover:bg-brand-tint"
+        className="rounded-md border border-brand-navy/40 px-2 py-1 text-[10px] font-medium text-brand-navy transition-colors hover:bg-brand-tint"
       >
         + Add to Avalanche
       </button>
@@ -109,7 +109,7 @@ export function AddToAvalanche({
         Balance <MoneyText amount={card.statementBalance} /> · auto-syncs from Plaid
       </div>
       <div className="flex gap-1.5">
-        <label className="flex-1 text-[10px] uppercase tracking-wide text-neutral-500">
+        <label className="flex-1 text-[10px] text-neutral-500">
           APR %
           <input
             value={aprPct}
@@ -120,7 +120,7 @@ export function AddToAvalanche({
             className="mt-0.5 w-full rounded border border-brand-line bg-white px-1.5 py-1 text-xs text-brand-navy"
           />
         </label>
-        <label className="flex-1 text-[10px] uppercase tracking-wide text-neutral-500">
+        <label className="flex-1 text-[10px] text-neutral-500">
           Min payment $
           <input
             value={minPayment}
@@ -139,7 +139,7 @@ export function AddToAvalanche({
           disabled={busy}
           onClick={() => void submit()}
           data-testid="amex-add-to-avalanche-confirm"
-          className="rounded-md bg-brand-navy px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white disabled:opacity-50"
+          className="rounded-md bg-brand-navy px-2 py-1 text-[10px] font-medium text-white disabled:opacity-50"
         >
           {busy ? "Adding…" : "Add"}
         </button>

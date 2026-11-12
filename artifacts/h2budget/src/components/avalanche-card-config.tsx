@@ -132,7 +132,7 @@ export function AvalancheCardConfig() {
   if (cards.length === 0) return null;
 
   return (
-    <div className="panel tile-in">
+    <div className="panel">
       <div className="panel-head">
         <span className="text-title font-semibold text-brand-navy">Amex cards</span>
         <Help className="ml-auto">

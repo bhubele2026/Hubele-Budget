@@ -70,7 +70,7 @@ export function AppearanceButton({ className }: { className?: string }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60" data-testid="appearance-menu" aria-label="Appearance">
-        <DropdownMenuLabel className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
+        <DropdownMenuLabel className="text-micro font-medium text-neutral-500">
           Appearance
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup value={value} onValueChange={(v) => isAppearance(v) && pick(v)}>

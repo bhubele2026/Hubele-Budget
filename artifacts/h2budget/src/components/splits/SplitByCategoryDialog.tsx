@@ -129,7 +129,7 @@ function Form({
               value={p.amount}
               onChange={(e) => setPart(i, { amount: e.target.value })}
               placeholder="0.00"
-              className={cn(input, "w-28 text-right font-mono tabular-nums")}
+              className={cn(input, "w-28 text-right fig")}
             />
             {parts.length > 2 && (
               <button type="button" className={btnLink} aria-label={`Remove part ${i + 1}`} onClick={() => setParts((ps) => ps.filter((_, at) => at !== i))}>
@@ -155,7 +155,7 @@ function Form({
           data-testid="split-remainder"
           data-balanced={state.balanced ? "" : undefined}
         >
-          {remainder.words} <span className="font-mono tabular-nums">{remainder.figure}</span>
+          {remainder.words} <span className="fig">{remainder.figure}</span>
         </p>
       </div>
       <div className="flex items-center justify-between gap-3">
