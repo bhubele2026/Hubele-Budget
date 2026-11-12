@@ -138,6 +138,8 @@ describe("Checking", () => {
   it("'N to match' only when rows wait; one row is singular", () => {
     setup({ reviewCount: 3 });
     expect(text("four-checking-line")).toBe("3 to match");
+    // (2026-11-12) With rows to match, the box lands on Banking's Needs you list.
+    expect(href("four-checking")).toBe("/banking?account=c1#needs-you");
     cleanup();
     setup({ reviewCount: 1 });
     expect(text("four-checking-line")).toBe("1 to match");

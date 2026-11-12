@@ -743,7 +743,7 @@ describe("the review count is a finding or it is nothing", () => {
     reviewCount = 4;
     mount("/transactions");
     const pill = screen.getByTestId("topnav-review-badge");
-    expect(pill.getAttribute("href")).toBe("/review");
+    expect(pill.getAttribute("href")).toBe("/banking#needs-you");
     expect(pill.getAttribute("aria-label")).toBe("4 to review: 4 charges to match");
   });
 
@@ -778,15 +778,15 @@ describe("(F1) the Review badge adds the categorization queue", () => {
     expect(screen.getByTestId("morenav-review/categories").textContent).toBe("Categories3");
   });
 
-  it("the pill goes to the forecast inbox when it has charges, else to the categories queue", () => {
+  it("(2026-11-12) the pill goes to Banking's Needs you list, which holds both the charges and the categories", () => {
     reviewCount = 4;
     queueTotal = 3;
     mount("/banking");
-    expect(screen.getByTestId("topnav-review-badge").getAttribute("href")).toBe("/review");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("href")).toBe("/banking#needs-you");
     cleanup();
     reviewCount = 0;
     mount("/banking");
-    expect(screen.getByTestId("topnav-review-badge").getAttribute("href")).toBe("/review/categories");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("href")).toBe("/banking#needs-you");
     expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("3 to review: 3 categories to confirm");
   });
 

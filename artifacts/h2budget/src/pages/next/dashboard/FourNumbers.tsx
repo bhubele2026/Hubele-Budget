@@ -74,8 +74,10 @@ function Checking({ s, older }: { s: Spine | undefined; older?: string | null })
   const v = bankBalanceView(s.bank);
   const bal = Number(s.bank.balance);
   const n = s.reviewCount;
-  // The Banking tile's own link: the account the balance rolls forward on.
-  const href = v.account?.rowId ? `/banking?account=${encodeURIComponent(v.account.rowId)}` : "/banking";
+  // The Banking tile's own link: the account the balance rolls forward on. With rows to match it lands on
+  // Banking's "Needs you" list, where each one is answered with OK or Change.
+  const base = v.account?.rowId ? `/banking?account=${encodeURIComponent(v.account.rowId)}` : "/banking";
+  const href = n > 0 && v.balance != null ? `${base}#needs-you` : base;
   return (
     <Tile testid="four-checking" title="Checking" href={href} accent="checking" index={2} box={FOUR_BOX} body={FOUR_BODY}>
       <Fig

@@ -183,9 +183,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // every other page this pill is the way in, on every screen size.
   const hasReviewCount = reviewCount != null && reviewCount > 0;
   const reviewPillShown = hasReviewCount && section?.id !== "forecast";
-  // The pill goes where the work is: the forecast inbox when it has charges,
-  // else the categorization queue.
-  const reviewPillHref = forecastReview != null && forecastReview > 0 ? "/review" : "/review/categories";
+  // (2026-11-12) The pill goes where the work is answered: Banking's "Needs you" list, which holds both the
+  // charges to match and the categories to confirm, each with OK or Change. (Review and Categories stay in the nav.)
+  const reviewPillHref = "/banking#needs-you";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">

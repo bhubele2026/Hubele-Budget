@@ -91,7 +91,9 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
 const prefetched = new Set<string>();
 
 /** The map key (longest-prefix match) for `href`, or null when it has no chunk. */
-function bestKey(href: string): string | null {
+function bestKey(raw: string): string | null {
+  // The path only: `/banking#needs-you` and `/banking?account=…` are Banking's chunk.
+  const href = raw.split(/[?#]/)[0]!;
   let best: string | null = null;
   for (const key of Object.keys(routeImporters)) {
     if (href === key || href.startsWith(key + "/")) {
