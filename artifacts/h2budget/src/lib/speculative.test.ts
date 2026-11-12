@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { QueryClient } from "@tanstack/react-query";
 import { CHART_ROUTES, routeImporters } from "./routePrefetch";
 import { _resetPerfMarksForTests, markReady } from "./perfMarks";
-import { _resetSpeculativeForTests, trackChunk, warmAllowedFor, whenForegroundIdle } from "./speculative";
+import { _resetSpeculativeForTests, afterMarks, trackChunk, warmAllowedFor, whenForegroundIdle } from "./speculative";
 
 const SRC = resolve(import.meta.dirname, "..");
 
@@ -138,5 +138,61 @@ describe("whenForegroundIdle", () => {
     fail(new Error("offline"));
     await vi.advanceTimersByTimeAsync(1_000);
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("speculative: false (must happen, only later): runs on a saving connection too, once quiet", async () => {
+    Object.defineProperty(navigator, "connection", { value: { saveData: true }, configurable: true });
+    try {
+      const guess = vi.fn();
+      const must = vi.fn();
+      whenForegroundIdle(qc, { quietMs: 0 }, guess);
+      whenForegroundIdle(qc, { quietMs: 0, speculative: false }, must);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(guess).not.toHaveBeenCalled();
+      expect(must).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(navigator, "connection", { value: undefined, configurable: true });
+    }
+  });
+
+  it("a must-happen wait has a deadline; a guess never does", async () => {
+    void qc.fetchQuery({ queryKey: ["forever"], queryFn: () => new Promise<number>(() => {}) });
+    const guess = vi.fn();
+    const must = vi.fn();
+    whenForegroundIdle(qc, { quietMs: 0, giveUpMs: 1_000 }, guess);
+    whenForegroundIdle(qc, { quietMs: 0, speculative: false, deadlineMs: 10_000 }, must);
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(must).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(must).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(guess).not.toHaveBeenCalled();
+  });
+});
+
+describe("afterMarks", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    _resetPerfMarksForTests();
+  });
+  afterEach(() => vi.useRealTimers());
+  it("runs once every mark is in", () => {
+    const run = vi.fn();
+    afterMarks(["h2:a", "h2:b"], 4_000, run);
+    markReady("h2:a");
+    expect(run).not.toHaveBeenCalled();
+    markReady("h2:b");
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+  it("or after the give-up, never twice, and not after cancel", async () => {
+    const run = vi.fn();
+    afterMarks(["h2:a"], 4_000, run);
+    await vi.advanceTimersByTimeAsync(4_001);
+    markReady("h2:a");
+    expect(run).toHaveBeenCalledTimes(1);
+    const late = vi.fn();
+    afterMarks(["h2:z"], 4_000, late)();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(late).not.toHaveBeenCalled();
   });
 });

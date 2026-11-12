@@ -77,6 +77,8 @@ import { BELOW_FOLD } from "./belowFoldSizes";
 import { bankLines } from "./bankState";
 import { cleanRecap, recapSourceWords } from "./recapWords";
 import { remainingDebtTotal } from "@/lib/debtBalance";
+import { _resetPerfMarksForTests, markReady } from "@/lib/perfMarks";
+import { HOME_MARKS } from "@/hooks/useLandingWarmup";
 import { _resetWhatsNewSignalForTests, onWhatsNewOpen, setWhatsNewUnread } from "@/lib/whatsNewSignal";
 
 // (WP1) The spine's bank carries the snapshot under the balance, what rolled
@@ -816,7 +818,19 @@ describe("cash-flow forecast", () => {
     status: "ready", cashBuffer: "500.00", lowestProjected: "350.00", lowestDate: "2026-10-20", events: [],
     daily: [{ date: "2026-10-09", balance: "4000.00" }, { date: "2026-10-20", balance: "350.00" }, { date: "2026-10-21", balance: "-20.00" }], ...o,
   });
+  // (perf phase 2) The chart (and the chart library) waits for Home's real numbers: they are in for these tests.
+  const numbersIn = () => { for (const m of HOME_MARKS) markReady(m); };
+  it("(perf phase 2) the chart waits, in its same-size skeleton, until Home's numbers are in", async () => {
+    _resetPerfMarksForTests();
+    h.Q.cash = ok(signal());
+    wrap(<ForecastPanel />);
+    expect(screen.getByTestId("dash-forecast-chart-waiting")).toBeTruthy();
+    expect(screen.queryByTestId("chart-stub")).toBeNull();
+    act(() => numbersIn());
+    await waitFor(() => expect(screen.getByTestId("chart-stub")).toBeTruthy());
+  });
   it("loads the clean chart lazily with the 90-day default; the low point is said on the chart box, not in a sentence", async () => {
+    numbersIn();
     h.Q.cash = ok(signal({ events: [{ date: "2026-10-20", label: "Pay A", amount: "900.00" }, { date: "2026-10-21", label: "Bill A", amount: "-370.00" }] }));
     wrap(<ForecastPanel />);
     expect(h.horizons[0]).toBe(90);
@@ -877,6 +891,7 @@ describe("cash-flow forecast", () => {
     expect(screen.queryByTestId("dash-horizon-180")).toBeNull();
   });
   it("a horizon switch keeps the last answer mounted, dimmed and busy, and says 'Loading N days…'; the box still names the curve on screen", () => {
+    numbersIn();
     h.Q.cash = { ...ok(signal({ horizonDays: 30 })), isPlaceholderData: true };
     wrap(<ForecastPanel />);
     expect(screen.getByTestId("dash-forecast-chart").className).toContain("opacity-60");

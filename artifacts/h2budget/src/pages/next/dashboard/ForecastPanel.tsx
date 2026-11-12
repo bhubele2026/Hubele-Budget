@@ -1,7 +1,10 @@
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { useNearViewport } from "@/hooks/useNearViewport";
+import { afterMarks } from "@/lib/speculative";
+import { hasMark } from "@/lib/perfMarks";
+import { HOME_MARKS } from "@/hooks/useLandingWarmup";
 import { Link, useLocation } from "wouter";
 import { Panel, shortDate } from "@/components/next";
 import { buildEventsByDate } from "@/lib/forecastPastDue";
@@ -16,10 +19,18 @@ import { toggle } from "@/ui";
 import { Gate, LINK, money, weekdayLabel } from "./shared";
 
 /**
- * The chart (and recharts with it) loads only when this panel is within reach of
- * the screen (perf phase 2): below the fold on a phone, the chart library is
- * never fetched on a guess, ahead of the numbers above it.
+ * The chart (and recharts with it, ~113 KB on the wire) loads only once this panel
+ * is within reach of the screen AND the page's real numbers are in (perf phase 2):
+ * on a phone it is never fetched on a guess, and never shares the link with the
+ * four numbers and "Pay this week" above it. A same-size skeleton holds its place.
  */
+/** Longest the chart waits for the numbers' marks (a failed read must not hold it for good). */
+export const CHART_WAITS_FOR_NUMBERS_MS = 4_000;
+function useNumbersIn(): boolean {
+  const [inn, setIn] = useState(() => HOME_MARKS.every(hasMark));
+  useEffect(() => (inn ? undefined : afterMarks(HOME_MARKS, CHART_WAITS_FOR_NUMBERS_MS, () => setIn(true))), [inn]);
+  return inn;
+}
 const Chart = lazyWithPreload(() =>
   import("@/pages/forecast/ProjectedBalanceChart").then((m) => ({ default: m.ProjectedBalanceChart })),
 );
@@ -50,7 +61,9 @@ export function chartWords(days: number, low: { y: number; rawDate: string } | n
 
 export default function ForecastPanel() {
   const minH = useFoldMinH("forecast");
-  const [chartRef, chartNear] = useNearViewport<HTMLDivElement>("200px");
+  const [chartRef, near] = useNearViewport<HTMLDivElement>("200px");
+  const numbersIn = useNumbersIn();
+  const chartNear = near && numbersIn;
   const [days, setDays] = useState<number>(90);
   const [, navigate] = useLocation();
   const q = useCashSignalQ(days, { placeholderData: keepPreviousData });

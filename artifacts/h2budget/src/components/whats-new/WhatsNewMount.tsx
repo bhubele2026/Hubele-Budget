@@ -1,7 +1,10 @@
 import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@clerk/react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { lazyWithPreload } from "@/lib/lazyWithPreload";
+import { whenForegroundIdle } from "@/lib/speculative";
+import { HOME_MARKS, WARMUP_GIVE_UP_MS, WARMUP_QUIET_MS } from "@/hooks/useLandingWarmup";
 import { useWhatsNewOpenPending } from "@/lib/whatsNewSignal";
 
 /**
@@ -18,6 +21,9 @@ import { useWhatsNewOpenPending } from "@/lib/whatsNewSignal";
 const importHost = () => import("./WhatsNewHost");
 const WhatsNewHost = lazyWithPreload(importHost);
 
+/** The latest the host waits for a quiet page. */
+export const WHATS_NEW_DEADLINE_MS = 30_000;
+
 /** Where no one is greeted: the front door and the sign-in pages. */
 function offRoute(path: string): boolean {
   return path === "/" || path.startsWith("/sign-in") || path.startsWith("/sign-up");
@@ -28,15 +34,12 @@ export function WhatsNewMount({ enabled = false }: { enabled?: boolean }) {
   return <MountGate />;
 }
 
-type IdleWindow = Window & {
-  requestIdleCallback?: (cb: () => void, o: { timeout: number }) => number;
-  cancelIdleCallback?: (id: number) => void;
-};
-
 function MountGate() {
   const { isLoaded, isSignedIn, userId } = useAuth();
   const [location] = useLocation();
   const pending = useWhatsNewOpenPending();
+  const qc = useQueryClient();
+  const onHome = location === "/home";
   const [ready, setReady] = useState(false);
   const active = Boolean(isLoaded && isSignedIn && userId) && !offRoute(location);
 
@@ -59,20 +62,19 @@ function MountGate() {
         off = true;
       };
     }
-    const w = window as IdleWindow;
-    if (typeof w.requestIdleCallback === "function") {
-      const id = w.requestIdleCallback(load, { timeout: 3000 });
-      return () => {
-        off = true;
-        w.cancelIdleCallback?.(id);
-      };
-    }
-    const t = window.setTimeout(load, 1500);
+    // (perf phase 2) Not at the first idle: once the page is quiet (no query or chunk in flight), and on Home once
+    // its real numbers are in, so the host's chunk and /whats-new/me never share the link with them. Not a guess:
+    // it loads on any connection, only later, and by WHATS_NEW_DEADLINE_MS whatever is still in flight.
+    const cancel = whenForegroundIdle(
+      qc,
+      { marks: onHome ? HOME_MARKS : undefined, quietMs: WARMUP_QUIET_MS, giveUpMs: WARMUP_GIVE_UP_MS, speculative: false, deadlineMs: WHATS_NEW_DEADLINE_MS },
+      load,
+    );
     return () => {
       off = true;
-      window.clearTimeout(t);
+      cancel();
     };
-  }, [active, ready, pending]);
+  }, [active, ready, pending, onHome, qc]);
 
   if (!active || !ready || !userId) return null;
   // Rendered only once the chunk is in, so it never suspends; the boundary is a guard.

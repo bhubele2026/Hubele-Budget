@@ -96,6 +96,13 @@ export interface ForegroundIdleOptions {
   giveUpMs?: number;
   /** How often the quiet is re-checked. */
   checkMs?: number;
+  /**
+   * false for work that MUST happen eventually, only later (the What's new greeting): the device and network rule
+   * is not applied, only the marks and the quiet. Default true: a guess, skipped on a slow or saving connection.
+   */
+  speculative?: boolean;
+  /** For work that must happen (`speculative: false`): after this long it runs whatever is in flight. */
+  deadlineMs?: number;
 }
 
 /**
@@ -117,7 +124,8 @@ export function whenForegroundIdle(qc: QueryClient, o: ForegroundIdleOptions, ru
 
   const marksIn = () => !o.marks || o.marks.every(hasMark) || (o.giveUpMs !== undefined && now() - started >= o.giveUpMs);
   const quiet = () => qc.isFetching() === 0 && chunks === 0 && now() - lastResponseAt >= o.quietMs;
-  const ready = () => warmAllowed() && marksIn() && quiet();
+  const late = () => o.speculative === false && o.deadlineMs !== undefined && now() - started >= o.deadlineMs;
+  const ready = () => late() || ((o.speculative === false || warmAllowed()) && marksIn() && quiet());
 
   const fire = () => {
     idle = undefined;
@@ -153,6 +161,32 @@ export function whenForegroundIdle(qc: QueryClient, o: ForegroundIdleOptions, ru
     stopMarks();
     if (timer !== undefined) window.clearTimeout(timer);
     if (idle !== undefined) w.cancelIdleCallback?.(idle);
+  };
+}
+
+/**
+ * Calls `run` once every one of `marks` has fired in this page view, or `giveUpMs` has passed, whichever is first.
+ * For a panel of the page's own that should not share the link with its first numbers (the Home chart).
+ */
+export function afterMarks(marks: readonly string[], giveUpMs: number, run: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    off();
+    window.clearTimeout(t);
+    run();
+  };
+  const off = onMark(() => {
+    if (marks.every(hasMark)) finish();
+  });
+  const t = window.setTimeout(finish, giveUpMs);
+  if (marks.every(hasMark)) finish();
+  return () => {
+    done = true;
+    off();
+    window.clearTimeout(t);
   };
 }
 
