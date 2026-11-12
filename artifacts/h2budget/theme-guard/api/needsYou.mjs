@@ -19,13 +19,13 @@ function build() {
   const unclear = take(like(chk, /PAWS AND CO/i) ?? chk[1]);
   const pendingFun = take(card.find((t) => t.pending && !used.has(t.id)) ?? like(card, /CINEMA|BISTRO|COFFEE/i) ?? card[1]);
   const picks = [
-    { t: carIns, acct: fx.CHECKING, kind: "match", suggestion: { label: "the Car insurance · Oakmont Mutual payment, planned $186.00 on Nov 5", planOccurrenceId: "ri-car-ins|2026-11-05", confidence: "medium" }, reason: "The amount fits; the day is a few days off." },
-    { t: market, acct: L.CARD_A, kind: "category", suggestion: { label: "Groceries", categoryId: "cat-groceries", reviewItemId: "rv-fixture-1", confidence: "medium" }, reason: "A merchant H2 has not seen before." },
-    { t: unclear, acct: fx.CHECKING, kind: "match", suggestion: null, reason: "Two planned bills could fit this one." },
-    { t: pendingFun, acct: L.CARD_A, kind: "category", suggestion: { label: "Dining & fun", categoryId: "cat-dining", confidence: "low" }, reason: "Seen once before, filed differently." },
+    { t: carIns, acct: fx.CHECKING, kind: "match", suggestion: { label: "the Car insurance · Oakmont Mutual payment, planned $186.00 on Nov 5", planOccurrenceId: "ri-car-ins|2026-11-05", confidence: "medium" }, reason: "Looks like the Car insurance · Oakmont Mutual payment, planned $186.00 on Nov 5. Confirm the match or pick another." },
+    { t: market, acct: L.CARD_A, kind: "category", suggestion: { label: "Groceries", categoryId: "cat-groceries", reviewItemId: "rv-fixture-1", confidence: "medium" }, reason: "H2's best guess. Confirm the category." },
+    { t: unclear, acct: fx.CHECKING, kind: "match", suggestion: null, reason: "Not matched to the plan yet. Match it or mark it not in the plan." },
+    { t: pendingFun, acct: L.CARD_A, kind: "category", suggestion: { label: "Dining & fun", categoryId: "cat-dining", confidence: "low" }, reason: "Learned from a correction. Confirm the category." },
   ].filter((p) => p.t);
   const items = picks.map((p, i) => ({
-    id: `ny-${i + 1}`,
+    id: `${p.kind}:${p.t.id}`,
     txId: p.t.id,
     accountName: `${p.acct.institution} ${p.acct.name}`.trim(),
     mask: p.acct.mask,
@@ -42,3 +42,15 @@ function build() {
 }
 
 export const needsYou = () => build();
+
+/** GET /api/banking/auto-done — what H2 sorted on its own this week, each with its undo id (invented). */
+export const autoDone = () => ({
+  since: "2026-11-03",
+  matched: 1,
+  categorized: 1,
+  truncated: false,
+  items: [
+    { kind: "match", undoId: "res-auto-fixture-1", txnId: "txn-rent-1101", at: "2026-11-02T14:00:00.000Z", planKey: "ri-rent|2026-11-01", categoryId: null, label: "Rent · Birchwood Apartments" },
+    { kind: "category", undoId: "dec-auto-fixture-2", txnId: "txn-fixture-2", at: "2026-11-06T14:00:00.000Z", planKey: null, categoryId: "cat-groceries", label: "Groceries" },
+  ],
+});
