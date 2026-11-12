@@ -845,7 +845,7 @@ export default function AmexPage({
     const el = nodes.find((n) => n.offsetParent !== null) ?? nodes[0];
     if (!el) return;
     el.setAttribute("data-focused", "true");
-    el.style.outline = "2px solid var(--color-brand-navy, #19315b)";
+    el.style.outline = "2px solid var(--text-color-brand-navy)";
     el.style.outlineOffset = "-2px";
     // Scroll once per row; the mark is re-applied whenever the rows re-render.
     if (focusedRef.current !== focusTx) {

@@ -11,7 +11,7 @@ export function RingStat({
   value,
   size = 64,
   stroke = 6,
-  color = "hsl(var(--primary))",
+  color = "hsl(var(--primary-ink))",
   trackColor = "hsl(var(--muted))",
   centerText,
   centerSub,

@@ -91,7 +91,7 @@ export function SortableRuleRow({
   // anything with colour alone, so "winner" and "matched" each also carry a
   // chip that says the word — the platinum step just makes them findable.
   const stateBg = isHighlighted
-    ? "ring-2 ring-brand-navy/50 bg-brand-navy/5"
+    ? "ring-2 ring-brand-navy/50 bg-brand-wash/5"
     : isWinner
       ? "bg-platinum-3"
       : isMatched

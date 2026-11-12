@@ -117,25 +117,30 @@ export function readPageScroll(): number {
   if (typeof window === "undefined") return 0;
   return scroller()?.scrollTop || window.scrollY || 0;
 }
-/** Put the page back at `y`. Returns how far off it still is. */
+/** Put the page back at `y` (a no-op when it is there). Returns how far off it WAS. */
 export function writePageScroll(y: number): number {
   const el = scroller();
-  if (el) {
-    el.scrollTop = y;
-    return Math.abs(el.scrollTop - y);
-  }
-  window.scrollTo(0, y);
-  return Math.abs(window.scrollY - y);
+  const was = Math.abs((el ? el.scrollTop : window.scrollY) - y);
+  if (was <= 1) return was;
+  if (el) el.scrollTop = y;
+  else window.scrollTo(0, y);
+  return was;
 }
 
 /** Write the theme onto <html> and the browser chrome. */
 function paint(): void {
   setDarkNow(current === "dark"); // what the charts draw in (lib/chartTokens.ts)
   if (typeof document === "undefined") return;
+  // Written only when it differs: the boot script in index.html has usually
+  // set it already, and the attribute must not flicker.
   const html = document.documentElement;
-  if (current === "dark") html.setAttribute("data-theme", "dark");
-  else html.removeAttribute("data-theme");
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[current]);
+  const want = current === "dark" ? "dark" : null;
+  if (html.getAttribute("data-theme") !== want) {
+    if (want) html.setAttribute("data-theme", want);
+    else html.removeAttribute("data-theme");
+  }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta && meta.getAttribute("content") !== THEME_COLOR[current]) meta.setAttribute("content", THEME_COLOR[current]);
 }
 
 function recompute(): void {

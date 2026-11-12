@@ -202,15 +202,15 @@ export function PlanDropRow({
       // DOM, no second mobile render, no duplicated testids.
       className={`flex w-full cursor-pointer flex-wrap items-center justify-between gap-y-2 px-4 py-2.5 text-left transition-colors ${
         isOverEligible
-          ? "bg-primary/10 ring-2 ring-primary ring-inset"
+          ? "bg-brand-wash/10 ring-2 ring-primary ring-inset"
           : isOverBlocked
             ? "cursor-not-allowed bg-bad-bg opacity-60 ring-2 ring-bad/60 ring-inset"
             : isHighlighted
-              ? "bg-primary/10 ring-2 ring-primary ring-inset"
+              ? "bg-brand-wash/10 ring-2 ring-primary ring-inset"
               : showSuggestion
-                ? "bg-brand-navy/[0.06] ring-2 ring-brand-navy/40 ring-inset"
+                ? "bg-brand-wash/[0.06] ring-2 ring-brand-navy/40 ring-inset"
                 : showDropAffordance
-                  ? "bg-brand-navy/[0.03] ring-1 ring-dashed ring-brand-navy/30 ring-inset"
+                  ? "bg-brand-wash/[0.03] ring-1 ring-dashed ring-brand-navy/30 ring-inset"
                   : showDropBlocked
                     ? "cursor-not-allowed opacity-50"
                     : "hover:bg-neutral-50"

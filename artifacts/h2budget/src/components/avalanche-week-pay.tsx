@@ -14,7 +14,7 @@ import type { AvalancheWeekPayControls } from "@/hooks/useAvalancheWeekPay";
  * hover, which means "something is wrong".
  */
 export const WEEK_PAY_CTA =
-  "press inline-flex min-h-9 items-center justify-center rounded-control bg-brand-orange px-4 py-1.5 text-body font-semibold text-brand-navy hover:bg-brand-orange/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:opacity-55";
+  "press inline-flex min-h-9 items-center justify-center rounded-control bg-brand-orange px-4 py-1.5 text-body font-semibold text-on-orange hover:bg-brand-orange/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:opacity-55";
 
 export function WeekPayButton({ controls, date, className }: { controls: AvalancheWeekPayControls; date: string; className?: string }) {
   return (

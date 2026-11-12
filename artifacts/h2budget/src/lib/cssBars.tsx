@@ -303,7 +303,7 @@ export function CssBars({
             className={cn(
               "absolute inset-x-0 flex items-center gap-3 rounded px-1 text-left",
               onPick && "hover:bg-muted/60 active:bg-muted",
-              selected && "bg-primary/[0.06] ring-1 ring-inset ring-primary/20",
+              selected && "bg-brand-wash/[0.06] ring-1 ring-inset ring-primary/20",
             )}
             style={{
               height: rowHeight,

@@ -756,7 +756,7 @@ export default function AvalanchePage() {
           }
         >
           <div
-            className="bar-sweep h-full bg-brand-navy"
+            className="bar-sweep h-full bg-brand-fill"
             style={{ width: `${payoffPct != null ? Math.max(0, Math.min(100, payoffPct)) : 0}%` }}
           />
         </div>

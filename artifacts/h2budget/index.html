@@ -93,6 +93,13 @@
         background: #fff;
         box-shadow: 0 0 0 1px #e6edf5;
       }
+      /* DARK (the script above set data-theme before this painted). Mirrors
+         index.css: ground #0e0f11, card #17181b, hairline #2a2d33; the navy
+         band is the same in both. */
+      @media screen {
+        html[data-theme="dark"], html[data-theme="dark"] #boot { background: #0e0f11; }
+        html[data-theme="dark"] #boot .tile { background: #17181b; box-shadow: 0 0 0 1px #2a2d33; }
+      }
     </style>
     <!--
       The tab mark. Both files are the square half of the h2-wordmark lockup

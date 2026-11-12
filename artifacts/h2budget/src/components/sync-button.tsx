@@ -189,7 +189,7 @@ export function SyncButton({
         <div className="w-[180px] mt-1" data-testid="sync-progress">
           <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
             <div
-              className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+              className="h-full rounded-full bg-brand-fill transition-[width] duration-300 ease-out"
               style={{ width: `${syncPct}%` }}
             />
           </div>

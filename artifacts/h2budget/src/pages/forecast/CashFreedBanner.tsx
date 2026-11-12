@@ -22,7 +22,7 @@ export function CashFreedBanner({ transition }: { transition: PayoffTransition }
   return (
     <div
       data-testid={`cash-freed-${transition.debtId}`}
-      className="flex items-center justify-between gap-3 border-b border-brand-line/70 bg-brand-navy/[0.03] px-4 py-3 last:border-b-0"
+      className="flex items-center justify-between gap-3 border-b border-brand-line/70 bg-brand-wash/[0.03] px-4 py-3 last:border-b-0"
     >
       <div className="flex min-w-0 items-center gap-3">
         <span className="chip ok">Paid off</span>

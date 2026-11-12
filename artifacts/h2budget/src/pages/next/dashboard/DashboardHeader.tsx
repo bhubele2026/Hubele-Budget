@@ -80,7 +80,7 @@ export default function DashboardHeader() {
         <button type="button" className={QUIET_TEXT} onClick={requestWhatsNewOpen} data-testid="dash-whats-new">
           What's new
           {whatsNewUnread ? (
-            <span className="ml-1.5 rounded-full bg-brand-orange px-1.5 py-px align-middle text-micro font-semibold text-brand-navy" data-testid="dash-whats-new-new">
+            <span className="ml-1.5 rounded-full bg-brand-orange px-1.5 py-px align-middle text-micro font-semibold text-on-orange" data-testid="dash-whats-new-new">
               New
             </span>
           ) : null}

@@ -59,7 +59,7 @@ function OwnerLines({ id, report }: { id: string; report: ReadReport }) {
 
 function NewChip() {
   return (
-    <span className="ml-2 rounded-full bg-brand-orange px-1.5 py-px align-middle text-micro font-semibold text-brand-navy" data-testid="whats-new-new">
+    <span className="ml-2 rounded-full bg-brand-orange px-1.5 py-px align-middle text-micro font-semibold text-on-orange" data-testid="whats-new-new">
       New
     </span>
   );

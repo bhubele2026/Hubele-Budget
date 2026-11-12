@@ -94,7 +94,9 @@ export function H2Wordmark({
           fontWeight: 600,
           letterSpacing: "-0.025em",
           lineHeight: 1,
-          color: tone === "navy" ? NAVY : "#ffffff",
+          // The word is INK: navy on a light ground, light on the dark one
+          // (the box beside it is a navy FILL in both).
+          color: tone === "navy" ? "var(--text-color-brand-navy)" : "#ffffff",
         }}
       >
         Budget

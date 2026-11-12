@@ -3364,7 +3364,7 @@ export default function ForecastPage({
                     data-plan-key={planKey}
                     className={`flex items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 transition-colors last:border-b-0 ${
                       isHighlightedBucket
-                        ? "bg-primary/10 ring-2 ring-primary ring-inset"
+                        ? "bg-brand-wash/10 ring-2 ring-primary ring-inset"
                         : ""
                     }`}
                   >

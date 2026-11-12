@@ -203,7 +203,7 @@ export default function BillsOverviewPage() {
                 </div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-brand-line">
                   <div
-                    className={`bar-sweep h-full rounded-full ${short ? "bg-bad" : "bg-brand-navy"}`}
+                    className={`bar-sweep h-full rounded-full ${short ? "bg-bad" : "bg-brand-fill"}`}
                     style={{ width: `${Math.min(100, Math.max(0, committedPct))}%` }}
                   />
                 </div>

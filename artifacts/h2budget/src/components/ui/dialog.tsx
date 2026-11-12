@@ -21,7 +21,7 @@ const DialogOverlay = React.forwardRef<
     className={cn(
       // Navy scrim, not black — the app behind it should read as dimmed, not
       // switched off.
-      "anim-overlay fixed inset-0 z-50 bg-brand-navy/45 backdrop-blur-[2px]",
+      "anim-overlay fixed inset-0 z-50 bg-scrim backdrop-blur-[2px]",
       className
     )}
     {...props}

@@ -898,7 +898,7 @@ export default function BudgetPage() {
             aria-label={`${committedPct} percent of income is committed`}
           >
             <div
-              className={`bar-sweep h-full ${overCommitted ? "bg-bad" : "bg-brand-navy"}`}
+              className={`bar-sweep h-full ${overCommitted ? "bg-bad" : "bg-brand-fill"}`}
               style={{ width: `${committedPct}%` }}
               data-testid="hero-committed-bar"
             />

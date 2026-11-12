@@ -16,7 +16,7 @@ const Slider = React.forwardRef<
     {...props}
   >
     <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-brand-line">
-      <SliderPrimitive.Range className="absolute h-full bg-brand-navy" />
+      <SliderPrimitive.Range className="absolute h-full bg-brand-fill" />
     </SliderPrimitive.Track>
     {/* The thumb is the slider role: it carries the name (axe aria-input-field-name). */}
     <SliderPrimitive.Thumb aria-label={ariaLabel} className="press block h-4 w-4 rounded-full bg-white shadow-rest ring-1 ring-brand-navy/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy disabled:pointer-events-none disabled:opacity-55" />

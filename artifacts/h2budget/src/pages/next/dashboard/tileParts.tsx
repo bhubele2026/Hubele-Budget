@@ -127,7 +127,7 @@ export function FillBar({ value, ceiling }: { value: number; ceiling: number }) 
   return (
     <div aria-hidden="true" data-over={over ? "true" : undefined} className="relative h-1.5 w-full overflow-hidden rounded-full bg-brand-line">
       <span
-        className={cn("bar-sweep grow-x absolute inset-y-0 left-0 rounded-full", over ? "bg-brand-orange-deep" : "bg-brand-navy")}
+        className={cn("bar-sweep grow-x absolute inset-y-0 left-0 rounded-full", over ? "bg-brand-orange-deep" : "bg-brand-fill")}
         style={{ width: `${fillPct}%` }}
       />
       {over ? <span className="absolute inset-y-0 w-px bg-white/75" style={{ left: `${(1 / ratio) * 100}%` }} /> : null}

@@ -189,7 +189,7 @@ describe("(#860) per-user UI preferences (sidebar collapse)", () => {
     const bad = await fetch(`${baseUrl}/me/ui-preferences`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ appearance: "sepia" }),
+      body: JSON.stringify({ appearance: "mauve" }),
     });
     expect(bad.status).toBe(400);
     expect((await me()).appearance).toBe("auto");

@@ -269,7 +269,7 @@ describe("the API carries the pick", () => {
       const r = UpdateUiPreferencesBody.safeParse({ appearance: a });
       expect(r.success && r.data.appearance).toBe(a);
     }
-    expect(UpdateUiPreferencesBody.safeParse({ appearance: "sepia" }).success).toBe(false);
+    expect(UpdateUiPreferencesBody.safeParse({ appearance: "mauve" }).success).toBe(false);
   });
 
   it("GET /me answers it", () => {

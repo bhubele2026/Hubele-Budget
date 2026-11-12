@@ -384,7 +384,8 @@ const clerkAppearance = {
   // rebind moves it without touching this file. Verify `/sign-in` after any
   // token change: a broken sign-in fails "it just opens" harder than anything.
   variables: {
-    colorPrimary: "hsl(var(--primary))",
+    colorPrimary: "hsl(var(--clerk-primary))",
+    colorPrimaryForeground: "hsl(var(--clerk-primary-foreground))",
     colorForeground: "hsl(var(--foreground))",
     colorMutedForeground: "hsl(var(--muted-foreground))",
     colorDanger: "hsl(var(--destructive))",
@@ -410,7 +411,7 @@ const clerkAppearance = {
     // solid button falls back to `colorForeground`. On the old teal that was
     // merely ugly; on navy it is ink-on-navy at 1.2:1, an invisible "Continue"
     // on the sign-in card. A class beats the computed style deterministically.
-    formButtonPrimary: "!text-white",
+    formButtonPrimary: "!text-[hsl(var(--clerk-primary-foreground))]",
     headerTitle: "text-foreground text-xl font-semibold",
     headerSubtitle: "text-muted-foreground text-sm",
     socialButtonsBlockButtonText: "text-foreground",
@@ -472,13 +473,26 @@ function ThemeRepaint({ children }: { children: ReactNode }) {
     }
     const y = scrollBeforeThemeChange();
     if (y <= 0) return;
-    let tries = 0;
+    // ⚠️ One write is not enough: the re-mounted page is briefly shorter than
+    // it was (lazy panels, lists that fill in a frame later), which drags the
+    // scroller back to the top AFTER a first write has stuck. So the position
+    // is held until it has stayed put for a quarter of a second (or 1.5 s have
+    // gone), and let go the moment the person scrolls or types.
+    let frames = 0;
+    let held = 0;
     let raf = 0;
+    const stop = () => {
+      cancelAnimationFrame(raf);
+      for (const ev of ["wheel", "touchstart", "keydown"] as const) window.removeEventListener(ev, stop);
+    };
+    for (const ev of ["wheel", "touchstart", "keydown"] as const) window.addEventListener(ev, stop, { passive: true });
     const put = () => {
-      if (writePageScroll(y) > 1 && ++tries < 60) raf = requestAnimationFrame(put);
+      held = writePageScroll(y) > 1 ? 0 : held + 1;
+      if (held >= 15 || ++frames >= 90) return stop();
+      raf = requestAnimationFrame(put);
     };
     put();
-    return () => cancelAnimationFrame(raf);
+    return stop;
   }, [theme]);
   return <Fragment key={theme}>{children}</Fragment>;
 }

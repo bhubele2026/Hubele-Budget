@@ -189,7 +189,7 @@ describe("Spent this week", () => {
     expect(screen.getByTestId("four-spent-line").parentElement!.className).not.toContain("text-bad-ink");
     // $40 of $200 is a fifth of the track.
     expect(fill("four-spent-bar").style.width).toBe("20%");
-    expect(fill("four-spent-bar").className).toContain("bg-brand-navy");
+    expect(fill("four-spent-bar").className).toContain("bg-brand-fill");
     expect(fill("four-spent-bar").className).toContain("grow-x");
     // The bar is a picture of words already in the box.
     expect(screen.getByTestId("four-spent-bar").firstElementChild!.getAttribute("aria-hidden")).toBe("true");
@@ -211,7 +211,7 @@ describe("Spent this week", () => {
     expect(screen.getByTestId("four-spent-line").firstChild!.textContent).toBe("$0 left");
     expect(screen.getByTestId("four-spent-line").parentElement!.className).not.toContain("text-bad-ink");
     expect(fill("four-spent-bar").style.width).toBe("100%");
-    expect(fill("four-spent-bar").className).toContain("bg-brand-navy");
+    expect(fill("four-spent-bar").className).toContain("bg-brand-fill");
   });
   it("cents stay when the figure has them", () => {
     setup({ position: { ...position, knownWeek: "40.25", remainingWeekKnown: "159.75" } });
@@ -279,7 +279,7 @@ describe("Debt paid", () => {
   it("a thin bar of the percent paid, out of 100", () => {
     setup();
     expect(fill("four-debt-bar").style.width).toBe("25.4%");
-    expect(fill("four-debt-bar").className).toContain("bg-brand-navy");
+    expect(fill("four-debt-bar").className).toContain("bg-brand-fill");
   });
   it("no starting balance: a dash and the old tile's words", () => {
     setup({ debt: { payoffPct: null, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 } });

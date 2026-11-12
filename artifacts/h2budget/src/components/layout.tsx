@@ -284,7 +284,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                               >
                                 <span className="flex-1">{item.name}</span>
                                 {badge !== null && (
-                                  <span className="rounded-full bg-brand-orange/15 px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums text-brand-orange">
+                                  <span className="rounded-full bg-brand-orange-wash px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums text-brand-orange">
                                     {badge}
                                   </span>
                                 )}

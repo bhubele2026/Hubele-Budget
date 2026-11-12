@@ -52,6 +52,42 @@
   --color-brand-line: #e6edf5;
   --color-brand-ink: #1a2233;
 
+  /* ── INK vs FILL (light and dark) ─────────────────────────────────────────
+     In light these all equal the colour they stand beside, so nothing moves.
+     They exist so DARK can turn navy used as INK (text, rings, lines) light
+     while navy used as a FILL (the top bar, a solid button) stays navy, and
+     so `bg-white` can become the card colour while `text-white` stays white.
+     Tailwind v4 reads the most specific name for each utility:
+       text-brand-navy   → --text-color-brand-navy
+       border-brand-navy → --border-color-brand-navy
+       ring-brand-navy   → --ring-color-brand-navy
+       bg-brand-navy     → --color-brand-navy (the fill; unchanged in dark)
+       bg-white          → --background-color-white
+       ring-white        → --ring-color-white (a ring that separates a dot from its card)
+     The dark values are in the DARK block at the foot of this file. */
+  --text-color-brand-navy: #19315b;
+  --border-color-brand-navy: #19315b;
+  --ring-color-brand-navy: #19315b;
+  --background-color-white: #ffffff;
+  --ring-color-white: #ffffff;
+  /* A DATA fill (a progress bar, a slider's range): navy in light, near-white
+     in dark, where a navy bar on a black card cannot be seen. Never for a
+     button: a button is `bg-brand-navy` with white text in both modes. */
+  --color-brand-fill: #19315b;
+  /* A faint navy wash behind a selected or highlighted row (`bg-brand-wash/5`).
+     Its own name because 5% navy over black is invisible: dark makes it a
+     light blue-grey. */
+  --color-brand-wash: #19315b;
+  /* Ink ON a fill. On orange: navy in both modes (white on orange fails
+     4.5:1). On the alarm fill: white in light, dark ink in dark. */
+  --color-on-orange: #19315b;
+  --color-on-bad: #ffffff;
+  /* The orange count pill on a light surface (the More menu). A solid soft
+     value in dark: half-alpha orange over black reads brown. */
+  --color-brand-orange-wash: rgb(246 141 46 / 0.15);
+  /* What dims the page behind a dialog or sheet. */
+  --color-scrim: rgb(25 49 91 / 0.45);
+
   /* The platinum ramp — every neutral surface in the app is one of these six
      steps. Before this the app mixed a true-neutral white wash with cool greys
      and a teal cast, which is why nothing ever looked like it was made of the
@@ -220,6 +256,10 @@
 
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
+  /* (Light and dark) `text-primary` / `ring-primary` are INK; `bg-primary` is
+     a fill. Same split as brand-navy above. */
+  --text-color-primary: hsl(var(--primary-ink));
+  --ring-color-primary: hsl(var(--primary-ink));
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
@@ -321,6 +361,12 @@
 
   --primary: 218.2 56.9% 22.7%;       /* #19315b */
   --primary-foreground: 0 0% 100%;
+  /* Navy as INK (text, rings, selection, focus): equals --primary in light;
+     light in dark. Clerk's own primary (its buttons AND its links) rides on
+     the pair below for the same reason. */
+  --primary-ink: 218.2 56.9% 22.7%;
+  --clerk-primary: 218.2 56.9% 22.7%;
+  --clerk-primary-foreground: 0 0% 100%;
 
   --secondary: 215 54.5% 95.7%;       /* #eef3fa */
   --secondary-foreground: 218.2 56.9% 22.7%;
@@ -341,6 +387,9 @@
   --positive-foreground: 0 0% 100%;
   --negative: 17.3 73.1% 56.3%;
   --negative-foreground: 0 0% 100%;
+  /* The faded area under an alarm line. The alarm colour itself in light; a
+     neutral grey in dark, where a half-alpha orange over black is brown. */
+  --negative-wash: 17.3 73.1% 56.3%;
   --warning: 216.5 11% 41%;           /* watch is grey */
   --warning-foreground: 0 0% 100%;
 
@@ -512,14 +561,14 @@
   h1 { letter-spacing: -0.018em; font-weight: 700; }
 
   ::selection {
-    background: hsl(var(--primary) / 0.16);
+    background: hsl(var(--primary-ink) / var(--selection-alpha, 0.16));
   }
 
   /* KEYBOARD FOCUS. Nothing reads unfinished faster than tabbing through an app
      and watching nothing move. `:focus-visible` only — a mouse click must not
      leave a ring behind it. */
   :focus-visible {
-    outline: 2px solid var(--color-brand-navy);
+    outline: 2px solid var(--text-color-brand-navy);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -703,8 +752,8 @@
 
   /* Emphasis ring — a flat navy hairline, no blur halo. */
   .focus-glow {
-    border-color: hsl(var(--primary));
-    box-shadow: inset 0 0 0 1px hsl(var(--primary));
+    border-color: hsl(var(--primary-ink));
+    box-shadow: inset 0 0 0 1px hsl(var(--primary-ink));
   }
 }
 
@@ -1088,6 +1137,276 @@
       animation-duration: 0.01ms !important;
       animation-delay: 0ms !important;
       transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⭐ DARK — matte black, the same navy bar, one orange.
+   ══════════════════════════════════════════════════════════════════════════
+   `lib/theme.ts` puts `data-theme="dark"` on <html> (absent = light); this is
+   the only place that reads it. Everything above is the light app and is not
+   touched: dark only re-values the tokens.
+
+   THE RULES
+   - Tokens only. Never a `dark:` class and never a colour literal on a page:
+     a page that needs a colour takes a token, and the token gets its dark
+     value here. Chart colours come from `lib/chartTokens.ts` (same rule, JS).
+   - Flat and matte: no gradients on surfaces, black shadows with a faint lit
+     top rim (a navy or grey shadow on black is mud).
+   - Navy stays a FILL (the top bar, solid buttons, with white text). Navy as
+     INK (text, rings, lines) turns light. See "INK vs FILL" in @theme.
+   - One accent, orange #f68d2e, always solid. NEVER BROWN: no darkened or
+     desaturated orange, and no half-alpha orange or rust over black (that is
+     what brown is). Tints behind alarm text are neutral; the text carries it.
+   - Every text colour clears 4.5:1 on the ground, the card and the raised
+     step. `scripts/verify-theme.mts` measures it on every page: run it.
+   - All of it sits in `@media screen`.
+
+   THE PALETTE
+     ground #0e0f11 · card #17181b · raised #1e2024 · raised-2 #25272c
+     hairline #2a2d33 · strong line #3a3e46
+     text #f3f4f6 / #c5c9d1 / #9aa1ad · navy ink #e6ebf5
+     orange #f68d2e · alarm #e16d3e (fills, large text) / #ee7d50 (small text)
+     accounts: checking #9db8e3 · card teal #3fb8a9 · violet #a595ee
+
+   ⚠️ UNLAYERED ON PURPOSE. The token block must beat `@layer theme` and the
+   unlayered `:root` above (it does: `html[data-theme]` is more specific), and
+   the few class-level rules at its foot must beat `@layer utilities`. The
+   element defaults (inputs) sit in `@layer base` instead, so a utility on the
+   element still wins. */
+@media screen {
+  html[data-theme="dark"] {
+    color-scheme: dark;
+
+    /* ── Brand ─────────────────────────────────────────────────────────── */
+    --color-brand-tint: #1c1e22;
+    --color-brand-line: #2a2d33;
+    --color-brand-ink: #f3f4f6;
+    /* Ink vs fill: --color-brand-navy / -navy2 / -orange are NOT re-valued. */
+    --text-color-brand-navy: #e6ebf5;
+    --border-color-brand-navy: #e6ebf5;
+    --ring-color-brand-navy: #e6ebf5;
+    --background-color-white: #17181b;
+    --ring-color-white: #17181b;
+    --color-brand-fill: #e6ebf5;
+    --color-brand-wash: #dbe4f5;
+    --color-on-bad: #16100d;
+    --color-brand-orange-wash: #25272c;
+    --color-scrim: rgb(0 0 0 / 0.62);
+
+    /* ── Surfaces: one flat step per level, lighter = nearer ───────────── */
+    --color-platinum-0: #17181b;
+    --color-platinum-1: #17181b;
+    --color-platinum-2: #1b1c20;
+    --color-platinum-3: #1e2024;
+    --color-platinum-4: #23252a;
+    --color-platinum-5: #2a2d33;
+
+    /* ── Tailwind's neutral ramp, turned over (text greys become light, the
+       pale grounds become dark steps). Every text step clears 4.5:1. ───── */
+    --color-neutral-50: #1e2024;
+    --color-neutral-100: #23252a;
+    --color-neutral-200: #2a2d33;
+    --color-neutral-300: #858c98;
+    --color-neutral-400: #9aa1ad;
+    --color-neutral-500: #a8aeb9;
+    --color-neutral-600: #c5c9d1;
+    --color-neutral-700: #d7dae0;
+    --color-neutral-800: #e8eaee;
+    --color-neutral-900: #f3f4f6;
+    --color-neutral-950: #f3f4f6;
+
+    /* ── Status. Good is the resting ink; watch is grey; the alarm keeps its
+       hue. Tints are neutral or navy, never a dark orange. ─────────────── */
+    --color-ok: #e6ebf5;
+    --color-ok-bg: #1b2538;
+    --color-warn: #a8aeb9;
+    --color-warn-bg: #25272c;
+    --color-bad: #e16d3e;
+    --color-bad-hover: #ee7d50;
+    --color-bad-bg: #25272c;
+    --color-bad-ink: #ee7d50;
+    --color-info: #e6ebf5;
+    --color-info-bg: #1b2538;
+
+    /* ── Account accents, legible on black; tints are deep, not grey ───── */
+    --color-acct-checking: #9db8e3;
+    --color-acct-checking-bg: #1b2538;
+    --color-acct-amex: #3fb8a9;
+    --color-acct-amex-bg: #12312e;
+    --color-acct-card2: #a595ee;
+    --color-acct-card2-bg: #231f3d;
+    --color-acct-other: #9aa1ad;
+    --color-acct-other-bg: #25272c;
+
+    /* ── Elevation: black, with a faint lit rim along the top edge ─────── */
+    --shadow-rest: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+    --shadow-lift: 0 6px 16px rgb(0 0 0 / 0.5), 0 2px 4px rgb(0 0 0 / 0.4);
+    --shadow-over: 0 18px 44px rgb(0 0 0 / 0.66), 0 4px 12px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.05);
+    --shadow-milled: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.45);
+    --shadow-milled-lift: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 4px rgb(0 0 0 / 0.5), 0 12px 24px -10px rgb(0 0 0 / 0.7);
+    --shadow-2xs: 0 1px 1px rgb(0 0 0 / 0.3);
+    --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.4);
+
+    /* ── The bridged palette (HSL triplets) ────────────────────────────── */
+    --background: 220 9.7% 6.1%;        /* #0e0f11 ground */
+    --foreground: 220 14.3% 95.9%;      /* #f3f4f6 */
+    --border: 220 9.7% 18.2%;           /* #2a2d33 */
+
+    --card: 225 8% 9.8%;                /* #17181b */
+    --card-foreground: 220 14.3% 95.9%;
+    --card-border: 220 9.7% 18.2%;
+
+    --popover: 220 9.1% 12.9%;          /* #1e2024 raised */
+    --popover-foreground: 220 14.3% 95.9%;
+    --popover-border: 220 9.4% 25.1%;   /* #3a3e46 */
+
+    /* --primary stays navy: it is a FILL (white text). Ink is --primary-ink. */
+    --primary-ink: 220 42.9% 93.1%;     /* #e6ebf5 */
+    --clerk-primary: 220 42.9% 93.1%;
+    --clerk-primary-foreground: 218.2 56.9% 22.7%;
+
+    --secondary: 222.9 8.6% 15.9%;      /* #25272c */
+    --secondary-foreground: 220 42.9% 93.1%;
+
+    --muted: 220 9.1% 12.9%;            /* #1e2024 */
+    --muted-foreground: 217.9 10.4% 64.1%; /* #9aa1ad */
+
+    --accent: 222.9 8.6% 15.9%;
+    --accent-foreground: 220 42.9% 93.1%;
+
+    --destructive-foreground: 20 25.7% 6.9%; /* #16100d: dark ink on the alarm fill */
+
+    --input: 220 9.4% 25.1%;            /* #3a3e46: a field's edge has to show */
+    --ring: 220 42.9% 93.1%;
+
+    --positive: 220 42.9% 93.1%;        /* good is the resting ink */
+    --positive-foreground: 220 9.7% 6.1%;
+    --negative-foreground: 20 25.7% 6.9%;
+    --negative-wash: 217.9 10.4% 64.1%;
+    --warning: 218.8 10.8% 69.2%;       /* #a8aeb9 */
+    --warning-foreground: 220 9.7% 6.1%;
+
+    /* Sequential, densest first: near-white down to a deep steel. */
+    --chart-1: 220 42.9% 93.1%;         /* #e6ebf5 */
+    --chart-2: 216.9 55.6% 75.3%;       /* #9db8e3 */
+    --chart-3: 216.9 25.2% 60%;         /* #7f93b3 */
+    --chart-4: 218.2 22.4% 48.2%;       /* #5f7396 */
+    --chart-5: 218.8 26.4% 37.8%;       /* #47597a */
+
+    --card-blue: 216.9 55.6% 75.3%;
+    --card-silver: 217.8 23.5% 77.5%;   /* #b8c2d3 */
+    --card-gold: 217.8 23.5% 77.5%;
+
+    --selection-alpha: 0.28;
+  }
+
+  /* The ground is flat: no graded light under a matte page. */
+  html[data-theme="dark"] body {
+    background-image: none;
+  }
+
+  /* The hover bleed in a card head was three navy pools: invisible on black.
+     One faint light pool, same mask, same fade. */
+  html[data-theme="dark"] .card-bleed::before {
+    background-image:
+      radial-gradient(240px 76px at 13% -4px, rgb(230 235 245 / 0.07) 0%, rgb(230 235 245 / 0.025) 50%, rgb(230 235 245 / 0) 84%),
+      radial-gradient(260px 69px at 82% -6px, rgb(230 235 245 / 0.05) 0%, rgb(230 235 245 / 0.02) 52%, rgb(230 235 245 / 0) 85%);
+  }
+
+  html[data-theme="dark"] .skeleton {
+    background-image: linear-gradient(90deg, #1e2024 25%, #2a2d33 37%, #1e2024 63%);
+  }
+
+  /* ── NEVER BROWN ─────────────────────────────────────────────────────────
+     A translucent alarm colour over black is a dark orange, which is brown.
+     So in dark a FAINT alarm ring or border (under 40%) is the neutral strong
+     hairline, a STRONG one (40% and up) is the solid alarm colour, and a faint
+     alarm wash is the neutral raised step. The words and the icon inside keep
+     the alarm colour and carry the meaning. Matched by class-name fragment so
+     every strength is caught, including ones added later. */
+  html[data-theme="dark"] :is([class*="ring-bad/"], [class*="ring-destructive/"]) {
+    --tw-ring-color: #3a3e46;
+  }
+  html[data-theme="dark"] :is([class*="ring-bad/4"], [class*="ring-bad/5"], [class*="ring-bad/6"], [class*="ring-bad/7"], [class*="ring-bad/8"], [class*="ring-bad/9"]) {
+    --tw-ring-color: var(--color-bad);
+  }
+  html[data-theme="dark"] :is([class*="border-bad/"], [class*="border-destructive/"]) {
+    border-color: #3a3e46;
+  }
+  html[data-theme="dark"] :is([class*="border-bad/4"], [class*="border-destructive/4"], [class*="border-bad/5"], [class*="border-bad/6"]) {
+    border-color: var(--color-bad);
+  }
+  html[data-theme="dark"] :is(.bg-destructive\/5, .bg-destructive\/10, .bg-\[hsl\(var\(--negative\)\/0\.12\)\]),
+  html[data-theme="dark"] .hover\:bg-destructive\/10:hover {
+    background-color: var(--color-bad-bg);
+  }
+
+  /* ── Recharts' own furniture. The library paints these with its defaults
+     (#666 axis lines, a #ccc cursor, a white tooltip) wherever a chart does
+     not pass its own. Series colours come from `lib/chartTokens.ts`. ────── */
+  html[data-theme="dark"] .recharts-cartesian-axis-line,
+  html[data-theme="dark"] .recharts-cartesian-axis-tick-line {
+    stroke: #3a3e46;
+  }
+  html[data-theme="dark"] .recharts-cartesian-axis-tick-value {
+    fill: #9aa1ad;
+  }
+  html[data-theme="dark"] .recharts-tooltip-cursor {
+    stroke: #3a3e46;
+  }
+  html[data-theme="dark"] .recharts-rectangle.recharts-tooltip-cursor {
+    fill: rgb(255 255 255 / 0.06);
+    stroke: none;
+  }
+  html[data-theme="dark"] .recharts-default-tooltip {
+    background-color: #1e2024 !important;
+    border-color: #3a3e46 !important;
+    color: #f3f4f6;
+  }
+  html[data-theme="dark"] .recharts-default-tooltip .recharts-tooltip-label {
+    color: #c5c9d1;
+  }
+
+  /* A switch: the thumb is `bg-white` (the card colour here) and the tracks
+     are navy / hairline, so both states would vanish. Off = a grey thumb on a
+     visible track; on = a dark thumb on the light data fill. */
+  html[data-theme="dark"] [role="switch"][data-state="unchecked"] {
+    background-color: #3a3e46;
+  }
+  html[data-theme="dark"] [role="switch"][data-state="unchecked"] > span {
+    background-color: #c5c9d1;
+  }
+  html[data-theme="dark"] [role="switch"][data-state="checked"] {
+    background-color: var(--color-brand-fill);
+  }
+  /* A checkbox: its box is `bg-white` with a hairline ring, which is the card
+     itself here. A visible edge when empty; a lifted navy with the white tick
+     when checked. */
+  html[data-theme="dark"] [role="checkbox"] {
+    --tw-ring-color: #5a606b;
+  }
+  html[data-theme="dark"] [role="checkbox"][data-state="checked"] {
+    background-color: #2f5597;
+    --tw-ring-color: #2f5597;
+  }
+}
+
+@layer base {
+  @media screen {
+    /* A field with no ground of its own gets the browser's dark default (a
+       mid grey that matches nothing). The card colour instead; any utility on
+       the field still wins, because this is in the base layer. */
+    html[data-theme="dark"] :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), select, textarea) {
+      background-color: var(--background-color-white);
+    }
+    html[data-theme="dark"] :where(input, select, textarea)::placeholder {
+      color: hsl(var(--muted-foreground));
+    }
+    /* Native checkboxes and radios: tick in the light ink, not the browser blue. */
+    html[data-theme="dark"] :where(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+      accent-color: var(--color-brand-fill);
     }
   }
 }
