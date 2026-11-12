@@ -27,9 +27,10 @@ export { whyOverPath };
  * adds nothing. An unknown amount is "—", never $0.
  */
 
+/** (2026-11-12) A cell of ONE summary group (`.kpi-grid`, hairlines between), not a card of its own. */
 const FIG_BASE =
-  "press flex min-w-0 flex-col gap-0.5 rounded-card p-3 text-left ring-1 ring-brand-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
-const LINK = "font-semibold text-brand-navy underline";
+  "press flex min-w-0 flex-col gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-navy/40";
+const LINK = "font-medium text-brand-navy underline";
 
 /** "Oct 14" from the server's `owed.asOf` (an instant, or a bare day). */
 export function asOfWords(asOf: string | null): string | null {
@@ -90,7 +91,7 @@ function Figure({
     </>
   );
   if (!onClick) {
-    return <div className={cn(FIG_BASE, "bg-platinum-1")} data-testid={testId}>{body}</div>;
+    return <div className={FIG_BASE} data-testid={testId}>{body}</div>;
   }
   return (
     <button
@@ -98,7 +99,7 @@ function Figure({
       onClick={onClick}
       aria-pressed={active}
       data-testid={testId}
-      className={cn(FIG_BASE, "hover:bg-platinum-1", active && "bg-brand-tint ring-2 ring-brand-navy/40")}
+      className={cn(FIG_BASE, "hover:bg-brand-tint", active && "bg-brand-tint shadow-[inset_0_-2px_0_var(--color-chrome-ink)]")}
     >
       {body}
     </button>
@@ -191,7 +192,7 @@ export function AmexSummaryPanel({
         <div className="flex flex-wrap items-center gap-3" role="alert" data-testid="amex-summary-error">
           <p className="text-body text-neutral-600">The summary did not load.</p>
           {onRetry ? (
-            <button type="button" className="press text-label font-semibold text-brand-navy underline" onClick={retry} data-testid="amex-summary-retry">Retry</button>
+            <button type="button" className="press text-label font-medium text-brand-navy underline" onClick={retry} data-testid="amex-summary-retry">Retry</button>
           ) : null}
         </div>
       ) : !summary ? (
@@ -203,7 +204,7 @@ export function AmexSummaryPanel({
         />
       ) : (
         <div className="space-y-4" ref={bodyRef}>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="kpi-grid overflow-hidden rounded-card ring-1 ring-brand-line">
             {/* Owed is a figure, not a filter; one card's links to its balance history. */}
             <Figure
               testId="amex-fig-owed"
@@ -215,7 +216,7 @@ export function AmexSummaryPanel({
                   {tracked ? (
                     <span className="text-micro text-neutral-700" data-testid="amex-owed-tracked">
                       {tracked} ·{" "}
-                      <Link href="/avalanche" className="font-semibold text-brand-navy underline" data-testid="amex-owed-tracked-link">
+                      <Link href="/avalanche" className="font-medium text-brand-navy underline" data-testid="amex-owed-tracked-link">
                         Payoff plan
                       </Link>
                     </span>
@@ -223,7 +224,7 @@ export function AmexSummaryPanel({
                   {onOwedHistory && !allCards ? (
                     <button
                       type="button"
-                      className="press mt-0.5 self-start text-micro font-semibold text-brand-navy underline"
+                      className="press mt-0.5 self-start text-micro font-medium text-brand-navy underline"
                       onClick={onOwedHistory}
                       data-testid="amex-owed-history-link"
                     >
@@ -326,7 +327,7 @@ function ToReview({
             onClick={() => onAttention?.(on ? null : g.key)}
             data-testid={`amex-attn-${g.key}`}
             className={cn(
-              "press inline-flex min-h-8 items-center rounded-control px-2 font-semibold text-brand-navy ring-1 ring-brand-line hover:bg-platinum-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40",
+              "press inline-flex min-h-8 items-center rounded-control bg-white px-2 font-medium text-brand-navy ring-1 ring-input hover:bg-brand-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40",
               on && "bg-brand-tint ring-2 ring-brand-navy/40",
             )}
           >

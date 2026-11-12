@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { segment } from "@/components/next/Toolbar";
 import type { ForecastNextCtx } from "./next/forecast/types";
 import {
   useCallback,
@@ -208,11 +209,12 @@ type HorizonOpt = { label: string; days: number };
 const HORIZON_OPTS: HorizonOpt[] = [
   // (C3) Opens on 90 days like the Overview and the dashboard tile (lib/forecastHorizon); 30 stays one click
   // away. (The old 7-day "THIS WEEK" tab was removed at the owner's request.)
-  { label: "30 DAYS", days: 30 },
-  { label: "90 DAYS", days: 90 },
-  { label: "120 DAYS", days: 120 },
-  { label: "6 MONTHS", days: 183 },
-  { label: "1 YEAR", days: 365 },
+  // (2026-11-12) Sentence case, like every other control.
+  { label: "30 days", days: 30 },
+  { label: "90 days", days: 90 },
+  { label: "120 days", days: 120 },
+  { label: "6 months", days: 183 },
+  { label: "1 year", days: 365 },
 ];
 
 const FORECAST_FROM_KEY = "h2budget:forecastFromDate";
@@ -2159,10 +2161,8 @@ export default function ForecastPage({
 
   const horizonControls = (
       <div className="flex items-center gap-2 flex-wrap" data-testid="horizon-tabs">
-        {/* ⭐ The horizon segmented control. One hairline track, the active
-            segment navy-filled — the same shape the tab ribbon uses, so the
-            page has one language for "pick one of these". */}
-        <div className="inline-flex flex-wrap items-center gap-0.5 rounded-control bg-neutral-50 p-0.5 ring-1 ring-brand-line">
+        {/* ⭐ The horizon segmented control — the app's one `Segmented` look (components/next/Toolbar). */}
+        <div className="inline-flex flex-wrap items-stretch rounded-control bg-platinum-3 p-0.5 ring-1 ring-brand-line" role="group" aria-label="Horizon">
         {HORIZON_OPTS.map((h) => {
           const active = horizonDays === h.days;
           // (#618) The active button shows a subtle spinner while the new
@@ -2178,11 +2178,7 @@ export default function ForecastPage({
                 horizonFromDayLink.current = false;
                 setHorizonDays(h.days);
               }}
-              className={`press inline-flex items-center rounded-control px-2.5 py-1 text-micro font-semibold tracking-wide ${
-                active
-                  ? "bg-brand-navy text-white"
-                  : "text-neutral-500 hover:bg-white hover:text-brand-navy"
-              }`}
+              className={segment(active)}
               data-testid={`horizon-${h.days}`}
               data-pending={showPending ? "true" : undefined}
               aria-pressed={active}
@@ -2216,17 +2212,17 @@ export default function ForecastPage({
               setFromDatePicked(false);
             }
           }}
-          className={`press inline-flex items-center gap-1.5 rounded-control px-2.5 py-1 text-micro font-semibold tracking-wide ring-1 ${
+          className={`press inline-flex h-9 items-center gap-1.5 rounded-control px-2.5 text-label font-medium ring-1 sm:h-8 ${
             lookbackOpen
-              ? "bg-brand-navy text-white ring-brand-navy"
-              : "bg-white text-neutral-500 ring-brand-line hover:text-brand-navy"
+              ? "bg-brand-wash/[0.07] text-brand-navy ring-brand-navy"
+              : "bg-white text-neutral-700 ring-input hover:text-brand-navy"
           }`}
           data-testid="toggle-forecast-lookback"
           aria-expanded={lookbackOpen}
           aria-controls="forecast-lookback-panel"
         >
           <CalendarDays className="h-3 w-3" aria-hidden="true" />
-          LOOK BACK
+          Look back
         </button>
         {lookbackOpen && (
           <div
@@ -3067,7 +3063,6 @@ export default function ForecastPage({
                   title="Planned items"
                   count={planRows.length}
                   total={formatCurrency(plannedTotal)}
-                  totalTone={plannedTotal < 0 ? "bad" : undefined}
                   forceOpen={!!highlightedPlanKey}
                 >
                   {plannedCard}
@@ -3086,7 +3081,7 @@ export default function ForecastPage({
               const missed = listed.filter((b) => !owedOf(b));
               const missedTotal = missed.reduce((s, b) => s + b.amount, 0);
               return (
-                <CollapsibleSection id="missed" title={`Missed · ${monthFilter}`} count={missed.length} chipClass="chip bad" total={formatCurrency(missedTotal)} totalTone={missedTotal < 0 ? "bad" : undefined} forceOpen={bucketHasHighlight(listed)}>
+                <CollapsibleSection id="missed" title={`Missed · ${monthFilter}`} count={missed.length} chipClass="chip bad" total={formatCurrency(missedTotal)} forceOpen={bucketHasHighlight(listed)}>
                 <section className={kitCard} data-testid="missed-bucket-panel">
                   <div className={cardHead}>
                     <h2 className="sr-only text-title font-semibold text-foreground">
@@ -3187,7 +3182,7 @@ export default function ForecastPage({
               if (moved.length === 0) return null;
               const movedTotal = moved.reduce((s, b) => s + b.amount, 0);
               return (
-                <CollapsibleSection id="moved" title={`Moved · ${monthFilter}`} count={moved.length} chipClass="chip info" total={formatCurrency(movedTotal)} totalTone={movedTotal < 0 ? "bad" : undefined} forceOpen={bucketHasHighlight(moved)}>
+                <CollapsibleSection id="moved" title={`Moved · ${monthFilter}`} count={moved.length} chipClass="chip info" total={formatCurrency(movedTotal)} forceOpen={bucketHasHighlight(moved)}>
                 <section className={kitCard} data-testid="rescheduled-bucket-panel">
                   <div className={cardHead}>
                     <CalendarDays

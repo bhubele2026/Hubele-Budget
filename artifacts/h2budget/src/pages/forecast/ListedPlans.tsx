@@ -279,7 +279,6 @@ export function ListedPlans({
             title="Older than 14 days · off the curve"
             count={older.length}
             total={formatCurrency(olderTotal)}
-            totalTone={olderTotal < 0 ? "bad" : undefined}
           >
             <section className={`${kitCard} ${anchorClass}`} id={ANCHOR.older} tabIndex={-1} data-testid="older-unpaid-group">
               <h2 className="sr-only">Older than 14 days · off the curve</h2>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { segment } from "@/components/next/Toolbar";
 import { Link } from "wouter";
 import { usePageReadyMark } from "@/lib/perfMarks";
 import { ChevronDown, Settings as SettingsIcon } from "lucide-react";
@@ -63,10 +64,8 @@ const TABS: Array<{ id: RegisterTab; label: string; href: string }> = [
   { id: "plan", label: "Month & bank", href: "/forecast" },
 ];
 
-const tabClass = (on: boolean) =>
-  `press rounded-control px-3 py-1.5 text-label font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 ${
-    on ? "bg-brand-navy text-white" : "text-neutral-500 hover:bg-neutral-50 hover:text-brand-navy"
-  }`;
+/** (2026-11-12) The view switch is the app's one segmented look. */
+const tabClass = (on: boolean) => segment(on);
 
 /** Integer cents of a served figure (NaN when missing) — only to check the identity, never shown. */
 const cents = (v: string | null | undefined): number => (v == null || v === "" ? NaN : Math.round(Number(v) * 100));
@@ -74,7 +73,7 @@ const cents = (v: string | null | undefined): number => (v == null || v === "" ?
 /** One line of the disclosure: its words and its figure in one element (tests read "Matched impact …" as one line). */
 function AddsUpLine({ label, value, testid, strong }: { label: string; value: string; testid: string; strong?: boolean }) {
   return (
-    <div className={`flex justify-between gap-3 ${strong ? "font-semibold text-brand-navy" : ""}`} data-testid={testid}>
+    <div className={`flex justify-between gap-3 ${strong ? "font-semibold text-foreground" : ""}`} data-testid={testid}>
       {label}
       <span className={`fig ${strong ? "text-foreground" : "text-neutral-700"}`}>{value}</span>
     </div>
@@ -181,7 +180,7 @@ function ForecastHero({ ctx, onOpenList }: { ctx: ForecastNextCtx; onOpenList: (
     >
       <div
         className={`fig text-display font-semibold ${
-          projReady && Number.isFinite(endingNum) && endingNum < 0 ? "text-bad" : "text-brand-navy"
+          projReady && Number.isFinite(endingNum) && endingNum < 0 ? "text-bad" : "text-foreground"
         }`}
         data-testid="hero-forecast-balance"
       >
@@ -302,7 +301,7 @@ function AnswerLine({ ctx, kinded, onSeeDay }: { ctx: ForecastNextCtx; kinded: K
     proj ? { lowPoint: proj.lowestProjected, lowPointDate: proj.lowestDate, status: proj.status, cashBuffer: proj.cashBuffer } : null,
   );
   const lowShown = projReady && Number.isFinite(lowest);
-  const lowTone = !lowShown ? "text-brand-navy" : low.tone === "bad" ? "text-bad-ink" : low.kind === "below" ? "text-warn" : "text-brand-navy";
+  const lowTone = !lowShown ? "text-foreground" : low.tone === "bad" ? "text-bad-ink" : low.kind === "below" ? "text-warn" : "text-foreground";
   const lowWord = lowShown && low.chip && (low.tone === "bad" || low.kind === "below") ? low.chip.word : null;
   const ended = proj && proj.status !== "no_data";
   // The next payday on the curve: the first day from today with money in from a planned income; its amount is
@@ -329,7 +328,7 @@ function AnswerLine({ ctx, kinded, onSeeDay }: { ctx: ForecastNextCtx; kinded: K
         <li className={item} data-testid="answer-checking">
           <span className={label}>Checking today</span>
           <span
-            className={`${fig} ${ctx.bankOlder ? "text-neutral-500" : Number(ctx.bankBalance) < 0 ? "text-bad-ink" : "text-brand-navy"}`}
+            className={`${fig} ${ctx.bankOlder ? "text-neutral-500" : Number(ctx.bankBalance) < 0 ? "text-bad-ink" : "text-foreground"}`}
             data-testid="answer-checking-figure"
           >
             {moneyFace(ctx.bankBalance)}
@@ -359,15 +358,15 @@ function AnswerLine({ ctx, kinded, onSeeDay }: { ctx: ForecastNextCtx; kinded: K
           {payDate ? (
             <>
               <span className={label} data-testid="answer-payday-date">{shortDate(payDate)}</span>
-              <span className={`${fig} text-brand-navy`} data-testid="answer-payday-figure">{formatCurrency(payAmount)}</span>
+              <span className={`${fig} text-foreground`} data-testid="answer-payday-figure">{formatCurrency(payAmount)}</span>
             </>
           ) : (
-            <span className={`${fig} text-brand-navy`} data-testid="answer-payday-figure">—</span>
+            <span className={`${fig} text-foreground`} data-testid="answer-payday-figure">—</span>
           )}
         </li>
         <li className={item} data-testid="answer-ending">
           <span className={label}>Ends</span>
-          <span className={`${fig} ${ended && Number(proj!.endingBalance) < 0 ? "text-bad-ink" : "text-brand-navy"}`} data-testid="answer-ending-figure">
+          <span className={`${fig} ${ended && Number(proj!.endingBalance) < 0 ? "text-bad-ink" : "text-foreground"}`} data-testid="answer-ending-figure">
             {ended ? moneyFace(proj!.endingBalance) : "—"}
           </span>
           {ended && proj?.endingDate ? (
@@ -633,7 +632,7 @@ export function ForecastBody({
             // `aria-controls` pointing at a pane that is not on the page is an
             // axe violation (a11y-smoke scans /review).
             onTab ? (
-              <div role="tablist" aria-label="Register views" className="flex flex-wrap items-center gap-1">
+              <div role="tablist" aria-label="Register views" className="inline-flex flex-wrap items-stretch rounded-control bg-platinum-3 p-0.5 ring-1 ring-brand-line">
                 {TABS.map((t) => (
                   <button
                     key={t.id}
@@ -651,7 +650,7 @@ export function ForecastBody({
                 ))}
               </div>
             ) : (
-              <nav aria-label="Register views" className="flex flex-wrap items-center gap-1">
+              <nav aria-label="Register views" className="inline-flex flex-wrap items-stretch rounded-control bg-platinum-3 p-0.5 ring-1 ring-brand-line">
                 {TABS.map((t) => (
                   <Link
                     key={t.id}
