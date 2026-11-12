@@ -744,7 +744,7 @@ describe("the review count is a finding or it is nothing", () => {
     mount("/transactions");
     const pill = screen.getByTestId("topnav-review-badge");
     expect(pill.getAttribute("href")).toBe("/banking#needs-you");
-    expect(pill.getAttribute("aria-label")).toBe("4 to review: 4 charges to match");
+    expect(pill.getAttribute("aria-label")).toBe("4 to review");
   });
 
   it("shows no badge anywhere while the count is unknown, not a zero pill", () => {
@@ -762,12 +762,15 @@ describe("the review count is a finding or it is nothing", () => {
   });
 });
 
-describe("(F1) the Review badge adds the categorization queue", () => {
-  it("the pill carries forecast review + queue total", () => {
-    reviewCount = 4;
+describe("(2026-11-12) the Review pill is the spine's reviewCount alone: it already counts the category queue", () => {
+  it("the pill shows the spine's count and names the queue inside it, never adding it again", () => {
+    reviewCount = 7;
     queueTotal = 3;
     mount("/banking");
-    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("7 to review: 4 charges to match, 3 categories to confirm");
+    const pill = screen.getByTestId("topnav-review-badge");
+    expect(pill.textContent).toContain("7");
+    expect(pill.textContent).not.toContain("10");
+    expect(pill.getAttribute("aria-label")).toBe("7 to review, including 3 categories to confirm");
   });
 
   it("each count sits on the item that owns its page: Review = forecast, Categories (in More) = queue", () => {
@@ -784,17 +787,18 @@ describe("(F1) the Review badge adds the categorization queue", () => {
     mount("/banking");
     expect(screen.getByTestId("topnav-review-badge").getAttribute("href")).toBe("/banking#needs-you");
     cleanup();
-    reviewCount = 0;
+    // Only categories wait: the spine counts them, the pill still goes to Needs you.
+    reviewCount = 3;
     mount("/banking");
     expect(screen.getByTestId("topnav-review-badge").getAttribute("href")).toBe("/banking#needs-you");
-    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("3 to review: 3 categories to confirm");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("3 to review, including 3 categories to confirm");
   });
 
   it("a queue that has not answered adds nothing and is not a zero", () => {
     reviewCount = 4;
     queueTotal = null;
     mount("/banking");
-    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("4 to review: 4 charges to match");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("4 to review");
   });
 });
 

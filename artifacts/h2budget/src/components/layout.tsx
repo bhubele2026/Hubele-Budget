@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { useCategorizationQueueTotal } from "@/hooks/useCategorizationQueue";
-import { badgeCount } from "@/lib/reviewQueue";
 import { HomeMark } from "@/components/home-mark";
 import { TabRibbon, TabUnderline, type RibbonTab } from "@/components/tab-ribbon";
 import { AccountMenu } from "@/components/account-menu";
@@ -84,14 +83,13 @@ const MobileNav = lazy(importMobileNav);
 const AmexCardTabsFeed = lazy(() => import("@/components/amex-card-tabs-feed"));
 
 /**
- * The Review pill says its two queues apart for a screen reader (the visible number stays the umbrella):
- * "36 to review: 2 charges to match, 34 categories to confirm". An unknown queue is left out, never a zero.
+ * The Review pill's words for a screen reader. The number is the spine's `reviewCount`, which (2026-11-12) already
+ * counts the categories to confirm with the charges to match; the queue's own total is named inside it, never added
+ * to it: "36 to review, including 34 categories to confirm". An unknown queue is left out, never a zero.
  */
-function reviewPillWords(total: number, charges: number | null | undefined, queue: number | null | undefined): string {
-  const c = charges ?? 0;
+function reviewPillWords(total: number, queue: number | null | undefined): string {
   const q = queue ?? 0;
-  const parts = [c > 0 && `${c} charge${c === 1 ? "" : "s"} to match`, q > 0 && `${q} categor${q === 1 ? "y" : "ies"} to confirm`].filter(Boolean);
-  return `${total} to review${parts.length ? `: ${parts.join(", ")}` : ""}`;
+  return `${total} to review${q > 0 ? `, including ${q} categor${q === 1 ? "y" : "ies"} to confirm` : ""}`;
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -110,11 +108,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const trail = crumbsFor(location, section, litTab);
   const back = backLinkFor(section, litTab);
   const [mobileOpen, setMobileOpen] = useState(false);
-  // (F1) Two different queues feed the Review badge: the forecast bank-match
-  // inbox (the spine's count) and the categorization queue. `null` = unknown.
+  // (2026-11-12) The spine's `reviewCount` (server `computeReviewCount`) now counts BOTH the forecast bank-match
+  // inbox and the categorization queue, so the pill shows it alone: adding the queue again would count every
+  // category twice. The queue's own total still names Categories' badge and the pill's words. `null` = unknown.
   const forecastReview = useReviewInboxCount();
   const queueTotal = useCategorizationQueueTotal();
-  const reviewCount = forecastReview == null ? null : badgeCount(queueTotal, forecastReview);
+  const reviewCount = forecastReview;
 
   // (P4) Warm a section's REAL first queries on hover, focus and the first touch
   // of a press (pointer-down / touch-start), so the page renders from cache on
@@ -327,8 +326,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link
                   href={reviewPillHref}
                   {...warmHandlers(prefetch, reviewPillHref)}
-                  aria-label={reviewPillWords(reviewCount, forecastReview, queueTotal)}
-                  title={reviewPillWords(reviewCount, forecastReview, queueTotal)}
+                  aria-label={reviewPillWords(reviewCount, queueTotal)}
+                  title={reviewPillWords(reviewCount, queueTotal)}
                   data-testid="topnav-review-badge"
                   className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink"
                 >
