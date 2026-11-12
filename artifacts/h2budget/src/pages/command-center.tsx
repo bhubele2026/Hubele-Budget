@@ -32,6 +32,7 @@ import { useSpine } from "@/hooks/useSpine";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { CheckingBalanceFull } from "@/components/checking-balance-note";
 import { useOlderSnapshot } from "@/lib/dataAsOf";
+import { useReadyMark } from "@/lib/perfMarks";
 
 /**
  * (W3) ⭐ BANKING › REVIEW — "what wasn't in the plan?" for ONE bank account.
@@ -145,6 +146,7 @@ export default function BankingReviewPage() {
   // one (kept while this loads) is not: its balance, buckets and rows would sit
   // under the new account's name and the new dates.
   const d = scoped(q, (r) => r.period.to === range.to).data;
+  useReadyMark("h2:page-ready:/banking", d !== undefined); // (PERF-0) the summary's figures are real
   // (T1) An answer built on an older bank reading than the newest seen is labelled and asked again once.
   const olderReading = useOlderSnapshot(q);
   const [checkParam] = useUrlState<string>("check", str, "");

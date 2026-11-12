@@ -32,6 +32,7 @@ import { onWriteSuccess } from "@/lib/mutationInvalidation";
 import { recordDataAsOf, resetDataAsOf } from "@/lib/dataAsOf";
 import { useRefetchMoneyOnReturn } from "@/hooks/useRefetchMoneyOnReturn";
 import { confirmAppearance, scrollBeforeThemeChange, useTheme, writePageScroll } from "@/lib/theme";
+import { markReady, startPerfNavigation } from "@/lib/perfMarks";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -471,6 +472,8 @@ function ThemeRepaint({ children }: { children: ReactNode }) {
       first.current = false;
       return;
     }
+    // (PERF-0) The page re-mounted for a theme change: a mark, so a trace shows when.
+    markReady("h2:theme-repaint");
     const y = scrollBeforeThemeChange();
     if (y <= 0) return;
     // ⚠️ One write is not enough: the re-mounted page is briefly shorter than
@@ -500,6 +503,14 @@ function ThemeRepaint({ children }: { children: ReactNode }) {
 function ProtectedShell() {
   const [location] = useLocation();
   const { isLoaded, isSignedIn } = useAuth();
+  // (PERF-0) Each route change is a new page view for the ready marks (lib/perfMarks.ts). A layout effect, so it
+  // runs before the new page's own effects leave their marks.
+  const perfPath = useRef(location);
+  useLayoutEffect(() => {
+    if (perfPath.current === location) return;
+    perfPath.current = location;
+    startPerfNavigation(location);
+  }, [location]);
   const pendingChunk = whenRouteChunkLoaded(location);
   const [, chunkArrived] = useState(0);
   useEffect(() => {

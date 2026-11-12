@@ -5,6 +5,7 @@ import { lowPointView } from "@/lib/lowPoint";
 import { weekStory } from "@/lib/weekFigures";
 import { useSpine } from "@/hooks/useSpine";
 import { cn } from "@/lib/utils";
+import { useReadyMark } from "@/lib/perfMarks";
 import { useCashSignalQ, useMoneyPositionQ } from "./queries";
 import { dayLabel, money, PanelError, weekdayLabel } from "./shared";
 import { Fig, FillBar, FOUR_BODY, FOUR_BOX, FOUR_BOX_BAR, FOUR_GRID, Skel, Tile } from "./tileParts";
@@ -133,6 +134,8 @@ function SpentBody({ s }: { s: Spine }) {
   // No plan set: the same subtraction against the forecast's weekly amount, so an over week still says "over".
   const ofN = of != null ? Number(of) : NaN;
   const rem = w.planSet ? w.remainingKnown : Number.isFinite(ofN) ? Math.round((ofN - known) * 100) / 100 : null;
+  // (PERF-0) All four boxes real: the spine is here (this body mounts with it), and so is what the week's line reads.
+  useReadyMark("h2:home-numbers-ready", pos.data !== undefined && (cap != null || cash.data !== undefined));
   return (
     <>
       <Fig big testid="four-spent-value" value={money(w.known)} />

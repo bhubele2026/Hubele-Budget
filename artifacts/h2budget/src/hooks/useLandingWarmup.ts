@@ -9,6 +9,7 @@ import {
   getListDebtsQueryKey,
 } from "@workspace/api-client-react";
 import { prefetchRoute } from "@/lib/routePrefetch";
+import { markReady } from "@/lib/perfMarks";
 
 /**
  * ⭐ THE LANDING BUYS THE NEXT CLICK, AFTER IT HAS PAID FOR ITS OWN.
@@ -123,6 +124,7 @@ export function useLandingWarmup(): void {
   const run = () => {
     if (startedRef.current) return;
     startedRef.current = true;
+    markReady("h2:warmup-start"); // (PERF-0) when the warm-up began, for traces
     STAGES.forEach((stage, i) => {
       timers.current.push(
         window.setTimeout(() => {

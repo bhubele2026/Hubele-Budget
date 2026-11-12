@@ -146,6 +146,7 @@ import {
   type ChaseListFilter,
 } from "./transactions/chaseLedger";
 import { useChaseLedger } from "./transactions/useChaseLedger";
+import { useReadyMark } from "@/lib/perfMarks";
 import { useChaseHideReviewed } from "./transactions/useChaseHideReviewed";
 import { useChaseReviewWrites } from "./transactions/useChaseReviewWrites";
 import {
@@ -609,6 +610,7 @@ export default function TransactionsPage({
   // (PR14 review LOW-2) While a new range or filter loads, the cache still holds the
   // last one's figures. They are never shown under the new label: "—" until it answers.
   const statsStale = register.isPlaceholderData;
+  useReadyMark("h2:page-ready:/transactions", !embedded && registerPage != null && !statsStale); // (PERF-0) the register is real
   const toReviewCount = statsStale ? null : (registerPage?.review.unreviewed ?? null);
   const reviewedCount = statsStale ? 0 : (registerPage?.review.reviewed ?? 0);
   // (PR14 review H1) An account other than the bank balance's: rows, totals and

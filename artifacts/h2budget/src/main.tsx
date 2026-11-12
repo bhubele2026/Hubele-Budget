@@ -2,6 +2,11 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { bootTheme } from "./lib/theme";
+import { markReady, observeWebVitals } from "./lib/perfMarks";
+
+// (PERF-0) LCP, CLS and INP kept in window.__h2perf; nothing is sent.
+observeWebVitals();
+markReady("h2:entry-eval");
 
 // Light or dark, before the first render (index.html already put it on <html>
 // for the first paint; this takes over and follows the device and the clock).

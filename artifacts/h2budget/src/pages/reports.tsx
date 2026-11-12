@@ -19,6 +19,7 @@ import { CHART, catColor, washOf } from "@/lib/chartTokens";
 import { fieldLabel } from "@/ui";
 import { PageGrid } from "@/components/next";
 import { ReportsBalanceTiles } from "./reports/reportsShared";
+import { useReadyMark } from "@/lib/perfMarks";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -85,6 +86,7 @@ export default function ReportsPage() {
   // dates its tile promised ("Last 30 days"), not on its own week. Debt has no range; Budget is a month.
   const span = spanQuery(fmtISO(fromDate), fmtISO(today));
   const facts = factsQuery.data;
+  useReadyMark("h2:page-ready:/reports", facts !== undefined); // (PERF-0) the spending figure is real
   // ⚠️ NO FACTS, NO CLAIMS. Until the aggregate arrives (or after it failed) a
   // tile says so, rather than "$0.00", "No spend in range" or "No income
   // recorded" standing in for figures it never received.

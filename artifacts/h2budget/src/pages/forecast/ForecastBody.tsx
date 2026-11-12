@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { Link } from "wouter";
+import { usePageReadyMark } from "@/lib/perfMarks";
 import { ChevronDown, Settings as SettingsIcon } from "lucide-react";
 import { btnLink } from "@/ui";
 import { PageGrid, Panel, StatBlock } from "@/components/next";
@@ -294,6 +295,8 @@ function SummaryStrip({ ctx, onSeeDay }: { ctx: ForecastNextCtx; onSeeDay: (date
  */
 function AnswerLine({ ctx, kinded, onSeeDay }: { ctx: ForecastNextCtx; kinded: KindedEvent[]; onSeeDay: (date: string) => void }) {
   const { proj, projReady } = ctx;
+  // (PERF-0) The answer line's figures are real (/forecast and /review both draw it: the mark names the page).
+  usePageReadyMark(projReady);
   const lowest = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
   const low = lowPointView(
     proj ? { lowPoint: proj.lowestProjected, lowPointDate: proj.lowestDate, status: proj.status, cashBuffer: proj.cashBuffer } : null,

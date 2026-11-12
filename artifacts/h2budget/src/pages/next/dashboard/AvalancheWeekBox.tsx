@@ -11,6 +11,7 @@ import { WeekPayButton, WeekPayError, WeekUndoButton } from "@/components/avalan
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
 import { LINK, money, weekdayLabel } from "./shared";
+import { useReadyMark } from "@/lib/perfMarks";
 
 const MIN = 60_000;
 
@@ -224,6 +225,8 @@ export default function AvalancheWeekBox() {
   const minH = useFoldMinH("avalanche");
   const controls = useAvalancheWeekPay();
   const q = useWeeklyQ();
+  // (PERF-0) The week's payment (or its answer) is on screen.
+  useReadyMark("h2:weekly-pay-ready", q.data !== undefined);
   if (q.data !== undefined && weekPayView(q.data).kind === "hidden") return null;
   return (
     <Panel

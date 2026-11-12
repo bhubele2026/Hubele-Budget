@@ -95,6 +95,7 @@ import {
 import { AmexLogo } from "@/components/brand-logos";
 import { AmexCardBand, useAmexCardName } from "@/components/amex-card-band";
 import { AmexSummaryPanel, type AmexAttentionGroup, type AmexLinkPeriod } from "@/components/amex-summary";
+import { useReadyMark } from "@/lib/perfMarks";
 import { CardPayModes } from "@/components/amex-pay-mode";
 import { AmexLedgerRow, AmexRowDetails } from "@/components/amex-row";
 import { AddToAvalanche } from "@/components/add-card-to-avalanche";
@@ -393,6 +394,7 @@ export default function AmexPage({
   // under another card's heading it is a wrong number.
   const summaryScoped = scoped(summaryRaw, (s) => amexSummaryMatches(s, summaryParams));
   const summaryQ = { ...summaryRaw, data: summaryScoped.data };
+  useReadyMark("h2:page-ready:/amex", !embedded && summaryQ.data !== undefined); // (PERF-0) Owed and the summary are real
   // (P4) The summary answers the anchor question while it is enabled and has
   // not failed; embedded (summary off) or failed, the anchor is asked directly.
   const summaryAnswersAnchor = !embedded && summaryPeriod != null && !summaryQ.isError;
