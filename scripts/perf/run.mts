@@ -87,7 +87,7 @@ async function startServer(jobs: string): Promise<void> {
       PATH: process.env.PATH, HOME: process.env.HOME,
       DATABASE_URL: seeded.databaseUrl, PORT: String(PORT), MIGRATE_ON_BOOT: "false", JOBS_MODE: jobs,
       OWNER_EMAIL: "perf-owner@example.com", PERF_USER_ID: hh!.ownerUserId, WEB_DIST_DIR: WEB_OUT,
-      LOG_LEVEL: process.env.LOG_LEVEL ?? "info", APP_BUILD_ID: "dev", PERF_CLERK_API_MS: process.env.PERF_CLERK_API_MS ?? "0",
+      LOG_LEVEL: process.env.LOG_LEVEL ?? "info", APP_BUILD_ID: "dev", RATE_LIMIT_MAX: "1000000", PERF_CLERK_API_MS: process.env.PERF_CLERK_API_MS ?? "0",
     },
     stdio: ["ignore", log, log],
   });

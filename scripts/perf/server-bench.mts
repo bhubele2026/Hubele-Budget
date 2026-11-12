@@ -52,7 +52,7 @@ const server: ChildProcess = spawn("node", [join(SERVER_OUT, "index.mjs")], {
     PATH: process.env.PATH, HOME: process.env.HOME,
     DATABASE_URL: seeded.databaseUrl, PORT: String(PORT), MIGRATE_ON_BOOT: "false", JOBS_MODE: "off",
     OWNER_EMAIL: "perf-owner@example.com", PERF_USER_ID: seeded.households[0]!.ownerUserId,
-    LOG_LEVEL: process.env.LOG_LEVEL ?? "warn", APP_BUILD_ID: "dev",
+    LOG_LEVEL: process.env.LOG_LEVEL ?? "warn", APP_BUILD_ID: "dev", RATE_LIMIT_MAX: "1000000", // the bench outruns the 600/min abuse limiter
   },
   stdio: ["ignore", log, log],
 });
