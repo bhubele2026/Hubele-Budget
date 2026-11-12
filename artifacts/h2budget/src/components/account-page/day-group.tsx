@@ -92,11 +92,11 @@ export function DayGroup({
         </div>
         {/* The badge says what the head does not already say ("Pending" over the Pending group is said once). */}
         {isToday && todayBadgeLabel !== headerLabel && <span className={accentChip}>{todayBadgeLabel}</span>}
-        <span className="fig text-micro text-neutral-500">
+        <span className="fig shrink-0 whitespace-nowrap text-micro text-neutral-500">
           {count} txn{count === 1 ? "" : "s"}
         </span>
       </div>
-      <div className="fig text-label font-semibold">
+      <div className="fig shrink-0 text-right text-label font-semibold">
         {totalNode}
       </div>
     </>
