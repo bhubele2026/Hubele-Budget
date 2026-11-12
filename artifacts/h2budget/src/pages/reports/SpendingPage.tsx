@@ -765,8 +765,8 @@ function SpendingSection({
                         fill={
                           selectedDow === d.dow ||
                           (maxDowAvg > 0 && d.avgPerDay === maxDowAvg)
-                            ? CHART.orange
-                            : CHART.navy
+                            ? CHART.navy // (2026-11-12) the selected / busiest day is navy; orange is for warnings
+                            : CHART.mist
                         }
                         fillOpacity={
                           selectedDow === null || selectedDow === d.dow ? 1 : 0.4
@@ -906,7 +906,7 @@ function SpendingSection({
                         dataKey="spend"
                         stroke={catColor(i)}
                         fill={washOf(catColor(i))}
-                        fillOpacity={0.2}
+                        fillOpacity={0.08}
                         strokeWidth={1.5}
                       />
                       <Tooltip
