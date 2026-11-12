@@ -183,7 +183,6 @@ function DebtSection({
           label="Total debt"
           value={formatCurrency(totalBalance)}
           hint={`${activeDebts.length} active`}
-          tone="bad"
           data-testid="debt-report-total"
         />
         <Stat

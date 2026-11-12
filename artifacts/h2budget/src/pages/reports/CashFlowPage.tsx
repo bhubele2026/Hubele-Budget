@@ -89,9 +89,9 @@ export const CASHFLOW_SERIES = themed(() => ({
   /** Income vs expense, with the optional previous-period overlay. */
   inOut: {
     income: CHART.navy, //        #19315b
-    expense: CHART.orangeDeep, // #e16d3e
-    prevIncome: CHART.mist, //    #8fa3bf
-    prevExpense: CHART.steel, //  #4d5d73
+    expense: CHART.steel, //      (2026-11-12) neutral: spending is not a warning
+    prevIncome: CHART.mid, //     lighter step of income
+    prevExpense: CHART.mist, //   lighter step of expense
   },
   /** Net bars (coloured by sign) + the running and previous-period lines. */
   net: {
