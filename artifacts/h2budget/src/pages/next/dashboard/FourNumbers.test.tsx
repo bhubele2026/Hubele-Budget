@@ -99,6 +99,27 @@ describe("four numbers", () => {
     expect(Array.from(grid.children, (c) => c.className.includes(FOUR_BOX_BAR))).toEqual([false, false, true, true]);
   });
 
+  it("(Motion pass) the numbers arrive in the SAME four boxes: no box is remounted, so none enters twice", () => {
+    h.spine.data = undefined;
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const mem = memoryLocation({ path: "/home", record: true });
+    const tree = () => <QueryClientProvider client={qc}><Router hook={mem.hook}><FourNumbers /></Router></QueryClientProvider>;
+    const r = render(tree());
+    const before = Array.from(screen.getByTestId("dash-four").children);
+    expect(before.length).toBe(4);
+    const classes = before.map((b) => b.className);
+    expect(classes.every((c) => c.includes("tile-in"))).toBe(true);
+    h.spine = { ...h.spine, data: spine() };
+    r.rerender(tree());
+    const after = Array.from(screen.getByTestId("dash-four").children);
+    // The very same elements (an entrance animation restarts only on a new one), with the same classes.
+    after.forEach((el, i) => expect(el, BOXES[i]).toBe(before[i]));
+    expect(after.map((b) => b.className)).toEqual(classes);
+    expect(screen.getByTestId("dash-four").querySelectorAll(".skeleton").length).toBe(0);
+    expect(text("four-checking-value")).toBe("$1,234.00");
+    expect(text("four-spent-value")).toBe("$40.00");
+  });
+
   it("a failed first load says so, with a way to try again", () => {
     h.spine.state = "failed";
     setup(null);

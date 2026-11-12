@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
+import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useGetSettings, type Spine } from "@workspace/api-client-react";
@@ -27,12 +28,22 @@ import { Fig, Skel, Tile, Why, leftOver, type TileStatus } from "./tileParts";
  */
 
 // ── Banking ─────────────────────────────────────────────────────────────────
-const BankConfidence = lazy(() => import("./BankConfidence"));
+const BankConfidence = lazyWithPreload(() => import("./BankConfidence"));
 // (C1) The calculated line + Details (the shared note of components/checking-balance): its own chunk, as the
 // balance check is — the landing keeps only the label and the figure.
-const CheckingNote = lazy(() => import("@/components/checking-balance-note"));
+const CheckingNote = lazyWithPreload(() => import("@/components/checking-balance-note"));
 // (E3) The week tile's no-plan line + action (owner only): after first paint, off the landing bytes.
-const WeekPlanAction = lazy(() => import("./WeekPlanAction"));
+const WeekPlanAction = lazyWithPreload(() => import("./WeekPlanAction"));
+
+/**
+ * (Motion pass, 2026-11-11) Fetch those three small chunks ahead of the first opening (the drawer asks when it
+ * mounts, closed, after first paint). Arriving after the tiles were on screen, the calculated line and the balance
+ * check made the Banking tile taller and pushed everything under the drawer down a second time. Code only: no
+ * request for data is made until the drawer opens.
+ */
+export function warmTileNotes(): void {
+  for (const c of [BankConfidence, CheckingNote, WeekPlanAction]) void c.preload().catch(() => {});
+}
 
 function BankingTile({ s, older }: { s: Spine | undefined; older?: string | null }) {
   if (!s) return <Tile testid="banking" title="Banking" href="/banking" accent="checking" index={1}><Skel /></Tile>;

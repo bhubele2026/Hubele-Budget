@@ -942,12 +942,35 @@
      slide and fade when it opens. Only the ENTRANCE is animated, on the
      children of an [open] details, so the closed state is the browser's own
      (nothing is measured, nothing is held open) and it behaves the same in
-     Chrome and Safari. One step of --dur-soft; none under reduced motion. */
+     Chrome and Safari. One step of --dur-soft; none under reduced motion.
+     (Motion pass, 2026-11-11) Where the browser has it, the slide runs on the
+     details' own content box (`::details-content`) and not on the children:
+     Chrome skips style for the children of a CLOSED details, so their
+     animation never reset and only the first opening moved; every later one
+     cut in. The content box is restyled on every open, in Chrome and Safari
+     alike. There it is a TRANSITION, named only on the [open] state: neither
+     engine runs a keyframe animation on that box, and with no transition on
+     the closed state, closing stays the browser's own instant fold. The same
+     6px and the same dial and curve as the keyframe. The child rule stays for
+     a browser without the pseudo-element (it hides closed children outright,
+     which does restart them). The slide is
+     the ONE entrance: a tile inside does not also rise (`.tile-in`), which
+     stacked a second, slower, upward stagger on the first opening only. */
   @keyframes discloseIn {
     from { opacity: 0; transform: translateY(-6px); }
     to { opacity: 1; transform: none; }
   }
   .disclose[open] > :not(summary) { animation: discloseIn var(--dur-soft) var(--ease-enter) backwards; }
+  @supports selector(::details-content) {
+    .disclose[open] > :not(summary) { animation: none; }
+    .disclose::details-content { opacity: 0; transform: translateY(-6px); }
+    .disclose[open]::details-content {
+      opacity: 1;
+      transform: none;
+      transition: opacity var(--dur-soft) var(--ease-enter), transform var(--dur-soft) var(--ease-enter);
+    }
+  }
+  .disclose .tile-in { animation: none; }
 
   /* The active-tab underline sweeps in from the left. It is the ONLY moving
      part of a tab ribbon: the label must not shift, or a row of tabs jitters
@@ -1052,6 +1075,11 @@
     .surface-lift, .chart-glide, .chart-calm .recharts-reference-dot,
     .chart-calm .recharts-reference-area, .chart-calm [data-plate] {
       transition: none !important;
+    }
+    /* Its own rule: a browser that does not know the pseudo-element drops the
+       whole rule it appears in, and the list above must never be dropped. */
+    @supports selector(::details-content) {
+      .disclose[open]::details-content { transition: none !important; }
     }
     /* Animation off would leave --reveal at 0% and mask most of the chart. */
     .area-draw { -webkit-mask-image: none; mask-image: none; }

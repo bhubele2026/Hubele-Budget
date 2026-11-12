@@ -82,13 +82,15 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@workspace/api-client-react/features", () => ({
   getGetAmexSummaryQueryKey: (p: unknown) => ["/api/amex/summary", p],
-  useGetAmexSummary: (_p: unknown, o?: { query?: { enabled?: boolean } }) => ({
+  // The summary echoes the period it was asked for, as the server does. The page holds back
+  // a summary for any other period (Q4), so a fixed week here only matched in that one week.
+  useGetAmexSummary: (p: { from: string; to: string }, o?: { query?: { enabled?: boolean } }) => ({
     data:
       o?.query?.enabled === false
         ? undefined
         : {
             scope: { kind: "all", accountId: null, name: null, mask: null, institution: null, cards: [] },
-            period: { from: "2026-10-11", to: "2026-10-17", timezone: "America/Chicago" },
+            period: { from: p.from, to: p.to, timezone: "America/Chicago" },
             owed: { current: "1234.50", statement: null, asOf: "2026-10-14T12:00:00Z", source: "plaid" },
             purchases: { amount: "10.00", count: 1, reimbursable: { amount: "0.00", count: 0 } },
             refunds: { amount: "0.00", count: 0 },

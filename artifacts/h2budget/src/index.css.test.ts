@@ -166,6 +166,32 @@ describe("index.css — the literal-duration kills stay, because dials cannot re
     expect(kills).toMatch(/\.disclose\[open\]\s*>\s*:not\(summary\)[^{]*\{[^}]*animation:\s*none\s*!important/s);
   });
 
+  /**
+   * (Motion pass, 2026-11-11) Chrome skips style for the children of a closed
+   * details, so the child rule moved the first opening only. Where the browser
+   * has `::details-content`, the slide runs on that box (restyled on every
+   * open; a transition, since no engine animates keyframes there) and the
+   * child rule is switched off, so the two never stack. The
+   * pseudo-element is only ever named inside `@supports`: an unknown one voids
+   * the whole rule it sits in, which would take the reduced-motion list with it.
+   */
+  it("a disclosure slides on every opening: the content box where the browser has it, never both", () => {
+    const sup = SRC.match(/@supports selector\(::details-content\)\s*\{\s*\.disclose\[open\]\s*>\s*:not\(summary\)\s*\{\s*animation:\s*none;\s*\}\s*\.disclose::details-content\s*\{([^}]*)\}\s*\.disclose\[open\]::details-content\s*\{([^}]*)\}/);
+    expect(sup, "the ::details-content rules, with the child rule switched off beside them").not.toBeNull();
+    // Closed: where the slide starts from (nothing that takes part in layout).
+    expect(sup![1].replace(/\s+/g, " ").trim()).toBe("opacity: 0; transform: translateY(-6px);");
+    // Open: at rest with no transform left behind, and the transition lives HERE only, so closing is instant.
+    expect(sup![2]).toMatch(/opacity:\s*1;\s*transform:\s*none;/);
+    expect(sup![2]).toMatch(/transition:\s*opacity var\(--dur-soft\) var\(--ease-enter\),\s*transform var\(--dur-soft\) var\(--ease-enter\)/);
+    expect(sup![2]).not.toMatch(/\d+m?s\b/);
+    const kills = SRC.slice(SRC.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(kills).toMatch(/@supports selector\(::details-content\)\s*\{\s*\.disclose\[open\]::details-content\s*\{\s*transition:\s*none\s*!important/);
+    // Outside @supports the pseudo-element never shares a selector list.
+    for (const m of SRC.matchAll(/([^{}]*)::details-content[^{]*\{/g)) expect(m[1]).not.toContain(",");
+    // A tile inside a disclosure takes the slide as its entrance, not its own rise on top.
+    expect(SRC).toMatch(/\.disclose \.tile-in\s*\{\s*animation:\s*none;\s*\}/);
+  });
+
   it("collapses Radix overlay lifecycles instead of removing them", () => {
     // An animation removed outright never fires `animationend`, so a Radix
     // overlay would stay mounted. Near-instant, not `none`.

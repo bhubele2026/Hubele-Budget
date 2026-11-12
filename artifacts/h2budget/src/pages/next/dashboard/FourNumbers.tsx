@@ -50,7 +50,27 @@ function Bar({ value, ceiling, testid }: { value?: number; ceiling?: number; tes
   );
 }
 
-function Checking({ s, older }: { s: Spine; older?: string | null }) {
+/** The low point looks 90 days ahead (the spine's horizon, and the link's). */
+const LOWEST = (
+  <>
+    Lowest cash · <span className="whitespace-nowrap">90 days</span>
+  </>
+);
+
+/**
+ * Each box while the spine is on its way. (Motion pass, 2026-11-11) The SAME component draws the skeleton and the
+ * figure, so the box is one node from first paint on: its entrance plays once. Swapping a skeleton tile for a
+ * different component remounted it, and the four boxes blinked out and rose in a second time when the numbers came.
+ */
+const LOADING = {
+  checking: { testid: "four-checking", title: "Checking", href: "/banking", accent: "checking", box: FOUR_BOX },
+  lowest: { testid: "four-lowest", title: LOWEST, href: "/forecast?horizon=90", accent: "other", box: FOUR_BOX },
+  spent: { testid: "four-spent", title: "Spent this week", href: "/spending/week", accent: "checking", box: FOUR_BOX_BAR },
+  debt: { testid: "four-debt", title: "Debt paid", href: "/avalanche", accent: "other", box: FOUR_BOX_BAR },
+} as const;
+
+function Checking({ s, older }: { s: Spine | undefined; older?: string | null }) {
+  if (!s) return <Tile {...LOADING.checking} index={2} body={FOUR_BODY}><Skel /></Tile>;
   const v = bankBalanceView(s.bank);
   const bal = Number(s.bank.balance);
   const n = s.reviewCount;
@@ -68,14 +88,8 @@ function Checking({ s, older }: { s: Spine; older?: string | null }) {
   );
 }
 
-/** The low point looks 90 days ahead (the spine's horizon, and the link's). */
-const LOWEST = (
-  <>
-    Lowest cash · <span className="whitespace-nowrap">90 days</span>
-  </>
-);
-
-function Lowest({ s }: { s: Spine }) {
+function Lowest({ s }: { s: Spine | undefined }) {
+  if (!s) return <Tile {...LOADING.lowest} index={3} body={FOUR_BODY}><Skel /></Tile>;
   const f = s.forecast;
   const v = lowPointView(f, { buffer: f.cashBuffer, stale: s.bank.stale });
   const below = v.value != null && v.value < 0;
@@ -92,7 +106,16 @@ function Lowest({ s }: { s: Spine }) {
   );
 }
 
-function SpentThisWeek({ s }: { s: Spine }) {
+/** The box is one node from skeleton to figure; what it reads (and asks for) mounts with the spine, as before. */
+function SpentThisWeek({ s }: { s: Spine | undefined }) {
+  return (
+    <Tile {...LOADING.spent} index={4} body={FOUR_BODY}>
+      {s ? <SpentBody s={s} /> : <Skel />}
+    </Tile>
+  );
+}
+
+function SpentBody({ s }: { s: Spine }) {
   const pos = useMoneyPositionQ();
   // The same cash signal the header already asked for (same key, no new request).
   const cash = useCashSignalQ(90);
@@ -109,7 +132,7 @@ function SpentThisWeek({ s }: { s: Spine }) {
   const ofN = of != null ? Number(of) : NaN;
   const rem = w.planSet ? w.remainingKnown : Number.isFinite(ofN) ? Math.round((ofN - known) * 100) / 100 : null;
   return (
-    <Tile testid="four-spent" title="Spent this week" href="/spending/week" accent="checking" index={4} box={FOUR_BOX_BAR} body={FOUR_BODY}>
+    <>
       <Fig big testid="four-spent-value" value={money(w.known)} />
       {/* The bar's length only: spent against (spent + what is left), which is the week's amount. */}
       <Bar testid="four-spent-bar" value={rem != null ? known : undefined} ceiling={rem != null ? known + rem : undefined} />
@@ -121,11 +144,12 @@ function SpentThisWeek({ s }: { s: Spine }) {
       ) : (
         <Line testid="four-spent-line">{null}</Line>
       )}
-    </Tile>
+    </>
   );
 }
 
-function DebtPaid({ s }: { s: Spine }) {
+function DebtPaid({ s }: { s: Spine | undefined }) {
+  if (!s) return <Tile {...LOADING.debt} index={5} body={FOUR_BODY}><Skel /></Tile>;
   const pct = s.debt.payoffPct;
   return (
     <Tile testid="four-debt" title="Debt paid" href="/avalanche" accent="other" index={5} box={FOUR_BOX_BAR} body={FOUR_BODY}>
@@ -136,13 +160,6 @@ function DebtPaid({ s }: { s: Spine }) {
   );
 }
 
-const LOADING = [
-  { testid: "four-checking", title: "Checking", href: "/banking", accent: "checking", box: FOUR_BOX },
-  { testid: "four-lowest", title: LOWEST, href: "/forecast?horizon=90", accent: "other", box: FOUR_BOX },
-  { testid: "four-spent", title: "Spent this week", href: "/spending/week", accent: "checking", box: FOUR_BOX_BAR },
-  { testid: "four-debt", title: "Debt paid", href: "/avalanche", accent: "other", box: FOUR_BOX_BAR },
-] as const;
-
 export default function FourNumbers() {
   const spine = useSpine();
   const s = spine.data;
@@ -151,18 +168,10 @@ export default function FourNumbers() {
   }
   return (
     <div className={FOUR_GRID} data-testid="dash-four">
-      {s ? (
-        <>
-          <Checking s={s} older={spine.olderWords} />
-          <Lowest s={s} />
-          <SpentThisWeek s={s} />
-          <DebtPaid s={s} />
-        </>
-      ) : (
-        LOADING.map((t, i) => (
-          <Tile key={t.testid} {...t} index={i + 2} body={FOUR_BODY}><Skel /></Tile>
-        ))
-      )}
+      <Checking s={s} older={spine.olderWords} />
+      <Lowest s={s} />
+      <SpentThisWeek s={s} />
+      <DebtPaid s={s} />
     </div>
   );
 }

@@ -49,7 +49,7 @@ vi.mock("@/lib/charts", async () => {
   return { ...kit, useXTicks: () => [] };
 });
 
-import { ProjectedBalanceChart } from "./ProjectedBalanceChart";
+import { LINE_SLOTS, linePads, ProjectedBalanceChart } from "./ProjectedBalanceChart";
 import type { MarkerGroup } from "@/lib/forecastEventKinds";
 import { CHART, DRAW_MS, MORPH_MS, niceAxis, PULSE_MS } from "@/lib/chartTokens";
 
@@ -321,6 +321,33 @@ describe("ProjectedBalanceChart — calm motion (clean forecast line)", () => {
     const before = wrapper(b.container);
     b.rerender(<ProjectedBalanceChart {...props} horizonKey={90} />);
     expect(wrapper(b.container)).not.toBe(before);
+  });
+
+  it("(Motion pass) the line keeps its place among the chart's children however many tints the data draws", () => {
+    // The chart library keys the line by its position. One more tint ahead of it used to move it one place,
+    // which threw the line away and drew it again from the left edge on a refresh or a new horizon.
+    const ahead = (c: HTMLElement) =>
+      c.querySelectorAll("[data-testid='risk-below-buffer'], [data-testid='risk-below-zero'], [data-testid='ref-zero'], [data-line-slot]").length;
+    const a = render(<ProjectedBalanceChart {...props} calm riskShading sessionKey="calm-slots" />);
+    expect(a.container.querySelectorAll("[data-testid='risk-below-buffer']").length).toBe(0);
+    expect(ahead(a.container)).toBe(LINE_SLOTS);
+    // The same days, now under the cushion once.
+    const dips = data.map((d, i) => (i === 2 ? { ...d, balance: 300 } : d));
+    a.rerender(<ProjectedBalanceChart {...props} calm riskShading sessionKey="calm-slots" data={dips} />);
+    expect(a.container.querySelectorAll("[data-testid='risk-below-buffer']").length).toBe(1);
+    expect(ahead(a.container)).toBe(LINE_SLOTS);
+    // Under zero as well: a second tint and the zero rule.
+    const under = data.map((d, i) => (i === 2 ? { ...d, balance: -200 } : d));
+    a.rerender(<ProjectedBalanceChart {...props} calm riskShading sessionKey="calm-slots" data={under} />);
+    expect(a.container.querySelectorAll("[data-testid='risk-below-zero']").length).toBe(1);
+    expect(a.container.querySelectorAll("[data-testid='ref-zero']").length).toBe(1);
+    expect(ahead(a.container)).toBe(LINE_SLOTS);
+    expect(linePads(0)).toBe(LINE_SLOTS);
+    expect(linePads(LINE_SLOTS + 5)).toBe(0);
+    // The classic expanded chart remounts per horizon anyway: no held places there.
+    cleanup();
+    const b = render(<ProjectedBalanceChart {...props} riskShading />);
+    expect(b.container.querySelectorAll("[data-line-slot]").length).toBe(0);
   });
 
   it("the low point pulses ONCE after the first draw, then the ring is gone for good", () => {

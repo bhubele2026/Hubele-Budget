@@ -12,7 +12,7 @@ import { useCashSignalQ } from "./queries";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
 import { toggle } from "@/ui";
-import { Gate, LINK, money, rise, weekdayLabel } from "./shared";
+import { Gate, LINK, money, weekdayLabel } from "./shared";
 
 /** The chart (and recharts with it) loads only when this panel mounts. */
 const Chart = lazyWithPreload(() =>
@@ -89,7 +89,9 @@ export default function ForecastPanel() {
       title="Checking forecast"
       span={BELOW_FOLD.forecast.span}
       variant="static"
-      className={cn(rise(BELOW_FOLD.forecast.rise), minH)}
+      // No entrance of its own: it replaces a skeleton of the same size (a second fade blinked the box). The
+      // chart's one sweep is the arrival.
+      className={minH}
       data-testid="dash-forecast"
       actions={
         <div className="flex gap-1" role="group" aria-label="Forecast horizon">

@@ -1,8 +1,8 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { cn } from "@/lib/utils";
-import Tiles from "./Tiles";
+import Tiles, { warmTileNotes } from "./Tiles";
 import { usePlaidItemsQ } from "./queries";
 import { bankLines } from "./bankState";
 
@@ -83,6 +83,9 @@ function MoreBody() {
  */
 export default function MoreDrawer() {
   const [ever, setEver] = useState(false);
+  // The tiles' small lazy notes, fetched while the drawer is still closed, so the first opening lands at its
+  // final height (code only; nothing inside asks for data until it opens).
+  useEffect(() => warmTileNotes(), []);
   return (
     <details
       className="disclose span-12"

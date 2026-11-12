@@ -99,6 +99,13 @@ function useScale(series: DailyPoint[], cashBuffer: number) {
 /** Session keys that have already drawn their sweep (module scope: survives leaving and returning to the page). */
 const DRAWN = new Set<string>();
 
+/** Places held ahead of the calm line for the tints and the zero rule (far more than a 120-day window draws). */
+export const LINE_SLOTS = 40;
+/** How many empty places to add after `used` real ones, so the line's own place never moves. */
+export function linePads(used: number): number {
+  return Math.max(0, LINE_SLOTS - used);
+}
+
 export function ProjectedBalanceChart({
   data,
   cashBuffer,
@@ -616,6 +623,18 @@ export function ProjectedBalanceChart({
     />
   );
 
+  const zeroLine = expanded && (scale.domain[0] < 0 || touchesZero);
+  // (Motion pass, 2026-11-11) Calm: the line must sit at the SAME place among the chart's children whatever the
+  // data says. The chart library keys the line by its position, and the tints and the zero rule are drawn before it
+  // (under it): when their count changed (a refresh or a new horizon that dips under the cushion one more or one
+  // fewer time) the line was thrown away and drawn again from the left edge, which is the one thing calm forbids.
+  // Empty groups fill the unused places, so the count ahead of the line never changes and it reshapes instead.
+  const slotPads = calmX
+    ? Array.from({ length: linePads((risk?.below.length ?? 0) + (risk?.negative.length ?? 0) + (zeroLine ? 1 : 0)) }, (_, i) => (
+        <g key={`line-slot-${i}`} data-line-slot="" />
+      ))
+    : null;
+
   return (
     // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
     // left→right so the curve reads as being plotted across the horizon.
@@ -711,9 +730,10 @@ export function ProjectedBalanceChart({
               data-testid="risk-below-zero"
             />
           ))}
-          {expanded && (scale.domain[0] < 0 || touchesZero) && (
+          {zeroLine && (
             <ReferenceLine y={0} stroke={CHART.steel} strokeWidth={1} ifOverflow="extendDomain" data-testid="ref-zero" />
           )}
+          {slotPads}
           {expanded && todayISO && !quiet && (
             <Area
                 {...areaAnim}

@@ -10,7 +10,7 @@ import { useAvalancheWeekPay, type AvalancheWeekPayControls } from "@/hooks/useA
 import { WeekPayButton, WeekPayError, WeekUndoButton } from "@/components/avalanche-week-pay";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
-import { LINK, money, rise, weekdayLabel } from "./shared";
+import { LINK, money, weekdayLabel } from "./shared";
 
 const MIN = 60_000;
 
@@ -230,7 +230,9 @@ export default function AvalancheWeekBox() {
       title="Pay this week"
       span={BELOW_FOLD.avalanche.span}
       variant="static"
-      className={cn(rise(BELOW_FOLD.avalanche.rise), minH)}
+      // No entrance of its own: it replaces a skeleton of the same size that is already on screen (a second
+      // fade here blinked the box out and back in). The page's own lift is its entrance.
+      className={minH}
       data-testid="dash-avalanche-week"
       actions={
         <Link href="/avalanche" className={cn(LINK, "text-label")} data-testid="dash-avalanche-week-link">
