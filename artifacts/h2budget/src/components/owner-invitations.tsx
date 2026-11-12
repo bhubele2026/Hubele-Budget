@@ -1,3 +1,4 @@
+import { StatusBadge } from "@/components/next/StatusBadge";
 import {
   useGetMe,
   useListInvitations,
@@ -34,15 +35,12 @@ function formatDate(epoch: number | null | undefined): string {
 }
 
 /** (C8) The invitation state as a `.chip` word; the tint only helps. */
-function statusChip(status: string): string {
-  switch (status) {
-    case "accepted":
-      return "chip ok";
-    case "pending":
-      return "chip warn";
-    default:
-      return "chip gray";
-  }
+/** (2026-11-12) An invitation's state in the shared badge look: accepted = confirmed, pending = pending, the rest grey. */
+function InvitationStatus({ status }: { status: string }) {
+  const words = status ? status.charAt(0).toUpperCase() + status.slice(1) : status;
+  if (status === "accepted") return <StatusBadge state="confirmed">{words}</StatusBadge>;
+  if (status === "pending") return <StatusBadge state="pending">{words}</StatusBadge>;
+  return <span className="chip gray">{words}</span>;
 }
 
 export function OwnerInvitationsSection() {
@@ -238,7 +236,7 @@ export function OwnerInvitationsSection() {
                     <tr key={inv.id} data-testid={`row-invitation-${inv.id}`}>
                       <td className={td}>{inv.emailAddress}</td>
                       <td className={td}>
-                        <span className={statusChip(inv.status)}>{inv.status}</span>
+                        <InvitationStatus status={inv.status} />
                       </td>
                       <td className={`${td} fig text-neutral-500`}>
                         {formatDate(inv.createdAt)}
