@@ -74,7 +74,7 @@ function RowList({ rows, count, truncated, routeOf, kind = "known" }: {
                     <span className="min-w-0 truncate" title={route.note ?? undefined}>{merchant}</span>
                   )}
                 </span>
-                <span className="shrink-0 font-mono text-body tabular-nums text-brand-ink" data-testid="sp-row-amount">{formatCurrency(r.amount)}</span>
+                <span className="shrink-0 fig text-body text-foreground" data-testid="sp-row-amount">{formatCurrency(r.amount)}</span>
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-neutral-600">
                 <span className="chip gray" data-testid="sp-row-account">{accountWords(r.account)}</span>
@@ -115,7 +115,7 @@ function GroupHead({ id, open, onToggle, title, amount, sub, bar, chips }: {
     >
       <span className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 truncate text-body font-semibold text-brand-ink">{title}</span>
-        <span className="shrink-0 font-mono text-body font-semibold tabular-nums text-brand-ink" data-testid={`sp-group-amount-${id}`}>{amount}</span>
+        <span className="shrink-0 fig text-body font-semibold text-foreground" data-testid={`sp-group-amount-${id}`}>{amount}</span>
       </span>
       {sub ? <span className="mt-0.5 block text-micro text-neutral-600">{sub}</span> : null}
       {bar}
@@ -208,8 +208,8 @@ export function Breakdown({ data, open, onToggle, routeOf }: {
 
       <div data-testid="sp-known">
         <div className="flex items-baseline justify-between gap-3 border-b border-brand-line bg-brand-tint/40 px-4 py-2">
-          <h3 className="text-label font-semibold uppercase tracking-wide text-neutral-600">Counts toward plan</h3>
-          <span className="font-mono text-body font-semibold tabular-nums text-brand-ink" data-testid="sp-known-amount">{formatCurrency(data.known)}</span>
+          <h3 className="text-label font-medium text-neutral-600">Counts toward plan</h3>
+          <span className="fig text-body font-semibold text-foreground" data-testid="sp-known-amount">{formatCurrency(data.known)}</span>
         </div>
         {cats.length === 0 && !showUnfiled ? (
           <p className="px-4 py-4 text-body text-neutral-600" data-testid="sp-empty">Nothing counted against this plan.</p>

@@ -270,7 +270,7 @@ export function ChartCard({
       span={span}
       variant="static"
       data-testid={testId}
-      className={cn("tile-in", className)}
+      className={className}
       actions={
         help || right ? (
           <>
@@ -319,7 +319,7 @@ export function PanelCard({
       span={span}
       variant={["static", "flush"]}
       data-testid={testId}
-      className={cn("tile-in", className)}
+      className={className}
       actions={
         help || right ? (
           <>
@@ -353,7 +353,7 @@ export function Stat(props: {
   const span = props.span === undefined ? 3 : props.span;
   return (
     <div
-      className={cn("panel tile-in p-4", span != null && `span-${span}`)}
+      className={cn("panel p-4", span != null && `span-${span}`)}
       style={
         props.index != null
           ? { animationDelay: `calc(${Math.min(props.index, 12)} * var(--stagger))` }
@@ -465,7 +465,7 @@ export function ReportsBalanceTiles() {
         data-testid="reports-tile-total-debt"
       />
       {/* (R) The Dashboard's block, not this page's own words: "Checking today", the calculated line, Details. */}
-      <div className="panel tile-in span-3 p-4" style={{ animationDelay: "calc(1 * var(--stagger))" }} data-testid="reports-tile-bank">
+      <div className="panel span-3 p-4" style={{ animationDelay: "calc(1 * var(--stagger))" }} data-testid="reports-tile-bank">
         {/* (R) The one shared block: label, figure, calculated line, Details — from the spine's bank (the Dashboard
             tile's own source), no Plaid/Manual account words, no second calculation. Before the spine answers
             it makes no claim about a reading. */}
@@ -593,7 +593,7 @@ export function ReportShell({
         <span className="px-1 py-0.5 text-neutral-400">{crumb}</span>
       </nav>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-display font-semibold text-brand-navy">{title}</h1>
+        <h1 className="text-display font-semibold text-foreground">{title}</h1>
         {controls}
       </div>
       {children}

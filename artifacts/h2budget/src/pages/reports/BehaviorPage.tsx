@@ -135,7 +135,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
             <div key={r.key}>
               <div className="flex items-baseline justify-between gap-2">
                 <span className={fieldLabel}>{r.key}</span>
-                <span className="font-mono text-title font-semibold tabular-nums text-brand-navy">
+                <span className="fig text-title font-semibold text-foreground">
                   {daysValue(r.entry)}
                 </span>
               </div>
@@ -151,7 +151,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
                 className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-brand-line"
               >
                 <span
-                  className="bar-sweep grow-x block h-full rounded-full"
+                  className="bar-sweep block h-full rounded-full"
                   style={{
                     width: `${((r.entry?.days ?? 0) / sinceMax) * 100}%`,
                     background: CHART.navy,
@@ -298,7 +298,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
         <div className="grid grid-cols-1 divide-y divide-brand-line sm:grid-cols-2 sm:divide-x sm:divide-y-0">
           <div className="px-4 py-3">
             <div className={fieldLabel}>Biggest expense</div>
-            <div className="mt-0.5 font-mono text-title font-semibold tabular-nums text-bad">
+            <div className="mt-0.5 fig text-title font-semibold text-bad">
               {hallOfFame.biggestExpense
                 ? formatCurrency(hallOfFame.biggestExpense.amount)
                 : "—"}
@@ -311,7 +311,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
           </div>
           <div className="px-4 py-3">
             <div className={fieldLabel}>Biggest income</div>
-            <div className="mt-0.5 font-mono text-title font-semibold tabular-nums text-brand-navy">
+            <div className="mt-0.5 fig text-title font-semibold text-foreground">
               {hallOfFame.biggestIncome
                 ? formatCurrency(hallOfFame.biggestIncome.amount)
                 : "—"}
@@ -354,7 +354,7 @@ function StreakCard({
     >
       <div>
         <div className="flex items-baseline gap-2">
-          <span className="font-mono text-display font-semibold tabular-nums text-brand-navy">
+          <span className="fig text-display font-semibold text-foreground">
             {current}
           </span>
           <span className="text-micro text-neutral-400">days</span>
@@ -370,7 +370,7 @@ function StreakCard({
           title={`${current} of a ${longest}-day record`}
         >
           <span
-            className="bar-sweep grow-x block h-full rounded-full"
+            className="bar-sweep block h-full rounded-full"
             style={{
               width: `${longest > 0 ? Math.min(100, (current / longest) * 100) : 0}%`,
               background: CHART.navy,

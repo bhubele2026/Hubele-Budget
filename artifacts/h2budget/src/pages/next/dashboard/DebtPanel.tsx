@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
 import { useDebtsQ } from "./queries";
-import { Gate, LABEL, LINK, money, rise } from "./shared";
+import { Gate, LABEL, LINK, money } from "./shared";
 
 export function monthName(ym: string): string {
   const m = /^(\d{4})-(\d{2})/.exec(ym);
@@ -31,7 +31,7 @@ export default function DebtPanel() {
   const q = { data: spine.data, isError: spine.state === "failed", refetch: spine.refetch };
   return (
     <Panel title="Debt progress" span={6} variant="static"
-      className={cn(rise(BELOW_FOLD.debt.rise), minH)} data-testid="dash-debt">
+      className={cn(minH)} data-testid="dash-debt">
       <Gate q={q} what="Debt progress" rows={5}>
         {() => noDebts ? (
           <div className="space-y-3" data-testid="dash-debt-empty">
@@ -46,7 +46,7 @@ export default function DebtPanel() {
             <div data-testid="dash-debt-paid">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-label font-semibold text-brand-ink">Paid off so far</span>
-                <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+                <span className="fig text-label font-semibold text-foreground">
                   {d?.payoffPct == null ? "—" : `${Math.round(d.payoffPct)}%`}
                 </span>
               </div>
@@ -56,12 +56,12 @@ export default function DebtPanel() {
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3" data-testid="dash-debt-month">
                 <div>
                   <dt className={LABEL}>Paid down this month</dt>
-                  <dd className="font-mono text-body tabular-nums text-brand-ink" data-testid="dash-debt-paid-down">{money(d.paidDownMtd)}</dd>
+                  <dd className="fig text-body text-foreground" data-testid="dash-debt-paid-down">{money(d.paidDownMtd)}</dd>
                   <dd className="text-micro text-neutral-500">confirmed by the bank</dd>
                 </div>
                 <div>
                   <dt className={LABEL}>New charges this month</dt>
-                  <dd className="font-mono text-body tabular-nums text-brand-ink" data-testid="dash-debt-new">{money(d.newChargesMtd)}</dd>
+                  <dd className="fig text-body text-foreground" data-testid="dash-debt-new">{money(d.newChargesMtd)}</dd>
                   <dd className="text-micro text-neutral-500">on the debts' own accounts</dd>
                 </div>
                 <div className="col-span-2" data-testid="dash-debt-milestone">

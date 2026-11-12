@@ -33,7 +33,7 @@ export function RemainderNote({ remainderAmount }: { remainderAmount: number }) 
   return (
     <span>
       Paid;{" "}
-      <span className="font-mono tabular-nums">
+      <span className="fig">
         {formatCurrency(Math.abs(remainderAmount))}
       </span>{" "}
       still assumed unpaid
@@ -53,7 +53,7 @@ export function DayDelta({ days }: { days: number }) {
   if (days === 0) return <span>same day</span>;
   return (
     <span>
-      <span className="font-mono tabular-nums">{Math.abs(days)}d</span>{" "}
+      <span className="fig">{Math.abs(days)}d</span>{" "}
       {days < 0 ? "early" : "late"}
     </span>
   );
@@ -64,7 +64,7 @@ export function AmountDifference({ difference }: { difference: number }) {
   if (Math.abs(difference) < 0.005) return <span>exact</span>;
   return (
     <span>
-      <span className="font-mono tabular-nums">
+      <span className="fig">
         {formatCurrency(Math.abs(difference))}
       </span>{" "}
       {difference > 0 ? "over" : "under"}

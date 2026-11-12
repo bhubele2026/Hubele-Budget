@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { PageHeader } from "@/components/next/PageHeader";
 import {
   useListDebts,
   useGetAvalancheSettings,
@@ -208,7 +209,7 @@ export default function DebtsPage() {
   if (debtsFailed && !debts) {
     return (
       <div className="space-y-4">
-        <h1 className="text-display font-semibold text-brand-navy">Debts</h1>
+        <PageHeader title="Debts" />
         <DebtsLoadFailed onRetry={() => void refetchDebts()} />
       </div>
     );
@@ -241,7 +242,7 @@ export default function DebtsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-display font-semibold text-brand-navy">Debts</h1>
+      <PageHeader title="Debts" />
       <DebtReauthBanner debts={debts} />
 
       <PageGrid>
@@ -255,10 +256,10 @@ export default function DebtsPage() {
           hint="on top of minimums"
         />
 
-      <div className="panel tile-in span-12">
+      <div className="panel span-12">
         <div className="panel-head">
           <span className="text-title font-semibold text-brand-navy">Creditors</span>
-          <span className="text-micro uppercase tracking-wide text-neutral-400">
+          <span className="text-micro text-neutral-400">
             Highest APR first
           </span>
           <Help className="ml-auto">
@@ -356,7 +357,7 @@ export default function DebtsPage() {
                       <div className="flex items-center gap-1.5 text-micro text-neutral-400">
                         <span className="capitalize">{debt.type || "General"}</span>
                         {originalNum > 0 && (
-                          <span className="font-mono tabular-nums">
+                          <span className="fig">
                             · {Math.round(paidRatio * 100)}% paid
                           </span>
                         )}
@@ -379,7 +380,7 @@ export default function DebtsPage() {
                     </td>
                     <td className={tdNum}>{formatCurrency(debt.minPayment)}</td>
                     <td
-                      className={`${td} whitespace-nowrap text-right font-mono text-label tabular-nums`}
+                      className={`${td} whitespace-nowrap text-right fig text-label `}
                       data-testid="debt-card-payoff-date"
                       data-debt-id={debt.id}
                       title={payoffDate ? "Projected payoff month" : payoffReason}
@@ -398,7 +399,7 @@ export default function DebtsPage() {
                         target rows by testid stay accurate. */}
                     <td
                       className={cn(
-                        `${td} whitespace-nowrap text-right font-mono text-label font-semibold tabular-nums text-brand-navy`,
+                        `${td} whitespace-nowrap text-right fig text-label font-semibold text-foreground`,
                         !isTarget && "invisible",
                       )}
                       aria-hidden={!isTarget}
@@ -419,7 +420,7 @@ export default function DebtsPage() {
                     </td>
                     <td
                       className={cn(
-                        `${td} whitespace-nowrap text-right font-mono text-label font-semibold tabular-nums text-brand-navy`,
+                        `${td} whitespace-nowrap text-right fig text-label font-semibold text-foreground`,
                         !(isTarget && targetExtra > 0) && "invisible",
                       )}
                       aria-hidden={!(isTarget && targetExtra > 0)}

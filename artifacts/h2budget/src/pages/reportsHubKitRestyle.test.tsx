@@ -328,11 +328,11 @@ describe("Reports hub — one basis, no local money maths", () => {
     const tile = screen.getByTestId("report-tile-spending").textContent ?? "";
     expect(tile).toContain("$195.75");
     expect(tile).toContain("+ $24.50 uncategorized");
-    // (PR7b) The figure is in mono numerals.
+    // (PR7b) The figure is in figure numerals.
     const amount = screen.getByTestId("report-tile-spending-uncategorized");
     expect(amount.textContent).toBe("$24.50");
-    expect(amount.className).toContain("font-mono");
-    expect(amount.className).toContain("tabular-nums");
+    // (2026-11-12) Money is Inter's tabular lining figures (`.fig`), no longer the mono face.
+    expect(amount.className).toContain("fig");
   });
 
   it("measures the budget ring against real income", () => {

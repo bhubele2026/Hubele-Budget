@@ -2012,7 +2012,7 @@ export default function ForecastPage({
     return (
       <div className="space-y-4">
         {/* The screen names itself while it loads and when it failed; a failed first read leaves no skeleton pulsing under the error. */}
-        <h1 className="text-title font-semibold text-brand-navy">{forecastTitle(mode)}</h1>
+        <h1 className="text-display font-semibold text-foreground">{forecastTitle(mode)}</h1>
         {forecastError ? <div role="alert" className={errorBanner}>Couldn't load the forecast. <button type="button" className={btnLink} onClick={() => void refetchForecast()}>Retry forecast</button></div> : <Skeleton className="h-10 w-48" />}
         {!forecastError && <Skeleton className="h-96 w-full" />}
       </div>
@@ -2236,7 +2236,7 @@ export default function ForecastPage({
           >
             <Label
               htmlFor="forecast-from"
-              className="text-micro font-semibold uppercase tracking-wide text-neutral-500"
+              className="text-micro font-medium text-neutral-500"
             >
               Start
             </Label>
@@ -2253,7 +2253,7 @@ export default function ForecastPage({
                 setForecastFromDate(clampForecastFrom(e.target.value));
                 setFromDatePicked(true);
               }}
-              className="h-7 w-[150px] font-mono text-micro tabular-nums"
+              className="h-7 w-[150px] fig text-micro"
               data-testid="input-forecast-from"
               data-pending={fromDateSwitchPending ? "true" : undefined}
               aria-busy={fromDateSwitchPending || undefined}
@@ -2435,7 +2435,7 @@ export default function ForecastPage({
   // bank row from an earlier month never reached the inbox.
   const monthPicker = (
     <>
-      <Label className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
+      <Label className="text-micro font-medium text-neutral-500">
         Month
       </Label>
       <Help>Lists this month's rows. The curve follows the horizon.</Help>
@@ -2643,7 +2643,7 @@ export default function ForecastPage({
                   >
                     <span className="flex flex-1 items-center gap-1.5 text-micro text-neutral-500">
                       Back in review
-                      <span className="font-mono tabular-nums text-brand-navy">
+                      <span className="fig text-foreground">
                         {returnedUnflaggedIds.length}
                       </span>
                       <Help>
@@ -2722,7 +2722,7 @@ export default function ForecastPage({
                     className="mt-3 border-t border-brand-line pt-3"
                     data-testid="bank-resolved-list"
                   >
-                    <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">
+                    <div className="mb-1 text-micro font-medium text-neutral-400">
                       Resolved this month
                     </div>
                     <div
@@ -2822,7 +2822,7 @@ export default function ForecastPage({
                         Prev
                       </button>
                       <span
-                        className="font-mono text-micro tabular-nums text-neutral-500"
+                        className="fig text-micro text-neutral-500"
                         data-testid="bank-inbox-pager-indicator"
                       >
                         {safeIndex + 1} of {bankInbox.length}
@@ -2880,7 +2880,7 @@ export default function ForecastPage({
                         >
                           {card.bank.txn.description}
                         </span>
-                        <span className="font-mono text-label tabular-nums text-neutral-500">
+                        <span className="fig text-label text-neutral-500">
                           {formatCurrency(card.bank.amount)}
                         </span>
                         {(() => {
@@ -3224,7 +3224,7 @@ export default function ForecastPage({
                             <div className="truncate text-body font-medium text-neutral-700">
                               {b.label || "—"}
                             </div>
-                            <div className="font-mono text-micro tabular-nums text-neutral-400">
+                            <div className="fig text-micro text-neutral-400">
                               {formatDate(b.date)} → {formatDate(b.rescheduledTo!)}
                             </div>
                           </div>

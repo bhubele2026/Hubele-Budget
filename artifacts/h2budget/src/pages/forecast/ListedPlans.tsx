@@ -73,7 +73,7 @@ function PlanRow({ row, prefix, missedWord, h }: { row: DraggingPlanRow; prefix:
           <div className="truncate text-body font-medium text-neutral-700">{row.label}</div>
           <div className="text-micro text-neutral-600">Due {shortDate(row.originalDate)}</div>
         </div>
-        <span className={`font-mono text-label tabular-nums ${row.amount < 0 ? "text-bad" : "text-brand-navy"}`}>
+        <span className={`fig text-label ${row.amount < 0 ? "text-bad" : "text-foreground"}`}>
           {formatCurrency(row.amount)}
         </span>
       </button>
@@ -183,7 +183,7 @@ export function ListedPlans({
           <span className="chip bad" data-testid="dragging-plans-chip">
             {carried.length} · carried to {shortDate(carriedTo!)}
           </span>
-          <span className="ml-auto font-mono text-label tabular-nums text-bad" data-testid="dragging-plans-total">
+          <span className="ml-auto fig text-label text-bad" data-testid="dragging-plans-total">
             {formatCurrency(carriedTotal)}
           </span>
         </>
@@ -210,7 +210,7 @@ export function ListedPlans({
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="truncate text-body font-medium text-neutral-700">{p.label}</span>
-                <span className="font-mono text-label tabular-nums text-neutral-700">{formatCurrency(Number(p.planAmount))}</span>
+                <span className="fig text-label text-neutral-700">{formatCurrency(Number(p.planAmount))}</span>
               </div>
               <div className="text-micro text-neutral-600" data-testid={`assumed-paid-words-${p.itemId}-${p.dueDate}`}>
                 {/* Words carry the direction ("paid", "still unpaid"): the amounts read unsigned. */}

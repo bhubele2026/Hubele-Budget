@@ -132,7 +132,7 @@ export function InboxCardView({
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2 text-micro text-neutral-400">
-          <span className="font-mono tabular-nums">
+          <span className="fig">
             {formatDate(card.bank.date)}
           </span>
           {categoryName ? (

@@ -50,28 +50,28 @@ export function Details({ data, view, openOnMount = false }: { data: PeriodBreak
         <dl className="space-y-1 text-body">
           <div className="flex justify-between gap-3">
             <dt className="text-neutral-700">Counts toward the {view === "week" ? "weekly" : "monthly"} plan</dt>
-            <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-known">{formatCurrency(data.known)}</dd>
+            <dd className="fig text-foreground" data-testid="sp-d-known">{formatCurrency(data.known)}</dd>
           </div>
           {!isZero(data.unresolved.amount) ? (
             <div className="flex justify-between gap-3">
               <dt className="text-neutral-700">{WEEK_FIGURE_WORDS.unresolved} (not counted yet)</dt>
-              <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-unconfirmed">{formatCurrency(data.unresolved.amount)}</dd>
+              <dd className="fig text-foreground" data-testid="sp-d-unconfirmed">{formatCurrency(data.unresolved.amount)}</dd>
             </div>
           ) : null}
           <div className="flex justify-between gap-3">
             <dt className="text-neutral-700">{WEEK_FIGURE_WORDS.cautious}</dt>
-            <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-actual">{formatCurrency(data.actual)}</dd>
+            <dd className="fig text-foreground" data-testid="sp-d-actual">{formatCurrency(data.actual)}</dd>
           </div>
           {data.carryOver != null && !isZero(data.carryOver) ? (
             <div className="flex justify-between gap-3">
               <dt className="text-neutral-700">Carried over</dt>
-              <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-carry">{formatCurrency(data.carryOver)}</dd>
+              <dd className="fig text-foreground" data-testid="sp-d-carry">{formatCurrency(data.carryOver)}</dd>
             </div>
           ) : null}
           {!isZero(data.refundFloorAdjustment) ? (
             <div className="flex justify-between gap-3">
               <dt className="text-neutral-700">Refund adjustment</dt>
-              <dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-d-floor">{formatCurrency(data.refundFloorAdjustment)}</dd>
+              <dd className="fig text-foreground" data-testid="sp-d-floor">{formatCurrency(data.refundFloorAdjustment)}</dd>
             </div>
           ) : null}
         </dl>
@@ -82,7 +82,7 @@ export function Details({ data, view, openOnMount = false }: { data: PeriodBreak
               {fullUsual.map((c) => (
                 <div key={c.categoryId ?? "none"} className="flex justify-between gap-3">
                   <dt className="text-neutral-700">{c.name ?? "No category"}</dt>
-                  <dd className="font-mono tabular-nums text-brand-ink">{formatCurrency(c.usualFullPeriod)}</dd>
+                  <dd className="fig text-foreground">{formatCurrency(c.usualFullPeriod)}</dd>
                 </div>
               ))}
             </dl>
@@ -100,7 +100,7 @@ export function Details({ data, view, openOnMount = false }: { data: PeriodBreak
               v == null ? null : (
                 <div key={key} className="flex justify-between gap-3">
                   <dt className="text-neutral-700">{label}</dt>
-                  <dd className="font-mono tabular-nums text-brand-ink" data-testid={`sp-d-${key}`}>{formatCurrency(v)}</dd>
+                  <dd className="fig text-foreground" data-testid={`sp-d-${key}`}>{formatCurrency(v)}</dd>
                 </div>
               ),
             )}

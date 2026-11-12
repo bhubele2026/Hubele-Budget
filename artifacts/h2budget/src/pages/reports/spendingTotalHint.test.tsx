@@ -92,7 +92,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("Spending page — Total real spend", () => {
-  it("adds '+ $X uncategorized' in mono numerals when anything is uncategorized", () => {
+  it("adds '+ $X uncategorized' in figure numerals when anything is uncategorized", () => {
     state.facts = {
       ...baseFacts,
       householdSpend: { total: 220.25, transactionCount: 3 },
@@ -105,8 +105,8 @@ describe("Spending page — Total real spend", () => {
     expect(tile).toContain("+ $24.50 uncategorized");
     const amount = screen.getByTestId("spending-total-uncategorized");
     expect(amount.textContent).toBe("$24.50");
-    expect(amount.className).toContain("font-mono");
-    expect(amount.className).toContain("tabular-nums");
+    // (2026-11-12) Money is Inter's tabular lining figures (`.fig`), no longer the mono face.
+    expect(amount.className).toContain("fig");
   });
 
   it("says nothing about uncategorized spend when there is none", () => {

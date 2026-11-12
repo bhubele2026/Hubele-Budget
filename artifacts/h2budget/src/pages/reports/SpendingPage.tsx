@@ -230,7 +230,7 @@ function UncategorizedBanner({
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="chip bad">Uncategorized</span>
-          <span className="font-mono text-title font-semibold tabular-nums text-bad">
+          <span className="fig text-title font-semibold text-bad">
             {formatCurrency(facts.uncategorized.total)}
           </span>
         </div>
@@ -266,11 +266,11 @@ function UncategorizedBanner({
                       <div className="truncate text-body font-medium">
                         {t.description}
                       </div>
-                      <div className="font-mono text-micro tabular-nums text-neutral-400">
+                      <div className="fig text-micro text-neutral-400">
                         {t.occurredOn}
                       </div>
                     </div>
-                    <div className="whitespace-nowrap font-mono text-label tabular-nums">
+                    <div className="whitespace-nowrap fig text-label">
                       {formatCurrency(Math.abs(parseFloat(t.amount)))}
                     </div>
                   </div>
@@ -520,7 +520,7 @@ function SpendingSection({
                 <>
                   {" · + "}
                   <span
-                    className="font-mono tabular-nums"
+                    className="fig"
                     data-testid="spending-total-uncategorized"
                   >
                     {formatCurrency(facts.uncategorized.total)}
@@ -619,10 +619,10 @@ function SpendingSection({
                   <span className="flex-1 truncate text-neutral-600">
                     {sentenceCase(d.name)}
                   </span>
-                  <span className="font-mono tabular-nums text-neutral-700">
+                  <span className="fig text-neutral-700">
                     {formatCurrency(d.amount)}
                   </span>
-                  <span className="w-9 text-right font-mono tabular-nums text-neutral-400">
+                  <span className="w-9 text-right fig text-neutral-400">
                     {formatShare(d.pct)}
                   </span>
                 </li>
@@ -781,7 +781,7 @@ function SpendingSection({
               <div className="mt-2 min-h-0 flex-1 overflow-y-auto border-t border-brand-line pt-2">
                 <div className="mb-1 flex items-baseline justify-between gap-2">
                   <span className={fieldLabel}>{selected.label} · top merchants</span>
-                  <span className="font-mono text-label font-semibold tabular-nums">
+                  <span className="fig text-label font-semibold">
                     {formatCurrency(selected.total)}
                   </span>
                 </div>
@@ -846,7 +846,7 @@ function SpendingSection({
               <span className="text-body font-medium">
                 {monthLongLabel(months[0].month)}
               </span>
-              <span className="font-mono text-label tabular-nums">
+              <span className="fig text-label">
                 {formatCurrency(months[0].total)} across {realCats.length}{" "}
                 {realCats.length === 1 ? "category" : "categories"}
               </span>
@@ -874,7 +874,7 @@ function SpendingSection({
                   <span className="flex-1 truncate text-neutral-600">
                     {sentenceCase(c.name)}
                   </span>
-                  <span className="font-mono tabular-nums text-neutral-700">
+                  <span className="fig text-neutral-700">
                     {formatCurrency(c.total)}
                   </span>
                 </li>
@@ -893,7 +893,7 @@ function SpendingSection({
                 <div className="truncate text-micro font-medium text-neutral-700">
                   {t.name}
                 </div>
-                <div className="mb-1 font-mono text-micro tabular-nums text-neutral-400">
+                <div className="mb-1 fig text-micro text-neutral-400">
                   {formatCurrency(t.total)}
                 </div>
                 <div className="h-16">

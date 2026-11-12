@@ -2522,7 +2522,7 @@ export default function AmexPage({
               style={{ top: "var(--page-sticky-top, 0px)" }}
               data-testid="amex-bulk-bar"
             >
-              <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+              <span className="fig text-label font-semibold text-foreground">
                 {selected.size} selected
               </span>
               <BulkCategoryPicker
@@ -2530,7 +2530,7 @@ export default function AmexPage({
                 onPick={bulkSetCategory}
               />
               <div className="flex items-center gap-1">
-                <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Bucket:</span>
+                <span className="mr-1 text-micro font-medium text-neutral-500">Bucket:</span>
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
                   —
                 </Button>
@@ -2545,7 +2545,7 @@ export default function AmexPage({
                 </Button>
               </div>
               <div className="flex items-center gap-1">
-                <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Reimb:</span>
+                <span className="mr-1 text-micro font-medium text-neutral-500">Reimb:</span>
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(true)}>
                   Mark
                 </Button>
@@ -2554,7 +2554,7 @@ export default function AmexPage({
                 </Button>
               </div>
               <div className="flex items-center gap-1">
-                <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Reviewed:</span>
+                <span className="mr-1 text-micro font-medium text-neutral-500">Reviewed:</span>
                 <Button
                   size="sm"
                   variant="outline"
@@ -2575,7 +2575,7 @@ export default function AmexPage({
                 </Button>
               </div>
               <div className="flex items-center gap-1">
-                <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Owed by:</span>
+                <span className="mr-1 text-micro font-medium text-neutral-500">Owed by:</span>
                 <Input
                   placeholder="Owed by…"
                   list={owedByListId}
@@ -2606,7 +2606,7 @@ export default function AmexPage({
               </div>
               {bulkProgress.total > 0 && (
                 <span
-                  className="text-xs text-foreground font-mono tabular-nums"
+                  className="text-xs text-foreground fig"
                   data-testid="text-bulk-progress"
                 >
                   Updating {bulkProgress.done}/{bulkProgress.total}…
@@ -2763,7 +2763,7 @@ export default function AmexPage({
                           </span>
                           {runningBalanceMap.has(t.id) && (
                             <span
-                              className="font-mono text-micro tabular-nums text-neutral-600"
+                              className="fig text-micro text-neutral-600"
                               data-testid={`text-running-balance-${t.id}`}
                             >
                               bal {formatCurrency(runningBalanceMap.get(t.id)!)}

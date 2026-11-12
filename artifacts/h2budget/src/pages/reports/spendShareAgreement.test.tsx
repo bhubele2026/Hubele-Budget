@@ -85,7 +85,7 @@ afterEach(() => {
 });
 
 const rowText = (name: string, testid: string) =>
-  Array.from(document.querySelectorAll(testid === "stackbar-legend-row" ? ".stagger-children [data-share-name]" : `[data-testid="${testid}"]`))
+  Array.from(document.querySelectorAll(testid === "stackbar-legend-row" ? '[data-testid="stackbar-legend"] [data-share-name]' : `[data-testid="${testid}"]`))
     .find((el) => el.getAttribute("data-share-name") === name)?.textContent ?? "";
 
 describe("(P) tile and report agree on a category's percentage", () => {

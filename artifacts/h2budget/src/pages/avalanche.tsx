@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PageHeader } from "@/components/next/PageHeader";
 import { useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -614,7 +615,7 @@ export default function AvalanchePage() {
   if (debtsFailed && !debts) {
     return (
       <div className="space-y-4">
-        <h1 className="text-display font-semibold text-brand-navy">Debt</h1>
+        <PageHeader title="Debt" />
         <DebtsLoadFailed onRetry={() => void refetchDebts()} />
       </div>
     );
@@ -660,12 +661,12 @@ export default function AvalanchePage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-display font-semibold text-brand-navy">Debt</h1>
+      <PageHeader title="Debt" />
       <DebtReauthBanner debts={debts} />
 
       <PageGrid>
       {killedBanner && (
-        <div className="panel tile-in span-12 flex items-center gap-3 px-4 py-3">
+        <div className="panel span-12 flex items-center gap-3 px-4 py-3">
           <span className="chip ok">Paid off</span>
           <span className="text-body text-neutral-600">
             <span className="font-medium text-brand-navy">{killedBanner.name}</span> is
@@ -687,13 +688,13 @@ export default function AvalanchePage() {
           with how much of it is gone — a percentage, never an amount owed. The
           balance is real detail and lives further down, in the table that can
           disclose what it is counting. */}
-      <section className="panel tile-in span-8" data-testid="avalanche-hero">
+      <section className="panel span-8" data-testid="avalanche-hero">
         <div className="flex flex-col gap-4 px-5 pb-5 pt-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className={fieldLabel}>Debt paid off</div>
             <div
               data-testid="avalanche-payoff-pct"
-              className="mt-1 font-mono text-hero font-semibold leading-none tabular-nums text-brand-navy"
+              className="mt-1 fig text-hero font-semibold leading-none text-foreground"
             >
               {payoffPct != null ? `${Math.round(payoffPct)}%` : "—"}
             </div>
@@ -764,7 +765,7 @@ export default function AvalanchePage() {
 
       {/* Headline detail. `Months to freedom` carries the underwater caveat as
           its hint — a drill has to disclose what it is leaving out. */}
-      <div className="panel tile-in span-4 grid grid-cols-2 content-start gap-4 p-4">
+      <div className="panel span-4 grid grid-cols-2 content-start gap-4 p-4">
         <StatBlock
           label="Months to freedom"
           value={sim.ranOutOfTime ? "∞" : String(sim.monthsToFreedom)}
@@ -798,10 +799,10 @@ export default function AvalanchePage() {
           whenever the extra changes, and a recharts list would restart its draw
           on every keystroke of the slider. */}
       {payoffRows.length > 0 && (
-        <div className={cn("panel tile-in", planTargets.length > 0 ? "span-6" : "span-12")}>
+        <div className={cn("panel", planTargets.length > 0 ? "span-6" : "span-12")}>
           <div className="panel-head">
             <span className="text-title font-semibold text-brand-navy">Payoff order</span>
-            <span className="text-micro uppercase tracking-wide text-neutral-400">
+            <span className="text-micro text-neutral-400">
               Balance left
             </span>
             <Help className="ml-auto">
@@ -834,12 +835,12 @@ export default function AvalanchePage() {
         const primaryDebt = (debts ?? []).find((x) => x.id === primary.id);
         return (
           <div
-            className={cn("panel tile-in", payoffRows.length > 0 ? "span-6" : "span-12")}
+            className={cn("panel", payoffRows.length > 0 ? "span-6" : "span-12")}
             data-testid="panel-this-month"
           >
             <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">This month</span>
-              <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
+              <span className="ml-auto fig text-label font-semibold text-foreground">
                 {fmtMoney(planTotal)}
               </span>
             </div>
@@ -862,7 +863,7 @@ export default function AvalanchePage() {
                             className="flex flex-wrap items-baseline gap-x-2 text-label"
                           >
                             <span className="font-medium text-brand-navy">{t.name}</span>
-                            <span className="font-mono tabular-nums text-neutral-600">
+                            <span className="fig text-neutral-600">
                               {fmtMoney(t.minPayment + t.extraForTarget)}
                             </span>
                             <span className="text-micro text-neutral-400">
@@ -873,7 +874,7 @@ export default function AvalanchePage() {
                             ) : killDate ? (
                               <span className="text-micro text-neutral-400">
                                 projected kill{" "}
-                                <span className="font-mono tabular-nums text-neutral-600">
+                                <span className="fig text-neutral-600">
                                   {fmtMonth(killDate)}
                                 </span>
                               </span>
@@ -900,20 +901,20 @@ export default function AvalanchePage() {
                         <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5">
                           <div>
                             <dt className={fieldLabel}>Target gets</dt>
-                            <dd className="font-mono text-label tabular-nums text-brand-navy">
+                            <dd className="fig text-label text-foreground">
                               {fmtMoney(targetPayment)}
                             </dd>
                           </div>
                           <div>
                             <dt className={fieldLabel}>Interest / day</dt>
-                            <dd className="font-mono text-label tabular-nums text-brand-navy">
+                            <dd className="fig text-label text-foreground">
                               {fmtMoney(dailyCost)}
                             </dd>
                           </div>
                           {killDate && (
                             <div>
                               <dt className={fieldLabel}>Projected kill</dt>
-                              <dd className="font-mono text-label tabular-nums text-brand-navy">
+                              <dd className="fig text-label text-foreground">
                                 {fmtMonth(killDate)}
                               </dd>
                             </div>
@@ -972,12 +973,12 @@ export default function AvalanchePage() {
 
       {/* Two cards: Extra per month + Strategy */}
         {/* Extra per month */}
-        <div className="panel tile-in span-6">
+        <div className="panel span-6">
           <div className="panel-head">
             <span className="text-title font-semibold text-brand-navy">
               {settings?.extraCadence === "weekly" ? "Target per month" : "Extra per month"}
             </span>
-            <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
+            <span className="ml-auto fig text-label font-semibold text-foreground">
               {fmtMoney(resolvedExtraAmount)}
             </span>
           </div>
@@ -1088,7 +1089,7 @@ export default function AvalanchePage() {
                   <div className="mb-2 flex items-center justify-between">
                     <span className={fieldLabel}>Avalanche budget</span>
                     <span
-                      className="font-mono text-label font-semibold tabular-nums text-brand-navy"
+                      className="fig text-label font-semibold text-foreground"
                       data-testid="text-avalanche-budget-live"
                     >
                       {fmtMoney(Math.min(liveManualExtra, budgetCap))}
@@ -1123,16 +1124,16 @@ export default function AvalanchePage() {
                     {overBudget ? (
                       <>
                         Over budget by{" "}
-                        <span className="font-mono tabular-nums">
+                        <span className="fig">
                           {fmtMoney(Math.abs(roomLeft))}
                         </span>{" "}
-                        — <span className="font-mono tabular-nums">{fmtMoney(availableMoney)}</span>{" "}
+                        — <span className="fig">{fmtMoney(availableMoney)}</span>{" "}
                         free this month
                       </>
                     ) : (
                       <>
                         Room left{" "}
-                        <span className="font-mono tabular-nums text-neutral-600">
+                        <span className="fig text-neutral-600">
                           {fmtMoney(roomLeft)}
                         </span>
                       </>
@@ -1152,7 +1153,7 @@ export default function AvalanchePage() {
         </div>
 
         {/* Strategy */}
-        <div className="panel tile-in span-6">
+        <div className="panel span-6">
           <div className="panel-head">
             <span className="text-title font-semibold text-brand-navy">Strategy</span>
             <Help className="ml-auto">
@@ -1194,7 +1195,7 @@ export default function AvalanchePage() {
       <div className={cn(settings?.extraCadence === "weekly" ? "span-12" : "span-6", "space-y-3")}>
         <div className="flex items-baseline gap-2">
           <h2 className="text-title font-semibold text-brand-navy">Your next 3 moves</h2>
-          <span className="text-micro uppercase tracking-wide text-neutral-400">Kill order</span>
+          <span className="text-micro text-neutral-400">Kill order</span>
         </div>
         {next3.length === 0 ? (
           <div className={cn("panel", emptyNote)}>Add a debt to see which one dies first.</div>
@@ -1206,9 +1207,9 @@ export default function AvalanchePage() {
               const cascadeFreed = killEntry?.minFreed ?? 0;
               const nextDebt = next3[i + 1];
               return (
-                <div key={d.id} className="panel tile-in p-4" style={{ animationDelay: `calc(${i} * var(--stagger))` }}>
+                <div key={d.id} className="panel p-4" style={{ animationDelay: `calc(${i} * var(--stagger))` }}>
                   <div className="flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-navy font-mono text-[10px] font-bold tabular-nums text-white">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-navy fig text-[10px] font-bold text-white">
                       {i + 1}
                     </span>
                     <span className="truncate font-medium text-brand-navy">{d.name}</span>
@@ -1216,26 +1217,26 @@ export default function AvalanchePage() {
                   <dl className="mt-2.5 space-y-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <dt className={fieldLabel}>APR</dt>
-                      <dd className="font-mono text-label tabular-nums text-neutral-600">
+                      <dd className="fig text-label text-neutral-600">
                         {fmtPct(d.apr)}
                       </dd>
                     </div>
                     <div className="flex items-baseline justify-between gap-2">
                       <dt className={fieldLabel}>Balance</dt>
-                      <dd className="font-mono text-label tabular-nums text-neutral-600">
+                      <dd className="fig text-label text-neutral-600">
                         {fmtMoney(d.balance)}
                       </dd>
                     </div>
                     <div className="flex items-baseline justify-between gap-2">
                       <dt className={fieldLabel}>Payoff</dt>
-                      <dd className="font-mono text-label tabular-nums text-brand-navy">
+                      <dd className="fig text-label text-foreground">
                         {k ? fmtMonth(k.date) : "—"}
                       </dd>
                     </div>
                   </dl>
                   {cascadeFreed > 0 && (
                     <p className="mt-2.5 border-t border-brand-line pt-2 text-micro text-neutral-400">
-                      <span className="font-mono tabular-nums text-neutral-600">
+                      <span className="fig text-neutral-600">
                         +{fmtMoney(cascadeFreed)}
                       </span>
                       /mo rolls into {nextDebt ? nextDebt.name : "the next debt"}
@@ -1278,10 +1279,10 @@ export default function AvalanchePage() {
         </TabsList>
 
         <TabsContent value="debts" className="mt-4">
-          <div className="panel tile-in">
+          <div className="panel">
             <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">Debts</span>
-              <span className="text-micro uppercase tracking-wide text-neutral-400">
+              <span className="text-micro text-neutral-400">
                 Highest APR first
               </span>
               <Help className="ml-auto">
@@ -1390,7 +1391,7 @@ export default function AvalanchePage() {
                 {sortedActive.length > 0 && (
                   <tfoot>
                     <tr className="bg-platinum-3 font-semibold">
-                      <td className={cn(td, "text-micro uppercase tracking-wide text-neutral-500")} colSpan={2}>
+                      <td className={cn(td, "text-micro text-neutral-500")} colSpan={2}>
                         Totals
                       </td>
                       <td className={tdNum}>{fmtMoney(totalBalance)}</td>
@@ -1406,10 +1407,10 @@ export default function AvalanchePage() {
         </TabsContent>
 
         <TabsContent value="projection" className="mt-4 space-y-4">
-          <div className="panel tile-in">
+          <div className="panel">
             <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">What-if extra</span>
-              <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
+              <span className="ml-auto fig text-label font-semibold text-foreground">
                 +{fmtMoney(whatIf)}
               </span>
             </div>
@@ -1426,7 +1427,7 @@ export default function AvalanchePage() {
                 {whatIf > 0 && whatIfInterestSaved > 0 ? (
                   <>
                     Adding {fmtMoney(whatIf)}/mo saves{" "}
-                    <span className="font-mono tabular-nums text-neutral-600">
+                    <span className="fig text-neutral-600">
                       {fmtMoney(whatIfInterestSaved)}
                     </span>
                     {whatIfMonthsSaved > 0 ? <> and {whatIfMonthsSaved} mo</> : null} vs your
@@ -1439,10 +1440,10 @@ export default function AvalanchePage() {
             </div>
           </div>
 
-          <div className="panel tile-in">
+          <div className="panel">
             <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">Schedule</span>
-              <span className="text-micro uppercase tracking-wide text-neutral-400">
+              <span className="text-micro text-neutral-400">
                 Month by month
               </span>
             </div>
@@ -1462,7 +1463,7 @@ export default function AvalanchePage() {
                 <tbody>
                   {(showAllMonths ? sim.months : sim.months.slice(0, 24)).map((m) => (
                     <tr key={m.monthIndex}>
-                      <td className={cn(td, "whitespace-nowrap font-mono text-label tabular-nums")}>
+                      <td className={cn(td, "whitespace-nowrap fig text-label")}>
                         {fmtMonth(m.date)}
                       </td>
                       <td className={cn(td, "text-neutral-500")}>
@@ -1516,7 +1517,7 @@ export default function AvalanchePage() {
         </TabsContent>
 
         <TabsContent value="chart" className="mt-4">
-          <div className="panel tile-in">
+          <div className="panel">
             <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">Payoff projection</span>
               <Help className="ml-auto">
@@ -1541,7 +1542,7 @@ export default function AvalanchePage() {
 
         {archivedDebts.length > 0 && (
           <TabsContent value="archived" className="mt-4">
-            <div className="panel tile-in">
+            <div className="panel">
               <div className="panel-head">
                 <span className="text-title font-semibold text-brand-navy">Archived</span>
               </div>
@@ -1707,7 +1708,7 @@ export default function AvalanchePage() {
                   <tbody>
                     {drillSchedule.map((r, i) => (
                       <tr key={i} className={cn(r.paidOff && "bg-platinum-3 font-medium")}>
-                        <td className={cn(td, "whitespace-nowrap font-mono text-label tabular-nums")}>
+                        <td className={cn(td, "whitespace-nowrap fig text-label")}>
                           {fmtMonth(r.date)}
                         </td>
                         <td className={tdNum}>{fmtMoney(r.startBalance)}</td>

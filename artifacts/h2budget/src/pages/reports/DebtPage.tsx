@@ -223,12 +223,12 @@ function DebtSection({
         <div className="px-4 py-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span
-              className="font-mono text-display font-semibold tabular-nums text-brand-navy"
+              className="fig text-display font-semibold text-foreground"
               data-testid="debt-report-paid-pct"
             >
               {totalPaid.pct.toFixed(1)}%
             </span>
-            <span className="font-mono text-micro tabular-nums text-neutral-500">
+            <span className="fig text-micro text-neutral-500">
               {formatCurrency(totalPaid.paidOff)} of{" "}
               {formatCurrency(totalPaid.startingBalance)}
             </span>
@@ -284,7 +284,7 @@ function DebtSection({
                           ceiling={p.startingBalance}
                           className="flex-1"
                         />
-                        <span className="w-9 shrink-0 text-right font-mono text-micro tabular-nums text-neutral-500">
+                        <span className="w-9 shrink-0 text-right fig text-micro text-neutral-500">
                           {Math.round(p.paidPct)}%
                         </span>
                       </div>
@@ -328,8 +328,8 @@ function DebtSection({
           >
             <defs>
               <linearGradient id={`${gid}-past`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={DEBT_SERIES.history} stopOpacity={0.7} />
-                <stop offset="100%" stopColor={DEBT_SERIES.history} stopOpacity={0.1} />
+                <stop offset="0%" stopColor={DEBT_SERIES.history} stopOpacity={0.45} />
+                <stop offset="100%" stopColor={DEBT_SERIES.history} stopOpacity={0.45} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
@@ -361,8 +361,8 @@ function DebtSection({
             <defs>
               {activeDebts.map((d, i) => (
                 <linearGradient key={d.id} id={`${gid}-payoff-${d.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={washOf(catColor(i))} stopOpacity={0.85} />
-                  <stop offset="100%" stopColor={washOf(catColor(i))} stopOpacity={0.25} />
+                  <stop offset="0%" stopColor={washOf(catColor(i))} stopOpacity={0.55} />
+                  <stop offset="100%" stopColor={washOf(catColor(i))} stopOpacity={0.55} />
                 </linearGradient>
               ))}
             </defs>
@@ -481,7 +481,7 @@ function DebtSection({
                         netting with the same component and the same words the
                         Debts and Avalanche tables use. */}
                     <span className="flex shrink-0 flex-col items-end">
-                      <span className="font-mono tabular-nums text-neutral-500">
+                      <span className="fig text-neutral-500">
                         {p.monthsLeft !== null ? `${p.monthsLeft} mo` : "∞"} ·{" "}
                         {formatCurrency(p.balance)}
                       </span>
@@ -498,7 +498,7 @@ function DebtSection({
                     className="h-1.5 w-full overflow-hidden rounded-full bg-brand-line"
                   >
                     <span
-                      className="bar-sweep grow-x block h-full rounded-full"
+                      className="bar-sweep block h-full rounded-full"
                       style={{
                         width: `${
                           p.monthsLeft !== null

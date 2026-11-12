@@ -145,7 +145,7 @@ function AmexTile({ weekCharges }: AmexTileProps) {
             return (
               <li key={c.id} className="flex items-baseline justify-between gap-3" data-testid="tile-amex-card">
                 <span className="min-w-0 text-label text-brand-ink [overflow-wrap:anywhere]">{c.label}</span>
-                <span className="font-mono text-body font-semibold tabular-nums text-brand-navy" data-testid="tile-amex-owed">{money(owed)}</span>
+                <span className="fig text-body font-semibold text-foreground" data-testid="tile-amex-owed">{money(owed)}</span>
               </li>
             );
           })}
@@ -191,7 +191,7 @@ function WeekTile({ s }: { s: Spine | undefined }) {
       {w.planSet ? (
         <>
           <Fig label="Plan" value={plan} testid="tile-week-plan" />
-          <div className={cn("font-mono text-body font-semibold tabular-nums", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-week-left">{line}</div>
+          <div className={cn("fig text-body font-semibold", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-week-left">{line}</div>
         </>
       ) : (
         // The chip says "Plan not set"; the line and the owner's action load after first paint (own chunk).
@@ -225,7 +225,7 @@ function MonthTile({ s }: { s: Spine | undefined }) {
       {planSet ? (
         <>
           <Fig label="Plan" value={money(m.plan)} testid="tile-month-plan" />
-          <div className={cn("font-mono text-body font-semibold tabular-nums", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-month-left">{lo!.text}</div>
+          <div className={cn("fig text-body font-semibold", lo!.over ? "text-bad-ink" : "text-brand-navy")} data-testid="tile-month-left">{lo!.text}</div>
         </>
       ) : null /* the chip already says "Plan not set" */}
     </Tile>
@@ -254,7 +254,7 @@ function ForecastTile({ s }: { s: Spine | undefined }) {
       {nb ? (
         <div className="flex items-baseline justify-between gap-3" data-testid="tile-forecast-next">
           <span className="min-w-0 text-label text-brand-ink [overflow-wrap:anywhere]">Next: {nb.name}</span>
-          <span className="font-mono text-body font-semibold tabular-nums text-brand-navy">{money(nb.amount)}</span>
+          <span className="fig text-body font-semibold text-foreground">{money(nb.amount)}</span>
         </div>
       ) : v.kind === "none" ? (
         <p className="text-label text-neutral-600">{v.words}</p>

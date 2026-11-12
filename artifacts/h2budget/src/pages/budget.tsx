@@ -163,7 +163,7 @@ type SourceKind = "manual" | "auto_bills" | "auto_debts";
 const ROW_GRID =
   "grid grid-cols-1 gap-x-3 gap-y-1 px-4 py-2 sm:grid-cols-[minmax(9rem,1fr)_6.5rem_6.5rem_minmax(6rem,11rem)_7.25rem] sm:items-center sm:gap-y-0";
 const headCell =
-  "text-micro font-semibold uppercase tracking-wide text-neutral-400";
+  "text-micro font-medium text-neutral-400";
 
 /**
  * ⚠️ THE COLUMNS HAVE TO BE NAMED. A row reads
@@ -193,7 +193,7 @@ function ColumnHeads() {
   );
 }
 /** Money, everywhere it renders: mono, tabular, and it must not reflow. */
-const num = "font-mono text-label tabular-nums";
+const num = "fig text-label";
 
 /**
  * The month stepper's two arrows, and the shape every quiet icon control on
@@ -765,8 +765,9 @@ export default function BudgetPage() {
 
   return (
     <PageGrid>
-      <div className="span-12 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-display font-semibold text-brand-navy">Budget</h1>
+      {/* (2026-11-12) The shared page header: the month controls are its actions. */}
+      <div className="span-12 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <h1 className="text-display font-semibold text-foreground">Budget</h1>
         <div className="flex flex-wrap items-center gap-2">
           <AffordLauncher />
           {budgetSwitching ? (
@@ -833,24 +834,24 @@ export default function BudgetPage() {
           `Stat` inside a five-up grid, so nothing on it was the point. */}
       {!plan && (
         // (T4) No answer yet (the first load failed): a dash, never a $0 plan.
-        <section className="panel tile-in span-12" data-testid="budget-hero-missing">
+        <section className="panel span-12" data-testid="budget-hero-missing">
           <div className="px-5 pb-5 pt-4">
             <div className={fieldLabel}>Planned this month</div>
-            <div className="mt-1 font-mono text-hero font-semibold leading-none tabular-nums text-neutral-600" data-testid="hero-planned">—</div>
+            <div className="mt-1 fig text-hero font-semibold leading-none text-neutral-600" data-testid="hero-planned">—</div>
           </div>
         </section>
       )}
 
       {plan && (
         <section
-          className={`panel tile-in ${allowance ? "span-8" : "span-12"}`}
+          className={`panel ${allowance ? "span-8" : "span-12"}`}
           data-testid="budget-hero"
         >
           <div className="flex flex-col gap-4 px-5 pb-5 pt-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
               <div className={fieldLabel}>Planned this month</div>
               <div
-                className="mt-1 font-mono text-hero font-semibold leading-none tabular-nums text-brand-navy"
+                className="mt-1 fig text-hero font-semibold leading-none text-foreground"
                 data-testid="hero-planned"
               >
                 <MoneyText amount={plannedTotal} />
@@ -1025,7 +1026,7 @@ function PlanSection({
 
   return (
     <section
-      className="panel tile-in span-12"
+      className="panel span-12"
       style={{ animationDelay: `calc(${Math.min(index, 12)} * var(--stagger))` }}
       data-testid={def.testId}
     >
@@ -1049,12 +1050,12 @@ function PlanSection({
         <Help>{def.help}</Help>
         <div className="text-right">
           <div
-            className="font-mono text-label font-semibold tabular-nums text-brand-navy"
+            className="fig text-label font-semibold text-foreground"
             data-testid={`${def.testId}-planned`}
           >
             {formatCurrency(planned)}
           </div>
-          <div className="font-mono text-micro tabular-nums text-neutral-400">
+          <div className="fig text-micro text-neutral-400">
             {formatCurrency(actual)} in
           </div>
         </div>
@@ -1854,7 +1855,7 @@ function BudgetLineRow({
                 the server's; together they are the figure above. */}
             {pending > 0 && (
               <div
-                className="mb-2 flex items-center justify-end gap-3 font-mono text-micro tabular-nums text-neutral-500"
+                className="mb-2 flex items-center justify-end gap-3 fig text-micro text-neutral-500"
                 data-testid={`actuals-split-${line.categoryId}`}
               >
                 <span>Posted {formatCurrency(line.postedAmount ?? "0")}</span>
@@ -2051,7 +2052,7 @@ function BudgetLineRow({
             keeps the row's baseline. */}
         {pending > 0 && (
           <span
-            className="font-mono"
+            className="fig"
             data-testid={`actual-pending-${line.categoryId}`}
           >
             incl. {formatCurrency(line.pendingAmount ?? "0")} pending

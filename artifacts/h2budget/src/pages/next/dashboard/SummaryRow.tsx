@@ -14,7 +14,7 @@ import { useSpine } from "@/hooks/useSpine";
 import { hasCents, knownWithinPlan, weekStatus, weekStory } from "@/lib/weekFigures";
 import { cn } from "@/lib/utils";
 import { useAmexQ, useDebtsQ, useLiabilityAccountsQ, useMoneyPositionQ, usePlaidItemsQ } from "./queries";
-import { dayLabel, Kpi, LINK, money, PanelError, rise, weekdayLabel } from "./shared";
+import { dayLabel, Kpi, LINK, money, PanelError, weekdayLabel } from "./shared";
 
 /** "$500" for a round amount, "$512.40" otherwise (the buffer is usually round). */
 function wholeMoney(v: string | number | null | undefined): string {
@@ -172,7 +172,7 @@ function DebtCell({ s }: { s: Spine }) {
       ? <span data-testid="dash-debt-left">No balance left on any active debt.</span>
       : (
         <span data-testid="dash-debt-left">
-          <span className="font-mono tabular-nums text-brand-ink">{money(scope.total)}</span>
+          <span className="fig text-foreground">{money(scope.total)}</span>
           {` left on your payoff plan (${joinNames(scope.names)})`}
         </span>
       );
@@ -214,7 +214,7 @@ export default function SummaryRow() {
   const spine = useSpine();
   const s = spine.data;
   return (
-    <section className={cn("panel span-12", rise(1))} data-testid="dash-summary" aria-label="Summary">
+    <section className={cn("panel span-12")} data-testid="dash-summary" aria-label="Summary">
       {s ? (
         <div className="kpi-grid">
           <CheckingCell s={s} />

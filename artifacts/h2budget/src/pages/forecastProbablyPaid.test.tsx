@@ -295,8 +295,8 @@ describe("Forecast — probably paid (PR5b)", () => {
     // Money and counts are mono numerals; the words carry the meaning.
     for (const figure of ["$23.00", "8d", "$150.00"]) {
       const el = within(strip).getByText((_, node) => node?.tagName === "SPAN" && node.textContent === figure || node?.textContent === `-${figure}` && node?.tagName === "SPAN");
-      expect(el.className).toContain("font-mono");
-      expect(el.className).toContain("tabular-nums");
+      // (2026-11-12) figure numerals (`.fig`), not the mono face
+      expect(el.className).toContain("fig");
     }
     // The server's pair is this row's only suggestion.
     expect(screen.queryByTestId("bank-suggestions-t-water")).toBeNull();

@@ -76,7 +76,7 @@ function AddsUpLine({ label, value, testid, strong }: { label: string; value: st
   return (
     <div className={`flex justify-between gap-3 ${strong ? "font-semibold text-brand-navy" : ""}`} data-testid={testid}>
       {label}
-      <span className={`font-mono tabular-nums ${strong ? "text-brand-navy" : "text-neutral-700"}`}>{value}</span>
+      <span className={`fig ${strong ? "text-foreground" : "text-neutral-700"}`}>{value}</span>
     </div>
   );
 }
@@ -143,12 +143,12 @@ function AddsUp({ ctx, onOpenList }: { ctx: ForecastNextCtx; onOpenList: ((key: 
                   data-testid={`adds-up-list-${l.key}`}
                 >
                   {l.label}
-                  <span className="font-mono tabular-nums">{l.n}</span>
+                  <span className="fig">{l.n}</span>
                 </button>
               ) : (
                 <Link href="/forecast" className={`${btnLink} flex w-full justify-between gap-3`} data-testid={`adds-up-list-${l.key}`}>
                   {l.label}
-                  <span className="font-mono tabular-nums">{l.n}</span>
+                  <span className="fig">{l.n}</span>
                 </Link>
               )}
             </li>
@@ -321,7 +321,7 @@ function AnswerLine({ ctx, kinded, onSeeDay }: { ctx: ForecastNextCtx; kinded: K
     }
   }
   const label = "text-label text-neutral-600";
-  const fig = "font-mono text-title font-semibold tabular-nums sm:text-display";
+  const fig = "fig text-title font-semibold sm:text-display";
   const item = "flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 sm:border-l sm:border-brand-line sm:pl-5 sm:first:border-l-0 sm:first:pl-0";
   return (
     <section className="span-12 rounded-card bg-white px-4 py-3 ring-1 ring-brand-line" data-testid="forecast-answer" aria-label="The forecast in one line">
@@ -512,12 +512,12 @@ export function ForecastBody({
     <div style={stickyTop} data-testid="forecast-screen">
       <div
         ref={headRef}
-        className="page-sticky-head z-30 space-y-2 border-b border-brand-line bg-platinum-1 pt-2 pb-2 md:sticky md:top-0 md:pt-3"
+        className="page-sticky-head z-30 space-y-2 border-b border-brand-line bg-background pt-2 pb-2 md:sticky md:top-0 md:pt-3"
         data-testid="forecast-sticky-head"
       >
         <div className="flex flex-wrap items-center gap-2">
           {/* ⭐ The head just names the screen; the register says the rest. */}
-          <h1 className="text-title font-semibold text-brand-navy">{title}</h1>
+          <h1 className="text-display font-semibold text-foreground">{title}</h1>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Link href="/bills" data-testid="link-manage-bills" className={btnLink}>
               Bills

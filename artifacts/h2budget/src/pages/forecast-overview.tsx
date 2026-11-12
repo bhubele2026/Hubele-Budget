@@ -184,7 +184,7 @@ export default function ForecastOverviewPage() {
       >
         <div
           data-testid="fo-stat-bank"
-          className="surface tile-in min-w-[132px] rounded-card px-4 py-3 ring-1 ring-brand-line"
+          className="surface min-w-[132px] rounded-card px-4 py-3 ring-1 ring-brand-line"
           style={{ animationDelay: "0ms" }}
         >
           <CheckingBalanceFull
@@ -230,7 +230,7 @@ export default function ForecastOverviewPage() {
             Projected balance · {days}
           </h2>
           <Help>{`Checking today rolled forward through every planned bill and income event for the next ${days}. Navy is the projection; it is not a record of what happened.`}</Help>
-          <span className="ml-auto font-mono text-label tabular-nums text-neutral-600">
+          <span className="ml-auto fig text-label text-neutral-600">
             {money(bankToday)} → {money(signal?.endingBalance)}
           </span>
         </div>
@@ -262,7 +262,7 @@ export default function ForecastOverviewPage() {
               Money in vs out · {days}
             </h2>
             <Help>{`Totals of every projected income and expense event over the ${days}. Navy is money in, deep orange is money out.`}</Help>
-            <span className="ml-auto text-micro uppercase tracking-wider text-neutral-400">
+            <span className="ml-auto text-micro text-neutral-400">
               {days}
             </span>
           </div>

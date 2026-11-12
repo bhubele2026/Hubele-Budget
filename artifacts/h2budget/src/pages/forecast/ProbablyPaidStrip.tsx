@@ -84,8 +84,8 @@ export function ProbablyPaidStrip({
       </span>
       <span className="text-neutral-500">
         Planned{" "}
-        <span className="font-mono tabular-nums">{formatDate(plan.date)}</span>{" "}
-        <span className="font-mono tabular-nums">
+        <span className="fig">{formatDate(plan.date)}</span>{" "}
+        <span className="fig">
           {formatCurrency(plan.amount)}
         </span>
       </span>

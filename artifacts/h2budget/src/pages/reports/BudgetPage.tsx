@@ -216,7 +216,7 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
               ceiling={flex.plannedTotal}
               title={`${formatCurrency(flex.actualTotal)} of ${formatCurrency(flex.plannedTotal)}`}
             />
-            <div className="mt-1.5 flex flex-wrap justify-between gap-2 font-mono text-micro tabular-nums text-neutral-500">
+            <div className="mt-1.5 flex flex-wrap justify-between gap-2 fig text-micro text-neutral-500">
               <span>{formatCurrency(flex.actualTotal)} spent</span>
               <span>pace to date {formatCurrency(flex.pacePlanToDate)}</span>
               <span>{formatCurrency(flex.plannedTotal)} planned</span>
@@ -229,7 +229,7 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
               <div className={fieldLabel}>Projected month-end</div>
               <div
                 className={cn(
-                  "mt-0.5 font-mono text-title font-semibold tabular-nums",
+                  "mt-0.5 fig text-title font-semibold",
                   projectedUnder ? "text-brand-navy" : "text-bad",
                 )}
               >
@@ -242,7 +242,7 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
               </div>
               <div
                 className={cn(
-                  "mt-0.5 font-mono text-title font-semibold tabular-nums",
+                  "mt-0.5 fig text-title font-semibold",
                   projectedUnder ? "text-brand-navy" : "text-bad",
                 )}
               >
@@ -434,7 +434,7 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
                       <td key={i} className={cn(td, "px-1")}>
                         {c ? (
                           <div
-                            className="flex h-6 items-center justify-center rounded font-mono text-micro tabular-nums"
+                            className="flex h-6 items-center justify-center rounded fig text-micro"
                             style={{ background: budgetStatusColor(c.status), color: CHART_INK.onFill }}
                             title={`${row.name} · ${c.status} · ${c.pct >= 999 ? "no plan" : `${Math.round(c.pct)}%`}`}
                           >

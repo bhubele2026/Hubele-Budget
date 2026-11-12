@@ -45,7 +45,7 @@ export function PlanStrip({
   ].filter((s) => s.value > 0);
 
   return (
-    <section className="panel tile-in span-4" data-testid="budget-plan-strip">
+    <section className="panel span-4" data-testid="budget-plan-strip">
       <div className="panel-head">
         <span className={`${fieldLabel} flex-1 truncate`}>
           Where the plan comes from
@@ -57,7 +57,7 @@ export function PlanStrip({
           the plan yet.
         </Help>
         <span
-          className="font-mono text-label font-semibold tabular-nums text-brand-navy"
+          className="fig text-label font-semibold text-foreground"
           data-testid="plan-strip-total"
         >
           {formatCurrency(total)}
@@ -123,7 +123,7 @@ function Aside({
   return (
     <div className="bg-platinum-1 px-4 py-2.5" data-testid={testId}>
       <div className={fieldLabel}>{label}</div>
-      <div className="mt-0.5 font-mono text-label font-semibold tabular-nums text-neutral-700">
+      <div className="mt-0.5 fig text-label font-semibold text-neutral-700">
         {value}
       </div>
       <div className="mt-0.5 text-micro text-neutral-400">{sub}</div>

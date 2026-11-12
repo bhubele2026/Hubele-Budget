@@ -17,7 +17,7 @@ export default function AmexWeekCharges() {
   return (
     <div className="flex items-baseline justify-between gap-3 border-t border-brand-line pt-2" data-testid="tile-amex-purchases-week">
       <span className="text-label text-neutral-600">Amex purchases · this week</span>
-      <span className="font-mono text-body font-semibold tabular-nums text-brand-navy">{moneyFace(amount)}</span>
+      <span className="fig text-body font-semibold text-foreground">{moneyFace(amount)}</span>
     </div>
   );
 }

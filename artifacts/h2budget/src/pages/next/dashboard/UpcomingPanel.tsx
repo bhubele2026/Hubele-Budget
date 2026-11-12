@@ -8,7 +8,7 @@ import { useCashSignalQ, useDebtsQ } from "./queries";
 import { useRecurringQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
-import { Empty, Gate, LINK, money, rise, weekdayLabel } from "./shared";
+import { Empty, Gate, LINK, money, weekdayLabel } from "./shared";
 import { UPCOMING_COUNT, upcomingRows, type UpcomingRow } from "./obligations";
 
 export { UPCOMING_COUNT, upcomingRows, type UpcomingRow } from "./obligations";
@@ -46,7 +46,7 @@ export default function UpcomingPanel() {
       sub={`Next ${UPCOMING_COUNT} payments the forecast expects`}
       span={4}
       variant="static"
-      className={cn(rise(BELOW_FOLD.upcoming.rise), minH)}
+      className={cn(minH)}
       data-testid="dash-upcoming"
       bodyClassName="flex flex-col"
     >
@@ -63,7 +63,7 @@ export default function UpcomingPanel() {
                 {rows.map((r, idx) => (
                   <li key={r.key} data-testid="dash-up-row" data-next={idx === 0 ? "true" : undefined}
                     className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-baseline gap-x-3 py-2">
-                    <span className="font-mono text-micro tabular-nums text-neutral-500">{weekdayLabel(r.date)}</span>
+                    <span className="fig text-micro text-neutral-500">{weekdayLabel(r.date)}</span>
                     <span className="min-w-0">
                       <span className="block text-label font-medium text-brand-ink [overflow-wrap:anywhere]">{r.label}</span>
                       <span className="block text-micro text-neutral-500">
@@ -75,7 +75,7 @@ export default function UpcomingPanel() {
                         ) : null}
                       </span>
                     </span>
-                    <span className="font-mono text-label tabular-nums text-brand-ink" data-testid="dash-up-amount">
+                    <span className="fig text-label text-foreground" data-testid="dash-up-amount">
                       {money(Math.abs(r.amount))}
                     </span>
                   </li>
@@ -85,7 +85,7 @@ export default function UpcomingPanel() {
             {payday ? (
               <p className="mt-2 border-t border-brand-line pt-2 text-micro text-neutral-500" data-testid="dash-up-payday">
                 Next money in: <span className="font-medium text-neutral-700">{payday.label}</span>{" "}
-                <span className="font-mono tabular-nums text-brand-navy">+{money(payday.amount)}</span> on {weekdayLabel(payday.date)}
+                <span className="fig text-foreground">+{money(payday.amount)}</span> on {weekdayLabel(payday.date)}
               </p>
             ) : null}
             <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-3 text-label">

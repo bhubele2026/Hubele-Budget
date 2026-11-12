@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PageHeader } from "@/components/next/PageHeader";
 import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Split } from "lucide-react";
 import { PageGrid } from "@/components/next";
 import { AffordLauncher } from "@/components/afford/AffordLauncher";
@@ -267,7 +268,7 @@ function TxnRow({
       data-testid={`allowance-txn-${t.id}`}
     >
       <div className="flex min-w-0 items-baseline gap-3">
-        <span className="w-12 shrink-0 font-mono text-micro tabular-nums text-neutral-400">
+        <span className="w-12 shrink-0 fig text-micro text-neutral-400">
           {formatTxnDate(t.occurredOn)}
         </span>
         <span className="truncate text-neutral-700">{t.description}</span>
@@ -329,7 +330,7 @@ function TxnRow({
             Split
           </button>
         )}
-        <span className="w-24 shrink-0 text-right font-mono text-label tabular-nums">
+        <span className="w-24 shrink-0 text-right fig text-label">
           {formatCurrency(expenseAmount(t))}
         </span>
       </div>
@@ -374,11 +375,11 @@ function CategoryGroupRow({
               )}
             />
             <span className="truncate">{group.label}</span>
-            <span className="font-mono text-micro tabular-nums text-neutral-400">
+            <span className="fig text-micro text-neutral-400">
               {group.txns.length}
             </span>
           </span>
-          <span className="whitespace-nowrap font-mono text-label tabular-nums">
+          <span className="whitespace-nowrap fig text-label">
             {formatCurrency(group.amount)}
           </span>
         </button>
@@ -463,7 +464,7 @@ function BucketCard({
     }
   };
   return (
-    <div className={cn("panel tile-in span-4", expanded && "border-brand-navy/40")}>
+    <div className={cn("panel span-4", expanded && "border-brand-navy/40")}>
       <div className="panel-head">
         <span className={cn(fieldLabel, "flex-1 truncate")}>{name}</span>
         <span className={`chip ${state.chip}`} data-testid={`allowance-state-${slug}`}>
@@ -485,7 +486,7 @@ function BucketCard({
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
           <div className="min-w-0 text-center leading-tight">
-            <div className="truncate font-mono text-micro tabular-nums text-neutral-600">
+            <div className="truncate fig text-micro text-neutral-600">
               {periodLabel}
             </div>
             <div className={fieldLabel}>{periodSub}</div>
@@ -514,7 +515,7 @@ function BucketCard({
         >
           <span
             className={cn(
-              "font-mono text-display font-semibold tabular-nums",
+              "fig text-display font-semibold",
               over ? "text-bad" : "text-brand-navy",
             )}
           >
@@ -522,7 +523,7 @@ function BucketCard({
           </span>
           <span className="flex items-center gap-1.5">
             {known && hasPlan && (
-              <span className="font-mono text-micro tabular-nums text-neutral-400">
+              <span className="fig text-micro text-neutral-400">
                 {pct}%
               </span>
             )}
@@ -536,7 +537,7 @@ function BucketCard({
         </button>
 
         <div className="mt-1 flex items-center gap-1.5">
-          <span className="font-mono text-micro tabular-nums text-neutral-500" data-testid={`allowance-plan-${slug}`}>
+          <span className="fig text-micro text-neutral-500" data-testid={`allowance-plan-${slug}`}>
             {plan === undefined
               ? "of — planned"
               : !hasPlan
@@ -570,7 +571,7 @@ function BucketCard({
               <PopoverContent className="w-56 p-3" align="start">
                 <Field label={`Planned ${name.toLowerCase()}`}>
                   <input
-                    className={cn(input, "font-mono tabular-nums")}
+                    className={cn(input, "fig")}
                     type="number"
                     step="0.01"
                     inputMode="decimal"
@@ -618,7 +619,7 @@ function BucketCard({
 
         <div
           className={cn(
-            "mt-2 font-mono text-label tabular-nums",
+            "mt-2 fig text-label",
             !hasPlan
               ? "text-neutral-400"
               : over
@@ -1033,10 +1034,9 @@ export default function AllowancesPage() {
         : "Spend flagged unplanned in the selected calendar month, against the full unplanned allowance.";
 
   return (
-    <PageGrid className="stagger">
-      <div className="span-12 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-display font-semibold text-brand-navy">Allowances</h1>
-        <AffordLauncher />
+    <PageGrid>
+      <PageHeader className="span-12" title="Allowances" actions={<AffordLauncher />} />
+      <div className="span-12 flex flex-wrap items-center justify-between gap-3 empty:hidden">
         {/* Streak state, in words. The chip is the whole message — the prose
             banners it replaces said this same fact in a paragraph. */}
         {(overStreak >= STREAK_MIN || underStreak >= STREAK_MIN) && (
@@ -1124,7 +1124,7 @@ export default function AllowancesPage() {
       {/* Weekly history — CSS bars diverging from a centre zero line, so a
           week that came in under and a week that ran over read as opposite
           directions and not merely as two colours. */}
-      <div className="panel tile-in span-6">
+      <div className="panel span-6">
         <div className="panel-head">
           <span className={cn(fieldLabel, "flex-1")}>
             Weekly money left · last {HISTORY_WEEKS} weeks
@@ -1166,7 +1166,7 @@ export default function AllowancesPage() {
 
       {/* Drill-down breakdown — one collapsible group per bucket, driven by
           the card's expanded state. */}
-      <div className="panel tile-in span-6">
+      <div className="panel span-6">
         <div className="panel-head">
           <span className={cn(fieldLabel, "flex-1")}>Transaction breakdown</span>
         </div>
@@ -1195,7 +1195,7 @@ export default function AllowancesPage() {
                     />
                     {b.name}
                   </span>
-                  <span className="font-mono text-label tabular-nums">
+                  <span className="fig text-label">
                     {total == null ? "—" : formatCurrency(total)}
                   </span>
                 </button>
@@ -1244,7 +1244,7 @@ export default function AllowancesPage() {
 
       {/* Over/under summary — the three sentences this used to print, as the
           table they were describing. */}
-      <div className="panel tile-in span-12">
+      <div className="panel span-12">
         <div className="panel-head">
           <span className={cn(fieldLabel, "flex-1")}>Over / under summary</span>
         </div>

@@ -35,7 +35,7 @@ export function CashFreedBanner({ transition }: { transition: PayoffTransition }
           </div>
         </div>
       </div>
-      <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+      <span className="fig text-label font-semibold text-foreground">
         +{formatCurrency(transition.freedAmount)}/mo
       </span>
     </div>

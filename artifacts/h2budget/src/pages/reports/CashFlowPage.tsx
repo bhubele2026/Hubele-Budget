@@ -640,7 +640,7 @@ function CashFlowSection({
         >
           <div className="px-4 py-3">
             <div className="flex items-baseline gap-2">
-              <span className="font-mono text-display font-semibold tabular-nums text-brand-navy">
+              <span className="fig text-display font-semibold text-foreground">
                 {formatCurrency(recurringMonthly.expense)}
               </span>
               <span className="text-micro text-neutral-400">/mo of bills</span>
@@ -648,13 +648,13 @@ function CashFlowSection({
             <dl className="mt-2 grid grid-cols-2 gap-2">
               <div>
                 <dt className={fieldLabel}>Recurring income</dt>
-                <dd className="font-mono text-label tabular-nums text-neutral-700">
+                <dd className="fig text-label text-neutral-700">
                   {formatCurrency(recurringMonthly.income)}
                 </dd>
               </div>
               <div>
                 <dt className={fieldLabel}>Net per month</dt>
-                <dd className="font-mono text-label tabular-nums text-neutral-700">
+                <dd className="fig text-label text-neutral-700">
                   {formatCurrency(recurringMonthly.income - recurringMonthly.expense)}
                 </dd>
               </div>
@@ -721,8 +721,8 @@ function CashFlowSection({
               <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
                 <defs>
                   <linearGradient id={`${gid}-forecast`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={SERIES.forecast} stopOpacity={0.35} />
-                    <stop offset="100%" stopColor={SERIES.forecast} stopOpacity={0} />
+                    <stop offset="0%" stopColor={SERIES.forecast} stopOpacity={0.08} />
+                    <stop offset="100%" stopColor={SERIES.forecast} stopOpacity={0.08} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
@@ -779,8 +779,8 @@ function CashFlowSection({
             <AreaChart data={burn} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
               <defs>
                 <linearGradient id={`${gid}-burn`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={washOf(SERIES.burn)} stopOpacity={0.7} />
-                  <stop offset="100%" stopColor={washOf(SERIES.burn)} stopOpacity={0.05} />
+                  <stop offset="0%" stopColor={washOf(SERIES.burn)} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={washOf(SERIES.burn)} stopOpacity={0.4} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />

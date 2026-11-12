@@ -222,7 +222,7 @@ export function PlanPrompt({
           <dl className="space-y-2 text-body">
             <div className="flex items-baseline justify-between gap-3">
               <dt className="text-neutral-600">Amount</dt>
-              <dd className="font-mono font-semibold tabular-nums text-brand-ink" data-testid="plan-confirm-amount">
+              <dd className="fig font-semibold text-foreground" data-testid="plan-confirm-amount">
                 {pick?.custom ? null : pick ? formatCurrency(pick.amount) : null}
               </dd>
             </div>
@@ -230,7 +230,7 @@ export function PlanPrompt({
               <label className="block">
                 <span className={fieldLabel}>Dollars</span>
                 <input
-                  className={`${input} mt-1 font-mono tabular-nums`}
+                  className={`${input} mt-1 fig `}
                   inputMode="decimal"
                   value={typed}
                   placeholder="350"

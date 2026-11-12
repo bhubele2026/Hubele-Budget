@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from "react";
+import { PageHeader } from "@/components/next/PageHeader";
 import { formatCurrency } from "@/lib/utils";
 import { Link } from "wouter";
 import { ChevronRight } from "lucide-react";
@@ -42,7 +43,7 @@ function ReportTile({
   return (
     <Link
       href={href}
-      className="panel panel-link press group tile-in span-4 flex flex-col p-4"
+      className="panel panel-link press group span-4 flex flex-col p-4"
       style={{ animationDelay: `calc(${index} * var(--stagger))` }}
       data-testid={`report-tile-${href.split("?")[0]!.split("/").pop()}`}
     >
@@ -50,7 +51,7 @@ function ReportTile({
         <span className={fieldLabel}>{label}</span>
         <ChevronRight className="h-4 w-4 shrink-0 text-neutral-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-orange" />
       </div>
-      <div className="mt-1 font-mono text-title font-semibold tabular-nums text-brand-navy">
+      <div className="mt-1 fig text-title font-semibold text-foreground">
         {value}
       </div>
       <div className="mt-0.5 text-micro text-neutral-400">{sub}</div>
@@ -190,7 +191,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-display font-semibold text-brand-navy">Reports</h1>
+      <PageHeader title="Reports" />
 
       <PageGrid>
       {/* At-a-glance balance tiles — the household's live vitals */}
@@ -248,7 +249,7 @@ export default function ReportsPage() {
               <>
                 {"Last 30 days, by category · + "}
                 <span
-                  className="font-mono tabular-nums"
+                  className="fig"
                   data-testid="report-tile-spending-uncategorized"
                 >
                   {formatCurrency(uncategorizedSpent)}
@@ -300,7 +301,7 @@ export default function ReportsPage() {
                   {facts ? (
                     <MoneyText
                       amount={income}
-                      className="font-mono tabular-nums text-neutral-700"
+                      className="fig text-neutral-700"
                     />
                   ) : (
                     "—"
@@ -311,7 +312,7 @@ export default function ReportsPage() {
                   {facts ? (
                     <MoneyText
                       amount={spent}
-                      className="font-mono tabular-nums text-neutral-700"
+                      className="fig text-neutral-700"
                     />
                   ) : (
                     "—"
@@ -335,7 +336,7 @@ export default function ReportsPage() {
             ) : (
               <div>
                 <MiniBars data={dowSpend} height={36} accent={CHART.navy} />
-                <div className="mt-1 flex justify-between text-micro uppercase tracking-wide text-neutral-400">
+                <div className="mt-1 flex justify-between text-micro text-neutral-400">
                   {DOW.map((day) => (
                     <span key={day}>{day[0]}</span>
                   ))}

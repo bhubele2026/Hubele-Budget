@@ -17,7 +17,7 @@ import { bankLines } from "./bankState";
 import { RECENT_LIMIT, RECENT_WINDOW_DAYS, useCategoriesQ, useDuplicateCountQ, useRecentTxnsQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
-import { Empty, LABEL, rise } from "./shared";
+import { Empty, LABEL } from "./shared";
 
 /** (F1) The categorization queue's own screen, Review › Categories (still in the nav; the panel now points at Needs you). */
 export const CATEGORIZATION_QUEUE_HREF = "/review/categories";
@@ -35,7 +35,7 @@ function Row({ href, label, detail, count, testid, tone }: {
           <span className={cn("block font-medium", tone === "bad" ? "text-bad-ink" : "text-brand-ink")}>{label}</span>
           {detail ? <span className="block text-micro text-neutral-500">{detail}</span> : null}
         </span>
-        {count != null ? <span className="shrink-0 font-mono font-semibold tabular-nums text-brand-navy">{count}</span> : <span aria-hidden className="shrink-0 text-neutral-400">›</span>}
+        {count != null ? <span className="shrink-0 fig font-semibold text-foreground">{count}</span> : <span aria-hidden className="shrink-0 text-neutral-400">›</span>}
       </Link>
     </li>
   );
@@ -165,7 +165,7 @@ export default function AttentionPanel() {
 
   return (
     <Panel title="Needs attention" span={7} variant="static"
-      className={cn(rise(BELOW_FOLD.attention.rise), minH, "self-start")} data-testid="dash-attention">
+      className={cn(minH, "self-start")} data-testid="dash-attention">
       {allClear ? (
         <Empty>Nothing needs you today.</Empty>
       ) : (
@@ -226,7 +226,7 @@ export default function AttentionPanel() {
                         {incomeDetail(misfiled![0]!, income, misfiledCapped)} · {misfiled![0]!.route.note}
                       </span>
                     </span>
-                    <span className="shrink-0 font-mono font-semibold tabular-nums text-brand-navy">{income}</span>
+                    <span className="shrink-0 fig font-semibold text-foreground">{income}</span>
                   </li>
                 )
               ) : misfiledCapped ? (

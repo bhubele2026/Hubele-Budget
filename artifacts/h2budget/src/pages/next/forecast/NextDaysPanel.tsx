@@ -66,7 +66,7 @@ function Row({
             ) : null}
           </span>
           <span className="flex shrink-0 flex-col items-end">
-            <span className={`font-mono text-label font-semibold tabular-nums ${tone}`} data-testid={`next-day-balance-${r.date}`}>
+            <span className={`fig text-label font-semibold ${tone}`} data-testid={`next-day-balance-${r.date}`}>
               {formatCurrency(r.close)}
             </span>
             {r.belowZero ? (
@@ -79,14 +79,14 @@ function Row({
         {r.moneyIn !== 0 ? (
           <div className="mt-0.5 flex min-w-0 gap-1.5 text-micro text-neutral-600" data-testid={`next-day-in-${r.date}`}>
             <span className="shrink-0 font-semibold text-brand-navy">In</span>
-            <span className="shrink-0 font-mono tabular-nums text-brand-navy">{formatCurrency(r.moneyIn)}</span>
+            <span className="shrink-0 fig text-foreground">{formatCurrency(r.moneyIn)}</span>
             <span className="min-w-0 truncate" title={r.inNames.join(", ")}>{names(r.inNames)}</span>
           </div>
         ) : null}
         {r.moneyOut !== 0 ? (
           <div className="mt-0.5 flex min-w-0 gap-1.5 text-micro text-neutral-600" data-testid={`next-day-out-${r.date}`}>
             <span className="shrink-0 font-semibold text-neutral-700">Out</span>
-            <span className="shrink-0 font-mono tabular-nums text-neutral-700">{formatCurrency(Math.abs(r.moneyOut))}</span>
+            <span className="shrink-0 fig text-neutral-700">{formatCurrency(Math.abs(r.moneyOut))}</span>
             <span className="min-w-0 truncate" title={r.outNames.join(", ")}>{names(r.outNames)}</span>
           </div>
         ) : null}

@@ -16,7 +16,7 @@ import { btnSecondarySm } from "@/ui";
 import { cn } from "@/lib/utils";
 import { useDebtsQ, useLiabilityAccountsQ, usePlaidItemsQ } from "./queries";
 import { connectionState, STATE_WORD } from "./bankState";
-import { Gate, LABEL, LINK, money, ordinal, rise } from "./shared";
+import { Gate, LABEL, LINK, money, ordinal } from "./shared";
 
 export { connectionState } from "./bankState";
 export type { AccountState } from "./bankState";
@@ -47,7 +47,7 @@ function Fact({ label, value, testid }: { label: string; value: ReactNode; testi
   return (
     <div className="min-w-0" data-testid={testid}>
       <dt className={LABEL}>{label}</dt>
-      <dd className="font-mono text-label tabular-nums text-brand-ink">{value}</dd>
+      <dd className="fig text-label text-foreground">{value}</dd>
     </div>
   );
 }
@@ -109,7 +109,6 @@ export default function AccountsPanel() {
       title="Accounts"
       span={12}
       variant={["flush", "static"]}
-      className={rise(2)}
       data-testid="dash-accounts"
       actions={<Link href="/next/accounts" className={cn(LINK, "text-label")} data-testid="dash-all-accounts">All accounts</Link>}
     >
@@ -166,7 +165,7 @@ export default function AccountsPanel() {
                             {identity.label}
                           </span>
                           {identity.mask4 ? (
-                            <span className="ml-1.5 whitespace-nowrap font-mono text-label tabular-nums text-neutral-500">••{identity.mask4}</span>
+                            <span className="ml-1.5 whitespace-nowrap fig text-label text-neutral-500">••{identity.mask4}</span>
                           ) : null}
                         </Link>
                         <div className="mt-0.5 text-micro text-neutral-500" data-testid="dash-account-fresh">

@@ -20,7 +20,7 @@ function Row({ label, value, tone, testid }: { label: string; value: string; ton
       <dt className="text-micro text-neutral-600">{label}</dt>
       <dd
         data-testid={testid}
-        className={`font-mono text-label tabular-nums ${tone === "bad" ? "text-bad" : "text-brand-navy"}`}
+        className={`fig text-label ${tone === "bad" ? "text-bad" : "text-foreground"}`}
       >
         {value}
       </dd>
@@ -108,7 +108,7 @@ export function DayPanel({
       ) : null}
 
       <div>
-        <h3 className="text-micro font-semibold uppercase tracking-wide text-neutral-600">Events</h3>
+        <h3 className="text-micro font-medium text-neutral-600">Events</h3>
         {sum.events.length === 0 && !hasBank ? (
           <p className="mt-1 text-micro text-neutral-600">Nothing on this day.</p>
         ) : (
@@ -134,7 +134,7 @@ export function DayPanel({
                       <span className="truncate text-body text-neutral-700">{ev.label}</span>
                     </span>
                     <span
-                      className={`font-mono text-label tabular-nums ${ev.amount < 0 ? "text-bad" : "text-brand-navy"}`}
+                      className={`fig text-label ${ev.amount < 0 ? "text-bad" : "text-foreground"}`}
                     >
                       {formatCurrency(ev.amount)}
                     </span>
@@ -198,7 +198,7 @@ export function DayPanel({
               <li key={`bank-${b.txnId}`} className="py-2" data-testid={`day-bank-${b.txnId}`}>
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="truncate text-body text-neutral-700">{b.label}</span>
-                  <span className={`font-mono text-label tabular-nums ${b.amount < 0 ? "text-bad" : "text-brand-navy"}`}>
+                  <span className={`fig text-label ${b.amount < 0 ? "text-bad" : "text-foreground"}`}>
                     {formatCurrency(b.amount)}
                   </span>
                 </div>

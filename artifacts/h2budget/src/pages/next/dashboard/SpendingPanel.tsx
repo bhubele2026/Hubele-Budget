@@ -13,7 +13,7 @@ import { hasLinkedBank } from "./bankState";
 import { useBudgetMonthQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
-import { Gate, LINK, money, rise, weekdayLabel } from "./shared";
+import { Gate, LINK, money, weekdayLabel } from "./shared";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -54,16 +54,16 @@ export function SpendingWhy({ r, month }: { r: SpendingReconciliation; month: st
       </PopoverTrigger>
       <PopoverContent className="w-80 p-3" align="start" data-testid="dash-spend-why-body">
         <dl className="space-y-1 text-micro text-neutral-600">
-          <div className="flex justify-between gap-2"><dt>Budget, {month} 1–end</dt><dd className="font-mono tabular-nums text-neutral-700">{formatCurrency(r.budgetActual)}</dd></div>
-          <div className="flex justify-between gap-2"><dt>Purchases, {month} 1–today</dt><dd className="font-mono tabular-nums text-neutral-700">{formatCurrency(r.householdSpendToDate)}</dd></div>
-          <div className="flex justify-between gap-2 font-semibold text-brand-ink"><dt>Difference</dt><dd className="font-mono tabular-nums">{formatCurrency(r.difference)}</dd></div>
+          <div className="flex justify-between gap-2"><dt>Budget, {month} 1–end</dt><dd className="fig text-neutral-700">{formatCurrency(r.budgetActual)}</dd></div>
+          <div className="flex justify-between gap-2"><dt>Purchases, {month} 1–today</dt><dd className="fig text-neutral-700">{formatCurrency(r.householdSpendToDate)}</dd></div>
+          <div className="flex justify-between gap-2 font-semibold text-brand-ink"><dt>Difference</dt><dd className="fig">{formatCurrency(r.difference)}</dd></div>
         </dl>
         {lines.length ? (
           <dl className="mt-2 space-y-1 border-t border-brand-line pt-2 text-micro text-neutral-600" data-testid="dash-spend-why-terms">
             {lines.map((t) => (
               <div key={t.key} className="flex justify-between gap-2">
                 <dt>{t.label}</dt>
-                <dd className="font-mono tabular-nums text-neutral-700">{signed(t.minus ? -t.v : t.v)}</dd>
+                <dd className="fig text-neutral-700">{signed(t.minus ? -t.v : t.v)}</dd>
               </div>
             ))}
           </dl>
@@ -98,7 +98,7 @@ function MeterRow({
     <div data-testid={testid}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <span className="text-label font-semibold text-brand-ink">{title}</span>
-        <span className="font-mono text-label tabular-nums text-neutral-700">
+        <span className="fig text-label text-neutral-700">
           {spent == null ? "—" : formatCurrency(spent)} <span className="text-neutral-500">of {hasCap ? formatCurrency(cap!) : "—"}</span>
         </span>
       </div>
@@ -138,7 +138,7 @@ export default function SpendingPanel() {
 
   return (
     <Panel title="Spending pace" span={6} variant="static"
-      className={cn(rise(BELOW_FOLD.spending.rise), minH)} data-testid="dash-spending">
+      className={cn(minH)} data-testid="dash-spending">
       <Gate q={pos} what="Spending" rows={5}>
         {() => noBank ? (
           <div className="space-y-3" data-testid="dash-spending-empty">
@@ -195,13 +195,13 @@ export default function SpendingPanel() {
                 <div data-testid="dash-household-spent">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                     <span className="text-label font-semibold text-brand-ink">Purchases so far</span>
-                    <span className="font-mono text-label tabular-nums text-neutral-700" data-testid="dash-spent-month">{money(spine.spentMonth)}</span>
+                    <span className="fig text-label text-neutral-700" data-testid="dash-spent-month">{money(spine.spentMonth)}</span>
                   </div>
                   <div className="text-micro text-neutral-500" data-testid="dash-purchases-scope">
                     {monthName} 1–today · card payments, debt payments, transfers and reimbursables left out · refunds netted
                   </div>
                   <div className="text-micro text-neutral-500">
-                    <span className="font-mono tabular-nums text-neutral-700" data-testid="dash-spent-week">{money(spine.spentWeek)}</span> this week
+                    <span className="fig text-neutral-700" data-testid="dash-spent-week">{money(spine.spentWeek)}</span> this week
                   </div>
                 </div>
               ) : null}

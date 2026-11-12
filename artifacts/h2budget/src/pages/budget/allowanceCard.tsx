@@ -10,7 +10,7 @@ const n = (v: string | number | null | undefined): number => {
   return Number.isFinite(x) ? x : 0;
 };
 
-const HEAD = "text-micro font-semibold uppercase tracking-wide text-neutral-400";
+const HEAD = "text-micro font-medium text-neutral-400";
 
 const BUCKET_LABEL: Record<string, string> = {
   weekly: "Weekly allowance",
@@ -59,7 +59,7 @@ export function AllowanceCard({
 
   return (
     <section
-      className="panel tile-in span-12"
+      className="panel span-12"
       style={{ animationDelay: `calc(${Math.min(index, 12)} * var(--stagger))` }}
       data-testid="section-allowance"
     >
@@ -80,19 +80,19 @@ export function AllowanceCard({
         </Help>
         <div className="text-right">
           <div
-            className="font-mono text-label font-semibold tabular-nums text-brand-navy"
+            className="fig text-label font-semibold text-foreground"
             data-testid="allowance-total"
           >
             {formatCurrency(allowance.planned)}
           </div>
-          <div className="font-mono text-micro tabular-nums text-neutral-400">
+          <div className="fig text-micro text-neutral-400">
             {formatCurrency(allowance.actual)} spent
           </div>
           {/* (PR-D) How much of "spent" is still pending. Already inside the
               figure above, counted once; said, never added again. */}
           {n(allowance.pending) > 0 && (
             <div
-              className="font-mono text-micro tabular-nums text-neutral-400"
+              className="fig text-micro text-neutral-400"
               data-testid="allowance-pending-total"
             >
               incl. {formatCurrency(allowance.pending)} pending
@@ -134,12 +134,12 @@ export function AllowanceCard({
                   {BUCKET_LABEL[l.bucket] ?? l.bucket}
                 </span>
                 <Col label="Cap">
-                  <span className="font-mono text-label tabular-nums text-neutral-700">
+                  <span className="fig text-label text-neutral-700">
                     {planned > 0 ? formatCurrency(planned) : "—"}
                   </span>
                 </Col>
                 <Col label="Spent">
-                  <span className="font-mono text-label tabular-nums text-neutral-700">
+                  <span className="fig text-label text-neutral-700">
                     {formatCurrency(actual)}
                   </span>
                 </Col>
@@ -153,7 +153,7 @@ export function AllowanceCard({
                         planned > 0 ? formatCurrency(planned) : "no cap"
                       }`}
                     />
-                    <span className="w-[2.75rem] shrink-0 text-right font-mono text-label tabular-nums text-neutral-500">
+                    <span className="w-[2.75rem] shrink-0 text-right fig text-label text-neutral-500">
                       {pct === null ? "—" : `${pct}%`}
                     </span>
                   </div>
@@ -180,7 +180,7 @@ export function AllowanceCard({
                   <span className="hidden sm:block" />
                   <span className="hidden sm:block" />
                   <span
-                    className="text-right font-mono text-micro tabular-nums text-neutral-400"
+                    className="text-right fig text-micro text-neutral-400"
                     data-testid={`allowance-pending-${l.bucket}`}
                   >
                     incl. {formatCurrency(l.pending)} pending
@@ -207,7 +207,7 @@ export function AllowanceCard({
                         {labels[s.bucket as keyof typeof labels] ?? s.bucket}
                       </span>
                       <span />
-                      <span className="text-right font-mono text-micro tabular-nums text-neutral-400">
+                      <span className="text-right fig text-micro text-neutral-400">
                         {formatCurrency(s.actual)}
                       </span>
                     </li>
@@ -243,7 +243,7 @@ function Col({
     <div
       className={`flex items-center justify-between gap-2 sm:block sm:text-right ${className ?? ""}`}
     >
-      <span className="text-micro font-semibold uppercase tracking-wide text-neutral-500 sm:hidden">
+      <span className="text-micro font-medium text-neutral-500 sm:hidden">
         {label}
       </span>
       {children}

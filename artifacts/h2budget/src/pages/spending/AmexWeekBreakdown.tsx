@@ -53,7 +53,7 @@ function Rows({ g, end, isCurrent, routeOf }: {
                     <span className="min-w-0 truncate" title={route.note ?? undefined}>{merchant}</span>
                   )}
                 </span>
-                <span className="shrink-0 font-mono text-body tabular-nums text-brand-ink" data-testid="sp-amex-row-amount">{formatCurrency(r.amount)}</span>
+                <span className="shrink-0 fig text-body text-foreground" data-testid="sp-amex-row-amount">{formatCurrency(r.amount)}</span>
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-neutral-600">
                 <span className="chip gray" data-testid="sp-amex-row-card">{cardWords(r.card)}</span>
@@ -113,7 +113,7 @@ export default function AmexWeekBreakdown({ rec, start, end, isCurrent, open, on
                 >
                   <span className="min-w-0 truncate text-body font-semibold text-brand-ink">{g.label}</span>
                   <span className="shrink-0 text-body tabular-nums text-brand-ink">
-                    <span className="font-mono font-semibold" data-testid={`sp-amex-group-amount-${g.key}`}>{formatCurrency(g.amount)}</span>
+                    <span className="fig font-semibold" data-testid={`sp-amex-group-amount-${g.key}`}>{formatCurrency(g.amount)}</span>
                     <span className="text-micro text-neutral-600"> · {countWords(g.count)}</span>
                   </span>
                 </summary>

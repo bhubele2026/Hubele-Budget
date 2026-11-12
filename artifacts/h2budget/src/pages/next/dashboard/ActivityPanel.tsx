@@ -12,7 +12,7 @@ import { accountTypesOf, categoriesByIdOf, isCardTxn, isInflowFiledAsExpense } f
 import { RECENT_WINDOW_DAYS, useCategoriesQ, useRecentTxnsQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
-import { Gate, LINK, rise } from "./shared";
+import { Gate, LINK } from "./shared";
 
 export const ACTIVITY_ROWS = 6;
 
@@ -68,7 +68,7 @@ export default function ActivityPanel() {
   return (
     <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={5}
       variant={["flush", "static"]}
-      className={cn(rise(BELOW_FOLD.activity.rise), minH, "self-start")} data-testid="dash-activity"
+      className={cn(minH, "self-start")} data-testid="dash-activity"
       actions={<Link href="/transactions" className={cn(LINK, "text-label")} data-testid="dash-all-activity">All activity</Link>}>
       <Gate q={txns} what="Recent activity" rows={6}>
         {() => (

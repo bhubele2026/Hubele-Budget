@@ -246,7 +246,7 @@ export function PlanDropRow({
               </TooltipProvider>
             )}
           </div>
-          <div className="whitespace-nowrap font-mono text-micro tabular-nums text-neutral-400">
+          <div className="whitespace-nowrap fig text-micro text-neutral-400">
             {formatDate(row.date)}
           </div>
           {hook ? (
@@ -285,10 +285,10 @@ export function PlanDropRow({
               <span className="max-w-[180px] truncate">
                 {pp.txnDescription ?? "Bank row"}
               </span>
-              <span className="font-mono tabular-nums">
+              <span className="fig">
                 {formatDate(pp.txnDate)}
               </span>
-              <span className="font-mono tabular-nums">
+              <span className="fig">
                 {formatCurrency(pp.txnAmount)}
               </span>
               <span>·</span>
@@ -314,11 +314,11 @@ export function PlanDropRow({
                   negative paid and planned amounts must not print as
                   "Paid -$1,000.00 of -$1,500.00". */}
               Paid{" "}
-              <span className="font-mono tabular-nums">
+              <span className="fig">
                 {row.paidAmount != null ? formatCurrency(Math.abs(row.paidAmount)) : "—"}
               </span>{" "}
               of{" "}
-              <span className="font-mono tabular-nums">
+              <span className="fig">
                 {formatCurrency(Math.abs(row.plannedAmount))}
               </span>
             </div>
@@ -329,11 +329,11 @@ export function PlanDropRow({
               data-testid={`plan-remainder-paid-${testKey}`}
             >
               Paid{" "}
-              <span className="font-mono tabular-nums">
+              <span className="fig">
                 {formatCurrency(Math.abs(paidSoFar))}
               </span>{" "}
               of{" "}
-              <span className="font-mono tabular-nums">
+              <span className="fig">
                 {formatCurrency(Math.abs(row.amount))}
               </span>
             </div>

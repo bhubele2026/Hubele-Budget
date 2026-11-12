@@ -71,7 +71,7 @@ export function CollapsibleSection({
         <span className="min-w-0 truncate text-title font-semibold text-brand-navy">{title}</span>
         {count != null ? <span className={chipClass}>{count}</span> : null}
         {total != null ? (
-          <span className={`ml-auto font-mono text-label tabular-nums ${totalTone === "bad" ? "text-bad" : "text-brand-navy"}`}>{total}</span>
+          <span className={`ml-auto fig text-label ${totalTone === "bad" ? "text-bad" : "text-foreground"}`}>{total}</span>
         ) : null}
       </summary>
       {children}
