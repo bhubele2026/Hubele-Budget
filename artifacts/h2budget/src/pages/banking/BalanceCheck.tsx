@@ -47,7 +47,7 @@ export function BalanceCheck({
       data-stale={check.stale && check.status !== "not_checked" ? "true" : "false"}
       data-tone={s.tone}
     >
-      <div className="mt-1.5">
+      <div className="mt-2">
         <span className={cn("chip", s.tone === "grey" ? "gray" : s.tone)} data-testid="br-tie">{s.chip}</span>
       </div>
       {s.agree ? <div className="text-micro text-neutral-700" data-testid="br-check-agree">{s.agree}</div> : null}
@@ -56,12 +56,12 @@ export function BalanceCheck({
       {s.action === "review" ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-micro">
           <CheckExplain open={explain?.open} onOpenChange={explain?.onOpenChange} />
-          {registerHref ? <Link href={registerHref} className="font-semibold text-brand-navy underline" data-testid="br-check-register">Open register</Link> : null}
+          {registerHref ? <Link href={registerHref} className="font-medium text-brand-navy underline" data-testid="br-check-register">Open register</Link> : null}
         </div>
       ) : s.action === "sync" && onSync ? (
         <button
           type="button"
-          className="press text-micro font-semibold text-brand-navy underline disabled:opacity-60"
+          className="press text-micro font-medium text-brand-navy underline disabled:opacity-60"
           onClick={onSync}
           disabled={syncing}
           data-testid="br-check-sync"

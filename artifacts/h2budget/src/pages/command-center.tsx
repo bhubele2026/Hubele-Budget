@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 import { useListPlaidItems } from "@workspace/api-client-react";
 import {
@@ -17,7 +18,10 @@ import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries, accountViewOf } from "@/pages/next/accounts/entries";
 import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
-import { Help, figLabel, input, toggle } from "@/ui";
+import { Help, input, toggle } from "@/ui";
+import { PageHeader } from "@/components/next/PageHeader";
+import { Segmented, Toolbar, segment } from "@/components/next/Toolbar";
+import { SummaryGroup, SUMMARY_FIGURE, SUMMARY_LABEL } from "@/components/next/SummaryGroup";
 import { BalanceCheck } from "./banking/BalanceCheck";
 import { BucketRows } from "./banking/BucketRows";
 import { ProposedFixes } from "./banking/ProposedFixes";
@@ -63,9 +67,13 @@ const str: UrlCodec<string> = { read: (raw) => (raw ? raw : null), write: (v) =>
 const dayCodec: UrlCodec<string> = { read: (raw) => (isDay(raw) ? raw : null), write: (v) => v || null };
 const MIN = 60_000;
 
-const CELL = "surface rounded-card px-4 py-3 ring-1 ring-brand-line";
-const CELL_LABEL = cn("flex items-center gap-1.5", figLabel);
-const CELL_VALUE = "mt-1 whitespace-nowrap font-mono text-kpi font-semibold tabular-nums text-brand-ink";
+/** (2026-11-12) The four figures are ONE summary group: cells split by hairlines, not four cards. */
+const CELL = "min-w-0";
+const CELL_LABEL = SUMMARY_LABEL;
+const CELL_VALUE = SUMMARY_FIGURE;
+
+/** An account's identity dot (literal names, so Tailwind sees them). */
+const ACCT_DOT = { checking: "bg-acct-checking", amex: "bg-acct-amex", card2: "bg-acct-card2", other: "bg-acct-other" } as const;
 
 const face = (v: string | null | undefined) => (v == null || v === "" ? "—" : formatCurrency(v));
 const cents = (v: string | null | undefined) => (v == null ? 0 : Math.round(Number(v) * 100));
@@ -97,8 +105,8 @@ function BucketPill({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)
       className={cn(toggle(selected), "flex flex-col items-stretch justify-start px-3 py-2 text-left")}
     >
       <span className="flex items-baseline justify-between gap-2">
-        <span className="text-label font-semibold">{meta.title}</span>
-        <span className="font-mono text-label font-semibold tabular-nums" data-testid={`br-count-${meta.name}`}>{bucket.count}</span>
+        <span className="text-label font-medium">{meta.title}</span>
+        <span className="fig text-label font-semibold" data-testid={`br-count-${meta.name}`}>{bucket.count}</span>
       </span>
       {second === "sides" ? (
         <span className="mt-0.5 flex flex-wrap gap-x-2 text-label font-normal text-neutral-600" data-testid={`br-sides-${meta.name}`}>
@@ -117,8 +125,8 @@ function BucketPill({ meta, bucket, selected, onPick }: { meta: (typeof BUCKETS)
 function ReviewSkeleton() {
   return (
     <div className="space-y-4" aria-busy="true" data-testid="br-loading">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-24 rounded-card" />)}
+      <div className="panel kpi-grid">
+        {[0, 1, 2, 3].map((i) => <div key={i}><div className="skeleton h-20 w-full rounded-control" /></div>)}
       </div>
       <div className="skeleton h-10 w-full rounded-card" />
       <div className="skeleton h-72 w-full rounded-card" />
@@ -282,17 +290,31 @@ export default function BankingReviewPage() {
 
   return (
     <div className="space-y-4" data-testid="banking-review">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <h1 className="text-display font-semibold text-brand-navy">Banking review</h1>
-          {needsOwnSync ? <SyncButton asKit compact relevantItemIds={here ? [here.itemId] : undefined} /> : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {/* (2026-11-12) The shared page header: title · account, freshness and Sync; the account and the period as ONE
+          toolbar under it. */}
+      <PageHeader
+        title="Banking review"
+        meta={
+          syncedWords || pendingWords ? (
+            <>
+              {syncedWords ? <span data-testid="br-fresh">{syncedWords}</span> : null}
+              {pendingWords ? (
+                <span className="inline-flex items-center gap-1.5" data-testid="br-pending">
+                  <span aria-hidden className="size-1.5 rounded-full bg-neutral-400" />
+                  {pendingWords}
+                </span>
+              ) : null}
+            </>
+          ) : null
+        }
+        actions={needsOwnSync ? <SyncButton asKit compact relevantItemIds={here ? [here.itemId] : undefined} /> : null}
+      >
+        <Toolbar data-testid="br-toolbar">
           {banks.length > 1 || (banks.length === 1 && accountParam) ? (
             <label className="flex items-center gap-2 text-label text-neutral-600">
-              <span>Account</span>
+              <span className="sr-only sm:not-sr-only">Account</span>
               <select
-                className={cn(input, "w-auto max-w-[16rem]")}
+                className={cn(input, "h-9 w-auto max-w-[16rem] py-1 sm:h-8")}
                 value={accountId ?? ""}
                 onChange={(e) => pickAccount(e.target.value)}
                 aria-label="Account"
@@ -302,11 +324,14 @@ export default function BankingReviewPage() {
                 {banks.map((b) => <option key={b.rowId} value={b.rowId}>{accountLabel(b)}</option>)}
               </select>
             </label>
-          ) : (
-            <span className="text-label font-medium text-brand-ink" data-testid="br-account-name">{headLabel}</span>
-          )}
-          <span className="text-label text-neutral-600" data-testid="br-range">{rangeWords(range, today)}</span>
-          <div className="flex gap-1.5" role="group" aria-label="Range">
+          ) : headLabel ? (
+            // The account on screen: its identity dot and name ••mask, at the head of the toolbar.
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-label font-medium text-foreground" data-testid="br-account-name">
+              <span aria-hidden className={cn("size-2 shrink-0 rounded-full", ACCT_DOT[here?.identity.accent ?? "other"])} />
+              <span className="truncate">{headLabel}</span>
+            </span>
+          ) : null}
+          <Segmented label="Range">
             {PRESETS.map((p) => (
               <button
                 key={p.key}
@@ -314,20 +339,15 @@ export default function BankingReviewPage() {
                 aria-pressed={activePreset === p.key}
                 onClick={() => pickRange(presetRange(p.key, today))}
                 data-testid={`br-preset-${p.key}`}
-                className={toggle(activePreset === p.key)}
+                className={segment(activePreset === p.key)}
               >
                 {p.label}
               </button>
             ))}
-          </div>
-          {syncedWords ? (
-            <span className="text-micro text-neutral-600" data-testid="br-fresh">
-              {syncedWords}
-            </span>
-          ) : null}
-          {pendingWords ? <span className="text-micro text-neutral-600" data-testid="br-pending">{pendingWords}</span> : null}
-        </div>
-      </header>
+          </Segmented>
+          <span className="fig text-label font-medium text-neutral-700" data-testid="br-range">{rangeWords(range, today)}</span>
+        </Toolbar>
+      </PageHeader>
 
       <QueryRefreshBanner q={q} data-testid="br-error" />
       <NeedsYou planned={d?.planned} hrefOfTx={hrefOfTx} />
@@ -337,7 +357,7 @@ export default function BankingReviewPage() {
         )
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="br-summary">
+          <SummaryGroup data-testid="br-summary">
             <div className={CELL}>
               {/* ⭐ (C1) Checking today — the one presentation. Figure and reading are THIS response's (one moment);
                   the rows since come from the spine only when it describes the same reading. An answer on an older
@@ -346,7 +366,7 @@ export default function BankingReviewPage() {
                 <>
                   <div className={CELL_LABEL}>Checking today</div>
                   <div className={CELL_VALUE} data-testid="br-balance">—</div>
-                  <div className="mt-1 text-micro text-neutral-500" data-testid="br-balance-asof">Not tracked for this account</div>
+                  <div className="mt-1 text-micro text-neutral-600" data-testid="br-balance-asof">Not tracked for this account</div>
                 </>
               ) : (
                 <CheckingBalanceFull
@@ -386,36 +406,38 @@ export default function BankingReviewPage() {
                 explain={{ open: explainOpen, onOpenChange: setExplainOpen }}
               />
             </div>
-          </div>
+          </SummaryGroup>
 
           {unplaced ? (
-            <div className="rounded-card bg-bad-bg px-4 py-2.5 text-body text-bad ring-1 ring-bad/15" role="status" data-testid="br-unplaced">
+            <div className="rounded-card bg-bad-bg px-4 py-2.5 text-body text-bad-ink ring-1 ring-bad/15" role="status" data-testid="br-unplaced">
               H2 could not place some rows: {formatCurrency(d.reconciliation.unexplained)}
             </div>
           ) : null}
 
+          {/* (2026-11-12) ONE panel; its parts are sections split by hairlines, never cards inside a card. */}
           <details
-            className="disclose surface overflow-hidden rounded-card ring-1 ring-brand-line"
+            className="disclose panel group/details"
             open={detailsOpen}
             onToggle={(e) => setDetailsOpen((e.currentTarget as HTMLDetailsElement).open)}
             data-testid="br-details"
           >
-            <summary className="press cursor-pointer px-4 py-3" data-testid="br-details-summary">
-              <span className="text-title font-semibold text-brand-navy">Details</span>
-              <span className="ml-2 text-label text-neutral-600">Proposed fixes · Not in the plan · Planned this period</span>
+            <summary className="press flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-0.5 px-4 py-2.5 hover:bg-brand-tint [&::-webkit-details-marker]:hidden" data-testid="br-details-summary">
+              <ChevronRight aria-hidden className="size-4 shrink-0 text-neutral-500 transition-transform group-open/details:rotate-90" />
+              <span className="text-title font-semibold text-foreground">Details</span>
+              <span className="text-label text-neutral-600">Proposed fixes · Not in the plan · Planned this period</span>
             </summary>
-            <div className="space-y-4 border-t border-brand-line p-3 sm:p-4">
+            <div className="divide-y divide-brand-line border-t border-brand-line">
           {/* (2026-11-12) The forecast's "charges to match" count for this account and range, kept whole at the top of
               Details: under the figures it read as a second, different "to do" beside Needs you. The chip scrolls to
               Needs you, where they are answered; Review's own list stays one link away. */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="br-inbox-cell">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3" data-testid="br-inbox-cell">
             <a
               href="#needs-you"
               onClick={(e) => {
                 e.preventDefault();
                 toNeedsYou();
               }}
-              className="press chip gray"
+              className="press chip line text-neutral-700 hover:bg-brand-tint"
               data-testid="br-inbox"
               aria-label={`${inboxWords}, ${inboxScope}`}
             >
@@ -423,19 +445,22 @@ export default function BankingReviewPage() {
             </a>
             <span className="text-micro text-neutral-600" data-testid="br-inbox-scope">{inboxScope}</span>
             {inboxCount > 0 ? (
-              <Link href={inboxHref} className="text-micro font-semibold text-brand-navy hover:underline" data-testid="br-inbox-review">
+              <Link href={inboxHref} className="text-micro font-medium text-brand-navy hover:underline" data-testid="br-inbox-review">
                 Open in Review
               </Link>
             ) : null}
           </div>
 
-          <section className="space-y-2" aria-label="Proposed fixes" data-testid="br-decide">
+          <section aria-label="Proposed fixes" data-testid="br-decide">
             <ProposedFixes defaultOpen={fixesParam === "1"} />
           </section>
 
-          <details open className="surface overflow-hidden rounded-card ring-1 ring-brand-line" data-testid="br-notinplan">
-            <summary className="press cursor-pointer px-4 py-3 text-title font-semibold text-brand-navy">Not in the plan</summary>
-            <div className="space-y-3 border-t border-brand-line pt-3">
+          <details open className="group/nip" data-testid="br-notinplan">
+            <summary className="press flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-body font-semibold text-foreground hover:bg-brand-tint [&::-webkit-details-marker]:hidden">
+              <ChevronRight aria-hidden className="size-4 shrink-0 text-neutral-500 transition-transform group-open/nip:rotate-90" />
+              Not in the plan
+            </summary>
+            <div className="space-y-3 pb-1">
               {!d.planComparison.available ? (
                 <p className="px-4 text-label text-neutral-600" data-testid="br-no-compare">
                   Plans are compared on the planned account only. Rows here are listed as "Unclear".
@@ -456,14 +481,14 @@ export default function BankingReviewPage() {
               <section className="border-t border-brand-line" data-testid="br-detail" aria-label={selMeta.title}>
                 <div className="space-y-1 px-4 pt-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <h3 className="text-body font-semibold text-brand-navy">
+                    <h3 className="text-body font-semibold text-foreground">
                       {selMeta.title}{kind ? ` · ${KIND_WORDS[kind]}` : ""}
-                      <span className="ml-2 font-mono text-label tabular-nums text-neutral-600" data-testid="br-sel-count">{selCount}</span>
+                      <span className="fig ml-2 text-label font-normal text-neutral-600" data-testid="br-sel-count">{selCount}</span>
                     </h3>
                     {showIn || showOut ? (
                       <p className="flex gap-x-3 text-label text-neutral-600">
-                        {showIn ? <span data-testid="br-sel-in">In <span className="font-mono tabular-nums">{formatCurrency(selTotals!.moneyIn)}</span></span> : null}
-                        {showOut ? <span data-testid="br-sel-out">Out <span className="font-mono tabular-nums">{formatCurrency(selTotals!.moneyOut)}</span></span> : null}
+                        {showIn ? <span data-testid="br-sel-in">In <span className="fig text-foreground">{formatCurrency(selTotals!.moneyIn)}</span></span> : null}
+                        {showOut ? <span data-testid="br-sel-out">Out <span className="fig text-foreground">{formatCurrency(selTotals!.moneyOut)}</span></span> : null}
                       </p>
                     ) : null}
                   </div>
@@ -477,7 +502,7 @@ export default function BankingReviewPage() {
                     <div className="space-y-1.5 pb-1 pt-1" data-testid="br-kinds">
                       <div role="group" aria-label="Filter by kind" className="flex flex-wrap gap-2">
                         <button type="button" aria-pressed={kind === null} onClick={() => pickBucket("unmatched")} data-testid="br-kind-all" className={toggle(kind === null)}>
-                          All <span className="font-mono tabular-nums">{d.notInPlan.unmatched.count}</span>
+                          All <span className="fig">{d.notInPlan.unmatched.count}</span>
                         </button>
                         {KIND_ORDER.filter((k) => d.notInPlan.unmatched.byKind![k].count > 0).map((k) => (
                           <button
@@ -496,7 +521,7 @@ export default function BankingReviewPage() {
                     </div>
                   ) : null}
                 </div>
-                <div className="mt-2 border-t border-brand-line/70">
+                <div className="mt-2 border-t border-brand-line">
                   <BucketRows
                     key={`${accountId}|${range.from}|${range.to}|${selected}|${kind ?? ""}|${rowsKey}`}
                     base={base}
@@ -514,28 +539,29 @@ export default function BankingReviewPage() {
             </div>
           </details>
 
-          <details className="surface rounded-card ring-1 ring-brand-line" data-testid="br-planned">
-            <summary className="press cursor-pointer px-4 py-3 text-title font-semibold text-brand-navy">
+          <details className="group/planned" data-testid="br-planned">
+            <summary className="press flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-body font-semibold text-foreground hover:bg-brand-tint [&::-webkit-details-marker]:hidden">
+              <ChevronRight aria-hidden className="size-4 shrink-0 text-neutral-500 transition-transform group-open/planned:rotate-90" />
               Planned this period
-              <span className="ml-2 font-mono text-label tabular-nums text-neutral-500">{d.planned.length}</span>
+              <span className="fig text-label font-normal text-neutral-600">{d.planned.length}</span>
             </summary>
             {d.planned.length ? (
-              <ul className="divide-y divide-brand-line/70 border-t border-brand-line">
+              <ul className="divide-y divide-brand-line border-t border-brand-line">
                 {d.planned.map((p) => (
                   <li key={p.key} className="flex items-baseline justify-between gap-3 px-4 py-2.5" data-testid="br-planned-row">
                     <div className="min-w-0">
-                      <div className="truncate text-body font-medium text-brand-ink">{p.label}</div>
-                      <div className="text-micro text-neutral-500">
+                      <div className="truncate text-body font-medium text-foreground">{p.label}</div>
+                      <div className="text-micro text-neutral-600">
                         {p.direction === "in" ? "Expected" : "Due"} {dayWords(p.scheduledDate)} · {plannedFateWords(p)}
                         {p.txnAmount != null && p.txnDate ? ` · ${formatCurrency(Math.abs(Number(p.txnAmount)))} on ${dayWords(p.txnDate)}` : ""}
                       </div>
                     </div>
-                    <span className="shrink-0 font-mono text-body tabular-nums text-brand-ink">{p.planned == null ? "—" : formatCurrency(Math.abs(Number(p.planned)))}</span>
+                    <span className="fig shrink-0 text-body text-foreground">{p.planned == null ? "—" : formatCurrency(Math.abs(Number(p.planned)))}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="border-t border-brand-line px-4 py-3 text-body text-neutral-500">
+              <p className="border-t border-brand-line px-4 py-3 text-body text-neutral-600">
                 {d.planComparison.available ? "Nothing was due in this range." : "Plans are compared on the planned account only."}
               </p>
             )}
@@ -545,29 +571,29 @@ export default function BankingReviewPage() {
 
           {d.household ? (
             <section className="border-t border-brand-line pt-3" data-testid="br-household">
-              <h2 className="text-label font-semibold text-brand-navy">Household · this week</h2>
+              <h2 className="text-label font-semibold text-foreground">Household · this week</h2>
               <dl className="mt-1.5 flex flex-wrap gap-x-6 gap-y-1 text-label">
-                <div className="flex gap-2"><dt className="text-neutral-600">{WEEK_FIGURE_WORDS.known}</dt><dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-spent">{formatCurrency(d.household.knownWeek)}</dd></div>
+                <div className="flex gap-2"><dt className="text-neutral-600">{WEEK_FIGURE_WORDS.known}</dt><dd className="fig font-medium text-foreground" data-testid="br-hh-spent">{formatCurrency(d.household.knownWeek)}</dd></div>
                 {!isZeroMoney(d.household.unresolvedWeek) ? (
-                  <div className="flex gap-2"><dt className="text-neutral-600">{WEEK_FIGURE_WORDS.unresolved}</dt><dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-unconfirmed">{formatCurrency(d.household.unresolvedWeek)}</dd></div>
+                  <div className="flex gap-2"><dt className="text-neutral-600">{WEEK_FIGURE_WORDS.unresolved}</dt><dd className="fig font-medium text-foreground" data-testid="br-hh-unconfirmed">{formatCurrency(d.household.unresolvedWeek)}</dd></div>
                 ) : null}
                 <div className="flex gap-2">
                   <dt className="text-neutral-600">Plan</dt>
-                  <dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-plan">{d.household.weekPlan == null ? "Not set" : formatCurrency(d.household.weekPlan)}</dd>
+                  <dd className="fig font-medium text-foreground" data-testid="br-hh-plan">{d.household.weekPlan == null ? "Not set" : formatCurrency(d.household.weekPlan)}</dd>
                 </div>
                 {d.household.remainingWeekKnown != null ? (
                   <div className="flex gap-2">
                     <dt className="text-neutral-600">{Number(d.household.remainingWeekKnown) < 0 ? "Over" : "Left"}{d.household.provisional ? " so far" : ""}</dt>
-                    <dd className="font-mono tabular-nums text-brand-ink" data-testid="br-hh-left">{formatCurrency(Math.abs(Number(d.household.remainingWeekKnown)))}</dd>
+                    <dd className="fig font-medium text-foreground" data-testid="br-hh-left">{formatCurrency(Math.abs(Number(d.household.remainingWeekKnown)))}</dd>
                   </div>
                 ) : null}
               </dl>
               {!isZeroMoney(d.household.unresolvedWeek) ? (
                 <p className="mt-1 text-micro text-neutral-600" data-testid="br-hh-cautious">
-                  {WEEK_FIGURE_WORDS.cautious} <span className="font-mono tabular-nums">{formatCurrency(d.household.spentWeek)}</span>
+                  {WEEK_FIGURE_WORDS.cautious} <span className="fig">{formatCurrency(d.household.spentWeek)}</span>
                 </p>
               ) : null}
-              <Link href="/spending/week" className="press mt-1.5 inline-block text-label font-semibold text-brand-navy hover:underline">Open this week's plan →</Link>
+              <Link href="/spending/week" className="press mt-1.5 inline-block text-label font-medium text-brand-navy hover:underline">Open this week's plan →</Link>
             </section>
           ) : null}
         </>

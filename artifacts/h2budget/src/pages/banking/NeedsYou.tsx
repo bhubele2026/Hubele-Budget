@@ -29,6 +29,7 @@ import { shortDateOfInstant } from "@/lib/dates";
 import { isTyping } from "@/lib/reviewQueue";
 import { cn } from "@/lib/utils";
 import { btnLink, btnSecondarySm, btnSm, emptyNote } from "@/ui";
+import { StatusBadge } from "@/components/next/StatusBadge";
 import { getAutoDoneQueryKey, getNeedsYouQueryKey, planOccurrenceOf, useAutoDone, useNeedsYou, type AutoDoneItem, type NeedsYouItem } from "./needsYouApi";
 import { TxDrawer, type DrawerRow } from "./TxDrawer";
 import { dayWords } from "./words";
@@ -53,6 +54,9 @@ import { useReadyMark } from "@/lib/perfMarks";
  */
 
 export const NEEDS_YOU_HINT = "Match = this is a planned bill or payment. Category = what kind of spending it is.";
+
+/** (2026-11-12) The list's columns on a desktop — the head row and every row share this one track list. */
+const NY_GRID = "grid md:grid-cols-[4rem_minmax(0,1fr)_9.5rem_8.5rem_6.5rem_8rem] md:items-start md:gap-x-4";
 
 const accountOf = (i: NeedsYouItem) => `${i.accountName}${i.mask ? ` ••${i.mask.slice(-4)}` : ""}`;
 /** The row's one line: the suggestion (its label is written to follow "Looks like "), else why it waits. */
@@ -97,14 +101,14 @@ function AutoDoneList() {
   if (q.data.items.length === 0) return <p className="text-label text-neutral-600" data-testid="ny-autodone-none">Nothing H2 sorted is left to show.</p>;
   return (
     <>
-      <ul className="surface list-none divide-y divide-brand-line/70 rounded-card p-0 ring-1 ring-brand-line" data-testid="ny-autodone-items">
+      <ul className="panel list-none divide-y divide-brand-line p-0" data-testid="ny-autodone-items">
         {q.data.items.map((it) => {
           const gone = undone.has(it.undoId);
           return (
             <li key={`${it.kind}:${it.undoId}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2" data-testid="ny-autodone-item">
               <span className="min-w-0">
-                <span className="text-body text-brand-ink">{it.kind === "match" ? `Matched to ${it.label}` : `Filed under ${it.label}`}</span>
-                <span className="ml-2 text-micro text-neutral-500">{shortDateOfInstant(it.at)}</span>
+                <span className="text-body text-foreground">{it.kind === "match" ? `Matched to ${it.label}` : `Filed under ${it.label}`}</span>
+                <span className="ml-2 text-micro text-neutral-600">{shortDateOfInstant(it.at)}</span>
               </span>
               {gone ? (
                 <span className="chip gray">Undone</span>
@@ -179,7 +183,7 @@ function MatchChangeDialog({
                     <span className="block truncate font-medium">{p.label}</span>
                     <span className="block text-micro text-neutral-600">{p.direction === "in" ? "Expected" : "Due"} {dayWords(p.scheduledDate)}</span>
                   </span>
-                  {p.planned != null ? <span className="shrink-0 font-mono text-label tabular-nums">{formatDisplayAmount(Math.abs(Number(p.planned)))}</span> : null}
+                  {p.planned != null ? <span className="fig shrink-0 text-label">{formatDisplayAmount(Math.abs(Number(p.planned)))}</span> : null}
                 </button>
               </li>
             ))}
@@ -389,31 +393,45 @@ export function NeedsYou({
 
   return (
     <>
-      <section id="needs-you" className="surface scroll-mt-4 overflow-hidden rounded-card ring-1 ring-brand-line" aria-labelledby="needs-you-title" data-testid="needs-you">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 pb-2 pt-3">
-          <h2 id="needs-you-title" className="text-title font-semibold text-brand-navy">
-            Needs you{q.data ? <span className="ml-1 font-mono tabular-nums" data-testid="ny-count"> ({count})</span> : null}
-          </h2>
+      {/* (2026-11-12) ONE panel, an aligned table-like list: date | description and account | category | state |
+          amount (right) | OK · Change. On a phone the same cells wrap into a compact card row. */}
+      <section id="needs-you" className="panel scroll-mt-4" aria-labelledby="needs-you-title" data-testid="needs-you">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-brand-line px-4 py-2.5">
+          <div className="min-w-0">
+            <h2 id="needs-you-title" className="text-title font-semibold text-foreground">
+              Needs you{q.data ? <span className="fig ml-1 font-normal text-neutral-600" data-testid="ny-count"> ({count})</span> : null}
+            </h2>
+            {q.data && items.length > 0 ? (
+              <p className="text-micro text-neutral-600" data-testid="ny-hint">{NEEDS_YOU_HINT}</p>
+            ) : null}
+          </div>
           {items.length > 1 ? <span className="hidden text-micro text-neutral-500 md:inline">j / k to move · Enter = OK · c = Change</span> : null}
         </div>
         {cold ? (
-          <div className="space-y-2 px-4 pb-4" aria-busy="true" data-testid="ny-loading">
-            {[0, 1, 2].map((i) => <div key={i} className="skeleton h-14 w-full rounded-card" />)}
+          <div className="space-y-2 p-4" aria-busy="true" data-testid="ny-loading">
+            {[0, 1, 2].map((i) => <div key={i} className="skeleton h-12 w-full rounded-control" />)}
           </div>
         ) : !q.data ? (
-          <p className="px-4 pb-4 text-body text-neutral-700" role="alert" data-testid="ny-failed">
+          <p className="px-4 py-4 text-body text-neutral-700" role="alert" data-testid="ny-failed">
             Couldn't load what needs you.{" "}
             <button type="button" className={btnLink} onClick={() => void q.refetch()}>Try again</button>
           </p>
         ) : items.length === 0 ? (
-          <div className="px-4 pb-5 pt-1" data-testid="ny-empty">
-            <p className="text-body font-medium text-brand-ink">All caught up through {shortDay(q.data.throughDate)}.</p>
+          <div className="px-4 py-5" data-testid="ny-empty">
+            <p className="text-body font-medium text-foreground">All caught up through {shortDay(q.data.throughDate)}.</p>
             <p className="mt-1 text-label text-neutral-600">New bank rows are matched and filed for you when H2 is sure.</p>
           </div>
         ) : (
           <>
-            <p className="border-b border-brand-line px-4 pb-2 text-micro text-neutral-600" data-testid="ny-hint">{NEEDS_YOU_HINT}</p>
-            <ul ref={listRef} className="list-none divide-y divide-brand-line/70 p-0" data-testid="ny-items">
+            <div aria-hidden className={cn(NY_GRID, "hidden border-b border-brand-line px-4 py-2 text-micro font-medium text-neutral-500 md:grid")}>
+              <span>Date</span>
+              <span>Description</span>
+              <span>Category</span>
+              <span>State</span>
+              <span className="text-right">Amount</span>
+              <span />
+            </div>
+            <ul ref={listRef} className="list-none divide-y divide-brand-line p-0" data-testid="ny-items">
               {items.map((item, i) => {
                 const here = i === cursor;
                 return (
@@ -425,51 +443,56 @@ export function NeedsYou({
                       setOpened(item);
                     }}
                     className={cn(
-                      "press cursor-pointer border-l-2 px-4 py-2.5 hover:bg-brand-tint",
-                      here ? "border-l-brand-orange bg-platinum-3/60" : "border-l-transparent",
+                      "press cursor-pointer border-l-2 px-4 py-3 hover:bg-brand-tint",
+                      here ? "border-l-brand-navy bg-brand-tint" : "border-l-transparent",
                     )}
                     data-testid="ny-item"
                     data-kind={item.kind}
                   >
-                    <div className="flex items-baseline justify-between gap-3">
+                    <div className={cn(NY_GRID, "grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-1.5")}>
+                      <span className="fig pt-px text-label text-neutral-600">{dayWords(item.date)}</span>
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className="text-label tabular-nums text-neutral-600">{dayWords(item.date)}</span>
-                          <button
-                            type="button"
-                            className="truncate text-left text-body font-medium text-brand-navy hover:underline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAt(i);
-                              setOpened(item);
-                            }}
-                            data-testid={`ny-open-${item.id}`}
-                          >
-                            {item.name}
-                          </button>
-                          <span className="text-micro text-neutral-600" data-testid={`ny-account-${item.id}`}>{accountOf(item)}</span>
-                          {item.pending ? <span className="chip gray">Pending</span> : null}
-                          <span className="text-micro text-neutral-600" data-testid={`ny-cat-${item.id}`}>
-                            <span className="sr-only">Category: </span>
-                            {item.categoryName ?? "No category"}
-                          </span>
-                          <span className="chip info">{item.kind === "match" ? "Match" : "Category"}</span>
-                        </div>
+                        <button
+                          type="button"
+                          className="max-w-full truncate text-left text-body font-medium text-foreground hover:text-brand-navy hover:underline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAt(i);
+                            setOpened(item);
+                          }}
+                          data-testid={`ny-open-${item.id}`}
+                        >
+                          {item.name}
+                        </button>
+                        <div className="text-micro text-neutral-600" data-testid={`ny-account-${item.id}`}>{accountOf(item)}</div>
                         <p className="mt-1 text-label text-neutral-700" data-testid={`ny-think-${item.id}`}>{thinkWords(item)}</p>
                       </div>
-                      <span className="shrink-0 font-mono text-body tabular-nums text-brand-ink" data-testid={`ny-amount-${item.id}`}>
+                      {/* Category and state: one wrapping line under the words on a phone, their own columns on a desktop. */}
+                      <div className="col-span-2 col-start-2 row-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 md:contents">
+                        <span className="text-label text-neutral-700 md:pt-px" data-testid={`ny-cat-${item.id}`}>
+                          <span className="sr-only">Category: </span>
+                          {item.categoryName ?? "No category"}
+                        </span>
+                        <span className="flex flex-wrap items-start gap-1">
+                          <StatusBadge state={canOk(item) ? "suggested" : "unresolved"} title={canOk(item) ? "H2 has a suggested answer" : "Waits for your answer"}>
+                            {item.kind === "match" ? "Match" : "Category"}
+                          </StatusBadge>
+                          {item.pending ? <StatusBadge state="pending" /> : null}
+                        </span>
+                      </div>
+                      <span className="fig col-start-3 row-start-1 shrink-0 text-right text-body font-medium text-foreground md:col-start-auto md:row-start-auto" data-testid={`ny-amount-${item.id}`}>
                         {formatDisplayAmount(Number(item.amount))}
                       </span>
+                      <div className="col-span-2 col-start-2 md:col-span-1 md:col-start-auto md:justify-self-end">{answerButtons(item, "row")}</div>
                     </div>
-                    <div className="mt-2">{answerButtons(item, "row")}</div>
                   </li>
                 );
               })}
             </ul>
             {q.data.truncated && count > items.length ? (
               <p className="border-t border-brand-line px-4 py-2 text-micro text-neutral-600" data-testid="ny-more">
-                Showing the first <span className="font-mono tabular-nums">{items.length}</span> of{" "}
-                <span className="font-mono tabular-nums">{count}</span>. Answer these and the next ones come up.
+                Showing the first <span className="fig">{items.length}</span> of{" "}
+                <span className="fig">{count}</span>. Answer these and the next ones come up.
               </p>
             ) : null}
           </>
@@ -479,7 +502,7 @@ export function NeedsYou({
       {autoDone && autoN > 0 ? (
         <div className="text-label text-neutral-600" data-testid="ny-autodone">
           <span>
-            H2 sorted <span className="font-mono tabular-nums">{autoN}</span> {autoN === 1 ? "row" : "rows"} for you since {shortDay(autoDone.since)}
+            H2 sorted <span className="fig">{autoN}</span> {autoN === 1 ? "row" : "rows"} for you since {shortDay(autoDone.since)}
           </span>
           {" · "}
           <button type="button" className={btnLink} aria-expanded={seeDone} onClick={() => setSeeDone((v) => !v)} data-testid="ny-see-them">

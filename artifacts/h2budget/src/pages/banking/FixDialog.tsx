@@ -134,7 +134,7 @@ export function FixDialog({ proposal, title, hrefOf, onClose, onApplied, startCo
                           <span className="shrink-0 text-neutral-500">{dayWords(row.date)}</span>
                           {href ? <Link href={href} className="min-w-0 truncate hover:underline" data-testid="fix-row-link">{name}</Link> : name}
                         </span>
-                        <span className="shrink-0 font-mono tabular-nums text-brand-ink">{formatCurrency(row.amount)}</span>
+                        <span className="fig shrink-0 text-foreground">{formatCurrency(row.amount)}</span>
                       </div>
                       <ul className="text-micro text-neutral-600" data-testid="fix-row-change">
                         {rowChangeWords(row, proposal).map((w) => <li key={w}>{w}</li>)}
@@ -154,7 +154,7 @@ export function FixDialog({ proposal, title, hrefOf, onClose, onApplied, startCo
                   {changes.map((c) => (
                     <div key={c.key} className="flex flex-wrap items-baseline justify-between gap-x-3 text-label" data-testid="fix-change">
                       <dt className="text-neutral-700"><span className="text-neutral-500">{c.scope} · </span>{c.label}</dt>
-                      <dd className="font-mono tabular-nums text-brand-ink">{c.before} → {c.after}</dd>
+                      <dd className="fig text-foreground">{c.before} → {c.after}</dd>
                     </div>
                   ))}
                 </dl>

@@ -125,8 +125,8 @@ function Proposal({
   return (
     <li className="space-y-1.5 px-4 py-3" data-testid="br-fix" data-kind={p.kind}>
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-body font-semibold text-brand-navy">{kindTitle(p)}</h3>
-        <span className="font-mono text-body font-semibold tabular-nums text-brand-ink" data-testid="br-fix-total">{formatCurrency(p.total)}</span>
+        <h3 className="text-body font-semibold text-foreground">{kindTitle(p)}</h3>
+        <span className="fig text-body font-semibold text-foreground" data-testid="br-fix-total">{formatCurrency(p.total)}</span>
       </div>
       <ul className="space-y-0.5">
         {shown.map((r) => {
@@ -137,7 +137,7 @@ function Proposal({
               <span className="min-w-0 truncate">
                 {href ? <Link href={href} className="hover:underline" data-testid="br-fix-row-link">{name}</Link> : name}
               </span>
-              <span className="shrink-0 font-mono tabular-nums text-brand-ink">{formatCurrency(r.amount)}</span>
+              <span className="fig shrink-0 text-foreground">{formatCurrency(r.amount)}</span>
             </li>
           );
         })}
@@ -191,8 +191,8 @@ function AppliedFixes({ onUndo, owner }: { onUndo: (id: string, label: string) =
   if (items.length === 0) return null;
   return (
     <div className="border-t border-brand-line" data-testid="br-applied">
-      <h3 className="px-4 pt-3 text-label font-semibold text-brand-navy">Applied fixes</h3>
-      <ul className="divide-y divide-brand-line/70">
+      <h3 className="px-4 pt-3 text-label font-semibold text-foreground">Applied fixes</h3>
+      <ul className="divide-y divide-brand-line">
         {items.map((a) => (
           <li key={a.id} className="flex items-baseline justify-between gap-3 px-4 py-2 text-label" data-testid="br-applied-row">
             <span className="min-w-0">
@@ -278,15 +278,16 @@ export function ProposedFixes({ defaultOpen = false }: { defaultOpen?: boolean }
   if (owner === false) {
     // The proposals and the applied list are the owner's; a member is told so once.
     return (
-      <p className="surface rounded-card px-4 py-3 text-label text-neutral-600 ring-1 ring-brand-line" data-testid="br-fixes-member">
+      <p className="px-4 py-3 text-label text-neutral-600" data-testid="br-fixes-member">
         The household owner applies fixes.
       </p>
     );
   }
 
   return (
+    // (2026-11-12) A flat section of Banking's Details panel, split by hairlines — not a card inside a card.
     <details
-      className="surface rounded-card ring-1 ring-brand-line"
+      className=""
       data-testid="br-fixes"
       id="proposed-fixes"
       open={open}
@@ -297,12 +298,12 @@ export function ProposedFixes({ defaultOpen = false }: { defaultOpen?: boolean }
       <summary ref={summaryRef} className="press block cursor-pointer px-4 py-3" data-testid="br-fixes-summary">
         {/* Two lines, always: the height is reserved while the count is on its way, so nothing below moves. */}
         <span className="flex items-baseline justify-between gap-3">
-          <span className="text-title font-semibold text-brand-navy" data-testid="br-fixes-title">
+          <span className="text-body font-semibold text-foreground" data-testid="br-fixes-title">
             {d ? (
-              <><span className="font-mono tabular-nums" data-testid="br-fixes-count">{d.count}</span> proposed {d.count === 1 ? "fix" : "fixes"}</>
+              <><span className="fig" data-testid="br-fixes-count">{d.count}</span> proposed {d.count === 1 ? "fix" : "fixes"}</>
             ) : q.isError ? "Proposed fixes" : <span className="skeleton inline-block h-5 w-36 rounded-control align-middle" aria-busy="true" data-testid="br-fixes-count-loading" />}
           </span>
-          <span className="text-label font-semibold text-brand-navy underline" aria-hidden>{open ? "Hide" : "Show"}</span>
+          <span className="text-label font-medium text-brand-navy" aria-hidden>{open ? "Hide" : "Show"}</span>
         </span>
         <span className="mt-0.5 block min-h-[1rem] text-micro font-normal text-neutral-600" data-testid="br-fixes-scope">
           {d ? `All accounts · last ${d.window.days} days` : q.isError ? "Did not load" : ""}
@@ -319,7 +320,7 @@ export function ProposedFixes({ defaultOpen = false }: { defaultOpen?: boolean }
           <p className="px-4 py-3 text-body text-neutral-600" data-testid="br-fixes-none">Nothing to propose right now.</p>
         ) : (
           <>
-            <ul className="divide-y divide-brand-line/70">
+            <ul className="divide-y divide-brand-line">
               {d.items.map((p) => (
                 <Proposal key={p.key} p={p} owner={owner} hrefOf={hrefOf} onPreview={(el) => openDialog(p, false, el)} onApply={(el) => openDialog(p, true, el)} />
               ))}

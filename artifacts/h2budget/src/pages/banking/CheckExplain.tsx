@@ -36,12 +36,12 @@ export function CheckExplain({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button type="button" className="press font-semibold text-brand-navy underline" data-testid="br-review-difference">
+        <button type="button" className="press font-medium text-brand-navy underline" data-testid="br-review-difference">
           {label}
         </button>
       </DialogTrigger>
       <DialogContent className="max-h-[85dvh] max-w-lg overflow-y-auto" data-testid="check-explain">
-        <DialogTitle className="text-title font-semibold text-brand-navy">Review difference</DialogTitle>
+        <DialogTitle className="text-title font-semibold text-foreground">Review difference</DialogTitle>
         <DialogDescription className="sr-only">What the last balance check compared, and what explains the difference.</DialogDescription>
         <Suspense fallback={<p className="text-label text-neutral-600">Loading…</p>}>
           <Body query={query} />

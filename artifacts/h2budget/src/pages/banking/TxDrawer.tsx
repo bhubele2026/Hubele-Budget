@@ -20,6 +20,7 @@ import { formatDisplayAmount } from "@/lib/amountDisplay";
 import { bucketPatchOf } from "@/lib/bucketPatch";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { btnLink, fieldLabel } from "@/ui";
+import { StatusBadge } from "@/components/next/StatusBadge";
 import { getNeedsYouQueryKey } from "./needsYouApi";
 import { dayWords } from "./words";
 
@@ -117,8 +118,8 @@ export function TxDrawer({
               </SheetDescription>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <span className={row.pending ? "chip gray" : "chip info"} data-testid="tx-drawer-state">{row.pending ? "Pending" : "Posted"}</span>
-              <span className="font-mono text-title font-semibold tabular-nums text-brand-ink" data-testid="tx-drawer-amount">
+              <StatusBadge state={row.pending ? "pending" : "confirmed"} data-testid="tx-drawer-state">{row.pending ? "Pending" : "Posted"}</StatusBadge>
+              <span className="fig text-kpi font-semibold text-foreground" data-testid="tx-drawer-amount">
                 {formatDisplayAmount(Number(row.amount))}
               </span>
             </div>
@@ -170,7 +171,7 @@ export function TxDrawer({
             </div>
 
             {registerHref ? (
-              <Link href={registerHref} className="press mt-auto text-label font-semibold text-brand-navy hover:underline" data-testid="tx-drawer-register">
+              <Link href={registerHref} className="press mt-auto text-label font-medium text-brand-navy hover:underline" data-testid="tx-drawer-register">
                 Open in register →
               </Link>
             ) : null}

@@ -21,6 +21,7 @@ import { toast } from "@/hooks/use-toast";
 import { useOwner } from "@/hooks/useOwner";
 import { formatDisplayAmount } from "@/lib/amountDisplay";
 import { BANKING_MIN as MIN, BANKING_PAGE as PAGE } from "./reviewParams";
+import { StatusBadge } from "@/components/next/StatusBadge";
 import {
   classificationNote,
   dayWords,
@@ -66,7 +67,7 @@ function MoreButton({ load, onHover }: { load: () => Promise<void>; onHover?: ()
     <li className="px-4 py-3">
       <button
         type="button"
-        className="press rounded-control px-3 py-1.5 text-label font-semibold text-brand-navy ring-1 ring-brand-line hover:bg-neutral-50"
+        className="press rounded-control bg-white px-3 py-1.5 text-label font-medium text-brand-navy ring-1 ring-input hover:bg-neutral-50"
         onPointerEnter={onHover}
         onFocus={onHover}
         onClick={go}
@@ -161,17 +162,17 @@ function RowLine({ row, href, bucket, first, onOpen }: { row: BankingReviewRow; 
             <span className="text-label tabular-nums text-neutral-600">{dayWords(row.date)}</span>
             {onOpen ? (
               // (2026-11-12) The row opens IN PLACE (the drawer, with "Open in register" inside): Banking never sends you away.
-              <button type="button" onClick={() => onOpen(row)} className="press truncate text-left text-body font-medium text-brand-navy hover:underline" data-testid={`br-link-${row.id}`}>
+              <button type="button" onClick={() => onOpen(row)} className="press truncate text-left text-body font-medium text-foreground hover:text-brand-navy hover:underline" data-testid={`br-link-${row.id}`}>
                 {name}
               </button>
             ) : href ? (
-              <Link href={href} className="press truncate text-body font-medium text-brand-navy hover:underline" data-testid={`br-link-${row.id}`}>
+              <Link href={href} className="press truncate text-body font-medium text-foreground hover:text-brand-navy hover:underline" data-testid={`br-link-${row.id}`}>
                 {name}
               </Link>
             ) : (
-              <span className="truncate text-body font-medium text-brand-ink">{name}</span>
+              <span className="truncate text-body font-medium text-foreground">{name}</span>
             )}
-            {row.pending ? <span className={chip}>Pending</span> : null}
+            {row.pending ? <StatusBadge state="pending" /> : null}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-micro text-neutral-600">
             <span data-testid={`br-cat-${row.id}`}>{row.category ? (row.category.name ?? "Category removed") : "No category"}</span>
@@ -190,17 +191,17 @@ function RowLine({ row, href, bucket, first, onOpen }: { row: BankingReviewRow; 
           {note ? (
             <div className="mt-1 text-micro text-neutral-700" data-testid={`br-issue-${row.id}`}>
               {note} ·{" "}
-              <Link href="/review/categories" className="font-semibold text-brand-navy underline">Categories</Link>
+              <Link href="/review/categories" className="font-medium text-brand-navy underline">Categories</Link>
             </div>
           ) : null}
         </div>
         {variance && row.plan ? (
           <span className="shrink-0 text-right" data-testid={`br-variance-box-${row.id}`}>
-            <span className={`block font-mono text-body font-semibold tabular-nums ${pinches ? "text-bad-ink" : "text-brand-navy"}`} data-testid={`br-variance-${row.id}`}>{variance}</span>
-            <span className="block font-mono text-micro tabular-nums text-neutral-600" data-testid={`br-amount-${row.id}`}>{formatDisplayAmount(Number(row.amount))}</span>
+            <span className={`fig block text-body font-semibold ${pinches ? "text-bad-ink" : "text-foreground"}`} data-testid={`br-variance-${row.id}`}>{variance}</span>
+            <span className="fig block text-micro text-neutral-600" data-testid={`br-amount-${row.id}`}>{formatDisplayAmount(Number(row.amount))}</span>
           </span>
         ) : (
-          <span className="shrink-0 font-mono text-body tabular-nums text-brand-ink" data-testid={`br-amount-${row.id}`}>
+          <span className="fig shrink-0 text-body font-medium text-foreground" data-testid={`br-amount-${row.id}`}>
             {formatDisplayAmount(Number(row.amount))}
           </span>
         )}
