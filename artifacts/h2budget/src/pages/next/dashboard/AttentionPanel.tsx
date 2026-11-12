@@ -35,7 +35,7 @@ function Row({ href, label, detail, count, testid, tone }: {
           <span className={cn("block font-medium", tone === "bad" ? "text-bad-ink" : "text-brand-ink")}>{label}</span>
           {detail ? <span className="block text-micro text-neutral-500">{detail}</span> : null}
         </span>
-        {count != null ? <span className="shrink-0 fig font-semibold text-foreground">{count}</span> : <span aria-hidden className="shrink-0 text-neutral-400">›</span>}
+        {count != null ? <span className="shrink-0 fig font-semibold text-foreground">{count}</span> : <span aria-hidden className="shrink-0 text-neutral-500">›</span>}
       </Link>
     </li>
   );

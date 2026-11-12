@@ -354,11 +354,6 @@ export function Stat(props: {
   return (
     <div
       className={cn("panel p-4", span != null && `span-${span}`)}
-      style={
-        props.index != null
-          ? { animationDelay: `calc(${Math.min(props.index, 12)} * var(--stagger))` }
-          : undefined
-      }
     >
       <StatBlock
         label={props.label}
@@ -580,7 +575,7 @@ export function ReportShell({
 }) {
   return (
     <div className="space-y-4">
-      <nav className="flex flex-wrap items-center gap-1 text-micro text-neutral-400">
+      <nav className="flex flex-wrap items-center gap-1 text-micro text-neutral-500">
         <Link
           href="/reports"
           className="press rounded px-1 py-0.5 font-medium text-neutral-500 hover:bg-neutral-100 hover:text-brand-navy"
@@ -590,7 +585,7 @@ export function ReportShell({
         <span aria-hidden className="text-neutral-300">
           ›
         </span>
-        <span className="px-1 py-0.5 text-neutral-400">{crumb}</span>
+        <span className="px-1 py-0.5 text-neutral-500">{crumb}</span>
       </nav>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-display font-semibold text-foreground">{title}</h1>

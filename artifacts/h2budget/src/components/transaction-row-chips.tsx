@@ -153,7 +153,7 @@ function InlineCategoryPicker({
               ))}
             </CommandGroup>
           </CommandList>
-          <div className="border-t border-brand-line px-2 py-1.5 text-micro text-neutral-400">
+          <div className="border-t border-brand-line px-2 py-1.5 text-micro text-neutral-500">
             Remembers this merchant.
           </div>
         </Command>
@@ -235,7 +235,7 @@ function CategorizeChip({
                   ))}
                 </CommandGroup>
               </CommandList>
-              <div className="border-t border-brand-line px-2 py-1.5 text-micro text-neutral-400">
+              <div className="border-t border-brand-line px-2 py-1.5 text-micro text-neutral-500">
                 Remembers this merchant.
               </div>
             </Command>
@@ -274,7 +274,7 @@ function CategorizeChip({
               ))}
             </CommandGroup>
           </CommandList>
-          <div className="border-t border-brand-line px-2 py-1.5 text-micro text-neutral-400">
+          <div className="border-t border-brand-line px-2 py-1.5 text-micro text-neutral-500">
             Remembers this merchant.
           </div>
         </Command>

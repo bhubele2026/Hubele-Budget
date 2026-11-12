@@ -118,7 +118,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
   return (
     <PageGrid>
       {facts.range.floorApplied && (
-        <p className="span-12 text-micro text-neutral-400">
+        <p className="span-12 text-micro text-neutral-500">
           Window clamped to the tracking start, {facts.range.trackingStart}.
         </p>
       )}
@@ -303,7 +303,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
                 ? formatCurrency(hallOfFame.biggestExpense.amount)
                 : "—"}
             </div>
-            <div className="mt-0.5 truncate text-micro text-neutral-400">
+            <div className="mt-0.5 truncate text-micro text-neutral-500">
               {hallOfFame.biggestExpense
                 ? `${hallOfFame.biggestExpense.merchant}${hallOfFame.biggestExpense.categoryName ? ` · ${hallOfFame.biggestExpense.categoryName}` : ""} · ${hallOfFame.biggestExpense.date}`
                 : "No data this window"}
@@ -316,7 +316,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
                 ? formatCurrency(hallOfFame.biggestIncome.amount)
                 : "—"}
             </div>
-            <div className="mt-0.5 truncate text-micro text-neutral-400">
+            <div className="mt-0.5 truncate text-micro text-neutral-500">
               {hallOfFame.biggestIncome
                 ? `${hallOfFame.biggestIncome.merchant}${hallOfFame.biggestIncome.categoryName ? ` · ${hallOfFame.biggestIncome.categoryName}` : ""} · ${hallOfFame.biggestIncome.date}`
                 : "No data this window"}
@@ -357,7 +357,7 @@ function StreakCard({
           <span className="fig text-display font-semibold text-foreground">
             {current}
           </span>
-          <span className="text-micro text-neutral-400">days</span>
+          <span className="text-micro text-neutral-500">days</span>
         </div>
         {/* Current run against the record — NOT `CssFillMeter`, deliberately.
             That primitive paints an overshoot deep orange because it exists

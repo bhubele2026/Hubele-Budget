@@ -643,7 +643,7 @@ function CashFlowSection({
               <span className="fig text-display font-semibold text-foreground">
                 {formatCurrency(recurringMonthly.expense)}
               </span>
-              <span className="text-micro text-neutral-400">/mo of bills</span>
+              <span className="text-micro text-neutral-500">/mo of bills</span>
             </div>
             <dl className="mt-2 grid grid-cols-2 gap-2">
               <div>

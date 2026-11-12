@@ -8,7 +8,7 @@ import { monthWords } from "@/lib/planWords";
 
 function Money({ value }: { value: string | number | null | undefined }) {
   const n = toAmount(value);
-  if (n == null) return <span className="text-neutral-400">—</span>;
+  if (n == null) return <span className="text-neutral-500">—</span>;
   return (
     <data value={centsValue(n)} className="fig">
       {fmtMoney(n)}

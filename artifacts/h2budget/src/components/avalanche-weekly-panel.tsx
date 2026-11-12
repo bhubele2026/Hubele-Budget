@@ -231,7 +231,7 @@ export function AvalancheWeeklyPanel({ settings, onUpdate, saving = false }: Pro
                                   )}
                                 </span>
                               ))}
-                              {w.basis === "target" && <span className="text-neutral-400">at the target pace</span>}
+                              {w.basis === "target" && <span className="text-neutral-500">at the target pace</span>}
                             </span>
                           </td>
                         </tr>

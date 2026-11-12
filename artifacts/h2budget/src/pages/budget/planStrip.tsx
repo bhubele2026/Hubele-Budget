@@ -69,7 +69,7 @@ export function PlanStrip({
         {segments.length > 0 ? (
           <StackBar segments={segments} height={12} money legendMax={2} />
         ) : (
-          <p className="py-2 text-body text-neutral-400">
+          <p className="py-2 text-body text-neutral-500">
             No bills or debt payments in this month yet.
           </p>
         )}
@@ -127,7 +127,7 @@ function Aside({
       <div className="mt-0.5 fig text-label font-semibold text-neutral-700">
         {value}
       </div>
-      <div className="mt-0.5 text-micro text-neutral-400">{sub}</div>
+      <div className="mt-0.5 text-micro text-neutral-500">{sub}</div>
     </div>
   );
 }

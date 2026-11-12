@@ -266,7 +266,7 @@ function UncategorizedBanner({
                       <div className="truncate text-body font-medium">
                         {t.description}
                       </div>
-                      <div className="fig text-micro text-neutral-400">
+                      <div className="fig text-micro text-neutral-500">
                         {t.occurredOn}
                       </div>
                     </div>
@@ -622,12 +622,12 @@ function SpendingSection({
                   <span className="fig text-neutral-700">
                     {formatCurrency(d.amount)}
                   </span>
-                  <span className="w-9 text-right fig text-neutral-400">
+                  <span className="w-9 text-right fig text-neutral-500">
                     {formatShare(d.pct)}
                   </span>
                 </li>
               ))}
-              <li className="pt-1 text-neutral-400" data-testid="spend-share-denominator">
+              <li className="pt-1 text-neutral-500" data-testid="spend-share-denominator">
                 {`% ${denomWords}`}
               </li>
             </ul>
@@ -676,7 +676,7 @@ function SpendingSection({
         {/* Twelve weeks is a narrow calendar, so it is CENTRED rather than
             pinned left in a full-width card with 80% dead space. */}
         <div className="flex h-full items-start justify-center gap-1 overflow-x-auto pb-2">
-          <div className="mr-2 grid grid-rows-7 items-center gap-1 text-micro text-neutral-400">
+          <div className="mr-2 grid grid-rows-7 items-center gap-1 text-micro text-neutral-500">
             {["", "Mon", "", "Wed", "", "Fri", ""].map((l, i) => (
               <div key={i} className="h-3 leading-none">
                 {l}
@@ -786,7 +786,7 @@ function SpendingSection({
                   </span>
                 </div>
                 {selected.topMerchants.length === 0 ? (
-                  <p className="text-micro text-neutral-400">
+                  <p className="text-micro text-neutral-500">
                     No spending on {selected.label}s in this window
                   </p>
                 ) : (
@@ -893,7 +893,7 @@ function SpendingSection({
                 <div className="truncate text-micro font-medium text-neutral-700">
                   {t.name}
                 </div>
-                <div className="mb-1 fig text-micro text-neutral-400">
+                <div className="mb-1 fig text-micro text-neutral-500">
                   {formatCurrency(t.total)}
                 </div>
                 <div className="h-16">

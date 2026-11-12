@@ -523,7 +523,7 @@ export function ProjectedBalanceChart({
               rawDate &&
               (incomeByDate?.get(rawDate)?.length ?? 0) > 0 && (
                 <div className="mt-2 border-t border-brand-line pt-2">
-                  <div className="mb-1 text-micro font-medium text-neutral-400">
+                  <div className="mb-1 text-micro font-medium text-neutral-500">
                     Money in
                   </div>
                   {incomeByDate!.get(rawDate)!.map((inc, i) => (
@@ -558,7 +558,7 @@ export function ProjectedBalanceChart({
                       sIdx === 0 ? "mt-2 border-t border-brand-line pt-2" : "mt-2"
                     }
                   >
-                    <div className="mb-1 text-micro font-medium text-neutral-400">
+                    <div className="mb-1 text-micro font-medium text-neutral-500">
                       {section.title}
                     </div>
                     <div className="flex flex-col gap-0.5">

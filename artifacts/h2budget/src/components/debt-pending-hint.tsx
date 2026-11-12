@@ -47,7 +47,7 @@ export function DebtPendingHint({
           // hint must explain itself without navigating away.
           onClick={(e) => e.stopPropagation()}
           data-testid={`debt-pending-${debt.id}`}
-          className="mt-0.5 cursor-help fig text-micro text-neutral-400 underline decoration-dotted underline-offset-2"
+          className="mt-0.5 cursor-help fig text-micro text-neutral-500 underline decoration-dotted underline-offset-2"
         >
           −{fmt(pendingTotal)} pending
         </button>

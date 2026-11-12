@@ -802,7 +802,7 @@ export default function AvalanchePage() {
         <div className={cn("panel", planTargets.length > 0 ? "span-6" : "span-12")}>
           <div className="panel-head">
             <span className="text-title font-semibold text-foreground">Payoff order</span>
-            <span className="text-micro text-neutral-400">
+            <span className="text-micro text-neutral-500">
               Balance left
             </span>
             <Help className="ml-auto">
@@ -866,13 +866,13 @@ export default function AvalanchePage() {
                             <span className="fig text-neutral-600">
                               {fmtMoney(t.minPayment + t.extraForTarget)}
                             </span>
-                            <span className="text-micro text-neutral-400">
+                            <span className="text-micro text-neutral-500">
                               {fmtMoney(t.minPayment)} min + {fmtMoney(t.extraForTarget)} extra
                             </span>
                             {t.killedThisMonth ? (
                               <span className="chip ok">Killed this month</span>
                             ) : killDate ? (
-                              <span className="text-micro text-neutral-400">
+                              <span className="text-micro text-neutral-500">
                                 projected kill{" "}
                                 <span className="fig text-neutral-600">
                                   {fmtMonth(killDate)}
@@ -1046,7 +1046,7 @@ export default function AvalanchePage() {
                     </tr>
                   </tbody>
                 </table>
-                <p className="text-micro text-neutral-400">
+                <p className="text-micro text-neutral-500">
                   {resolvedExtra?.mode === "actual" ? "Actual" : "Planned"} amount of{" "}
                   {resolvedExtra?.breakdown?.categoryName ?? "—"} for{" "}
                   {resolvedExtra?.monthStart?.slice(0, 7) ?? "this month"}.
@@ -1093,7 +1093,7 @@ export default function AvalanchePage() {
                       data-testid="text-avalanche-budget-live"
                     >
                       {fmtMoney(Math.min(liveManualExtra, budgetCap))}
-                      <span className="font-normal text-neutral-400">
+                      <span className="font-normal text-neutral-500">
                         {" / "}
                         {fmtMoney(budgetCap)}
                       </span>
@@ -1117,7 +1117,7 @@ export default function AvalanchePage() {
                   <div
                     className={cn(
                       "mt-2 text-micro",
-                      overBudget ? "font-medium text-bad" : "text-neutral-400",
+                      overBudget ? "font-medium text-bad" : "text-neutral-500",
                     )}
                     data-testid="text-room-left"
                   >
@@ -1195,7 +1195,7 @@ export default function AvalanchePage() {
       <div className={cn(settings?.extraCadence === "weekly" ? "span-12" : "span-6", "space-y-3")}>
         <div className="flex items-baseline gap-2">
           <h2 className="text-title font-semibold text-foreground">Your next 3 moves</h2>
-          <span className="text-micro text-neutral-400">Kill order</span>
+          <span className="text-micro text-neutral-500">Kill order</span>
         </div>
         {next3.length === 0 ? (
           <div className={cn("panel", emptyNote)}>Add a debt to see which one dies first.</div>
@@ -1207,7 +1207,7 @@ export default function AvalanchePage() {
               const cascadeFreed = killEntry?.minFreed ?? 0;
               const nextDebt = next3[i + 1];
               return (
-                <div key={d.id} className="panel p-4" style={{ animationDelay: `calc(${i} * var(--stagger))` }}>
+                <div key={d.id} className="panel p-4">
                   <div className="flex items-center gap-2">
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-navy fig text-[10px] font-bold text-white">
                       {i + 1}
@@ -1235,7 +1235,7 @@ export default function AvalanchePage() {
                     </div>
                   </dl>
                   {cascadeFreed > 0 && (
-                    <p className="mt-2.5 border-t border-brand-line pt-2 text-micro text-neutral-400">
+                    <p className="mt-2.5 border-t border-brand-line pt-2 text-micro text-neutral-500">
                       <span className="fig text-neutral-600">
                         +{fmtMoney(cascadeFreed)}
                       </span>
@@ -1282,7 +1282,7 @@ export default function AvalanchePage() {
           <div className="panel">
             <div className="panel-head">
               <span className="text-title font-semibold text-foreground">Debts</span>
-              <span className="text-micro text-neutral-400">
+              <span className="text-micro text-neutral-500">
                 Highest APR first
               </span>
               <Help className="ml-auto">
@@ -1343,7 +1343,7 @@ export default function AvalanchePage() {
                             <DebtSourceChip debt={dbt} />
                           </div>
                           {(dbt.plaidAccountId || dbt.type) && (
-                            <div className="mt-0.5 flex min-w-0 items-center gap-2 text-micro text-neutral-400">
+                            <div className="mt-0.5 flex min-w-0 items-center gap-2 text-micro text-neutral-500">
                               {dbt.type && <span className="capitalize">{dbt.type}</span>}
                               <DebtPlaidSource debt={dbt} />
                               <DebtLastSynced debt={dbt} />
@@ -1423,7 +1423,7 @@ export default function AvalanchePage() {
                 value={[whatIf]}
                 onValueChange={([v]) => setWhatIf(v ?? 0)}
               />
-              <div className="text-micro text-neutral-400">
+              <div className="text-micro text-neutral-500">
                 {whatIf > 0 && whatIfInterestSaved > 0 ? (
                   <>
                     Adding {fmtMoney(whatIf)}/mo saves{" "}
@@ -1443,7 +1443,7 @@ export default function AvalanchePage() {
           <div className="panel">
             <div className="panel-head">
               <span className="text-title font-semibold text-foreground">Schedule</span>
-              <span className="text-micro text-neutral-400">
+              <span className="text-micro text-neutral-500">
                 Month by month
               </span>
             </div>
@@ -1927,7 +1927,7 @@ function daysUntilDue(dueDay: number | null): number | null {
 function renderDueChip(dueDay: number | null) {
   const days = daysUntilDue(dueDay);
   if (days === null) {
-    return <span className="text-micro text-neutral-400">—</span>;
+    return <span className="text-micro text-neutral-500">—</span>;
   }
   const tone = days <= 2 ? "bad" : days <= 13 ? "warn" : "ok";
   const label = days < 0 ? "overdue" : days === 0 ? "today" : `${days}d`;

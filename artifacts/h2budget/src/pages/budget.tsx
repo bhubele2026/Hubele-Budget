@@ -163,7 +163,7 @@ type SourceKind = "manual" | "auto_bills" | "auto_debts";
 const ROW_GRID =
   "grid grid-cols-1 gap-x-3 gap-y-1 px-4 py-2 sm:grid-cols-[minmax(9rem,1fr)_6.5rem_6.5rem_minmax(6rem,11rem)_7.25rem] sm:items-center sm:gap-y-0";
 const headCell =
-  "text-micro font-medium text-neutral-400";
+  "text-micro font-medium text-neutral-500";
 
 /**
  * ⚠️ THE COLUMNS HAVE TO BE NAMED. A row reads
@@ -214,7 +214,7 @@ const monthStep =
  * in a lighter ink.
  */
 const rowIcon =
-  "press inline-flex h-6 w-6 items-center justify-center rounded-control text-neutral-400 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:text-neutral-300 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
+  "press inline-flex h-6 w-6 items-center justify-center rounded-control text-neutral-500 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:text-neutral-300 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
 
 /**
  * A figure and the word for its column, on the phone. On `sm` and up the
@@ -1027,7 +1027,6 @@ function PlanSection({
   return (
     <section
       className="panel span-12"
-      style={{ animationDelay: `calc(${Math.min(index, 12)} * var(--stagger))` }}
       data-testid={def.testId}
     >
       <div className="panel-head">
@@ -1045,7 +1044,7 @@ function PlanSection({
               </span>
             )}
           </div>
-          <div className="text-micro text-neutral-400">{def.sub}</div>
+          <div className="text-micro text-neutral-500">{def.sub}</div>
         </div>
         <Help>{def.help}</Help>
         <div className="text-right">
@@ -1055,7 +1054,7 @@ function PlanSection({
           >
             {formatCurrency(planned)}
           </div>
-          <div className="fig text-micro text-neutral-400">
+          <div className="fig text-micro text-neutral-500">
             {formatCurrency(actual)} in
           </div>
         </div>
@@ -1203,7 +1202,7 @@ function PlannedAmountCell({
   // against its digits.
   const input = (
     <div className="flex items-center justify-end gap-px">
-      <span className="text-micro text-neutral-400">$</span>
+      <span className="text-micro text-neutral-500">$</span>
       <input
         type="number"
         step="0.01"
@@ -1229,7 +1228,7 @@ function PlannedAmountCell({
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="press rounded-control p-1 text-neutral-400 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover/planned:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+            className="press rounded-control p-1 text-neutral-500 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover/planned:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
             title="Where did this amount come from?"
             data-testid={`button-planned-source-${line.categoryId}`}
           >
@@ -1290,7 +1289,7 @@ function PlannedAmountCell({
 function BillList({ bills }: { bills: LinkedBillEntry[] }) {
   if (bills.length === 0) {
     return (
-      <div className="py-1 text-micro text-neutral-400">
+      <div className="py-1 text-micro text-neutral-500">
         No linked bills hit this month.
       </div>
     );
@@ -1310,7 +1309,7 @@ function BillList({ bills }: { bills: LinkedBillEntry[] }) {
             <div className="truncate text-label font-medium text-neutral-700">
               {b.name}
             </div>
-            <div className="text-micro text-neutral-400">
+            <div className="text-micro text-neutral-500">
               {b.frequency}
               {b.eventCount === 0
                 ? " · no events this month"
@@ -1360,7 +1359,7 @@ function UncategorizedRow({
         <div className="truncate text-label font-medium text-neutral-700">
           {tx.description}
         </div>
-        <div className="text-micro text-neutral-400">
+        <div className="text-micro text-neutral-500">
           {tx.occurredOn}
           {tx.source ? ` · ${tx.source}` : ""}
         </div>
@@ -1417,7 +1416,7 @@ function ActualsRowReassignPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="press -mr-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-control text-neutral-400 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:opacity-50"
+          className="press -mr-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-control text-neutral-500 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:opacity-50"
           disabled={assigning}
           onClick={(e) => e.stopPropagation()}
           title="Re-categorize this transaction"
@@ -1659,13 +1658,13 @@ function BudgetLineRow({
                     name exactly the category name. */}
                 {opensInAmex ? (
                   <CreditCard
-                    className="h-3 w-3 shrink-0 text-neutral-400"
+                    className="h-3 w-3 shrink-0 text-neutral-500"
                     aria-hidden="true"
                     data-testid={`icon-drilldown-amex-${line.categoryId}`}
                   />
                 ) : (
                   <Landmark
-                    className="h-3 w-3 shrink-0 text-neutral-400"
+                    className="h-3 w-3 shrink-0 text-neutral-500"
                     aria-hidden="true"
                     data-testid={`icon-drilldown-transactions-${line.categoryId}`}
                   />
@@ -1685,7 +1684,7 @@ function BudgetLineRow({
           ))}
           {line.pinned && (
             <span
-              className="text-neutral-400"
+              className="text-neutral-500"
               title={
                 monthPinned
                   ? "This month is pinned — every auto-pulled line is locked to its persisted planned amount."
@@ -1759,7 +1758,7 @@ function BudgetLineRow({
                           />
                         ))}
                         {otherTxns.length > 50 && (
-                          <div className="pt-1 text-center text-micro text-neutral-400">
+                          <div className="pt-1 text-center text-micro text-neutral-500">
                             Showing 50 of {otherTxns.length}
                           </div>
                         )}
@@ -1863,7 +1862,7 @@ function BudgetLineRow({
               </div>
             )}
             {contributingTxns.length === 0 ? (
-              <div className="py-2 text-micro text-neutral-400">
+              <div className="py-2 text-micro text-neutral-500">
                 No transactions contributed to this line this month.
               </div>
             ) : (
@@ -1898,7 +1897,7 @@ function BudgetLineRow({
                             <div className="truncate text-label font-medium text-neutral-700">
                               {t.description}
                             </div>
-                            <div className="text-micro text-neutral-400">
+                            <div className="text-micro text-neutral-500">
                               {t.occurredOn}
                               {(() => {
                                 const lbl = friendlySourceLabel(t.source);
@@ -1915,7 +1914,7 @@ function BudgetLineRow({
                               {formatCurrency(amt)}
                             </div>
                             <div
-                              className={`${num} text-neutral-400`}
+                              className={`${num} text-neutral-500`}
                               title="Running total of this category (oldest through this row)"
                               data-testid={`actuals-running-${t.id}`}
                             >
@@ -1952,7 +1951,7 @@ function BudgetLineRow({
                           <div className="text-micro font-semibold text-neutral-500">
                             + {hidden.length} earlier transaction{hidden.length === 1 ? "" : "s"}
                           </div>
-                          <div className="text-micro text-neutral-400">
+                          <div className="text-micro text-neutral-500">
                             Included in the running total above
                           </div>
                         </div>
@@ -1985,7 +1984,7 @@ function BudgetLineRow({
                 {(line.sourceBreakdown ?? []).map((b) => (
                   <div
                     key={b.source}
-                    className="flex items-center justify-between text-micro text-neutral-400"
+                    className="flex items-center justify-between text-micro text-neutral-500"
                   >
                     <span>{b.source}</span>
                     <span className={num}>
@@ -2044,7 +2043,7 @@ function BudgetLineRow({
 
     {(contributingTxns.length > 0 || pending > 0) && (
       <div
-        className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-micro text-neutral-400 tabular-nums sm:col-span-5"
+        className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-micro text-neutral-500 tabular-nums sm:col-span-5"
         data-testid={`analysis-strip-${line.categoryId}`}
       >
         {/* (PR-D) How much of the Spent figure is still pending. It is inside

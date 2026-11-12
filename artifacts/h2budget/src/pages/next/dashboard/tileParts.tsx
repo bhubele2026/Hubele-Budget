@@ -81,7 +81,7 @@ export function Tile({
               {status.word}
             </span>
           ) : null}
-          <span aria-hidden className="text-neutral-400 transition-colors group-hover:text-brand-navy">→</span>
+          <span aria-hidden className="text-neutral-500 transition-colors group-hover:text-brand-navy">→</span>
         </div>
       </div>
       <div className={cn("flex flex-1 flex-col gap-2", body)}>{children}</div>

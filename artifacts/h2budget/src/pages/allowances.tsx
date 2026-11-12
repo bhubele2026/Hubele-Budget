@@ -268,7 +268,7 @@ function TxnRow({
       data-testid={`allowance-txn-${t.id}`}
     >
       <div className="flex min-w-0 items-baseline gap-3">
-        <span className="w-12 shrink-0 fig text-micro text-neutral-400">
+        <span className="w-12 shrink-0 fig text-micro text-neutral-500">
           {formatTxnDate(t.occurredOn)}
         </span>
         <span className="truncate text-neutral-700">{t.description}</span>
@@ -375,7 +375,7 @@ function CategoryGroupRow({
               )}
             />
             <span className="truncate">{group.label}</span>
-            <span className="fig text-micro text-neutral-400">
+            <span className="fig text-micro text-neutral-500">
               {group.txns.length}
             </span>
           </span>
@@ -481,7 +481,7 @@ function BucketCard({
             type="button"
             onClick={onPrevPeriod}
             aria-label="Previous period"
-            className="press grid h-6 w-6 shrink-0 place-items-center rounded-control text-neutral-400 ring-1 ring-brand-line hover:text-brand-navy"
+            className="press grid h-6 w-6 shrink-0 place-items-center rounded-control text-neutral-500 ring-1 ring-brand-line hover:text-brand-navy"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
@@ -496,7 +496,7 @@ function BucketCard({
             onClick={onNextPeriod}
             disabled={!canNextPeriod}
             aria-label="Next period"
-            className="press grid h-6 w-6 shrink-0 place-items-center rounded-control text-neutral-400 ring-1 ring-brand-line hover:text-brand-navy disabled:opacity-40"
+            className="press grid h-6 w-6 shrink-0 place-items-center rounded-control text-neutral-500 ring-1 ring-brand-line hover:text-brand-navy disabled:opacity-40"
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
@@ -523,13 +523,13 @@ function BucketCard({
           </span>
           <span className="flex items-center gap-1.5">
             {known && hasPlan && (
-              <span className="fig text-micro text-neutral-400">
+              <span className="fig text-micro text-neutral-500">
                 {pct}%
               </span>
             )}
             <ChevronDown
               className={cn(
-                "h-4 w-4 text-neutral-400",
+                "h-4 w-4 text-neutral-500",
                 expanded ? "" : "-rotate-90",
               )}
             />
@@ -560,7 +560,7 @@ function BucketCard({
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="press grid h-5 w-5 place-items-center rounded text-neutral-400 hover:text-brand-navy"
+                  className="press grid h-5 w-5 place-items-center rounded text-neutral-500 hover:text-brand-navy"
                   aria-label="Edit planned amount"
                   title="Edit planned amount"
                   data-testid={`allowance-edit-planned-${slug}`}
@@ -621,7 +621,7 @@ function BucketCard({
           className={cn(
             "mt-2 fig text-label",
             !hasPlan
-              ? "text-neutral-400"
+              ? "text-neutral-500"
               : over
                 ? "text-bad"
                 : "text-brand-navy",
@@ -1189,7 +1189,7 @@ export default function AllowancesPage() {
                   <span className="flex items-center gap-1.5">
                     <ChevronDown
                       className={cn(
-                        "h-4 w-4 shrink-0 text-neutral-400",
+                        "h-4 w-4 shrink-0 text-neutral-500",
                         open ? "" : "-rotate-90",
                       )}
                     />

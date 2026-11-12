@@ -49,7 +49,6 @@ export function StatTile({
   return (
     <div
       className={cn("panel p-4", `span-${span}`)}
-      style={index != null ? { animationDelay: `calc(${Math.min(index, 12)} * var(--stagger))` } : undefined}
     >
       <StatBlock {...props} />
     </div>

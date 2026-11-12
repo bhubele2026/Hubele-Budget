@@ -10,7 +10,7 @@ const n = (v: string | number | null | undefined): number => {
   return Number.isFinite(x) ? x : 0;
 };
 
-const HEAD = "text-micro font-medium text-neutral-400";
+const HEAD = "text-micro font-medium text-neutral-500";
 
 const BUCKET_LABEL: Record<string, string> = {
   weekly: "Weekly allowance",
@@ -60,7 +60,6 @@ export function AllowanceCard({
   return (
     <section
       className="panel span-12"
-      style={{ animationDelay: `calc(${Math.min(index, 12)} * var(--stagger))` }}
       data-testid="section-allowance"
     >
       <div className="panel-head">
@@ -73,7 +72,7 @@ export function AllowanceCard({
               already in the plan
             </span>
           </div>
-          <div className="text-micro text-neutral-400">Filed spend, by bucket</div>
+          <div className="text-micro text-neutral-500">Filed spend, by bucket</div>
         </div>
         <Help>
           {`Spend you filed into a bucket yourself — unfiled spend counts in none of the three. The weekly and monthly caps are your plans (Unplanned is set in Settings); the weekly one is scaled to this month by ${allowance.weeksInMonth} weeks.`}
@@ -85,14 +84,14 @@ export function AllowanceCard({
           >
             {formatCurrency(allowance.planned)}
           </div>
-          <div className="fig text-micro text-neutral-400">
+          <div className="fig text-micro text-neutral-500">
             {formatCurrency(allowance.actual)} spent
           </div>
           {/* (PR-D) How much of "spent" is still pending. Already inside the
               figure above, counted once; said, never added again. */}
           {n(allowance.pending) > 0 && (
             <div
-              className="fig text-micro text-neutral-400"
+              className="fig text-micro text-neutral-500"
               data-testid="allowance-pending-total"
             >
               incl. {formatCurrency(allowance.pending)} pending
@@ -167,7 +166,7 @@ export function AllowanceCard({
                           : `${formatCurrency(planned - actual)} left`}
                       </span>
                     ) : (
-                      <span className="text-micro text-neutral-400">no cap set</span>
+                      <span className="text-micro text-neutral-500">no cap set</span>
                     )}
                   </span>
                 </Col>
@@ -180,7 +179,7 @@ export function AllowanceCard({
                   <span className="hidden sm:block" />
                   <span className="hidden sm:block" />
                   <span
-                    className="text-right fig text-micro text-neutral-400"
+                    className="text-right fig text-micro text-neutral-500"
                     data-testid={`allowance-pending-${l.bucket}`}
                   >
                     incl. {formatCurrency(l.pending)} pending
@@ -207,7 +206,7 @@ export function AllowanceCard({
                         {labels[s.bucket as keyof typeof labels] ?? s.bucket}
                       </span>
                       <span />
-                      <span className="text-right fig text-micro text-neutral-400">
+                      <span className="text-right fig text-micro text-neutral-500">
                         {formatCurrency(s.actual)}
                       </span>
                     </li>

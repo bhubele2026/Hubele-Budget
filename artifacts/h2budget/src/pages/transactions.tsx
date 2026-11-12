@@ -1352,7 +1352,7 @@ export default function TransactionsPage({
             disabled={removal.pending}
             title={removal.label}
             aria-label={removal.label}
-            className="press inline-flex items-center rounded-control p-0.5 text-neutral-400 hover:text-brand-navy disabled:opacity-50"
+            className="press inline-flex items-center rounded-control p-0.5 text-neutral-500 hover:text-brand-navy disabled:opacity-50"
             data-testid={`button-remove-forecast-${tx.id}`}
           >
             <X className="h-3 w-3" />
@@ -2606,7 +2606,7 @@ export default function TransactionsPage({
                   legendMax={2}
                 />
               ) : (
-                <div className="grid h-10 place-items-center text-micro text-neutral-400">
+                <div className="grid h-10 place-items-center text-micro text-neutral-500">
                   {/* (PR14 review LOW-3) Say which: no day through today, a failed
                       load, or a new range still loading. */}
                   {register.isLoadingError
@@ -2675,7 +2675,7 @@ export default function TransactionsPage({
                   height={56}
                 />
               ) : (
-                <div className="grid h-14 place-items-center text-micro text-neutral-400">
+                <div className="grid h-14 place-items-center text-micro text-neutral-500">
                   No trend yet
                 </div>
               )}
@@ -3059,7 +3059,7 @@ export default function TransactionsPage({
             const afterTodayDay = items.every((t) => t.afterToday);
             const dayNetNode = afterTodayDay ? (
               <span
-                className="tabular-nums text-neutral-400"
+                className="tabular-nums text-neutral-500"
                 title="Days after today are not totalled"
                 data-testid={`day-net-${dayKey}`}
               >
@@ -3067,7 +3067,7 @@ export default function TransactionsPage({
               </span>
             ) : dayKey === partialDayKey ? (
                 <span
-                  className="tabular-nums text-neutral-400"
+                  className="tabular-nums text-neutral-500"
                   title="More rows for this day on the next page"
                   data-testid={`day-net-${dayKey}`}
                 >

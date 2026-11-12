@@ -111,7 +111,7 @@ export function InboxCardView({
       <button
         {...listeners}
         {...attributes}
-        className="-m-1 inline-flex min-h-[32px] min-w-[32px] cursor-grab touch-none items-center justify-center rounded-control p-1.5 text-neutral-400 outline-none hover:bg-neutral-50 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 active:cursor-grabbing"
+        className="-m-1 inline-flex min-h-[32px] min-w-[32px] cursor-grab touch-none items-center justify-center rounded-control p-1.5 text-neutral-500 outline-none hover:bg-neutral-50 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 active:cursor-grabbing"
         aria-label="Drag to match onto a planned item"
         title="Drag onto a planned item to match"
         data-testid={`inbox-drag-handle-${card.bank.txn.id}`}
@@ -125,13 +125,13 @@ export function InboxCardView({
         </div>
         {showDragHint && (
           <div
-            className="mt-0.5 text-micro text-neutral-400"
+            className="mt-0.5 text-micro text-neutral-500"
             data-testid={`inbox-drag-hint-${card.bank.txn.id}`}
           >
             Drag onto a planned item to match
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-2 text-micro text-neutral-400">
+        <div className="flex flex-wrap items-center gap-2 text-micro text-neutral-500">
           <span className="fig">
             {formatDate(card.bank.date)}
           </span>
@@ -177,7 +177,7 @@ export function InboxCardView({
             </SelectTrigger>
             <SelectContent>
               {planRows.length === 0 && (
-                <div className="px-2 py-1 text-micro text-neutral-400">
+                <div className="px-2 py-1 text-micro text-neutral-500">
                   No planned items this month
                 </div>
               )}

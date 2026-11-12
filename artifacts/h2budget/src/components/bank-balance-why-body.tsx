@@ -185,7 +185,7 @@ function Explanation({ explain, onReviewDifference }: { explain: BankBalanceExpl
             </details>
           )}
 
-          <div className="text-micro text-neutral-400">
+          <div className="text-micro text-neutral-500">
             <FreshnessLine
               bank={{
                 source: freshness.source,
@@ -235,7 +235,7 @@ function RowList({ rows, testid }: { rows: readonly BankBalanceExplainRow[]; tes
           <li key={r.id} className="flex items-start justify-between gap-2" data-testid="bank-why-row" data-row-id={r.id}>
             <div className="min-w-0">
               <div className="flex min-w-0 items-baseline gap-1.5">
-                <span className="shrink-0 fig text-neutral-400">{shortDay(r.date)}</span>
+                <span className="shrink-0 fig text-neutral-500">{shortDay(r.date)}</span>
                 {href ? (
                   <Link href={href} className="truncate font-medium text-brand-navy underline" data-testid="bank-why-row-link">
                     {name}
@@ -252,7 +252,7 @@ function RowList({ rows, testid }: { rows: readonly BankBalanceExplainRow[]; tes
               </div>
             </div>
             <span
-              className={`shrink-0 fig ${r.counted ? "text-neutral-700" : "text-neutral-400"}`}
+              className={`shrink-0 fig ${r.counted ? "text-neutral-700" : "text-neutral-500"}`}
               data-testid="bank-why-row-amount"
             >
               {signed(r.counted ? r.contribution : r.amount)}

@@ -366,7 +366,7 @@ export function PlaidSyncHistory({
                           </span>
                           {(a.requestId || a.httpStatus !== null) && (
                             <span
-                              className="text-[10px] text-neutral-400 fig"
+                              className="text-[10px] text-neutral-500 fig"
                               data-testid={`sync-attempt-meta-${a.id}`}
                             >
                               {a.httpStatus !== null && a.httpStatus !== undefined
@@ -410,7 +410,7 @@ export function PlaidSyncHistory({
                           )}
                         </div>
                       ) : (
-                        <span className="text-neutral-400">—</span>
+                        <span className="text-neutral-500">—</span>
                       )}
                     </td>
                   </tr>

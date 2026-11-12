@@ -93,7 +93,7 @@ export function AccountFilterBar({
             className="flex flex-wrap items-end gap-3"
           >
             <div className="relative min-w-[200px] flex-1">
-              <Search className="absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+              <Search className="absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-neutral-500" />
               <input
                 placeholder="Search description or category…"
                 value={search}

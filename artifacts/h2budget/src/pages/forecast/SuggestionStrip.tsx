@@ -34,7 +34,7 @@ export function SuggestionStrip({
       className="mt-1.5 flex flex-wrap items-center gap-1.5"
       data-testid={`bank-suggestions-${txnId}`}
     >
-      <span className="mr-0.5 text-micro font-medium text-neutral-400">
+      <span className="mr-0.5 text-micro font-medium text-neutral-500">
         Suggested
       </span>
       {suggestions.map((s) => (
@@ -52,10 +52,10 @@ export function SuggestionStrip({
           <span className="max-w-[140px] truncate font-semibold">
             {s.plan.label}
           </span>
-          <span className="fig text-neutral-400">
+          <span className="fig text-neutral-500">
             {formatDate(s.plan.date)}
           </span>
-          <span className="uppercase tracking-wide text-neutral-400">
+          <span className="uppercase tracking-wide text-neutral-500">
             {s.confidence}
           </span>
         </button>

@@ -448,7 +448,7 @@ function DebtSection({
                 <tbody>
                   {killed.map((k) => (
                     <tr key={`${k.name}-${k.monthIndex}`}>
-                      <td className={cn(tdNum, "text-neutral-400")}>{k.rank}</td>
+                      <td className={cn(tdNum, "text-neutral-500")}>{k.rank}</td>
                       <td className={cn(td, "max-w-[200px] truncate font-medium")}>
                         {k.name}
                       </td>
@@ -515,7 +515,7 @@ function DebtSection({
           )}
         </PanelCard>
 
-      <p className="span-12 text-micro text-neutral-400">
+      <p className="span-12 text-micro text-neutral-500">
         Projection assumes a total monthly payment of{" "}
         {formatCurrency(totalMin + extraPerMonth)} — {formatCurrency(totalMin)} in
         minimums plus {formatCurrency(extraPerMonth)} extra — on the{" "}

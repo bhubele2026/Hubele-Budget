@@ -44,17 +44,16 @@ function ReportTile({
     <Link
       href={href}
       className="panel panel-link press group span-4 flex flex-col p-4"
-      style={{ animationDelay: `calc(${index} * var(--stagger))` }}
       data-testid={`report-tile-${href.split("?")[0]!.split("/").pop()}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className={fieldLabel}>{label}</span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-neutral-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-orange" />
+        <ChevronRight className="h-4 w-4 shrink-0 text-neutral-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-navy" />
       </div>
       <div className="mt-1 fig text-title font-semibold text-foreground">
         {value}
       </div>
-      <div className="mt-0.5 text-micro text-neutral-400">{sub}</div>
+      <div className="mt-0.5 text-micro text-neutral-500">{sub}</div>
       <div className="mt-3">{visual}</div>
     </Link>
   );
@@ -187,7 +186,7 @@ export default function ReportsPage() {
     }));
   }, [facts]);
 
-  const noteClass = "text-micro text-neutral-400";
+  const noteClass = "text-micro text-neutral-500";
 
   return (
     <div className="space-y-4">
@@ -295,7 +294,7 @@ export default function ReportsPage() {
                 color={spendRatio > 1 ? CHART.orangeDeep : CHART.navy}
                 centerSub="spent"
               />
-              <div className="flex flex-col gap-0.5 text-micro text-neutral-400">
+              <div className="flex flex-col gap-0.5 text-micro text-neutral-500">
                 <span>
                   In{" "}
                   {facts ? (
@@ -336,7 +335,7 @@ export default function ReportsPage() {
             ) : (
               <div>
                 <MiniBars data={dowSpend} height={36} accent={CHART.navy} />
-                <div className="mt-1 flex justify-between text-micro text-neutral-400">
+                <div className="mt-1 flex justify-between text-micro text-neutral-500">
                   {DOW.map((day) => (
                     <span key={day}>{day[0]}</span>
                   ))}

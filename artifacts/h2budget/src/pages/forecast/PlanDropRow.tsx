@@ -246,7 +246,7 @@ export function PlanDropRow({
               </TooltipProvider>
             )}
           </div>
-          <div className="whitespace-nowrap fig text-micro text-neutral-400">
+          <div className="whitespace-nowrap fig text-micro text-neutral-500">
             {formatDate(row.date)}
           </div>
           {hook ? (

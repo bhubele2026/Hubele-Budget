@@ -131,7 +131,7 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
         <div className="panel">
           <div className="panel-head">
             <h3 className="text-label font-semibold text-brand-navy">Findings</h3>
-            <span className="ml-auto text-micro text-neutral-400">
+            <span className="ml-auto text-micro text-neutral-500">
               {issues.length} flagged
             </span>
           </div>

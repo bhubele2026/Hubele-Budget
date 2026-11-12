@@ -97,7 +97,7 @@ export function ProbablyPaidStrip({
       </span>
       {!pp.needsReview && (
         <span
-          className="uppercase tracking-wide text-neutral-400"
+          className="uppercase tracking-wide text-neutral-500"
           data-testid={`probably-paid-confidence-${txnId}`}
         >
           {pp.confidence}

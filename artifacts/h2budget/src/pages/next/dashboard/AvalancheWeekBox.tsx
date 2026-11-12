@@ -27,7 +27,7 @@ const COL_LABEL = "mb-1 text-micro font-medium text-neutral-600";
 /** A row that opens: the native marker, then the row's words. */
 const ROW_SUMMARY =
   "w-fit cursor-pointer rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
-const Dot = () => <span aria-hidden className="px-1.5 font-normal text-neutral-400">·</span>;
+const Dot = () => <span aria-hidden className="px-1.5 font-normal text-neutral-500">·</span>;
 
 /** "2 cards" — a row that pays more than one debt names how many; its detail names each. */
 const cardCount = (n: number) => `${n} cards`;

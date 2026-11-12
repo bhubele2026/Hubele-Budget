@@ -198,7 +198,7 @@ export function SplitTransactionDialog({
               {parts.length > 2 && (
                 <button
                   type="button"
-                  className="press grid h-8 w-8 shrink-0 place-items-center rounded-control text-neutral-400 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+                  className="press grid h-8 w-8 shrink-0 place-items-center rounded-control text-neutral-500 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40"
                   onClick={() => removePart(i)}
                   aria-label="Remove part"
                 >

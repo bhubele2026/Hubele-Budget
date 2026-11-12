@@ -30,7 +30,7 @@ export function CashFreedBanner({ transition }: { transition: PayoffTransition }
           <div className="truncate text-body font-medium text-neutral-700">
             {transition.debtName} is gone
           </div>
-          <div className="text-micro text-neutral-400">
+          <div className="text-micro text-neutral-500">
             from {nextMonthLabel(transition.payoffYM)}
           </div>
         </div>

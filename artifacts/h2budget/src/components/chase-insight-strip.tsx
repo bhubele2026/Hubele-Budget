@@ -186,7 +186,7 @@ export function ChaseInsightStrip({
                 {Math.abs(pctRounded)}%
               </span>
             )}
-            <span className="text-micro text-neutral-400" data-testid="strip-comparison">
+            <span className="text-micro text-neutral-500" data-testid="strip-comparison">
               {/* "Loading" only while it can still arrive: a failed comparison
                   used to read "Loading comparison…" forever. */}
               {prev
@@ -222,7 +222,7 @@ export function ChaseInsightStrip({
             {mix.length ? (
               <StackBar segments={mix} legendMax={4} />
             ) : (
-              <span className="text-micro text-neutral-400">
+              <span className="text-micro text-neutral-500">
                 No categorized spend yet.
               </span>
             )}

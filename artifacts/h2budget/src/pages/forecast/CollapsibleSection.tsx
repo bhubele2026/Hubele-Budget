@@ -68,7 +68,7 @@ export function CollapsibleSection({
         className="press flex min-h-11 cursor-pointer list-none items-center gap-2 border-b border-brand-line px-1 py-2 hover:bg-brand-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-navy/40 [&::-webkit-details-marker]:hidden group-open:mb-2"
         data-testid={`section-${id}-summary`}
       >
-        <ChevronDown className="h-4 w-4 flex-none text-neutral-400 transition-transform group-open:rotate-180" aria-hidden="true" />
+        <ChevronDown className="h-4 w-4 flex-none text-neutral-500 transition-transform group-open:rotate-180" aria-hidden="true" />
         <span className="min-w-0 truncate text-body font-semibold text-foreground">{title}</span>
         {count != null ? <span className={chipClass}>{count}</span> : null}
         {total != null ? (

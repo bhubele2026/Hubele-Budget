@@ -259,7 +259,7 @@ export default function DebtsPage() {
       <div className="panel span-12">
         <div className="panel-head">
           <span className="text-title font-semibold text-foreground">Creditors</span>
-          <span className="text-micro text-neutral-400">
+          <span className="text-micro text-neutral-500">
             Highest APR first
           </span>
           <Help className="ml-auto">
@@ -315,7 +315,7 @@ export default function DebtsPage() {
                     >
                       <td className={td}>
                         <div className="font-medium text-neutral-700">{debt.name}</div>
-                        <div className="text-micro capitalize text-neutral-400">
+                        <div className="text-micro capitalize text-neutral-500">
                           {debt.type || "General"}
                         </div>
                       </td>
@@ -330,9 +330,9 @@ export default function DebtsPage() {
                           </span>
                         )}
                       </td>
-                      <td className={`${tdNum} text-neutral-400`}>{fmtPct(Number(debt.apr))}</td>
-                      <td className={`${tdNum} text-neutral-400`}>{offPlan ? "—" : formatCurrency(0)}</td>
-                      <td className={`${tdNum} text-neutral-400`}>—</td>
+                      <td className={`${tdNum} text-neutral-500`}>{fmtPct(Number(debt.apr))}</td>
+                      <td className={`${tdNum} text-neutral-500`}>{offPlan ? "—" : formatCurrency(0)}</td>
+                      <td className={`${tdNum} text-neutral-500`}>—</td>
                       <td
                         className={`${td} whitespace-nowrap text-right text-label text-neutral-500`}
                         data-testid="debt-card-paid-off-month"
@@ -354,7 +354,7 @@ export default function DebtsPage() {
                   <tr key={debt.id} className={cn(isTarget && "bg-brand-tint")}>
                     <td className={td}>
                       <div className="font-medium text-neutral-700">{debt.name}</div>
-                      <div className="flex items-center gap-1.5 text-micro text-neutral-400">
+                      <div className="flex items-center gap-1.5 text-micro text-neutral-500">
                         <span className="capitalize">{debt.type || "General"}</span>
                         {originalNum > 0 && (
                           <span className="fig">

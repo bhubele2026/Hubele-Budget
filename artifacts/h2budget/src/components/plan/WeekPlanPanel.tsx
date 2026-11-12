@@ -28,7 +28,7 @@ const ENTRY_HINT = "Enter a dollar amount above $0, like 350 or 350.50.";
 
 function Money({ value }: { value: string | number | null | undefined }) {
   const n = toAmount(value);
-  if (n == null) return <span className="text-neutral-400">—</span>;
+  if (n == null) return <span className="text-neutral-500">—</span>;
   return (
     <data value={centsValue(n)} className="fig">
       {fmtMoney(n)}

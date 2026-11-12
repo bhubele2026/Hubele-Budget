@@ -219,7 +219,7 @@ export function OwnerInvitationsSection() {
           {invitesLoading ? (
             <div className="skeleton m-4 h-12 rounded-control" />
           ) : (invitations ?? []).length === 0 ? (
-            <p className="px-4 py-3 text-body text-neutral-400">No invitations yet.</p>
+            <p className="px-4 py-3 text-body text-neutral-500">No invitations yet.</p>
           ) : (
             <div className="overflow-x-auto" data-testid="table-invitations">
               <table className="w-full">
@@ -280,7 +280,7 @@ export function OwnerInvitationsSection() {
           {membersLoading ? (
             <div className="skeleton m-4 h-12 rounded-control" />
           ) : (members ?? []).length === 0 ? (
-            <p className="px-4 py-3 text-body text-neutral-400">No members yet.</p>
+            <p className="px-4 py-3 text-body text-neutral-500">No members yet.</p>
           ) : (
             <div className="overflow-x-auto" data-testid="table-members">
               <table className="w-full">

@@ -392,7 +392,7 @@ function ForecastDetails({ children }: { children: ReactNode }) {
         className="press inline-flex cursor-pointer list-none items-center gap-1.5 rounded-control px-2 py-1 text-label font-semibold text-brand-navy hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 [&::-webkit-details-marker]:hidden"
         data-testid="forecast-details-summary"
       >
-        <ChevronDown className="h-4 w-4 text-neutral-400 transition-transform group-open:rotate-180" aria-hidden="true" />
+        <ChevronDown className="h-4 w-4 text-neutral-500 transition-transform group-open:rotate-180" aria-hidden="true" />
         Details
         <span className="font-normal text-neutral-600">· opening, money in and out, cash buffer</span>
       </summary>

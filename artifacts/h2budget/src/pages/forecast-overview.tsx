@@ -185,7 +185,6 @@ export default function ForecastOverviewPage() {
         <div
           data-testid="fo-stat-bank"
           className="surface min-w-[132px] rounded-card px-4 py-3 ring-1 ring-brand-line"
-          style={{ animationDelay: "0ms" }}
         >
           <CheckingBalanceFull
             size="kpi"
@@ -262,7 +261,7 @@ export default function ForecastOverviewPage() {
               Money in vs out · {days}
             </h2>
             <Help>{`Totals of every projected income and expense event over the ${days}. Navy is money in, deep orange is money out.`}</Help>
-            <span className="ml-auto text-micro text-neutral-400">
+            <span className="ml-auto text-micro text-neutral-500">
               {days}
             </span>
           </div>
@@ -279,7 +278,7 @@ export default function ForecastOverviewPage() {
                 money
               />
             ) : (
-              <p className="text-micro text-neutral-400" data-testid="fo-in-out-empty">
+              <p className="text-micro text-neutral-500" data-testid="fo-in-out-empty">
                 —
               </p>
             )}

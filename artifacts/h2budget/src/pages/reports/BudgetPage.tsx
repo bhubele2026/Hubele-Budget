@@ -331,7 +331,7 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
                       {l.name}
                     </td>
                     <td className={tdNum}>{formatCurrency(l.actual)}</td>
-                    <td className={cn(tdNum, "text-neutral-400")}>—</td>
+                    <td className={cn(tdNum, "text-neutral-500")}>—</td>
                     <td className={td}>
                       <span className="chip ok">Paid</span>
                     </td>

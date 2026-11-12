@@ -2256,7 +2256,7 @@ export default function ForecastPage({
             />
             {fromDateSwitchPending && (
               <RefreshCw
-                className="h-3 w-3 animate-spin text-neutral-400"
+                className="h-3 w-3 animate-spin text-neutral-500"
                 data-testid="forecast-from-pending"
                 aria-hidden="true"
               />
@@ -2345,7 +2345,7 @@ export default function ForecastPage({
               reading rolled forward through the counted rows, from THIS bundle, one moment), in the one
               presentation; the bank's own reading is inside Details. */}
           <div className={cardHead}>
-            <Landmark className="h-4 w-4 text-neutral-400" aria-hidden="true" />
+            <Landmark className="h-4 w-4 text-neutral-500" aria-hidden="true" />
             {data.bankSnapshot && data.bankSnapshot.source === "plaid" && (
               <button
                 type="button"
@@ -2437,7 +2437,7 @@ export default function ForecastPage({
       <Help>Lists this month's rows. The curve follows the horizon.</Help>
       {monthSwitchPending && (
         <RefreshCw
-          className="h-3 w-3 animate-spin text-neutral-400"
+          className="h-3 w-3 animate-spin text-neutral-500"
           data-testid="month-filter-pending"
           aria-hidden="true"
         />
@@ -2531,7 +2531,7 @@ export default function ForecastPage({
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
             <span className="flex min-w-0 items-center gap-2">
               <InboxIcon
-                className="h-4 w-4 flex-none text-neutral-400"
+                className="h-4 w-4 flex-none text-neutral-500"
                 aria-hidden="true"
               />
               <span className="chip info" data-testid="review-waiting-count">{bankInbox.length} to match</span>
@@ -2558,7 +2558,7 @@ export default function ForecastPage({
           <section className={kitCard} data-testid="card-from-bank">
               <div className={`${cardHead} flex-wrap`}>
                 <Landmark
-                  className="h-4 w-4 text-neutral-400"
+                  className="h-4 w-4 text-neutral-500"
                   aria-hidden="true"
                 />
                 <h2 className="sr-only text-title font-semibold text-foreground">
@@ -2611,7 +2611,7 @@ export default function ForecastPage({
                     role="note"
                   >
                     <GripVertical
-                      className="h-3.5 w-3.5 shrink-0 text-neutral-400"
+                      className="h-3.5 w-3.5 shrink-0 text-neutral-500"
                       aria-hidden="true"
                     />
                     <span className="flex-1 text-micro text-neutral-500">
@@ -2703,7 +2703,7 @@ export default function ForecastPage({
                   </div>
                 )}
                 {bankInbox.length === 0 && (
-                  <div className="py-2.5 text-center text-micro text-neutral-400">
+                  <div className="py-2.5 text-center text-micro text-neutral-500">
                     {isReconciledToBank ? (
                       <span className="chip ok">
                         Reconciled to bank · {monthFilter}
@@ -2718,7 +2718,7 @@ export default function ForecastPage({
                     className="mt-3 border-t border-brand-line pt-3"
                     data-testid="bank-resolved-list"
                   >
-                    <div className="mb-1 text-micro font-medium text-neutral-400">
+                    <div className="mb-1 text-micro font-medium text-neutral-500">
                       Resolved this month
                     </div>
                     <div
@@ -2738,7 +2738,7 @@ export default function ForecastPage({
                         <span className="flex-1 truncate text-neutral-600">
                           {r.bank.txn.description}
                         </span>
-                        <span className="text-neutral-400">
+                        <span className="text-neutral-500">
                           {formatDate(r.bank.date)}
                         </span>
                         <span
@@ -2993,7 +2993,7 @@ export default function ForecastPage({
                             records "not a planned payment" instead. */}
                         <button
                           type="button"
-                          className="press grid h-7 w-7 shrink-0 place-items-center self-start rounded-control text-neutral-400 hover:bg-neutral-50 hover:text-brand-navy"
+                          className="press grid h-7 w-7 shrink-0 place-items-center self-start rounded-control text-neutral-500 hover:bg-neutral-50 hover:text-brand-navy"
                           onClick={() =>
                             onRemoveFromForecast(card.bank.txn.id)
                           }
@@ -3119,7 +3119,7 @@ export default function ForecastPage({
                             <div className="truncate text-body font-medium text-neutral-700">
                               {b.label || "—"}
                             </div>
-                            <div className="text-micro text-neutral-400">
+                            <div className="text-micro text-neutral-500">
                               {formatDate(b.date)}
                             </div>
                             {line && (
@@ -3186,7 +3186,7 @@ export default function ForecastPage({
                 <section className={kitCard} data-testid="rescheduled-bucket-panel">
                   <div className={cardHead}>
                     <CalendarDays
-                      className="h-4 w-4 text-neutral-400"
+                      className="h-4 w-4 text-neutral-500"
                       aria-hidden="true"
                     />
                     <h2 className="sr-only text-title font-semibold text-foreground">
@@ -3219,7 +3219,7 @@ export default function ForecastPage({
                             <div className="truncate text-body font-medium text-neutral-700">
                               {b.label || "—"}
                             </div>
-                            <div className="fig text-micro text-neutral-400">
+                            <div className="fig text-micro text-neutral-500">
                               {formatDate(b.date)} → {formatDate(b.rescheduledTo!)}
                             </div>
                           </div>
@@ -3369,7 +3369,7 @@ export default function ForecastPage({
                         <div className="truncate text-body font-medium text-neutral-700">
                           {b.label || "—"}
                         </div>
-                        <div className="text-micro text-neutral-400">
+                        <div className="text-micro text-neutral-500">
                           {formatDate(b.date)}
                         </div>
                       </div>
@@ -3442,7 +3442,7 @@ export default function ForecastPage({
                 value={draftBuffer}
                 onChange={(e) => setDraftBuffer(e.target.value)}
               />
-              <p className="mt-1 text-micro text-neutral-400">
+              <p className="mt-1 text-micro text-neutral-500">
                 The floor the projection is measured against. Dipping under it
                 flags the low point as at risk.
               </p>
@@ -3508,7 +3508,7 @@ export default function ForecastPage({
                   }}
                   data-testid="input-move-date"
                 />
-                <p className="mt-1 text-micro text-neutral-400">
+                <p className="mt-1 text-micro text-neutral-500">
                   Any day in the next 30. Overrides this occurrence only.
                 </p>
                 {moveError && (
@@ -3670,7 +3670,7 @@ export default function ForecastPage({
                   </div>
                 )}
               </div>
-              <p className="text-micro text-neutral-400">
+              <p className="text-micro text-neutral-500">
                 Appears in Planned items, ready to match this transaction to.
               </p>
             </div>

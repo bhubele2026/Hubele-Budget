@@ -55,7 +55,7 @@ export function AvalancheScheduleCard() {
       <div className="panel-head">
         <span className="text-title font-semibold text-foreground">Schedule</span>
         {target && (
-          <span className="truncate text-micro text-neutral-400">
+          <span className="truncate text-micro text-neutral-500">
             {target.debtName} · {(target.apr * 100).toFixed(2)}% APR
           </span>
         )}
@@ -77,7 +77,7 @@ export function AvalancheScheduleCard() {
             <span className="fig text-label font-semibold text-foreground">
               {formatCurrency(data.totalProposed)}
             </span>
-            <span className="text-micro text-neutral-400">
+            <span className="text-micro text-neutral-500">
               over {payments.length} payment{payments.length === 1 ? "" : "s"}
             </span>
             <span className="ml-auto inline-flex items-center gap-1 text-micro font-medium">
@@ -124,13 +124,13 @@ export function AvalancheScheduleCard() {
                   </tbody>
                   <tfoot>
                     <tr data-testid="text-avalanche-total">
-                      <td className={`${td} text-micro font-medium text-neutral-400`}>
+                      <td className={`${td} text-micro font-medium text-neutral-500`}>
                         Total
                       </td>
                       <td className={`${tdNum} font-semibold`}>
                         {formatCurrency(data.totalProposed)}
                       </td>
-                      <td className={`${td} text-neutral-400`} colSpan={2}>
+                      <td className={`${td} text-neutral-500`} colSpan={2}>
                         {payments.length} payment{payments.length === 1 ? "" : "s"}
                         {data.scheduleThroughDate && (
                           <> through {formatDate(data.scheduleThroughDate)}</>
