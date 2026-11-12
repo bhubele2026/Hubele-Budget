@@ -55,12 +55,12 @@ function DrawerLink({
       {active && (
         <span
           aria-hidden
-          className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-brand-orange"
+          className="absolute inset-y-1.5 left-0 w-[2px] bg-chrome-ink"
         />
       )}
       <span className="flex-1">{item.name}</span>
       {badge !== null && (
-        <span className="rounded-full bg-brand-orange/20 px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums text-brand-orange">
+        <span className="fig rounded-[4px] bg-count-bg px-1.5 py-0.5 text-micro font-medium leading-none text-count-ink">
           {badge}
         </span>
       )}
@@ -104,7 +104,7 @@ export default function MobileNav({
   const groupLabel =
     "px-2 pb-1.5 text-micro font-semibold uppercase tracking-wide text-chrome-ink-4";
   return (
-    <div className="flex h-full flex-col bg-brand-navy text-chrome-ink">
+    <div className="flex h-full flex-col bg-chrome text-chrome-ink-2">
       <div className="flex h-14 items-center border-b border-chrome-rule px-3">
         <HomeMark onNavigate={onNavigate} />
       </div>
@@ -192,7 +192,7 @@ export default function MobileNav({
         <div className="flex min-w-0 flex-col">
           <span className="text-label font-medium text-chrome-ink-2">Account</span>
           {/* (C12) LND-09: the build, also the last item of the account menu. */}
-          <span data-testid="drawer-version" className="truncate font-mono text-micro tabular-nums text-chrome-ink-4">
+          <span data-testid="drawer-version" className="fig truncate text-micro text-chrome-ink-4">
             {VERSION_LABEL}
           </span>
         </div>

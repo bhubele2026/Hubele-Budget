@@ -4,10 +4,9 @@ import { Link, useLocation } from "wouter";
 import { scrollBehavior } from "@/lib/reducedMotion";
 
 /**
- * The app's one navigation ribbon — the dashboard's tab geometry (flush
- * labels, an orange underline that sweeps in from the left, chevrons at the
- * edges only when the strip actually overflows), rendered on the navy chrome
- * rather than on a light page.
+ * The app's one navigation ribbon — flush labels, a 2 px navy underline under
+ * the lit tab, chevrons at the edges only when the strip actually overflows —
+ * on the white top bar (2026-11-12) and, as `section`, on the row under it.
  *
  * Ported from KFI-Housing `src/web/components/board-frame.tsx`, with one
  * deliberate difference: Housing's tabs are URL SEGMENTS of one board, ours are
@@ -32,15 +31,16 @@ export interface RibbonTab {
 }
 
 /**
- * The lit tab's mark: a brand-orange underline with its glow, sweeping in from
- * the left (`.tab-underline`). One element for the ribbon AND the More
- * trigger, so the two can never draw "you are here" differently.
+ * The lit tab's mark: a crisp 2 px NAVY underline under navy text (owner,
+ * 2026-11-12 — no orange, no glow, no sweep). One element for the ribbon AND
+ * the More trigger, so the two can never draw "you are here" differently.
+ * `bg-chrome-ink` is navy on the white bar and light ink in dark.
  */
 export function TabUnderline() {
   return (
     <span
       aria-hidden
-      className="tab-underline pointer-events-none absolute inset-x-2.5 bottom-0 h-[3px] rounded-t-full bg-brand-orange shadow-tab-glow"
+      className="tab-underline pointer-events-none absolute inset-x-3 bottom-0 h-[2px] bg-chrome-ink"
     />
   );
 }
@@ -66,7 +66,7 @@ export function TabRibbon({
   trailing?: ReactNode;
   ariaLabel?: string;
   /**
-   * `chrome` = the navy global bar. `section` = the lighter row under it: same
+   * `chrome` = the global bar. `section` = the row under it: same
    * geometry and underline, drawn on the page surface (never replaces the bar).
    */
   variant?: "chrome" | "section";
@@ -155,23 +155,22 @@ export function TabRibbon({
                 data-testid={`${testIdPrefix}-${t.href.slice(1)}`}
                 aria-current={on ? "page" : undefined}
                 {...(onPrefetch ? warmHandlers(onPrefetch, t.href) : {})}
-                className={`press relative flex flex-none items-center whitespace-nowrap px-3.5 text-label font-semibold ${
+                className={`press relative flex flex-none items-center whitespace-nowrap px-3 text-label ${
                   light
                     ? on
-                      ? "text-brand-navy"
-                      : "text-muted-foreground hover:text-brand-navy"
+                      ? "font-semibold text-brand-navy"
+                      : "font-medium text-neutral-600 hover:text-foreground"
                     : on
-                      ? "text-chrome-ink"
-                      : "text-chrome-ink-3 hover:text-chrome-ink-hover"
+                      ? "font-semibold text-chrome-ink"
+                      : "font-medium text-chrome-ink-3 hover:text-chrome-ink-hover"
                 }`}
               >
                 {t.label}
                 {t.count != null && t.count > 0 && (
-                  /* ⚠️ BRAND ORANGE, NOT THE DEEP ORANGE. Items waiting to be
-                     reviewed are a queue, not a fault — spending the palette's
-                     one alarm colour on a to-do is what makes a real alarm
-                     unreadable. */
-                  <span className="ml-1.5 rounded-full bg-brand-orange/20 px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums text-brand-orange">
+                  /* ⚠️ NOT ORANGE (2026-11-12). Items waiting to be reviewed
+                     are a queue, not a fault: a small navy count, squared
+                     like every badge. Orange is kept for warnings. */
+                  <span className="fig ml-1.5 rounded-[4px] bg-count-bg px-1.5 py-0.5 text-micro font-medium leading-none text-count-ink">
                     {t.count}
                   </span>
                 )}
@@ -196,7 +195,7 @@ export function TabRibbon({
                 className={`absolute inset-y-0 grid w-7 place-items-center ${side === "l" ? "bg-gradient-to-r left-0" : "bg-gradient-to-l right-0"} text-body ${
                   light
                     ? "from-card via-card/90 to-transparent text-muted-foreground hover:text-brand-navy"
-                    : "from-brand-navy via-brand-navy/90 to-transparent text-chrome-ink-4 hover:text-chrome-ink"
+                    : "from-chrome via-chrome/90 to-transparent text-chrome-ink-4 hover:text-chrome-ink"
                 }`}
               >
                 {side === "l" ? "‹" : "›"}

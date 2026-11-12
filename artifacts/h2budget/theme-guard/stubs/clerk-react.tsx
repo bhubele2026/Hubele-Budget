@@ -109,8 +109,9 @@ function UserButtonImpl(_props: { children?: ReactNode }) {
         width: 28,
         height: 28,
         borderRadius: 9999,
-        background: "rgba(255,255,255,0.16)",
-        color: "#fff",
+        // The top bar's own ink and press ground, so the stub sits on the white bar (and on dark's card) like Clerk's avatar.
+        background: "var(--color-chrome-press)",
+        color: "var(--color-chrome-ink)",
         fontSize: 12,
         fontWeight: 600,
       }}

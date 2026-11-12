@@ -14,7 +14,7 @@ export function HomeMark({ onNavigate }: { onNavigate?: () => void }) {
       onClick={onNavigate}
       className="press flex flex-none items-center rounded-control px-2 py-1.5 hover:bg-chrome-press"
     >
-      <H2Wordmark tone="white" size={24} data-testid="h2-wordmark" />
+      <H2Wordmark tone="navy" size={22} data-testid="h2-wordmark" />
     </Link>
   );
 }

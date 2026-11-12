@@ -99,7 +99,7 @@ export function AppearanceButton({ className }: { className?: string }) {
 let refocus: Appearance | null = null;
 
 /**
- * The same four choices as a row. `tone="chrome"` is for the navy drawer
+ * The same four choices as a row. `tone="chrome"` is for the drawer
  * (chrome tokens only); `tone="page"` for a card.
  */
 export function AppearanceRow({ tone, className }: { tone: "chrome" | "page"; className?: string }) {

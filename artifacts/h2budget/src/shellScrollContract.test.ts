@@ -17,7 +17,7 @@ describe("the shell publishes its scroller and padding", () => {
     expect(layout).toMatch(/<main\s+data-shell-scroller=""\s+className="shell-scroller [^"]*overflow-y-auto/);
   });
   it("the content column pads with .shell-pad, not hard-coded p-3 md:p-5", () => {
-    expect(layout).toMatch(/className="page-in shell-pad mx-auto max-w-\[1600px\]"/);
+    expect(layout).toMatch(/className="shell-pad mx-auto max-w-\[1600px\]"/); // (2026-11-12) no .page-in entrance
     expect(layout).not.toMatch(/className="[^"]*p-3 md:p-5/);
   });
 });

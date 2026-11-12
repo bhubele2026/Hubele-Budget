@@ -195,11 +195,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      {/* ── The navy rail: wordmark · the one global bar · account. Shown on
-          every page, the dashboard included. ──────────────────────────────── */}
+      {/* ── The top bar (white, a hairline under it; owner 2026-11-12):
+          wordmark · the one global bar · account. Every page. ─────────────── */}
       <header
           data-testid="app-header"
-          className="sticky top-0 z-30 shrink-0 bg-brand-navy text-chrome-ink inset-shadow-chrome-edge"
+          className="sticky top-0 z-30 shrink-0 bg-chrome text-chrome-ink-2 inset-shadow-chrome-edge"
         >
           <div className="flex h-12 items-center gap-1 pl-1 pr-2 md:pl-3 md:pr-4">
             {/* Mobile: the drawer trigger sits before the mark. */}
@@ -259,10 +259,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <button
                         type="button"
                         className={cn(
-                          "press relative flex items-center whitespace-nowrap px-3.5 text-label font-semibold",
+                          "press relative flex items-center whitespace-nowrap px-3 text-label",
                           moreActive
-                            ? "text-chrome-ink"
-                            : "text-chrome-ink-3 hover:text-chrome-ink-hover",
+                            ? "font-semibold text-chrome-ink"
+                            : "font-medium text-chrome-ink-3 hover:text-chrome-ink-hover",
                         )}
                         data-testid="topnav-more"
                         aria-label="More destinations"
@@ -290,7 +290,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                               >
                                 <span className="flex-1">{item.name}</span>
                                 {badge !== null && (
-                                  <span className="rounded-full bg-brand-orange-wash px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums text-brand-orange">
+                                  <span className="fig rounded-[4px] bg-count-bg px-1.5 py-0.5 text-micro font-medium leading-none text-count-ink">
                                     {badge}
                                   </span>
                                 )}
@@ -336,10 +336,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   aria-label={reviewPillWords(reviewCount, queueTotal)}
                   title={reviewPillWords(reviewCount, queueTotal)}
                   data-testid="topnav-review-badge"
-                  className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink"
+                  className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-label font-medium text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink"
                 >
                   <span className="hidden sm:inline">Needs you</span>
-                  <span className="rounded-full bg-brand-orange/20 px-1.5 py-0.5 font-mono leading-none tabular-nums text-brand-orange">
+                  <span className="fig rounded-[4px] bg-count-bg px-1.5 py-0.5 text-micro font-medium leading-none text-count-ink">
                     {reviewCount}
                   </span>
                 </Link>
@@ -353,7 +353,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 aria-label="Ask H2"
                 aria-current={location === "/ask" ? "page" : undefined}
                 {...warmHandlers(prefetch, "/ask")}
-                className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink aria-[current=page]:bg-chrome-press aria-[current=page]:text-chrome-ink"
+                className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-label font-medium text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink aria-[current=page]:bg-chrome-press aria-[current=page]:text-chrome-ink"
               >
                 <MessageCircleQuestion className="h-4 w-4" aria-hidden />
                 <span className="hidden sm:inline">Ask</span>
@@ -418,14 +418,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           className="shell-scroller min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
           ref={mainRef}
         >
-          {/* ⚠️ KEYED ON LOCATION so EVERY client-side navigation re-runs the
-              entrance — without the key this animates once on layout mount and
-              never again. `.page-in` puts the timing on the kit's dials
-              (`--dur-page` × `--ease-out`), so the whole app's page swap moves
-              when the dial moves, and the reduced-motion block zeroes it. */}
+          {/* KEYED ON LOCATION: every navigation mounts a fresh page. (No
+              entrance animation since 2026-11-12: a page is simply there.) */}
           {/* `.shell-pad` is p-3 md:p-5, read from --shell-pad-x/-y so the
               pages' sticky heads bleed by the same numbers. */}
-          <div key={location} className="page-in shell-pad mx-auto max-w-[1600px]">
+          <div key={location} className="shell-pad mx-auto max-w-[1600px]">
             {children}
           </div>
         </main>

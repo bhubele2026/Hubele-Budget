@@ -311,9 +311,11 @@ describe("app shell chrome", () => {
     expect(screen.getByTestId("page-body")).toBeTruthy();
   });
 
-  it("renders the page keyed on location so every navigation re-runs .page-in", () => {
+  // (2026-11-12) No entrance motion: the page body is keyed on location but no longer animates in.
+  it("renders the page body without an entrance animation", () => {
     mount("/banking");
-    expect(document.querySelector(".page-in")).toBeTruthy();
+    expect(document.querySelector(".shell-pad")).toBeTruthy();
+    expect(document.querySelector(".page-in")).toBeNull();
   });
 
   it("the bar is desktop-only and the drawer trigger phone-only — what the phone tests below rely on", () => {
