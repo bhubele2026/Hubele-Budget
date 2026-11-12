@@ -123,6 +123,8 @@ interface Api { url: string; path: string; start: number; ttfb: number; end: num
 interface Collected {
   nav: { ttfb: number; dcl: number; load: number };
   scripts: { count: number; bytes: number; lastEnd: number };
+  /** Every script: start, end, bytes (to tell what JS loaded before the numbers). */
+  scriptList?: Array<{ name: string; start: number; end: number; bytes: number }>;
   api: Api[];
   marks: Array<{ name: string; t: number; nav: number; path?: string }>;
   vitals: { lcp?: number; cls: number; inp?: number };
@@ -148,6 +150,7 @@ const COLLECT = () => {
   return {
     nav: { ttfb: n?.responseStart ?? NaN, dcl: n?.domContentLoadedEventEnd ?? NaN, load: n?.loadEventEnd ?? NaN },
     scripts: { count: scripts.length, bytes: scripts.reduce((s, r) => s + (r.encodedBodySize || 0), 0), lastEnd: Math.max(0, ...scripts.map((r) => r.responseEnd)) },
+    scriptList: scripts.map((r) => ({ name: new URL(r.name).pathname.split("/").pop() ?? r.name, start: r.startTime, end: r.responseEnd, bytes: r.encodedBodySize || 0 })),
     api,
     marks,
     vitals: { lcp: v.lcp, cls: v.cls, inp: v.inp },
@@ -378,7 +381,16 @@ function metrics(r: Run): Record<string, number> {
   const byUrl = new Map<string, number>();
   for (const a of c.api) byUrl.set(a.url, (byUrl.get(a.url) ?? 0) + 1);
   const repaint = markT(c, "h2:theme-repaint");
-  const refired = Number.isFinite(repaint) ? c.api.filter((a) => a.start > repaint && c.api.some((b) => b.url === a.url && b.start < repaint)).length : 0;
+  // The theme change: a re-mount (h2:theme-repaint) or a repaint without one (h2:theme-settle), whichever came first.
+  const change = Math.min(Number.isFinite(repaint) ? repaint : Infinity, markT(c, "h2:theme-settle") || Infinity);
+  const refired = Number.isFinite(change) ? c.api.filter((a) => a.start > change && c.api.some((b) => b.url === a.url && b.start < change)).length : 0;
+  // JS that STARTED before the later of the two Home marks (what the numbers had to share the link with).
+  const numbersAt = Math.max(markT(c, "h2:home-numbers-ready"), markT(c, "h2:weekly-pay-ready"));
+  const sl = c.scriptList ?? [];
+  // Lazy = asked for after the entry graph ran (the entry and its modulepreloads all start before h2:entry-eval).
+  const entryAt = markT(c, "h2:entry-eval");
+  const lazyBefore = sl.filter((x) => x.start < numbersAt && x.start >= entryAt);
+  const charts = sl.find((x) => x.name.startsWith("vendor-charts"));
   return {
     docTtfb: c.nav.ttfb,
     dcl: c.nav.dcl,
@@ -410,7 +422,14 @@ function metrics(r: Run): Record<string, number> {
     maxDup: Math.max(0, ...byUrl.values()),
     dupExtra: [...byUrl.values()].reduce((s, n) => s + (n - 1), 0),
     themeRepaints: c.marks.filter((m) => m.name === "h2:theme-repaint").length,
+    themeSettles: c.marks.filter((m) => m.name === "h2:theme-settle").length,
     refiredAfterRepaint: refired,
+    lazyJsBeforeNumbers: lazyBefore.length,
+    lazyJsKBBeforeNumbers: lazyBefore.reduce((x, r) => x + r.bytes, 0) / 1024,
+    chartsBeforeNumbers: charts ? (charts.start < numbersAt ? 1 : 0) : 0,
+    chartsLoaded: charts ? 1 : 0,
+    weeklyStart: weekly?.start ?? NaN,
+    positionEnd: c.api.find((a) => a.path === "/api/money/position")?.end ?? NaN,
   };
 }
 const fmt = (n: number, d = 0) => (Number.isFinite(n) ? n.toFixed(d) : "—");
@@ -461,12 +480,15 @@ const HOME_KEYS: Array<[string, string, number?]> = [
   ["ledgerBuilds", "ledger builds incl. warm-up"], ["baseBuilds", "base400 builds incl. warm-up"], ["shareJoined", "builds joined (shared)"],
   ["queries", "queries (all calls)"], ["poolwaitMs", "pool wait, all calls (ms)"],
   ["dupExtra", "identical duplicate requests"], ["themeRepaints", "theme re-mounts"], ["warmupBeforeWeekly", "warm-up began before /avalanche/weekly finished (1 = yes)", 2],
+  ["weeklyStart", "/api/avalanche/weekly start (ms)"], ["weeklyEnd", "/api/avalanche/weekly done (ms)"], ["positionEnd", "/api/money/position done (ms)"],
+  ["lazyJsBeforeNumbers", "lazy JS files started before both Home marks"], ["lazyJsKBBeforeNumbers", "lazy JS KB (encoded) started before both Home marks"],
+  ["chartsBeforeNumbers", "vendor-charts started before both Home marks (1 = yes)", 2], ["chartsLoaded", "vendor-charts loaded at all by settle (1 = yes)", 2],
 ];
 
 // ── MAIN ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const want = (s: string) => !ONLY || ONLY.includes(s);
 const md: string[] = [
-  `# Local client waterfall — before (${new Date().toISOString().slice(0, 16)}Z)`,
+  `# Local client waterfall — ${process.env.LABEL ?? "before"} (${new Date().toISOString().slice(0, 16)}Z)`,
   "",
   `Real API server (\`server-dist/index.mjs\`, Clerk stand-in) on the seeded perf DB · rich household scale ${SCALE} (${hh.rows} transactions, weekly avalanche cadence) · headless Chromium, dark device · ${ITER} runs per scenario (median, p90), after one unmeasured warm-up. Times are ms from navigation start unless named. Laptop CPU — production runs on 0.5 CPU.`,
 ];
@@ -578,8 +600,10 @@ try {
       const ms = th.map(metrics);
       const r0 = th[0]!.c;
       const rp = markT(r0, "h2:theme-repaint");
-      const refired = r0.api.filter((a) => a.start > rp && r0.api.some((b) => b.url === a.url && b.start < rp)).map((a) => `\`${a.url.slice(0, 70)}\``);
-      md.push("", `### theme — remembered Light on a dark device, server Auto (${th.length} runs)`, "", `theme re-mounts per load: ${ms.map((m) => m.themeRepaints).join(", ")} · re-mount at ${fmt(rp)} ms (run 1) · requests re-fired after it (same URL as before it): ${ms.map((m) => m.refiredAfterRepaint).join(", ")} — ${refired.join(", ") || "none"}`);
+      const ch = Math.min(Number.isFinite(rp) ? rp : Infinity, markT(r0, "h2:theme-settle") || Infinity);
+      const refired = r0.api.filter((a) => a.start > ch && r0.api.some((b) => b.url === a.url && b.start < ch)).map((a) => `\`${a.url.slice(0, 70)}\``);
+      const st = markT(r0, "h2:theme-settle");
+      md.push("", `### theme — remembered Light on a dark device, server Auto (${th.length} runs)`, "", `theme re-mounts per load: ${ms.map((m) => m.themeRepaints).join(", ")} · repaints without a re-mount (h2:theme-settle): ${ms.map((m) => m.themeSettles).join(", ")} · re-mount at ${fmt(rp)} ms / settle at ${fmt(st)} ms (run 1) · requests re-fired after the change (same URL as before it): ${ms.map((m) => m.refiredAfterRepaint).join(", ")} — ${refired.join(", ") || "none"}`);
     }
   }
 } finally {
