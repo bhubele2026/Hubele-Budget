@@ -45,6 +45,7 @@ import {
 } from "@workspace/avalanche-core";
 import { addDaysISO, householdDayOf, householdTodayISO } from "./householdClock";
 import { ledgerSharingEnabled, shareInFlight } from "./ledgerShare";
+import { cachedLedgerRead } from "./ledgerCache";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import type { Filing } from "./pendingFiling";
 
@@ -207,6 +208,23 @@ export async function findSupersededPendingForRange(
   to: string,
   reader: DbReader = db,
   opts: SupersedeReadOptions = {},
+): Promise<SupersededPendingInRange> {
+  // Inside a transaction (another reader) it reads that transaction's own view: never cached.
+  if (reader !== db) return findSupersededPendingForRangeUncached(householdId, from, to, reader, opts);
+  // ⭐ (PERF) Kept while the household's data revision holds (lib/ledgerCache.ts): the same range on the same day
+  // is the same answer until a write.
+  const today = opts.today ?? householdTodayISO();
+  return cachedLedgerRead("supersede", householdId, JSON.stringify([householdId, from, to, today, expiredHoldsRuleOn()]), () =>
+    findSupersededPendingForRangeUncached(householdId, from, to, db, { ...opts, today }),
+  );
+}
+
+async function findSupersededPendingForRangeUncached(
+  householdId: string,
+  from: string,
+  to: string,
+  reader: DbReader,
+  opts: SupersedeReadOptions,
 ): Promise<SupersededPendingInRange> {
   const [inReach] = await reader
     .select({ id: transactionsTable.id })

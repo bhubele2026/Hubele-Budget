@@ -11,7 +11,8 @@ import { inForecastWhere } from "./forecastInclusion";
 import { householdTodayISO, monthBounds } from "./householdClock";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { readPausedReview } from "./oneTimeBillMove";
-import { countsNowhere, findSupersededPendingForRange } from "./supersededPending";
+import { countsNowhere, expiredHoldsRuleOn, findSupersededPendingForRange } from "./supersededPending";
+import { cachedLedgerRead } from "./ledgerCache";
 
 /**
  * ⭐ (BANK-AUTO) THE BANK ROWS STILL WAITING FOR A MATCH — the body of
@@ -57,6 +58,17 @@ export interface UnresolvedBankRows {
 }
 
 export async function readUnresolvedBankRows(
+  householdId: string,
+  ownerUserId: string,
+  range?: { from: string; to: string },
+): Promise<UnresolvedBankRows> {
+  // ⭐ (PERF) Kept while the household's data revision holds (lib/ledgerCache.ts): every badge, Needs you and the
+  // auto-sort's reads of one moment read it once.
+  const key = JSON.stringify([householdId, ownerUserId, range?.from ?? null, range?.to ?? null, householdTodayISO(), expiredHoldsRuleOn()]);
+  return cachedLedgerRead("unresolvedBankRows", householdId, key, () => readUnresolvedBankRowsUncached(householdId, ownerUserId, range));
+}
+
+async function readUnresolvedBankRowsUncached(
   householdId: string,
   ownerUserId: string,
   range?: { from: string; to: string },

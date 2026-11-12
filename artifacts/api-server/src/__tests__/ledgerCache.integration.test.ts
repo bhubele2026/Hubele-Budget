@@ -233,12 +233,31 @@ const view = (b: Record<string, unknown>) => {
   return { ...rest, dataAsOf: { ...(dataAsOf ?? {}), computedAt: null } };
 };
 /** The spine now, with the cache, and as built from scratch: they must agree. */
+/** Drop every "as of now" stamp (computedAt, asOf) anywhere in an answer: they name the moment, not a figure. */
+const stamps = (v: unknown): unknown =>
+  Array.isArray(v)
+    ? v.map(stamps)
+    : v && typeof v === "object"
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k]) => k !== "asOf" && k !== "computedAt").map(([k, x]) => [k, stamps(x)]))
+      : v;
+/** (PERF) The other pages whose reads are cached too: Banking (review + Needs you) and the Amex summary. */
+const PAGES = [
+  "/banking/needs-you",
+  "/banking/review?from=2026-10-01&to=2026-10-14&rowsPerBucket=25",
+  "/amex/summary?accountId=all&from=2026-10-11&to=2026-10-17&rowsPerGroup=50",
+  "/reports/spending-facts?from=2026-09-15&to=2026-10-14",
+];
 async function spineAgrees() {
   const cached = await get("/spine");
+  const pages = [];
+  for (const p of PAGES) pages.push((await get(p)).body);
   process.env.LEDGER_CACHE = "off";
   const fresh = await get("/spine");
+  const freshPages = [];
+  for (const p of PAGES) freshPages.push((await get(p)).body);
   delete process.env.LEDGER_CACHE;
   expect(view(cached.body)).toEqual(view(fresh.body));
+  for (const [i, p] of PAGES.entries()) expect(stamps(pages[i]), p).toEqual(stamps(freshPages[i]));
   return cached;
 }
 

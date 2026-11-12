@@ -22,6 +22,9 @@ import * as schema from "@workspace/db";
 import { pool } from "@workspace/db";
 import { computeCashSignalDetailed } from "../lib/cashSignal";
 import { loadWeeklyAvalanchePlan } from "../lib/avalancheWeeklyPlan";
+import { findSupersededPendingForRange } from "../lib/supersededPending";
+import { buildSpendingFacts } from "../lib/spendingFacts";
+import { readUnresolvedBankRows } from "../lib/unresolvedBankRows";
 import { LEDGER_READ_TABLES } from "../lib/ledgerCache";
 import { findMigrationsDir } from "../lib/migrationsDir";
 import { RICH_NOW, cleanupRichHouseholds, seedRichHousehold } from "./_fixtures/richHousehold";
@@ -29,7 +32,7 @@ import { RICH_NOW, cleanupRichHouseholds, seedRichHousehold } from "./_fixtures/
 /** The revision table itself. */
 const EXEMPT = new Set(["household_data_revisions"]);
 const LIB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../lib");
-const ROOTS = ["forecastLedger.ts", "cashSignal.ts", "avalancheWeeklyPlan.ts"];
+const ROOTS = ["forecastLedger.ts", "cashSignal.ts", "avalancheWeeklyPlan.ts", "supersededPending.ts", "spendingFacts.ts", "unresolvedBankRows.ts"];
 
 const W = `perf-rev-w-${process.pid}-${randomUUID().slice(0, 8)}`;
 const M = `perf-rev-m-${process.pid}-${randomUUID().slice(0, 8)}`;
@@ -118,6 +121,9 @@ describe("(PERF) household data revision — no unseen read", () => {
           await computeCashSignalDetailed(hh[owner]!, owner, opts);
         }
         await loadWeeklyAvalanchePlan(hh[owner]!, owner);
+        await findSupersededPendingForRange(hh[owner]!, "2026-10-01", "2026-10-14");
+        await buildSpendingFacts(hh[owner]!, "2026-10-01", "2026-10-14");
+        await readUnresolvedBankRows(hh[owner]!, owner);
       }
     } finally {
       (pool as unknown as { query: unknown }).query = orig;

@@ -33,7 +33,7 @@ import { hookObligationsModelOn } from "./everydayHooks";
 import { addSpan, noteCacheRead, requestMemo } from "./requestTiming";
 import { deepFreeze } from "./ledgerShare";
 
-export const LEDGER_CACHE_MAX_ENTRIES = 24;
+export const LEDGER_CACHE_MAX_ENTRIES = 64;
 export const LEDGER_CACHE_MAX_AGE_MS = 5 * 60_000;
 /** How long the "are the triggers there?" answer is trusted. */
 const TRIGGER_CHECK_MS = 60_000;

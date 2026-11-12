@@ -33,9 +33,11 @@ import {
   type SpendTxn,
 } from "./spendingFilter";
 import {
+  expiredHoldsRuleOn,
   findSupersededPendingForRange,
   type SupersededPending,
 } from "./supersededPending";
+import { cachedLedgerRead } from "./ledgerCache";
 import {
   effectiveFiling,
   uncategorizedCategoryIds,
@@ -159,7 +161,22 @@ function topByTotal<T extends { total: number }>(arr: T[], n: number): T[] {
   return [...arr].sort((a, b) => b.total - a.total).slice(0, n);
 }
 
+/**
+ * ⭐ (PERF) `buildSpendingFacts`, kept while the household's data revision holds (lib/ledgerCache.ts). The answer for
+ * a range on a day is the same whichever caller supplies the pending pairs (they must be the whole-ledger answer for
+ * the range, as documented below), so the key is the household, the range and the day.
+ */
 export async function buildSpendingFacts(
+  householdId: string,
+  rangeStart?: string,
+  rangeEnd?: string,
+  opts: { supersede?: Pick<SupersededPending, "replacedIds" | "replacedBy" | "expiredIds"> } = {},
+): Promise<SpendingFacts> {
+  const key = JSON.stringify([householdId, rangeStart ?? null, rangeEnd ?? null, householdTodayISO(), expiredHoldsRuleOn()]);
+  return cachedLedgerRead("spendingFacts", householdId, key, () => buildSpendingFactsUncached(householdId, rangeStart, rangeEnd, opts));
+}
+
+async function buildSpendingFactsUncached(
   householdId: string,
   rangeStart?: string,
   rangeEnd?: string,
