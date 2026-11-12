@@ -71,7 +71,7 @@ export function MonthNavigator({
         <ChevronLeft className="h-3.5 w-3.5" />
       </Button>
       <div
-        className="min-w-[58px] text-center font-mono text-xs font-semibold tabular-nums"
+        className="min-w-[58px] text-center fig text-xs font-semibold"
         data-testid="text-selected-month"
       >
         {formatMonthLabel(value)}

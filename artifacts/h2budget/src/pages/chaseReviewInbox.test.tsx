@@ -785,19 +785,20 @@ describe("(PR14 review) fixes", () => {
     await waitFor(() => expect(state.trendProps.at(-1).actualFromToday[0]?.balance).toBe(960));
   });
 
-  it("NIT: the select-all count and the toast counts are mono", async () => {
+  // (2026-11-12) Counts are Inter's tabular lining figures (`.fig`), no longer the mono face.
+  it("NIT: the select-all count and the toast counts are tabular figures", async () => {
     serve({ rows: weekRows(60) });
     show();
     await ready("Showing 50 of 60 · 60 to review");
     fireEvent.click(screen.getByTestId("chase-select-page"));
-    await waitFor(() => expect(screen.getByTestId("chase-select-all-count").className).toContain("font-mono"));
+    await waitFor(() => expect(screen.getByTestId("chase-select-all-count").className).toContain("fig"));
     fireEvent.click(screen.getByTestId("chase-select-all-matching"));
     fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
     await waitFor(() =>
       expect(toastTexts(state.toast)).toContainEqual(expect.objectContaining({ title: "60 marked reviewed" })),
     );
     const call = state.toast.mock.calls.map((c) => c[0] as any).find((a) => nodeText(a.title) === "60 marked reviewed");
-    expect(renderToStaticMarkup(<>{call.title}</>)).toContain('class="font-mono tabular-nums"');
+    expect(renderToStaticMarkup(<>{call.title}</>)).toContain('class="fig"');
   });
 });
 

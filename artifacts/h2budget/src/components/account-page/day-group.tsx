@@ -87,15 +87,16 @@ export function DayGroup({
           onCheckedChange={(v) => onToggleAll(!!v)}
           aria-label="Select day"
         />
-        <div className="truncate text-body font-semibold text-brand-navy">
+        <div className="truncate text-label font-semibold text-foreground">
           {headerLabel ?? formatDayHeader(dayKey)}
         </div>
-        {isToday && <span className={accentChip}>{todayBadgeLabel}</span>}
-        <span className="chip gray">
+        {/* The badge says what the head does not already say ("Pending" over the Pending group is said once). */}
+        {isToday && todayBadgeLabel !== headerLabel && <span className={accentChip}>{todayBadgeLabel}</span>}
+        <span className="fig text-micro text-neutral-500">
           {count} txn{count === 1 ? "" : "s"}
         </span>
       </div>
-      <div className="font-mono text-label font-semibold tabular-nums">
+      <div className="fig text-label font-semibold">
         {totalNode}
       </div>
     </>
@@ -116,7 +117,7 @@ export function DayGroup({
         <div
           className={cn(
             "sticky z-10 flex min-h-9 items-center justify-between gap-3 border-y border-brand-line px-4 py-1",
-            isToday ? flushTint : "bg-platinum-1",
+            isToday ? flushTint : "bg-platinum-2",
           )}
           style={{ top: "var(--page-sticky-top, 0px)" }}
           data-testid={`day-head-${dayKey}`}

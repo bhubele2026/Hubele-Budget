@@ -191,7 +191,7 @@ export function AccountTransactionRow({
       >
         <span className="inline-flex min-w-0 max-w-full items-center gap-1" data-testid={`merchant-${tx.id}`}>
           <span
-            className="min-w-0 truncate font-medium text-neutral-700"
+            className="min-w-0 truncate font-medium text-foreground"
             title={tx.description}
           >
             {merchant}
@@ -273,11 +273,11 @@ export function AccountTransactionRow({
               />
             )}
       </div>
-      {/* `tdNum`: money is mono, tabular and right-aligned so a column of it
-          lines up and never reflows as it updates. */}
+      {/* `tdNum`: money is tabular lining figures, right-aligned, so a column
+          of it lines up and never reflows as it updates. */}
       <div
         className={cn(
-          "shrink-0 whitespace-nowrap text-right font-mono text-label tabular-nums @6xl:justify-self-end",
+          "shrink-0 whitespace-nowrap text-right fig text-label @6xl:justify-self-end",
           wrapIndent && "order-1 @6xl:order-none",
         )}
       >

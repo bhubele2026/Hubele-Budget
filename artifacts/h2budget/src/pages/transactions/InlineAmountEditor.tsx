@@ -53,7 +53,7 @@ export function InlineAmountEditor({
           type="button"
           disabled={disabled}
           className={cn(
-            "font-medium tabular-nums whitespace-nowrap cursor-pointer rounded px-1 -mx-1 hover:bg-muted/40 transition-colors",
+            "fig font-medium whitespace-nowrap cursor-pointer rounded px-1 -mx-1 hover:bg-muted/40 transition-colors",
             parseSigned(tx.amount) > 0
               ? "text-[hsl(var(--positive))]"
               : "text-foreground",

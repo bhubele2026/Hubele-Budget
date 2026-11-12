@@ -14,7 +14,7 @@ import { BULK_REVIEW_MAX, ledgerRowLabels } from "./chaseLedger";
 
 const count = (n: number) => n.toLocaleString("en-US");
 const Num = ({ n, testId }: { n: number; testId?: string }) => (
-  <span className="font-mono tabular-nums" data-testid={testId}>
+  <span className="fig" data-testid={testId}>
     {count(n)}
   </span>
 );
@@ -41,9 +41,9 @@ export function ChaseReviewControls({
       <span className="inline-flex items-center gap-1.5" data-testid="chase-to-review">
         <span className={fieldLabel}>To review:</span>
         {toReview == null ? (
-          <span className="font-mono tabular-nums text-neutral-400">—</span>
+          <span className="fig text-neutral-400">—</span>
         ) : (
-          <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+          <span className="fig text-label font-semibold text-brand-navy">
             {count(toReview)}
           </span>
         )}

@@ -35,12 +35,13 @@ export function AccountPageHeader({
   // (the decorative piggy/sparkle icons elsewhere are what got stripped).
   void accentBorderClass;
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
+    // (2026-11-12) The same shape as `PageHeader`: title and identity left, the page's actions right.
+    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
       <div className="flex min-w-0 items-center gap-3">
         {icon ? (
           <span
             className={cn(
-              "surface inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-control ring-1 ring-brand-line",
+              "inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-control bg-white ring-1 ring-brand-line",
               iconClass,
             )}
           >
@@ -50,11 +51,11 @@ export function AccountPageHeader({
         <div className="min-w-0">
           {/* `Page`'s display step — an account page is a page, so its title
               is the same size as every other page title in the app. */}
-          <h1 className="text-display leading-tight font-semibold text-brand-navy">
+          <h1 className="text-display font-semibold text-foreground">
             {title}
           </h1>
           {subtitle ? (
-            <p className="text-label text-neutral-500">{subtitle}</p>
+            <p className="text-label text-neutral-600">{subtitle}</p>
           ) : null}
           {identity || meta ? (
             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2" data-testid="account-head-identity">
@@ -65,7 +66,7 @@ export function AccountPageHeader({
         </div>
       </div>
       {actions ? (
-        <div className="flex flex-wrap items-start gap-2">{actions}</div>
+        <div className="flex flex-wrap items-center gap-2">{actions}</div>
       ) : null}
     </div>
   );

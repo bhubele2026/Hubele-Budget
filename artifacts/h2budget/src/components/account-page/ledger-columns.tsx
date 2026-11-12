@@ -7,7 +7,7 @@ import { LEDGER_GRID } from "./ledger-grid";
  * Both registers rendered seven aligned columns with nothing naming them —
  * the reader had to infer that the 13.5rem column was the category and that
  * the small figure under each amount was a running balance. These are the
- * `th` token: micro-caps, tracked, on the same track list the rows use.
+ * `th` token: 12 px medium grey, on the same track list the rows use.
  *
  * ⚠️ ONCE PER LEDGER, NOT ONCE PER DAY. The pages pass this to the FIRST
  * day-group only; repeating it above all thirty groups would turn a header
@@ -34,12 +34,13 @@ export function LedgerColumns({
   /** (P1) The Amex Review mode heads the column "Spending" (words, not marks). */
   bucketsLabel?: string;
 }) {
+  // (2026-11-12) Restrained heads: 12 px medium grey, sentence case, no fill — the `th` voice in ui.tsx.
   const th =
-    "text-micro font-semibold uppercase tracking-wide text-neutral-600";
+    "text-micro font-medium text-neutral-500";
   return (
     <div
       className={cn(
-        "hidden border-b border-brand-line bg-platinum-2 px-4 py-2 @6xl:grid @6xl:items-center @6xl:gap-x-3",
+        "hidden border-b border-brand-line bg-white px-4 py-2 @6xl:grid @6xl:items-center @6xl:gap-x-3",
         gridClass,
       )}
       aria-hidden

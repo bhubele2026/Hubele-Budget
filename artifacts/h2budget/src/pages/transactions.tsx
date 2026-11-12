@@ -42,7 +42,7 @@ import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { currentMonthRange, rangeForMode, type RangeMode } from "@/lib/timeRange";
 import { Sparkline, StackBar, DeltaPill, MoneyText } from "@/components/viz";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate, cn, moneyColorClass } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { householdMonthStartOf, householdToday, localDateOf } from "@/lib/householdDay";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -64,6 +64,8 @@ import {
   CalendarDays,
   X,
   Check,
+  CircleDashed,
+  ChevronRight,
   ArrowRight,
 } from "lucide-react";
 import { isBankTxn } from "@/lib/forecastMatch";
@@ -164,6 +166,14 @@ import {
 // knows where the row came from without the raw colon-separated
 // string shouting at them. Falls back to a Title-Cased version of
 // the raw source for anything we don't recognize.
+/**
+ * (2026-11-12) A register amount's ink: money in is navy (the resting "good"), money out is the charcoal text —
+ * an ordinary debit is not a warning, so it is not orange. Zero is grey. Display only.
+ */
+function ledgerTone(n: number): string {
+  return n > 0 ? "text-[hsl(var(--positive))]" : n < 0 ? "text-foreground" : "text-neutral-500";
+}
+
 function formatTransactionSource(source: string | null | undefined): string {
   if (!source) return "";
   const s = source.trim();
@@ -1291,12 +1301,13 @@ export default function TransactionsPage({
     // THE LABEL is what says which state the row is in.
     const state =
       r?.status === "matched"
-        ? { attr: "matched", label: "Matched", icon: Check, tone: "ok" }
+        ? { attr: "matched", label: "Matched", icon: Check, tone: "info" }
         : r?.status === "partial"
-          ? { attr: "partial", label: "Partly paid", icon: Check, tone: "ok" }
+          ? { attr: "partial", label: "Partly paid", icon: Check, tone: "info" }
         : r?.status === "ignored_unforecasted" || r?.status === "unplanned"
           ? { attr: "unplanned", label: "Marked unplanned", icon: Inbox, tone: "gray" }
-          : { attr: "in-review-bucket", label: "In Review", icon: Inbox, tone: "info" };
+          // (2026-11-12) Waiting for a match = UNRESOLVED: the hairline badge, the same look as Banking's.
+          : { attr: "in-review-bucket", label: "In Review", icon: CircleDashed, tone: "line" };
     const StateIcon = state.icon;
     // What the "×" does. A future row leaves the forecast. A posted row still
     // awaiting review is marked "not a planned payment". A posted row that is
@@ -1328,7 +1339,7 @@ export default function TransactionsPage({
       >
         <Link
           href="/review"
-          className={`chip ${state.tone} press inline-flex items-center gap-1 hover:bg-platinum-5`}
+          className={`chip ${state.tone} press hover:bg-platinum-4`}
           title="Match this in the Forecast Review Bucket"
           data-testid={`link-forecast-state-${tx.id}`}
         >
@@ -2464,7 +2475,7 @@ export default function TransactionsPage({
         <Link
           href="/review"
           data-testid="link-bucket-pending-count"
-          className="chip warn press inline-flex items-center gap-1.5 hover:bg-platinum-5 hover:text-brand-navy"
+          className="press inline-flex items-center gap-1.5 rounded-control bg-white px-2.5 py-1 text-label font-medium text-neutral-800 ring-1 ring-input hover:bg-neutral-50 hover:text-brand-navy"
           title="Open the Forecast Review Bucket to match these"
         >
           <Inbox className="h-3 w-3" />
@@ -2472,7 +2483,7 @@ export default function TransactionsPage({
               is already a label, not a sentence — restyled, not reworded. */}
           <span>
             Match{" "}
-            <span className="font-mono tabular-nums">{awaitingMatchCount}</span>{" "}
+            <span className="fig">{awaitingMatchCount}</span>{" "}
             {awaitingMatchCount === 1 ? "item" : "items"} in Review
           </span>
           <ArrowRight className="h-3 w-3" />
@@ -2490,7 +2501,7 @@ export default function TransactionsPage({
         <Link
           href={`/banking?account=${encodeURIComponent(effectiveAccountInternalId)}&from=${range.from}&to=${range.to}`}
           data-testid="link-banking-review"
-          className="press text-label font-semibold text-brand-navy hover:underline"
+          className="press text-label font-medium text-brand-navy hover:underline"
         >
           Review this account against the plan →
         </Link>
@@ -2582,14 +2593,15 @@ export default function TransactionsPage({
                     value={(rangeTotals.net / Math.abs(rangeBalances.startBal)) * 100}
                   />
                 ) : (
-                  <span className="font-mono text-label tabular-nums text-neutral-400">—</span>
+                  <span className="fig text-label text-neutral-500">—</span>
                 )}
               </div>
               {rangeTotals ? (
                 <StackBar
                   segments={[
                     { label: "In", value: rangeTotals.moneyIn, color: "hsl(var(--positive))" },
-                    { label: "Out", value: rangeTotals.moneyOut, color: "hsl(var(--negative))" },
+                    // (2026-11-12) Money out is ordinary, not an alarm: steel grey beside navy, never orange.
+                    { label: "Out", value: rangeTotals.moneyOut, color: "var(--color-acct-other)" },
                   ]}
                   legendMax={2}
                 />
@@ -2611,10 +2623,10 @@ export default function TransactionsPage({
                     amount={rangeTotals.net}
                     colored
                     signed
-                    className="font-mono text-title font-semibold tabular-nums"
+                    className="fig text-title font-semibold"
                   />
                 ) : (
-                  <span className="font-mono text-title font-semibold tabular-nums text-neutral-400">
+                  <span className="fig text-title font-semibold text-neutral-500">
                     —
                   </span>
                 )}
@@ -2641,10 +2653,10 @@ export default function TransactionsPage({
                 ) : checkingEnd != null ? (
                   <MoneyText
                     amount={checkingEnd}
-                    className="font-mono text-title font-semibold tabular-nums text-brand-navy"
+                    className="fig text-title font-semibold text-foreground"
                   />
                 ) : (
-                  <span className="font-mono text-title font-semibold tabular-nums text-neutral-400">
+                  <span className="fig text-title font-semibold text-neutral-500">
                     —
                   </span>
                 )
@@ -2673,10 +2685,10 @@ export default function TransactionsPage({
                   {rangeBalances.startBal != null ? (
                     <MoneyText
                       amount={rangeBalances.startBal}
-                      className="font-mono tabular-nums text-brand-navy"
+                      className="fig font-medium text-foreground"
                     />
                   ) : (
-                    <span className="font-mono tabular-nums text-neutral-400">—</span>
+                    <span className="fig text-neutral-500">—</span>
                   )}
                 </span>
                 <span className={fieldLabel}>
@@ -2684,10 +2696,10 @@ export default function TransactionsPage({
                   {rangeBalances.endBal != null ? (
                     <MoneyText
                       amount={rangeBalances.endBal}
-                      className="font-mono tabular-nums text-brand-navy"
+                      className="fig font-medium text-foreground"
                     />
                   ) : (
-                    <span className="font-mono tabular-nums text-neutral-400">—</span>
+                    <span className="fig text-neutral-500">—</span>
                   )}
                 </span>
               </div>
@@ -2774,11 +2786,11 @@ export default function TransactionsPage({
         </div>
 
         {/* Weekly-first range control (Month stepper only in Month mode), the
-            account picker and the Review drilldown. */}
+            account picker and the Review drilldown: ONE toolbar row (2026-11-12). */}
         <div className="span-12 flex flex-wrap items-center justify-between gap-3" data-testid="chase-controls">
           <div className="flex flex-wrap items-center gap-3">
             <TimeRangeToggle value={rangeMode} onChange={setRangeMode} />
-            <span className="text-sm font-medium tabular-nums text-muted-foreground">
+            <span className="fig text-label font-medium text-neutral-700">
               {range.label}
             </span>
             {rangeMode === "mo" && (
@@ -2861,7 +2873,7 @@ export default function TransactionsPage({
               style={{ top: "var(--page-sticky-top, 0px)" }}
               data-testid="bulk-bar"
             >
-              <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+              <span className="fig text-label font-semibold text-brand-navy">
                 {allMatching ? allMatching.count.toLocaleString("en-US") : selected.size} selected
               </span>
               {/* Forecast actions need row ids; "all matching" reviews by filter only. */}
@@ -2933,7 +2945,7 @@ export default function TransactionsPage({
             const dayNet = sumCounted(items.filter((t) => !t.afterToday));
             const dayNetNode = (
               <span
-                className={cn("tabular-nums", moneyColorClass(dayNet))}
+                className={cn("fig", ledgerTone(dayNet))}
                 data-testid="day-net-pending"
               >
                 {dayNet > 0 ? `+${formatCurrency(dayNet)}` : formatCurrency(dayNet)}
@@ -2990,8 +3002,8 @@ export default function TransactionsPage({
                           amountNode={
                             <span
                               className={cn(
-                                "tabular-nums font-medium",
-                                moneyColorClass(parseSigned(tx.amount)),
+                                "fig font-medium",
+                                ledgerTone(parseSigned(tx.amount)),
                               )}
                               data-testid={`amount-${tx.id}`}
                             >
@@ -3063,7 +3075,7 @@ export default function TransactionsPage({
                 </span>
               ) : (
                 <span
-                  className={cn("tabular-nums", moneyColorClass(dayNet))}
+                  className={cn("fig", ledgerTone(dayNet))}
                   data-testid={`day-net-${dayKey}`}
                 >
                   {dayNet > 0 ? `+${formatCurrency(dayNet)}` : formatCurrency(dayNet)}
@@ -3137,7 +3149,7 @@ export default function TransactionsPage({
                               />
                               {tx.runningBalance != null && (
                                 <span
-                                  className="font-mono text-micro tabular-nums text-neutral-400"
+                                  className="fig text-micro text-neutral-500"
                                   data-testid={`text-running-balance-${tx.id}`}
                                 >
                                   bal {moneyFace(tx.runningBalance)}
@@ -3183,13 +3195,14 @@ export default function TransactionsPage({
             account, so it comes after the Chase-only panels, closed, and says
             so in its title. Its reads start only once it is opened. */}
         <details
-          className="span-12"
+          className="group/household span-12"
           data-testid="chase-household"
           onToggle={(e) => {
             if ((e.currentTarget as HTMLDetailsElement).open) setHouseholdOpen(true);
           }}
         >
-          <summary className="press surface cursor-pointer rounded-card px-4 py-3 text-title font-semibold text-brand-navy ring-1 ring-brand-line">
+          <summary className="press flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-card border border-brand-line bg-white px-4 text-body font-medium text-foreground hover:bg-brand-tint [&::-webkit-details-marker]:hidden">
+            <ChevronRight aria-hidden className="size-4 shrink-0 text-neutral-500 transition-transform group-open/household:rotate-90" />
             Household · all accounts
           </summary>
           <div className="mt-3">{householdOpen ? <ChaseInsightStrip range={range} /> : null}</div>
