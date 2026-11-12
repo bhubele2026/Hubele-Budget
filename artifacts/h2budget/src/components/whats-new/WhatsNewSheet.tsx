@@ -59,7 +59,8 @@ function OwnerLines({ id, report }: { id: string; report: ReadReport }) {
 
 function NewChip() {
   return (
-    <span className="ml-2 rounded-full bg-brand-orange px-1.5 py-px align-middle text-micro font-semibold text-on-orange" data-testid="whats-new-new">
+    // (2026-11-12) Orange is for warnings and the H2 mark only: "New" is information, a squared navy-ink badge.
+    <span className="chip info ml-2 align-middle" data-testid="whats-new-new">
       New
     </span>
   );
@@ -106,12 +107,12 @@ export default function WhatsNewSheet(props: WhatsNewSheetProps) {
           aria-label="What's new notes"
           className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 pt-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-navy/40 sm:px-6 sm:pt-6"
         >
-          <p className="text-micro font-semibold uppercase tracking-wide text-neutral-600">What's new</p>
+          <p className="text-micro font-medium text-neutral-600">What's new</p>
           {full.map((u, i) => {
             const Title = i === 0 ? DialogTitle : "h2";
             return (
               <section key={u.id} data-whats-new-update={u.id} className={cn(i > 0 && "mt-5 border-t border-brand-line pt-5")}>
-                <Title className={cn("mt-1 text-title font-semibold leading-snug tracking-tight text-brand-navy")}>{u.headline}</Title>
+                <Title className={cn("mt-1 text-title font-semibold leading-snug text-foreground")}>{u.headline}</Title>
                 <p className="mt-1 text-label text-neutral-600">
                   {formatDay(u.id)}
                   {unreadIds.has(u.id) ? <NewChip /> : null}
@@ -120,7 +121,7 @@ export default function WhatsNewSheet(props: WhatsNewSheetProps) {
                 <ul className="mt-3 flex list-none flex-col gap-3 p-0">
                   {u.items.map((item) => (
                     <li key={item.title}>
-                      <p className="text-body font-semibold text-brand-navy">{item.title}</p>
+                      <p className="text-body font-semibold text-foreground">{item.title}</p>
                       <p className="mt-0.5 text-body leading-relaxed text-neutral-700">{item.body}</p>
                     </li>
                   ))}
@@ -130,11 +131,11 @@ export default function WhatsNewSheet(props: WhatsNewSheetProps) {
           })}
           {earlier.length > 0 ? (
             <section className="mt-5 border-t border-brand-line pt-4" data-testid="whats-new-earlier">
-              <h3 className="text-micro font-semibold uppercase tracking-wide text-neutral-600">Earlier</h3>
+              <h3 className="text-micro font-medium text-neutral-600">Earlier</h3>
               <div className="mt-2 flex flex-col gap-4">
                 {earlier.map((u) => (
                   <div key={u.id} data-whats-new-update={u.id}>
-                    <p className="text-body font-semibold text-brand-navy">
+                    <p className="text-body font-semibold text-foreground">
                       {u.headline}
                       {unreadIds.has(u.id) ? <NewChip /> : null}
                     </p>
@@ -143,7 +144,7 @@ export default function WhatsNewSheet(props: WhatsNewSheetProps) {
                     <ul className="mt-1 flex list-none flex-col gap-1 p-0">
                       {u.items.map((item) => (
                         <li key={item.title} className="text-label leading-relaxed text-neutral-700">
-                          <span className="font-semibold text-brand-navy">{item.title}.</span> {item.body}
+                          <span className="font-semibold text-foreground">{item.title}.</span> {item.body}
                         </li>
                       ))}
                     </ul>

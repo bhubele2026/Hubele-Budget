@@ -113,10 +113,10 @@ function MarketingHero() {
       <H2Wordmark tone="navy" size={30} />
 
       <div className="space-y-6 max-w-md">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+        <p className="text-label font-medium text-brand-navy">
           The household, handled
         </p>
-        <h1 className="text-4xl xl:text-5xl font-bold tracking-tight text-foreground leading-[1.05]">
+        <h1 className="text-4xl xl:text-5xl font-semibold tracking-tight text-foreground leading-[1.05]">
           Where your money has nowhere to hide.
         </h1>
         <p className="text-base text-muted-foreground leading-relaxed">
@@ -199,7 +199,7 @@ function AuthLayout({
           <MobileBrandHeader />
           <div className="w-full max-w-[440px] space-y-2 lg:text-left text-center">
             <p
-              className="hidden lg:block text-xs font-medium uppercase tracking-[0.18em] text-accent-foreground"
+              className="hidden lg:block text-label font-medium text-neutral-600"
               data-testid="auth-eyebrow"
             >
               {intro.eyebrow}

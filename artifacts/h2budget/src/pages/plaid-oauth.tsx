@@ -147,10 +147,10 @@ export default function PlaidOAuthPage() {
       <div className="text-center space-y-3 max-w-md">
         {error ? (
           <>
-            <h1 className="text-xl font-semibold">Couldn't finish linking</h1>
-            <p className="text-sm text-muted-foreground">{error}</p>
+            <h1 className="text-display font-semibold text-foreground">Couldn't finish linking</h1>
+            <p className="text-body text-neutral-600">{error}</p>
             <button
-              className="text-sm text-primary underline"
+              className="text-body font-medium text-brand-navy underline"
               onClick={() => setLocation("/settings")}
             >
               Go to Settings
@@ -159,8 +159,8 @@ export default function PlaidOAuthPage() {
         ) : (
           <>
             <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
-            <h1 className="text-xl font-semibold">Finishing bank link…</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="text-display font-semibold text-foreground">Finishing bank link…</h1>
+            <p className="text-body text-neutral-600">
               We're completing the connection with your bank. This usually
               takes a few seconds.
             </p>

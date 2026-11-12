@@ -23,7 +23,9 @@ import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
 import { SpendingWhy } from "@/pages/next/dashboard/SpendingPanel";
 import { cn, formatCurrency } from "@/lib/utils";
-import { figLabel } from "@/ui";
+import { PageHeader } from "@/components/next/PageHeader";
+import { SummaryGroup, SUMMARY_LABEL } from "@/components/next/SummaryGroup";
+import { StatusBadge } from "@/components/next/StatusBadge";
 import { periodParams, PERIOD_MIN } from "./periodParams";
 import { Breakdown, provisionalLine } from "./Breakdown";
 import { weekStatus, withinOfRemaining } from "@/lib/weekFigures";
@@ -51,9 +53,11 @@ const planCodec: UrlCodec<boolean> = { read: (raw) => (raw === "1" ? true : null
 const NONE: string[] = [];
 const MIN = PERIOD_MIN;
 
-const CELL = "surface rounded-card px-4 py-3 ring-1 ring-brand-line";
-const CELL_LABEL = figLabel;
-const CELL_VALUE = "mt-1 whitespace-nowrap fig text-kpi font-semibold";
+/** (2026-11-12) The three figures are ONE summary group: cells split by hairlines, not three cards. */
+const CELL = "min-w-0";
+const CELL_LABEL = SUMMARY_LABEL;
+/** SUMMARY_FIGURE minus its ink: each cell picks its own (charcoal, or the alarm ink when over). */
+const CELL_VALUE = "fig mt-1.5 whitespace-nowrap text-kpi font-semibold";
 
 export function PeriodView({ view }: { view: PeriodView }) {
   const today = useMemo(() => householdToday(new Date()), []);
@@ -118,19 +122,21 @@ export function PeriodView({ view }: { view: PeriodView }) {
 
   return (
     <div className="space-y-4" data-testid={`spending-${view}`}>
-      <header className="space-y-1">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="min-w-0 text-display font-semibold text-brand-navy" data-testid="sp-title">{periodTitle(view, start, isCurrent)}</h1>
-          <div className="flex shrink-0 gap-2">
+      <PageHeader
+        title={periodTitle(view, start, isCurrent)}
+        titleTestId="sp-title"
+        actions={
+          <>
             <button type="button" className={arrow} aria-label={view === "week" ? "Previous week" : "Previous month"} disabled={!canGoBack(view, start)} onClick={() => go(-1)} data-testid="sp-prev">
               <ChevronLeft className="size-4" aria-hidden />
             </button>
             <button type="button" className={arrow} aria-label={view === "week" ? "Next week" : "Next month"} disabled={start >= currentStart} onClick={() => go(1)} data-testid="sp-next">
               <ChevronRight className="size-4" aria-hidden />
             </button>
-          </div>
-        </div>
-        <p className="text-label text-neutral-600" data-testid="sp-scope">
+          </>
+        }
+      >
+        <p className="-mt-1 text-label text-neutral-600" data-testid="sp-scope">
           {account && d?.scope.kind === "account" ? (
             <>
               {[d.scope.institution, d.scope.name].filter(Boolean).join(" ")}{d.scope.mask ? ` ••${d.scope.mask.slice(-4)}` : ""} · household {planWord} plan{" · "}
@@ -140,7 +146,7 @@ export function PeriodView({ view }: { view: PeriodView }) {
             <>Household · {planWord} plan</>
           )}
         </p>
-      </header>
+      </PageHeader>
 
       <QueryRefreshBanner q={q} data-testid="sp-error" />
       {d === undefined ? (
@@ -149,39 +155,42 @@ export function PeriodView({ view }: { view: PeriodView }) {
         )
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-3" data-testid="sp-summary">
+          <SummaryGroup
+            className="lg:grid-cols-3 [&>:last-child]:col-span-2 [&>:last-child]:border-r-0 lg:[&>:last-child]:col-span-1"
+            data-testid="sp-summary"
+          >
             <div className={CELL}>
               <div className={CELL_LABEL}>Plan</div>
               {d.plan.status === "not_set" ? (
-                <div className="mt-1 text-title font-semibold text-neutral-700" data-testid="sp-plan">{planStatusWords(d.plan)}</div>
+                <div className="mt-1.5 text-title font-semibold text-neutral-700" data-testid="sp-plan">{planStatusWords(d.plan)}</div>
               ) : (
-                <div className={cn(CELL_VALUE, "text-brand-ink")} data-testid="sp-plan">{formatCurrency(d.plan.amount)}</div>
+                <div className={cn(CELL_VALUE, "text-foreground")} data-testid="sp-plan">{formatCurrency(d.plan.amount)}</div>
               )}
             </div>
             <div className={CELL}>
               <div className={CELL_LABEL}>Counts toward plan</div>
-              <div className={cn(CELL_VALUE, "text-brand-ink")} data-testid="sp-actual">{formatCurrency(d.known)}</div>
-              {d.provisional ? <span className="chip warn mt-1.5" data-testid="sp-provisional">Not final</span> : null}
+              <div className={cn(CELL_VALUE, "text-foreground")} data-testid="sp-actual">{formatCurrency(d.known)}</div>
+              {d.provisional ? <StatusBadge state="pending" className="mt-1.5" data-testid="sp-provisional">Not final</StatusBadge> : null}
             </div>
             <div className={CELL}>
               {d.remaining == null ? (
                 <>
                   <div className={CELL_LABEL}>Left</div>
-                  <div className="mt-1 text-title text-neutral-600" data-testid="sp-left">—</div>
+                  <div className="mt-1.5 text-title text-neutral-600" data-testid="sp-left">—</div>
                 </>
               ) : over ? (
                 <>
                   <div className={CELL_LABEL}>{d.provisional ? "Over so far" : "Over"}</div>
-                  <div className={cn(CELL_VALUE, bad ? "text-bad-ink" : "text-brand-navy")} data-testid="sp-left" data-tone={bad ? "bad" : "neutral"}>{formatCurrency(d.over)}</div>
+                  <div className={cn(CELL_VALUE, bad ? "text-bad-ink" : "text-foreground")} data-testid="sp-left" data-tone={bad ? "bad" : "neutral"}>{formatCurrency(d.over)}</div>
                 </>
               ) : (
                 <>
                   <div className={CELL_LABEL}>{d.provisional ? "Left so far" : "Left"}</div>
-                  <div className={cn(CELL_VALUE, "text-brand-navy")} data-testid="sp-left">{formatCurrency(d.remaining)}</div>
+                  <div className={cn(CELL_VALUE, "text-foreground")} data-testid="sp-left">{formatCurrency(d.remaining)}</div>
                 </>
               )}
             </div>
-          </div>
+          </SummaryGroup>
           {provisionalLine(d) ? (
             <p className="text-label text-neutral-700" data-testid="sp-provisional-line">{provisionalLine(d)}</p>
           ) : null}
@@ -205,16 +214,16 @@ export function PeriodView({ view }: { view: PeriodView }) {
           <Details data={d} view={view} openOnMount={open.includes("details")} />
 
           {view === "month" ? (
-            <section className="surface rounded-card px-4 py-3 ring-1 ring-brand-line" data-testid="sp-household-budget">
-              <h2 className="text-title font-semibold text-brand-navy">Household budget</h2>
+            <section className="panel px-4 py-3" data-testid="sp-household-budget">
+              <h2 className="text-title font-semibold text-foreground">Household budget</h2>
               <p className="text-micro text-neutral-600">Separate from the monthly allowance · includes debt payments</p>
               {budget.data === undefined ? (
                 <p className="mt-2 text-label text-neutral-600">{budget.isError ? "The budget did not load." : "Loading…"}</p>
               ) : (
                 <>
                   <dl className="mt-2 space-y-1 text-body">
-                    <div className="flex justify-between gap-3"><dt className="text-neutral-700">Planned</dt><dd className="fig text-brand-ink" data-testid="sp-hb-planned">{formatCurrency(budget.data.summary.expenses.budget)}</dd></div>
-                    <div className="flex justify-between gap-3"><dt className="text-neutral-700">Actual</dt><dd className="fig text-brand-ink" data-testid="sp-hb-actual">{formatCurrency(budget.data.summary.expenses.actual)}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-neutral-700">Planned</dt><dd className="fig text-foreground" data-testid="sp-hb-planned">{formatCurrency(budget.data.summary.expenses.budget)}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-neutral-700">Actual</dt><dd className="fig text-foreground" data-testid="sp-hb-actual">{formatCurrency(budget.data.summary.expenses.actual)}</dd></div>
                   </dl>
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-label">
                     <Link href={`/budget?month=${start}`} className="font-medium text-brand-navy underline" data-testid="sp-hb-link">Open the budget</Link>

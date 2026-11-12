@@ -33,7 +33,7 @@ const MAX = 100_000;
 
 function Money({ value }: { value: string | number | null | undefined }) {
   const n = toAmount(value);
-  if (n == null) return <span className="text-neutral-400">—</span>;
+  if (n == null) return <span className="text-neutral-500">—</span>;
   return (
     <data value={centsValue(n)} className="fig">
       {fmtMoney(n)}
@@ -61,7 +61,7 @@ export function Delta({
       data-testid={testId}
     >
       <span className="text-body text-neutral-600">{label}</span>
-      <span className="text-label font-semibold text-brand-navy">
+      <span className="text-label font-semibold text-foreground">
         <Money value={before} />
         {tail ? ` ${tail}` : ""} <span aria-hidden>→</span>
         <span className="sr-only"> becomes </span> <Money value={after} />
@@ -104,7 +104,7 @@ export function ResultBlock({ result, categoryName }: { result: AffordResult; ca
       </ul>
       {range && (
         <p className="text-body text-neutral-600" data-testid="afford-debt">
-          Debt-free: <span className="text-brand-navy">{range}</span> ·{" "}
+          Debt-free: <span className="font-medium text-foreground">{range}</span> ·{" "}
           <span data-testid="afford-debt-shift">
             {shift > 0 ? `later by ${shift} ${shift === 1 ? "month" : "months"}` : "unchanged"}
           </span>
