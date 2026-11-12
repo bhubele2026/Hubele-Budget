@@ -44,14 +44,14 @@ export function CheckingBalance({
   const n = figure == null || figure === "" ? NaN : Number(figure);
   return (
     <div className={cn("min-w-0", className)} data-testid="checking-balance" data-size={size}>
-      <div className="text-micro font-semibold uppercase tracking-wider text-neutral-600" data-testid="checking-balance-label">
+      <div className="text-micro font-medium text-neutral-600" data-testid="checking-balance-label">
         {CHECKING_WORDS}
       </div>
       <div
         className={cn(
-          "mt-1 whitespace-nowrap font-mono font-semibold tabular-nums",
+          "fig mt-1 whitespace-nowrap font-semibold",
           FIGURE[size],
-          older ? "text-neutral-500" : n < 0 ? "text-bad-ink" : "text-brand-navy",
+          older ? "text-neutral-500" : n < 0 ? "text-bad-ink" : "text-foreground",
         )}
         data-testid={figureTestId ?? "checking-balance-figure"}
       >

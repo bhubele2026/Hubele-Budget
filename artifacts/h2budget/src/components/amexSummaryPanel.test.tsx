@@ -100,7 +100,8 @@ describe("(P1) the title is the period; the card is named in the page's header",
     panel();
     const owed = screen.getByTestId("amex-fig-owed");
     expect(owed.querySelector(".text-kpi")!.textContent).toBe("$100.00");
-    expect(within(owed).getByText("Owed").className).toContain("text-label");
+    // (2026-11-12) A figure's label is the 12 px label step (`figLabel`), medium weight.
+    expect(within(owed).getByText("Owed").className).toContain("text-micro");
   });
 });
 

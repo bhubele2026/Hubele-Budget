@@ -72,7 +72,7 @@ export function Sparkline({
   const areaPath = `${linePath} L ${W} ${height} L 0 ${height} Z`;
 
   return (
-    // The sweep-in draw animation lives on the WRAPPER as a clip-path reveal.
+    // (2026-11-12) No entrance: `sweep-in` is an inert hook now.
     // Never dash-animate the path itself: stroke-dasharray combined with
     // vector-effect:non-scaling-stroke computes dashes in SCREEN pixels, which
     // turned every sparkline into 1px specks (the "broken graphs" bug).
@@ -88,8 +88,9 @@ export function Sparkline({
         {variant === "area" && (
           <defs>
             <linearGradient id={`spark-${gid}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={fill ?? color} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={fill ?? color} stopOpacity={0} />
+              {/* (2026-11-12) A flat, faint tint under the line — no gradient wash. */}
+              <stop offset="0%" stopColor={fill ?? color} stopOpacity={0.07} />
+              <stop offset="100%" stopColor={fill ?? color} stopOpacity={0.07} />
             </linearGradient>
           </defs>
         )}

@@ -110,7 +110,7 @@ export const CHART: ChartPalette = byTheme<ChartPalette>(
     // --color-bad-ink in index.css (a test pins them equal). Lines, areas and
     // dots keep orangeDeep.
     badInk: "#c2410c",
-    grid: "#e1e8f0", // gridlines, hairlines
+    grid: "#e8eaee", // gridlines, hairlines: a quiet neutral (2026-11-12)
   },
   {
     navy: "#eef1f6", // near-white: the lead line on a black card
@@ -158,14 +158,15 @@ interface ChartInk {
 }
 export const CHART_INK: ChartInk = byTheme<ChartInk>(
   {
-    axis: "#64748b",
-    label: "#334155",
+    axis: "#6b7280",
+    label: "#363d4a",
     plate: "#ffffff",
-    band: "#eef3fa",
+    band: "#f1f2f5",
+    // The tooltip is a white panel with a fine border (2026-11-12): one faint neutral shadow, never navy-tinted.
     tooltipBg: "#ffffff",
-    tooltipLine: "#e1e8f0",
-    tooltipInk: "#1a2233",
-    tooltipShadow: "0 6px 24px -8px rgb(25 49 91 / 0.18)",
+    tooltipLine: "#e3e6eb",
+    tooltipInk: "#1d2330",
+    tooltipShadow: "0 4px 14px -4px rgb(17 24 39 / 0.12)",
     onFill: "#ffffff",
   },
   {
@@ -341,7 +342,8 @@ export const DRAW_MS = Math.round(1100 * SPEED); // 1100
 export const PULSE_MS = Math.round(900 * SPEED); // 900
 export const FOLLOW_MS = Math.round(160 * SPEED); // 160
 export const CALM_STROKE = {
-  balance: 2.25,
+  // (2026-11-12) Restrained line weights: the one balance line is 1.75 px.
+  balance: 1.75,
   cushion: 1,
   hairline: 1,
   paydayTick: 2,
@@ -354,8 +356,9 @@ export const CALM_STROKE = {
 export const animBegin = (i = 0): number => 140 + i * 80;
 
 // ── Axes ───────────────────────────────────────────────────────────────────
-export const AXIS_TICK: { readonly fontSize: number; readonly fill: string } = themed(() => ({ fontSize: 11, fill: CHART_INK.axis }));
-export const LEGEND_STYLE = { fontSize: 11 } as const;
+// (2026-11-12) One label size for every chart: 12 px Inter, the app's own label step.
+export const AXIS_TICK: { readonly fontSize: number; readonly fill: string } = themed(() => ({ fontSize: 12, fill: CHART_INK.axis }));
+export const LEGEND_STYLE = { fontSize: 12 } as const;
 
 /**
  * A rounded tick step with clear air above the tallest point. Two jobs:

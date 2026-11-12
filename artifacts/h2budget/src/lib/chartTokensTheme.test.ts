@@ -72,18 +72,19 @@ describe("light is exactly what it was", () => {
   it("every table reads its old hex", () => {
     expect({ ...CHART }).toEqual({
       navy: "#19315b", navy2: "#22406e", mid: "#3b5c8f", mist: "#8fa3bf", steel: "#4d5d73",
-      orange: "#f68d2e", orangeDeep: "#e16d3e", badInk: "#c2410c", grid: "#e1e8f0",
+      // (2026-11-12, owner-approved light change) the grid is a quiet neutral hairline.
+      orange: "#f68d2e", orangeDeep: "#e16d3e", badInk: "#c2410c", grid: "#e8eaee",
     });
     expect([...CAT8]).toEqual(["#19315b", "#3b5c8f", "#f68d2e", "#4d5d73", "#8fa3bf", "#22406e", "#e16d3e", "#a9bad2"]);
     expect([...NAVY_RAMP]).toEqual(["#e1e8f0", "#c4d0e2", "#a9bad2", "#8fa3bf", "#3b5c8f", "#19315b"]);
     expect({ ...ACCOUNT_ACCENT }).toEqual({ checking: "#19315b", amex: "#0f766e", card2: "#5b4bb3", other: "#5d6674" });
     expect({ ...MARKER }).toEqual({ payday: "#19315b", bill: "#4d5d73", card: "#0f766e", debt: "#f68d2e" });
-    expect({ ...AXIS_TICK }).toEqual({ fontSize: 11, fill: "#64748b" });
+    expect({ ...AXIS_TICK }).toEqual({ fontSize: 12, fill: "#6b7280" });
     expect(OTHER_GREY).toBe("#767b83");
     // The literals these replaced in charts.tsx, reportsShared.tsx and ProjectedBalanceChart.tsx.
     expect({ ...CHART_INK }).toEqual({
-      axis: "#64748b", label: "#334155", plate: "#ffffff", band: "#eef3fa", tooltipBg: "#ffffff", tooltipLine: "#e1e8f0",
-      tooltipInk: "#1a2233", tooltipShadow: "0 6px 24px -8px rgb(25 49 91 / 0.18)", onFill: "#ffffff",
+      axis: "#6b7280", label: "#363d4a", plate: "#ffffff", band: "#f1f2f5", tooltipBg: "#ffffff", tooltipLine: "#e3e6eb",
+      tooltipInk: "#1d2330", tooltipShadow: "0 4px 14px -4px rgb(17 24 39 / 0.12)", onFill: "#ffffff",
     });
     expect(washOf(CHART.orange)).toBe("#f68d2e");
     expect(washOf(CHART.orangeDeep)).toBe("#e16d3e");

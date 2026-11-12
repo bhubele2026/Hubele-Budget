@@ -11,11 +11,9 @@ import { Link } from "wouter";
  */
 
 /**
- * ⭐ THE PLATINUM SURFACE, ON EVERYTHING — not just the landing.
- *
- * ⚠️ ONE ELEVATION LANGUAGE. A card is a hairline ring plus the inset
- * highlight; depth arrives on hover and nowhere else. Do not add a second
- * `shadow-*` on top — two competing depth cues is what reads as cheap.
+ * ⭐ ONE FLAT SURFACE, ON EVERYTHING (owner, 2026-11-12): white, a fine grey
+ * hairline ring, an 8 px corner, no shadow at rest. Do not add a `shadow-*`
+ * on top — a panel that floats is a dialog, not a section of the page.
  */
 export const card =
   "card-bleed surface relative overflow-hidden rounded-card ring-1 ring-brand-line";
@@ -24,14 +22,15 @@ export const card =
 export const cardHead =
   "relative z-[1] flex items-center gap-2.5 border-b border-brand-line px-4 py-2.5";
 
+/** Navy is the primary action (owner, 2026-11-12) — never orange. */
 export const btn =
   "press rounded-control bg-brand-navy px-3.5 py-1.5 text-body font-medium text-white hover:bg-brand-navy2 disabled:pointer-events-none disabled:opacity-55";
 export const btnSm =
-  "press rounded-control bg-brand-navy px-2.5 py-1 text-micro font-semibold text-white hover:bg-brand-navy2 disabled:pointer-events-none disabled:opacity-55";
+  "press rounded-control bg-brand-navy px-2.5 py-1 text-micro font-medium text-white hover:bg-brand-navy2 disabled:pointer-events-none disabled:opacity-55";
 export const btnSecondary =
-  "press rounded-control bg-white px-3.5 py-1.5 text-body font-medium text-neutral-700 ring-1 ring-brand-line hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-55";
+  "press rounded-control bg-white px-3.5 py-1.5 text-body font-medium text-neutral-800 ring-1 ring-input hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-55";
 export const btnSecondarySm =
-  "press rounded-control bg-white px-2.5 py-1 text-micro font-semibold text-neutral-700 ring-1 ring-brand-line hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-55";
+  "press rounded-control bg-white px-2.5 py-1 text-micro font-medium text-neutral-800 ring-1 ring-input hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-55";
 /** ⚠️ Hover is a DEEPER ORANGE, not a dark red — `bg-bad` is #e16d3e, and a
  *  crimson hover under an orange rest state reads as two different buttons. */
 export const btnDanger =
@@ -43,42 +42,48 @@ export const btnDanger =
  * blue, no underline. One token, so every call site moves at once.
  */
 export const btnLink =
-  "press inline-flex items-center gap-1 rounded-control bg-white px-2 py-1 text-micro font-semibold text-neutral-600 ring-1 ring-brand-line hover:bg-neutral-50 hover:text-brand-navy disabled:pointer-events-none disabled:opacity-55";
+  "press inline-flex items-center gap-1 rounded-control bg-white px-2 py-1 text-micro font-medium text-neutral-700 ring-1 ring-input hover:bg-neutral-50 hover:text-brand-navy disabled:pointer-events-none disabled:opacity-55";
 export const btnLinkDanger =
-  "press inline-flex items-center gap-1 rounded-control bg-white px-2 py-1 text-micro font-semibold text-bad ring-1 ring-bad/20 hover:bg-bad-bg disabled:pointer-events-none disabled:opacity-55";
+  "press inline-flex items-center gap-1 rounded-control bg-white px-2 py-1 text-micro font-medium text-bad-ink ring-1 ring-bad/20 hover:bg-bad-bg disabled:pointer-events-none disabled:opacity-55";
 
 /** A card that lifts on hover and dips on click — landing tiles, row cards. */
 export const cardButton =
   "press group relative flex h-full flex-col overflow-hidden rounded-card surface text-left hover:-translate-y-0.5 hover:shadow-lift hover:ring-brand-navy/25";
 
 export const input =
-  "w-full rounded-control bg-white px-3 py-2 text-body ring-1 ring-brand-line focus:outline-none focus:ring-2 focus:ring-brand-navy";
+  "w-full rounded-control bg-white px-3 py-2 text-body ring-1 ring-input focus:outline-none focus:ring-2 focus:ring-brand-navy";
 export const inputInline =
-  "rounded-md bg-transparent px-1.5 py-0.5 font-mono text-label tabular-nums ring-1 ring-transparent transition-colors hover:ring-brand-line focus:bg-white focus:ring-brand-navy focus:outline-none";
+  "fig rounded-md bg-transparent px-1.5 py-0.5 text-label ring-1 ring-transparent transition-colors hover:ring-brand-line focus:bg-white focus:ring-brand-navy focus:outline-none";
+/** A field's or a column's label: 12 px, medium, readable grey. Sentence case — no shouting caps. */
 export const fieldLabel =
-  "text-micro font-semibold uppercase tracking-wide text-neutral-500";
+  "text-micro font-medium text-neutral-600";
 
-/** A figure's label above its number: label size, readable grey (dashboard `LABEL` stays: it doubles as group headings). */
-export const figLabel = "text-label font-medium text-neutral-600";
+/** A figure's label above its number: the same voice as every other label. */
+export const figLabel = "text-micro font-medium text-neutral-600";
 
 /**
- * A toggle (range preset, pill, kind chip, horizon): selected is the quiet navy tint with a navy ring, so
- * solid navy stays the primary button (`btn`). Pair with `aria-pressed`.
+ * A toggle (range preset, pill, kind chip, horizon): selected is navy ink on a
+ * faint navy wash inside a navy hairline, so solid navy stays the primary
+ * button (`btn`). Pair with `aria-pressed`. Several side by side read best as
+ * ONE segmented control: `Segmented` + `segment()` (components/next/Toolbar).
  */
 export const toggle = (on: boolean) =>
-  `press rounded-control px-2.5 py-1 text-label font-semibold ring-1 ${
-    on ? "bg-acct-checking-bg text-brand-navy ring-2 ring-brand-navy" : "bg-white text-neutral-700 ring-brand-line hover:bg-neutral-50"
+  `press rounded-control px-2.5 py-1 text-label font-medium ring-1 ${
+    on ? "bg-brand-wash/[0.07] text-brand-navy ring-brand-navy" : "bg-white text-neutral-700 ring-input hover:bg-neutral-50"
   }`;
 
+/** ⭐ ONE TABLE STYLE (2026-11-12): a restrained 12 px medium grey head with
+ *  one hairline under it, 13 px rows on subtle separators, money
+ *  right-aligned in tabular lining figures. */
 export const th =
-  "whitespace-nowrap border-b border-brand-line px-4 py-2.5 text-left text-micro font-semibold uppercase tracking-wide text-neutral-500";
-export const td = "border-b border-brand-line/70 px-4 py-2 text-body";
-/** Money and counts: mono, tabular, right-aligned. They must line up down a
- *  column and must never reflow as they update. */
-export const tdNum = `${td} text-right font-mono text-label tabular-nums`;
+  "whitespace-nowrap border-b border-brand-line px-4 py-2 text-left text-micro font-medium text-neutral-500";
+export const td = "border-b border-brand-line px-4 py-2 text-label";
+/** Money and counts: Inter's tabular lining figures (`.fig`), right-aligned.
+ *  They line up down a column and never reflow as they update. */
+export const tdNum = `${td} fig text-right`;
 
 export const errorBanner =
-  "mb-4 rounded-card bg-bad-bg px-4 py-2.5 text-body text-bad ring-1 ring-bad/15";
+  "mb-4 rounded-card bg-bad-bg px-4 py-2.5 text-body text-bad-ink ring-1 ring-bad/15";
 export const emptyNote = "px-4 py-5 text-center text-body text-neutral-600";
 
 /** A titled page. No padding of its own: the shell's `.shell-pad` already pads
@@ -86,7 +91,7 @@ export const emptyNote = "px-4 py-5 text-center text-body text-neutral-600";
 export function Page(props: { title: string; sub?: string; children: ReactNode }) {
   return (
     <div className="w-full">
-      <h1 className={props.sub ? "text-display font-semibold text-brand-navy" : "mb-4 text-display font-semibold text-brand-navy"}>{props.title}</h1>
+      <h1 className={props.sub ? "text-display font-semibold text-foreground" : "mb-4 text-display font-semibold text-foreground"}>{props.title}</h1>
       {props.sub && <p className="mb-4 mt-1 text-label text-neutral-500">{props.sub}</p>}
       {props.children}
     </div>
@@ -137,12 +142,12 @@ export function Crumbs(props: {
 /**
  * A number and what it is — the dashboard's KpiCard geometry, exactly.
  *
- * ⚠️ `ok` AND THE DEFAULT ARE BOTH NAVY, DELIBERATELY. Under the palette rule
- * good is the resting state and does not shout; only `bad` takes a colour (deep
- * orange). That means THE LABEL has to say what the number is, because green no
- * longer does it.
+ * ⚠️ `ok` AND THE DEFAULT ARE BOTH THE RESTING CHARCOAL, DELIBERATELY. Good is
+ * the resting state and does not shout; only `bad` takes a colour (the alarm
+ * ink), and `navy` is kept for a call site that asks for it. That means THE
+ * LABEL has to say what the number is, because colour no longer does it.
  *
- * ⭐ LABEL ABOVE, VALUE BELOW, MONO NUMERALS. `hint` is the third line the old
+ * ⭐ LABEL ABOVE, VALUE BELOW, FIGURE NUMERALS. `hint` is the third line the old
  * stat shapes had nowhere to put — which is how context ended up as a paragraph
  * somewhere else on the page.
  */
@@ -157,7 +162,8 @@ export function Stat(props: {
   onClick?: () => void;
   "data-testid"?: string;
 }) {
-  const tone = props.tone === "bad" ? "text-bad" : "text-brand-navy";
+  // `bad` is the alarm colour itself: a figure is large text (3:1 is enough), like the summary figures.
+  const tone = props.tone === "bad" ? "text-bad" : props.tone === "navy" ? "text-brand-navy" : "text-foreground";
   // A plain number is rounded; anything pre-formatted ("5 / 12", money)
   // is rendered as given — never re-format someone else's string.
   const shown = typeof props.value === "number" ? Math.round(props.value) : props.value;
@@ -169,7 +175,7 @@ export function Stat(props: {
     <Tag
       {...(props.onClick ? { type: "button" as const, onClick: props.onClick } : {})}
       data-testid={props["data-testid"]}
-      className={`surface tile-in min-w-[132px] rounded-card px-4 py-3 ring-1 ring-brand-line ${clickable}`}
+      className={`surface min-w-[132px] rounded-card px-4 py-3 ring-1 ring-brand-line ${clickable}`}
       style={
         props.index != null
           ? { animationDelay: `calc(${Math.min(props.index, 12)} * var(--stagger))` }
@@ -177,7 +183,7 @@ export function Stat(props: {
       }
     >
       <div className={fieldLabel}>{props.label}</div>
-      <div className={`mt-0.5 font-mono text-title font-semibold tabular-nums ${tone}`}>
+      <div className={`fig mt-0.5 text-title font-semibold ${tone}`}>
         {shown}
       </div>
       {props.hint ? <div className="mt-0.5 text-micro text-neutral-600">{props.hint}</div> : null}

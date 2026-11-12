@@ -19,7 +19,7 @@ const buttonVariants = cva(
         destructive: "bg-bad text-on-bad hover:bg-bad-hover",
         // The quiet ghost control: a hairline ring, no blue, no underline.
         outline:
-          "bg-white text-neutral-700 ring-1 ring-brand-line hover:bg-neutral-50 hover:text-brand-navy",
+          "bg-white text-neutral-800 ring-1 ring-input hover:bg-neutral-50 hover:text-brand-navy",
         secondary:
           "bg-secondary text-secondary-foreground ring-1 ring-brand-line hover:bg-brand-tint",
         ghost: "text-neutral-700 hover:bg-secondary hover:text-brand-navy",
@@ -28,7 +28,7 @@ const buttonVariants = cva(
       },
       size: {
         default: "min-h-9 px-3.5 py-1.5",
-        sm: "min-h-8 rounded-control px-2.5 text-micro font-semibold",
+        sm: "min-h-8 rounded-control px-2.5 text-label font-medium",
         lg: "min-h-10 rounded-control px-8",
         icon: "h-9 w-9",
       },

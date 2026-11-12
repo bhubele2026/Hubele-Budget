@@ -21,7 +21,7 @@ const DialogOverlay = React.forwardRef<
     className={cn(
       // Navy scrim, not black — the app behind it should read as dimmed, not
       // switched off.
-      "anim-overlay fixed inset-0 z-50 bg-scrim backdrop-blur-[2px]",
+      "anim-overlay fixed inset-0 z-50 bg-scrim",
       className
     )}
     {...props}
@@ -97,7 +97,7 @@ const DialogTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "text-title font-semibold leading-none tracking-tight text-brand-navy",
+      "text-title font-semibold leading-snug text-foreground",
       className
     )}
     {...props}

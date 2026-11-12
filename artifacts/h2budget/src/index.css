@@ -1,7 +1,12 @@
-/* H2 Budget — the KFI Financial Dashboard design language.
-   Navy + platinum, flat and matte, one typeface, four motion dials.
-   Ported from KFI-Housing (src/web/index.css) and the Financial Dashboard
-   (apps/web/src/index.css), which are the two apps this now sits beside. */
+/* H2 Budget — the design language.
+   (Businesslike pass, owner-approved 2026-11-12) Clean, mature financial
+   software: a neutral off-white ground, FLAT white panels with fine grey
+   borders, dark charcoal text, navy for primary actions and the selected
+   place in the navigation, orange only for warnings and the H2 mark. One
+   typeface (Inter, standard figures, no stylistic sets) for labels, body and
+   balances alike; money in tabular lining numerals (`.fig`), never a
+   typewriter face. No entrance motion: brief functional transitions only.
+   Originally ported from KFI-Housing and the Financial Dashboard. */
 @layer theme, base, clerk, components, utilities;
 /* ⚠️ `source(none)` IS LOAD-BEARING, AND `@source` ALONE WOULD NOT DO IT.
    `@source` ADDS to automatic detection; it never replaces it. Automatic
@@ -23,34 +28,26 @@
    fallback, so a failed font degrades to something styled, never to nothing. */
 @import "@fontsource-variable/inter/wght.css";
 
-/* Registered so the area-draw mask edge can be ANIMATED — an unregistered
-   custom property has no type, so the browser can only swap it at the halfway
-   point instead of interpolating it. Top level, not inside a @layer: a
-   registration is a global fact, not a cascade participant. */
-@property --reveal {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 0%;
-}
-
 @theme {
-  /* ── PALETTE: NAVY, ORANGE, PLATINUM. Nothing else. ───────────────────────
-     The Financial Dashboard's standing rule 7c. Status is
-     navy = good · grey = watch · deep orange #e16d3e = bad, and THE LABEL
-     ALWAYS SAYS WHICH — `ok` is the same navy as body text on purpose,
-     because good is the resting state and should not shout.
+  /* ── PALETTE: NAVY, CHARCOAL, NEUTRAL GREYS; ORANGE FOR WARNINGS ─────────
+     (Owner, 2026-11-12) Navy is the primary: solid buttons, the selected tab
+     and nav item, focus. Text is dark charcoal, not navy. Orange is spent on
+     two things only: WARNINGS (#e16d3e and its small-text ink) and the H2
+     mark's "2". It is no longer a call to action. Status is navy = good ·
+     grey = watch · deep orange = bad, and THE LABEL ALWAYS SAYS WHICH.
 
-     ⚠️ DEEP ORANGE #e16d3e IS NOT BRAND ORANGE #f68d2e. #f68d2e is the accent
-     (tile-caption hover, the active tab underline); #e16d3e means something is
-     wrong. Using one for both makes an accent look like an alarm and an alarm
-     look like decoration. */
+     ⚠️ DEEP ORANGE #e16d3e IS NOT BRAND ORANGE #f68d2e. #f68d2e is the mark
+     and the warning accent; #e16d3e means something is wrong. */
   --color-brand-navy: #19315b;
   --color-brand-navy2: #22406e;
   --color-brand-orange: #f68d2e;
   --color-brand-orange-deep: #e16d3e;
-  --color-brand-tint: #f7f9fc;
-  --color-brand-line: #e6edf5;
-  --color-brand-ink: #1a2233;
+  /* A row under the pointer, a quiet raised ground. Neutral, not blue. */
+  --color-brand-tint: #f3f4f6;
+  /* THE hairline: every panel border, divider and row separator. */
+  --color-brand-line: #e3e6eb;
+  /* Charcoal: headings, figures, body. */
+  --color-brand-ink: #1d2330;
 
   /* ── INK vs FILL (light and dark) ─────────────────────────────────────────
      In light these all equal the colour they stand beside, so nothing moves.
@@ -85,24 +82,40 @@
   /* The orange count pill on a light surface (the More menu). A solid soft
      value in dark: half-alpha orange over black reads brown. */
   --color-brand-orange-wash: rgb(246 141 46 / 0.15);
-  /* What dims the page behind a dialog or sheet. */
-  --color-scrim: rgb(25 49 91 / 0.45);
+  /* What dims the page behind a dialog or sheet: a neutral charcoal, no blur. */
+  --color-scrim: rgb(17 24 39 / 0.38);
 
-  /* The platinum ramp — every neutral surface in the app is one of these six
-     steps. Before this the app mixed a true-neutral white wash with cool greys
-     and a teal cast, which is why nothing ever looked like it was made of the
-     same material. */
+  /* The neutral ramp (the old "platinum" names kept so no call site moves) —
+     every neutral surface in the app is one of these six steps. (2026-11-12)
+     True neutral greys with the faintest cool cast; the blue-tinted platinum
+     read soft. 0 = a panel, 2 = the ground, 5 = the hairline. */
   --color-platinum-0: #ffffff;
-  --color-platinum-1: #fbfcfe;
-  --color-platinum-2: #f7f9fc;
-  --color-platinum-3: #f2f6fb;
-  --color-platinum-4: #eef3fa;
-  --color-platinum-5: #e6edf5;
+  --color-platinum-1: #fbfbfc;
+  --color-platinum-2: #f6f7f9;
+  --color-platinum-3: #f1f2f5;
+  --color-platinum-4: #eceef2;
+  --color-platinum-5: #e3e6eb;
+
+  /* Tailwind's neutral ramp, re-valued onto the same charcoal family, so the
+     pages' `text-neutral-600` supporting text and `text-neutral-500` captions
+     are the house greys (dark re-values them again in the DARK block). Every
+     text step from 500 up clears 4.5:1 on white and on the ground. */
+  --color-neutral-50: #f6f7f9;
+  --color-neutral-100: #f1f2f5;
+  --color-neutral-200: #e3e6eb;
+  --color-neutral-300: #c9ced6;
+  --color-neutral-400: #9aa1ad;
+  --color-neutral-500: #6b7280;
+  --color-neutral-600: #4a5262;
+  --color-neutral-700: #363d4a;
+  --color-neutral-800: #262c38;
+  --color-neutral-900: #1d2330;
+  --color-neutral-950: #12161f;
 
   --color-ok: #19315b;
-  --color-ok-bg: #eef3fa;
+  --color-ok-bg: #eef1f6;
   --color-warn: #5d6674;
-  --color-warn-bg: #eef0f3;
+  --color-warn-bg: #f1f2f5;
   --color-bad: #e16d3e;
   /* The pressed/hover step of the alarm colour. It exists as a TOKEN because it
      used to be an arbitrary bracketed-hex hover literal, copy-pasted into two
@@ -118,18 +131,19 @@
      "Needs reconnecting"). A darkened #e16d3e is brown (the owner's rule), so
      this is a HIGH-CHROMA rust of the same family instead — more chroma than
      #e16d3e, a touch redder, never desaturated. Measured (WCAG 2.x):
-       panel top #ffffff 5.18:1 · panel foot #fbfcfe 5.04:1 ·
-       ground top #f7f9fc 4.91:1 · ground foot #eef3fa 4.64:1.
+       panel #ffffff 5.18:1 · ground #f6f7f9 4.80:1 · raised #f1f2f5 4.6:1.
      `index.css.test.ts` keeps it in that class (contrast floor, chroma and
      hue checks). Mirrored for SVG text as CHART.badInk (chartTokens.ts). */
   --color-bad-ink: #c2410c;
   --color-info: #19315b;
-  --color-info-bg: #eef3fa;
+  --color-info-bg: #eef1f6;
 
   /* ── ACCOUNT ACCENTS ─────────────────────────────────────────────────────
      Identity for money: checking/Chase in navy, the Amex card in teal-green,
-     any other card in violet, everything else in steel grey. Used on chips,
-     panel edges, chart series and the forecast legend. Colour reinforces the
+     any other card in violet, everything else in steel grey. Used as a small
+     DOT beside an account's name (chips, panel titles, ledger rows), on chart
+     series and in the forecast legend — never as a 4px panel edge (2026-11-12).
+     Colour reinforces the
      identity; a LABEL always says it too. `-bg` is the quiet tint behind a
      chip. (Teal-green and violet are the only hues outside navy/orange/
      platinum and they are reserved for account identity — never status.) */
@@ -142,28 +156,33 @@
   --color-acct-other: #5d6674;
   --color-acct-other-bg: #eef0f3;
 
-  /* ── CHROME: THE NAVY HEADER, RIBBON AND DRAWER ──────────────────────────
-     (C12) Every colour on the navy chrome is one of these, so the header, the
-     ribbon, the More trigger and the phone drawer cannot drift apart again
-     (they had grown 22 hand-picked `white/NN` strengths and two copies of the
-     underline glow). They are white at fixed strengths and are ONLY for the
-     brand-navy ground: on platinum they would vanish.
+  /* ── CHROME: THE TOP BAR, RIBBON AND DRAWER ──────────────────────────────
+     (C12) Every colour on the chrome is one of these, so the header, the
+     ribbon, the More trigger and the phone drawer cannot drift apart.
+     (Owner, 2026-11-12) The bar is WHITE with a fine bottom rule; the lit tab
+     is navy text over a 2px navy underline (no glow). Dark re-values these
+     onto the card colour.
      Ink, strongest first: the lit tab · a tab under the pointer · the quiet
      controls (Ask, the review pill, "Account") · a resting tab or row · group
      labels and the overflow chevrons. */
-  --color-chrome-ink: #ffffff;
-  --color-chrome-ink-hover: rgb(255 255 255 / 0.9);
-  --color-chrome-ink-2: rgb(255 255 255 / 0.7);
-  --color-chrome-ink-3: rgb(255 255 255 / 0.6);
-  --color-chrome-ink-4: rgb(255 255 255 / 0.45);
+  --color-chrome: #ffffff;
+  --color-chrome-ink: #19315b;
+  --color-chrome-ink-hover: #1d2330;
+  --color-chrome-ink-2: #363d4a;
+  --color-chrome-ink-3: #4a5262;
+  --color-chrome-ink-4: #6b7280;
   /* Grounds: a drawer row under the pointer · the current row and any control
      under the pointer. One hairline for every rule on the chrome. */
-  --color-chrome-hover: rgb(255 255 255 / 0.05);
-  --color-chrome-press: rgb(255 255 255 / 0.1);
-  --color-chrome-rule: rgb(255 255 255 / 0.12);
-  /* The rule under the header, and the brand-orange glow under the lit tab. */
+  --color-chrome-hover: #f6f7f9;
+  --color-chrome-press: #eef1f6;
+  --color-chrome-rule: #e3e6eb;
+  /* A COUNT badge (Needs you 3, a tab's queue, "New"): navy with white ink in
+     light; in dark the light ink with the card colour, so it never sinks into
+     the black bar. A queue is not a fault, so it is never orange. */
+  --color-count-bg: #19315b;
+  --color-count-ink: #ffffff;
+  /* The rule under the header. (The orange tab glow is gone, 2026-11-12.) */
   --inset-shadow-chrome-edge: inset 0 -1px 0 var(--color-chrome-rule);
-  --shadow-tab-glow: 0 0 10px color-mix(in srgb, var(--color-brand-orange) 55%, transparent);
 
   /* The gap between panels on the 12-column grid. */
   --grid-gap: 1rem;
@@ -172,6 +191,12 @@
      Seven steps and no more (the seventh, --text-kpi, says why below). Ad-hoc font sizes are the single loudest
      "nobody designed this" signal on a screen, because nothing lines up and
      every card invents its own hierarchy.
+     (2026-11-12, businesslike pass) The roles, and their weights:
+       page title   --text-display 22/600     section    --text-title 15/600
+       summary fig. --text-kpi 22–28/600      figure     --text-body 14/500
+       table text   --text-label 13/400       label      --text-micro 12/500
+       support      --text-micro 12/400 (never below 12 px).
+     Body 400, labels 500, headings 600: nothing heavier.
 
      ⚠️ `hero` IS NOT A HEADING SIZE. It is reserved for THE ONE NUMBER a
      screen exists to answer — today that is the debt payoff percentage, which
@@ -179,56 +204,61 @@
      the hero, so a screen gets one or none. */
   --text-hero: 3.25rem;     /* 52 — the one number a screen is about */
   /* 22–30 — a TILE's headline figure on a screen that has several (the
-     dashboard's summary row). Why a seventh step: at --text-title (18) every
+     dashboard's summary row). Why a seventh step: at --text-title every
      figure on the dashboard read at the same weight as the card headings, so
      nothing led; at --text-hero (52) four of them would be four heroes, which
-     the rule above forbids. The KFI dashboard's KPI tiles sit at 28–32 px in
-     mono tabular numerals, and this is that size. It shrinks with the
-     viewport so four cents-bearing figures still fit a 390 px phone two by
-     two (a 30 px mono "$12,345.67" is 180 px; a phone cell is ~150). */
-  --text-kpi: clamp(1.375rem, 1rem + 1.15vw, 1.875rem);
-  --text-kpi--line-height: 1.1;
-  --text-display: 1.5rem;   /* 24 — page titles */
-  --text-title: 1.125rem;   /* 18 — card headings */
-  --text-body: 0.875rem;    /* 14 — everything ordinary */
-  --text-label: 0.8125rem;  /* 13 — secondary, field labels */
-  --text-micro: 0.6875rem;  /* 11 — column heads, chips, captions */
+     the rule above forbids. 28 px at most, in Inter's tabular lining figures
+     (`.fig`). It shrinks with the viewport so four cents-bearing figures still
+     fit a 390 px phone two by two (a phone cell is ~150 px). */
+  --text-kpi: clamp(1.25rem, 0.95rem + 0.95vw, 1.75rem);
+  --text-kpi--line-height: 1.15;
+  --text-display: 1.375rem; /* 22 — page titles */
+  --text-display--line-height: 1.25;
+  --text-title: 0.9375rem;  /* 15 — section and panel headings */
+  --text-title--line-height: 1.35;
+  --text-body: 0.875rem;    /* 14 — everything ordinary, a figure in a row */
+  --text-label: 0.8125rem;  /* 13 — table text, secondary lines */
+  --text-micro: 0.75rem;    /* 12 — labels, column heads, chips, support */
 
   /* ── RADIUS ──────────────────────────────────────────────────────────────
      Two, not six. Tight and flat: the house style is thin marks and small
-     corners, never candy. The generic scale below is pulled in behind them so
+     corners, never candy. (2026-11-12) 8 px panels, 6 px controls; a status
+     badge is 4 px (`.chip`). The generic scale below is pulled in behind them so
      any surviving `rounded-2xl` call site lands on the card radius rather than
      re-opening a third geometry.
      ⚠️ Tailwind v4: `rounded-[--radius-card]` emits the literal
      `border-radius: --radius-card` — invalid, silently dropped. Tokens declared
      here generate their own utilities; use `rounded-card` / `rounded-control`. */
-  --radius-control: 8px;
-  --radius-card: 14px;
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.625rem;
-  --radius-2xl: 0.875rem;
-  --radius-3xl: 1rem;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.5rem;
+  --radius-3xl: 0.5rem;
 
   /* ── ELEVATION ───────────────────────────────────────────────────────────
-     Three steps, and every surface picks exactly one. Two competing depth
-     languages in one app is what reads as cheap. */
-  --shadow-rest: 0 1px 2px rgb(25 49 91 / 0.04), 0 1px 3px rgb(25 49 91 / 0.06);
-  --shadow-lift: 0 4px 12px rgb(25 49 91 / 0.08), 0 2px 4px rgb(25 49 91 / 0.05);
-  --shadow-over: 0 16px 40px rgb(25 49 91 / 0.16), 0 4px 12px rgb(25 49 91 / 0.08);
-  /* The MILLED material (ported from the Financial Dashboard's `.surface`):
-     a 1px lit rim along the top edge plus a two-stop navy shadow (tight
-     contact + wide soft ambient). It is the rest and lift step for `.panel`
-     and `.surface`, so a card is one material everywhere, never a flat white
-     slab. Slight by design: you should feel the depth, not see an effect. */
-  --shadow-milled: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 1.5px rgb(25 49 91 / 0.04), 0 6px 16px -6px rgb(25 49 91 / 0.07);
-  --shadow-milled-lift: inset 0 1px 0 rgb(255 255 255 / 0.95), 0 2px 4px rgb(25 49 91 / 0.05), 0 14px 28px -10px rgb(25 49 91 / 0.13);
+     (2026-11-12) PANELS ARE FLAT: a white surface and a fine grey border, no
+     shadow, no tint. Elevation is kept for things that genuinely sit OVER the
+     page — a menu, a popover, a dialog, a dragged row — and it is neutral
+     grey, never navy-tinted. */
+  --shadow-rest: 0 1px 2px rgb(17 24 39 / 0.05);
+  --shadow-lift: 0 4px 12px rgb(17 24 39 / 0.08), 0 1px 3px rgb(17 24 39 / 0.05);
+  --shadow-over: 0 12px 32px rgb(17 24 39 / 0.14), 0 2px 6px rgb(17 24 39 / 0.06);
+  /* The rest and lift step for `.panel` and `.surface` (the names are kept so
+     no call site moves). Rest is NO shadow — the border is the edge; lift is
+     one faint contact shadow, for a surface that is picked up or pointed at. */
+  --shadow-milled: 0 0 #0000;
+  --shadow-milled-lift: 0 1px 3px rgb(17 24 39 / 0.07);
 
-  /* Inter, self-hosted. Mono numerals use the system stack — zero font bytes,
-     and a monospace face downloaded purely to align digits is a round trip
-     spent on something `tabular-nums` already does. */
+  /* Inter, self-hosted. ONE family for labels, body and balances.
+     (2026-11-12) Money is `--font-figure` — the same Inter, set in tabular
+     lining figures by `.fig` — so a column of amounts lines up without the
+     typewriter look of a monospace face. `--font-mono` (the system stack, zero
+     font bytes) stays for genuinely code-like text only. */
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-figure: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -337,27 +367,28 @@
   /* ── The bridged palette ─────────────────────────────────────────────────
      HSL triplets, every one round-tripping exactly to its hex so the built
      bundle only ever ships colours from the navy/platinum allowlist. */
-  --background: 216 45.5% 97.8%;      /* #f7f9fc platinum tint */
-  --foreground: 220.8 32.5% 15.1%;    /* #1a2233 ink — matte, never #000 */
-  --border: 212 42.9% 93.1%;          /* #e6edf5 brand line */
+  --background: 220 20% 97.1%;        /* #f6f7f9 neutral off-white ground */
+  --foreground: 221.1 24.7% 15.1%;    /* #1d2330 charcoal — matte, never #000 */
+  --border: 217.5 16.7% 90.6%;        /* #e3e6eb the hairline */
 
   --card: 0 0% 100%;
-  --card-foreground: 220.8 32.5% 15.1%;
-  --card-border: 212 42.9% 93.1%;
+  --card-foreground: 221.1 24.7% 15.1%;
+  --card-border: 217.5 16.7% 90.6%;
 
-  /* Navy chrome: the header and mobile nav are a navy band, not a white one. */
-  --sidebar: 218.2 56.9% 22.7%;                 /* #19315b */
-  --sidebar-foreground: 216.3 30.6% 75.7%;      /* #aebdd4 */
-  --sidebar-border: 216.3 52.8% 28.2%;          /* #22406e */
-  --sidebar-primary: 28.5 91.7% 57.3%;          /* #f68d2e — the active accent */
-  --sidebar-primary-foreground: 218.2 56.9% 22.7%;
-  --sidebar-accent: 216.3 52.8% 28.2%;          /* #22406e hover row */
-  --sidebar-accent-foreground: 0 0% 100%;
-  --sidebar-ring: 28.5 91.7% 57.3%;
+  /* (2026-11-12) The chrome is a WHITE band with a hairline; navy marks the
+     selected place. */
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 220 14% 33.7%;          /* #4a5262 */
+  --sidebar-border: 217.5 16.7% 90.6%;          /* #e3e6eb */
+  --sidebar-primary: 218.2 56.9% 22.7%;         /* #19315b — the selected place */
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 20% 97.1%;              /* #f6f7f9 hover row */
+  --sidebar-accent-foreground: 221.1 24.7% 15.1%;
+  --sidebar-ring: 218.2 56.9% 22.7%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 220.8 32.5% 15.1%;
-  --popover-border: 212 42.9% 93.1%;
+  --popover-foreground: 221.1 24.7% 15.1%;
+  --popover-border: 217.5 16.7% 90.6%;
 
   --primary: 218.2 56.9% 22.7%;       /* #19315b */
   --primary-foreground: 0 0% 100%;
@@ -368,19 +399,19 @@
   --clerk-primary: 218.2 56.9% 22.7%;
   --clerk-primary-foreground: 0 0% 100%;
 
-  --secondary: 215 54.5% 95.7%;       /* #eef3fa */
-  --secondary-foreground: 218.2 56.9% 22.7%;
+  --secondary: 225 16.7% 95.3%;       /* #f1f2f5 */
+  --secondary-foreground: 221.1 24.7% 15.1%;
 
-  --muted: 213.3 52.9% 96.7%;         /* #f2f6fb */
-  --muted-foreground: 216.5 11% 41%;  /* #5d6674 */
+  --muted: 225 16.7% 95.3%;           /* #f1f2f5 */
+  --muted-foreground: 220 14% 33.7%;  /* #4a5262 supporting text */
 
-  --accent: 215 54.5% 95.7%;          /* #eef3fa — a raised neutral, NOT a second accent */
-  --accent-foreground: 218.2 56.9% 22.7%;
+  --accent: 225 16.7% 95.3%;          /* #f1f2f5 — a raised neutral, NOT a second accent */
+  --accent-foreground: 221.1 24.7% 15.1%;
 
   --destructive: 17.3 73.1% 56.3%;    /* #e16d3e deep orange */
   --destructive-foreground: 0 0% 100%;
 
-  --input: 212 42.9% 93.1%;
+  --input: 218.2 15.1% 85.7%;        /* #d5d9e0: a field's edge has to show */
   --ring: 218.2 56.9% 22.7%;
 
   --positive: 218.2 56.9% 22.7%;      /* good is navy and does not shout */
@@ -404,8 +435,8 @@
   --card-silver: 215 27.3% 65.5%;
   --card-gold: 215 27.3% 65.5%;
 
-  --shadow-2xs: 0 1px 1px rgb(25 49 91 / 0.03);
-  --shadow-xs: 0 1px 2px rgb(25 49 91 / 0.04);
+  --shadow-2xs: 0 1px 1px rgb(17 24 39 / 0.03);
+  --shadow-xs: 0 1px 2px rgb(17 24 39 / 0.04);
   --shadow-sm: var(--shadow-rest);
   --shadow: var(--shadow-rest);
   --shadow-md: var(--shadow-lift);
@@ -533,32 +564,27 @@
 
   body {
     @apply bg-background text-foreground;
-    /* Graded light rather than one flat tint, as on the Financial Dashboard:
-       the app sits ON something, and milled cards read against it. `fixed`
-       so a long page never stretches the ramp; the colour behind it stays
-       --background (platinum-2) for anything that paints before it. */
-    background-image: linear-gradient(180deg, var(--color-platinum-2) 0%, var(--color-platinum-4) 100%);
-    background-attachment: fixed;
+    /* (2026-11-12) One flat neutral ground: no graded light. */
     max-width: 100%;
     font-family: var(--font-sans);
     font-size: 14px;
     line-height: 1.45;
-    /* cv11 = the single-storey 'a' that keeps numerals and text feeling of a
-       piece; ss01 tightens the punctuation. Both are Inter's own, no drawing. */
-    font-feature-settings: "cv11", "ss01";
+    /* STANDARD Inter (owner, 2026-11-12): no cv11 single-storey 'a', no ss01.
+       The stylistic sets made the face read soft. */
+    font-feature-settings: normal;
     /* Money must NEVER reflow as it counts or updates. */
     font-variant-numeric: tabular-nums;
   }
 
-  /* Headings carry the tracking, not the size alone — a heading that is merely
-     bigger reads like body text that got promoted. */
+  /* Headings: semibold, charcoal, a hair of negative tracking. Nothing bolder
+     than 600 anywhere. */
   h1, h2, h3, h4, h5, h6 {
     @apply font-display text-foreground;
     font-weight: 600;
-    line-height: 1.18;
-    letter-spacing: -0.014em;
+    line-height: 1.25;
+    letter-spacing: -0.011em;
   }
-  h1 { letter-spacing: -0.018em; font-weight: 700; }
+  h1 { letter-spacing: -0.015em; }
 
   ::selection {
     background: hsl(var(--primary-ink) / var(--selection-alpha, 0.16));
@@ -574,8 +600,8 @@
   }
 
   [data-money], .tabular-nums {
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum" 1, "cv11" 1;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
   }
 
   input[type="search"]::-webkit-search-cancel-button {
@@ -589,18 +615,18 @@
 }
 
 @layer components {
-  /* ── PANELS + THE 12-COLUMN GRID ("H2 evolved") ──────────────────────────
-     .panel is a card with a head; .panel-accent-* adds a 4px identity edge.
+  /* ── PANELS + THE 12-COLUMN GRID ────────────────────────────────────────
+     .panel is a FLAT white section with a fine grey border (owner,
+     2026-11-12): no gradient, no shadow at rest (--shadow-milled is none), an
+     8px corner. Inside it, sections are split by hairlines, never by nested
+     cards. .panel-accent-* no longer paints an edge: an account's identity is
+     the small dot beside its name (Panel draws it).
      .grid-12 is 12 columns from 1024px, 6 from 640px, 1 below; .span-N are
-     the responsive spans (see the media blocks). Motion uses the dials, so
-     reduced motion zeroes it with everything else. */
+     the responsive spans (see the media blocks). */
   .panel {
     position: relative;
     overflow: hidden;
     background-color: var(--color-platinum-0);
-    /* Milled, not a flat white slab: a barely perceptible vertical gradient,
-       the lit rim and the two-stop shadow (--shadow-milled). */
-    background-image: linear-gradient(180deg, var(--color-platinum-0) 0%, var(--color-platinum-1) 100%);
     border: 1px solid var(--color-brand-line);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-milled);
@@ -608,8 +634,9 @@
   .panel-head {
     display: flex;
     align-items: center;
-    gap: 0.625rem;
-    padding: 0.625rem 1rem;
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--color-brand-line);
   }
   .panel-link {
@@ -624,10 +651,9 @@
      `Panel variant="sticky-safe"`. `flush` (no body padding) and `static` (no
      hover lift) are handled in `Panel` itself. */
   .panel-sticky-safe { overflow: clip; }
-  .panel-accent-checking { border-left: 4px solid var(--color-acct-checking); }
-  .panel-accent-amex { border-left: 4px solid var(--color-acct-amex); }
-  .panel-accent-card2 { border-left: 4px solid var(--color-acct-card2); }
-  .panel-accent-other { border-left: 4px solid var(--color-acct-other); }
+  /* Account identity on a panel: the class stays as a hook (tests, the guard);
+     the colour is the dot Panel draws beside the title, not an edge. */
+  .panel-accent-checking, .panel-accent-amex, .panel-accent-card2, .panel-accent-other { border-left-width: 1px; }
 
   .grid-12 {
     display: grid;
@@ -661,6 +687,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .kpi-grid > * { min-width: 0; padding: 0.875rem 1rem; }
+  /* (2026-11-12) The same grid, named for what it is: ONE summary group. */
   .kpi-grid > :nth-child(odd) { border-right: 1px solid var(--color-brand-line); }
   .kpi-grid > :nth-child(-n + 2) { border-bottom: 1px solid var(--color-brand-line); }
   @media (min-width: 1024px) {
@@ -670,20 +697,12 @@
     .kpi-grid > :not(:last-child) { border-right: 1px solid var(--color-brand-line); }
   }
 
-  /* ── The platinum surface ───────────────────────────────────────────────
-     A machined edge, not a drawn border. Three cheap layers do all the work:
-     a barely perceptible vertical gradient so a card isn't a flat slab; a 1px
-     inset highlight along the top edge — the lit rim of a milled panel; and a
-     TWO-stop shadow (tight contact + wide soft ambient) instead of one blunt
-     blur. Slight by design: at 100% zoom you should feel depth, not see an
-     effect. Pair with `ring-1 ring-brand-line` for the platinum hairline. */
-  /* Shadow tint is BRAND NAVY, matching --shadow-rest/lift/over above. It was
-     rgb(16 24 40) here — a second, near-black depth language running alongside
-     the navy one, which the elevation comment above explicitly forbids. The
-     audit found it in the built CSS as #101828; at 4–13% alpha the correction
-     is imperceptible, and it leaves exactly one shadow colour in the app. */
+  /* ── The surface ─────────────────────────────────────────────────────────
+     (2026-11-12) Flat white, edged by its `ring-1 ring-brand-line` hairline.
+     The old milled gradient and lit rim are gone; the shadow composition in
+     @layer utilities stays so a picked-up surface can still lift. */
   .surface {
-    background-image: linear-gradient(180deg, var(--color-platinum-0) 0%, var(--color-platinum-1) 100%);
+    background-color: var(--background-color-white);
   }
 
   /* Clickable surfaces settle a little deeper under the pointer. Shadow only —
@@ -693,53 +712,23 @@
     transition: box-shadow calc(96ms * var(--anim-speed)) var(--ease-move);
   }
 
-  /* ── The head, and its bleed ─────────────────────────────────────────────
-     At REST the card head is plain — title, hairline, nothing painted. Every
-     earlier attempt at this put colour in the header PERMANENTLY, and a
-     coloured bar across every card all the time is what read first as ugly and
-     then as juvenile. Colour as a RESPONSE to your pointer is the only version
-     that is subtle.
+  /* (2026-11-12) The hover "bleed" pools that stained a card head navy are
+     gone: a card head is plain at rest and under the pointer. `card-bleed`
+     stays as a harmless hook on the call sites. */
 
-     Brand navy seeps down from the top edge as three overlapping pools at
-     different x centres and strengths, so the lower edge undulates instead of
-     ruling straight across. That unevenness is the whole difference between
-     "a gradient was applied" and "the colour soaked in". Vertical radii finish
-     at ~72 / 56 / 63px — INSIDE the 78px box — so each pool reaches zero on its
-     own, at three different depths. */
-  .card-bleed::before {
-    content: "";
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 78px;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity calc(420ms * var(--anim-speed)) var(--ease-move);
-    background-image:
-      radial-gradient(240px 76px at 13% -4px, rgba(25, 49, 91, 0.28) 0%, rgba(25, 49, 91, 0.10) 50%, rgba(25, 49, 91, 0) 84%),
-      radial-gradient(188px 58px at 46% -2px, rgba(25, 49, 91, 0.2) 0%, rgba(25, 49, 91, 0.06) 54%, rgba(25, 49, 91, 0) 86%),
-      radial-gradient(260px 69px at 82% -6px, rgba(25, 49, 91, 0.24) 0%, rgba(25, 49, 91, 0.07) 52%, rgba(25, 49, 91, 0) 85%);
-    /* ⚠️ A pool still painting when the BOX ends gets sliced off, and the
-       element's own bottom edge draws a dead-straight line across the card —
-       the one thing a stain must never do. Belt and braces against any future
-       height change. */
-    -webkit-mask-image: linear-gradient(to bottom, #000 60%, rgba(0, 0, 0, 0) 100%);
-    mask-image: linear-gradient(to bottom, #000 60%, rgba(0, 0, 0, 0) 100%);
-  }
-  .card-bleed:hover::before { opacity: 1; }
-
-  /* Tile-scale bleed. The 78px default is tuned for a full-width card head; on
-     a ~154px landing tile it would stain half the box and the effect stops
-     reading as a head and starts reading as a two-tone card. Same three pools,
-     shallower — the mask still finishes the fade inside the shorter box. */
-  .bleed-sm::before { height: 52px; }
-
-  /* Status chips — the label says the state; colour only reinforces it. */
+  /* Status badges — the label says the state; colour only reinforces it.
+     Squared (4px), medium weight, a hair of padding: a badge, not a pill.
+     `StatusBadge` (components/next) is the one component that draws them with
+     their icon; `.chip` is the class underneath it. */
   .chip {
-    display: inline-block;
-    border-radius: 9999px;
-    padding: 2px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 4px;
+    padding: 1px 6px;
     font-size: var(--text-micro);
-    font-weight: 600;
+    line-height: 1.125rem;
+    font-weight: 500;
     text-transform: none;
     letter-spacing: 0;
     white-space: nowrap;
@@ -749,6 +738,8 @@
   .chip.bad { color: var(--color-bad-ink); background: var(--color-bad-bg); }
   .chip.info { color: var(--color-info); background: var(--color-info-bg); }
   .chip.gray { color: var(--color-acct-other); background: var(--color-acct-other-bg); }
+  /* A badge that only needs to be told apart, not coloured: a hairline box. */
+  .chip.line { color: hsl(var(--muted-foreground)); background: transparent; box-shadow: inset 0 0 0 1px var(--color-brand-line); }
 
   /* Emphasis ring — a flat navy hairline, no blur halo. */
   .focus-glow {
@@ -816,9 +807,13 @@
     padding-inline: calc(var(--shell-pad-x) + var(--page-head-overshoot));
   }
 
-  /* Aligning (tabular) lining figures for financial tables — clean, not
-     monospace/"code". Money never reflows as it counts or updates. */
+  /* ⭐ MONEY (owner, 2026-11-12): Inter's tabular lining figures — the same
+     family as the words beside them, digits of equal width so a column of
+     amounts lines up and never reflows as it counts or updates. Replaces the
+     typewriter `font-mono` money. `.fin-num` is the older name, kept. */
+  .fig,
   .fin-num {
+    font-family: var(--font-figure);
     font-variant-numeric: tabular-nums lining-nums;
     font-feature-settings: "tnum" 1, "lnum" 1;
   }
@@ -827,120 +822,26 @@
   .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
   .scrollbar-none::-webkit-scrollbar { display: none; }
 
-  /* ── Entrances ───────────────────────────────────────────────────────────
-     ⚠️ `backwards`, not `both`: an animation that ENDS holding a transform
-     leaves a containing block behind, and any `position: fixed` inside it
-     (every modal in this app) would then anchor to the card instead of the
-     viewport. Backwards gives the same entrance and lets the element settle
-     back to no transform. */
-  @keyframes tileIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .tile-in { animation: tileIn calc(280ms * var(--anim-speed)) var(--ease-enter) backwards; }
+  /* ── No entrances (owner, 2026-11-12) ─────────────────────────────────────
+     Nothing rises, fades in, staggers or draws itself on when a page opens:
+     a page simply IS there. The old class names (`tile-in`, `rise-in`,
+     `reveal`, `page-in`, `stagger`, `stagger-children`, `section-enter`,
+     `chart-in`, `area-draw`, `draw-once`, `sweep-in`, `spark-fill-in`,
+     `grow-x`) are inert hooks on their call sites; no rule here animates
+     them. What moves is FUNCTIONAL and brief: a disclosure opening, a sheet
+     sliding, a row's hover, a selection, a chart reshaping to a new horizon.
 
-  @keyframes riseIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: none; }
-  }
-  .rise-in { animation: riseIn calc(240ms * var(--anim-speed)) var(--ease-enter) backwards; }
-
-  @keyframes revealIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .reveal { animation: revealIn var(--dur-in) var(--ease-out) backwards; }
-
-  /* Route change: the outgoing page settles out, the incoming one lifts in.
-     A cut between two full pages is the most abrupt thing an app can do. */
-  @keyframes pageIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes pageOut {
-    from { opacity: 1; transform: translateY(0); }
-    to { opacity: 0; transform: translateY(-4px); }
-  }
-  .page-in { animation: pageIn calc(var(--dur-page) * 1.4) var(--ease-out) backwards; }
-  .page-out { animation: pageOut var(--dur-page) ease-in both; }
-
-  /* Stagger: one class on a grid/flex/list container and its DIRECT children
-     cascade in, instead of an animation class per child. */
-  .stagger > * { animation: riseIn calc(240ms * var(--anim-speed)) var(--ease-enter) backwards; }
-  .stagger > *:nth-child(1) { animation-delay: 0ms; }
-  .stagger > *:nth-child(2) { animation-delay: 28ms; }
-  .stagger > *:nth-child(3) { animation-delay: 56ms; }
-  .stagger > *:nth-child(4) { animation-delay: 84ms; }
-  .stagger > *:nth-child(5) { animation-delay: 112ms; }
-  .stagger > *:nth-child(6) { animation-delay: 140ms; }
-  .stagger > *:nth-child(7) { animation-delay: 168ms; }
-  .stagger > *:nth-child(8) { animation-delay: 196ms; }
-  .stagger > *:nth-child(n + 9) { animation-delay: 224ms; }
-
-  /* The legacy stagger name, on the new keyframe and the new dials. */
-  .stagger-children > * {
-    animation: riseIn var(--dur-slow) var(--ease-enter) backwards;
-    animation-delay: calc(var(--stagger) * var(--stagger-i, 0));
-  }
-  .stagger-children > *:nth-child(1) { --stagger-i: 0; }
-  .stagger-children > *:nth-child(2) { --stagger-i: 1; }
-  .stagger-children > *:nth-child(3) { --stagger-i: 2; }
-  .stagger-children > *:nth-child(4) { --stagger-i: 3; }
-  .stagger-children > *:nth-child(5) { --stagger-i: 4; }
-  .stagger-children > *:nth-child(6) { --stagger-i: 5; }
-  .stagger-children > *:nth-child(7) { --stagger-i: 6; }
-  .stagger-children > *:nth-child(8) { --stagger-i: 7; }
-  .stagger-children > *:nth-child(n + 9) { --stagger-i: 8; }
-  .section-enter { animation: riseIn var(--dur-soft) var(--ease-enter) backwards; }
+     The low-point ring that answered the old chart sweep never shows. */
+  .low-pulse { display: none; }
 
   /* ── Charts ──────────────────────────────────────────────────────────────
-     A GPU-composited fade+rise on the chart WRAPPER that outlasts the chart's
-     first paint, so even a heavy chart materialises smoothly instead of
-     popping in at the tail of the page fade. */
-  @keyframes chartIn {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: none; }
-  }
-  .chart-in { animation: chartIn calc(340ms * var(--anim-speed)) var(--ease-enter) backwards; }
-
-  /* Area draw-on: softly fill the chart LEFT→RIGHT, like it is being plotted
-     across the months. A gradient mask with a feathered leading edge sweeps
-     across, so there is no hard clip line — and it reveals the already-painted
-     chart, one cheap animation regardless of series count. Never dash-animate a
-     non-scaling-stroke path: dashes compute in screen pixels and shred the line
-     into loose specks. */
-  @keyframes areaFill {
-    from { --reveal: -7%; }
-    to { --reveal: 100%; }
-  }
-  .area-draw {
-    -webkit-mask-image: linear-gradient(to right, #000 var(--reveal), transparent calc(var(--reveal) + 7%));
-    mask-image: linear-gradient(to right, #000 var(--reveal), transparent calc(var(--reveal) + 7%));
-    animation: areaFill calc(600ms * var(--anim-speed)) var(--ease-move) both;
-  }
-  /* ⭐ (Clean forecast line) The Forecast chart draws in ONCE: the same mask
-     sweep, slower and on the glide curve, and nothing else stacked on it (no
-     wrapper rise, no chart-library reveal). */
-  .area-draw.draw-once {
-    animation-duration: var(--dur-draw);
-    animation-timing-function: var(--ease-glide);
-  }
-  /* The low point answers the sweep with ONE soft ring: it waits for the sweep
-     (the delay is the sweep's own dial), plays once and ends invisible. The
-     chart mounts it only for the first draw, so a re-render cannot replay it. */
-  @keyframes lowPulse {
-    0% { opacity: 0; transform: scale(1); }
-    18% { opacity: 0.5; }
-    100% { opacity: 0; transform: scale(3.6); }
-  }
-  .low-pulse {
-    opacity: 0;
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: lowPulse calc(900ms * var(--anim-speed)) var(--ease-glide) var(--dur-draw) 1 both;
-  }
-  /* The hover dot and hairline GLIDE between days: a transform transition on
+     (2026-11-12) QUIET FURNITURE on every chart: the axis line and its tick
+     marks are the panel hairline, not the library's #666 (a stylesheet rule
+     beats the SVG attribute). Dark re-values them in the DARK block.
+     The hover dot and hairline GLIDE between days: a transform transition on
      nodes that stay mounted (never a re-position by attribute, which jumps). */
+  .recharts-cartesian-axis-line,
+  .recharts-cartesian-axis-tick-line { stroke: var(--color-brand-line); }
   .chart-glide { transition: transform var(--dur-quick) var(--ease-glide); }
   /* While the line reshapes to a new horizon, the marks that belong to the NEW
      curve (low point, payday ticks, labels, tints) step out, then ease back in
@@ -952,8 +853,6 @@
   .chart-calm.chart-reshaping .recharts-reference-dot,
   .chart-calm.chart-reshaping .recharts-reference-area,
   .chart-calm.chart-reshaping [data-plate] { opacity: 0; transition: none; }
-  .sweep-in { animation: chartIn var(--dur-grand) var(--ease-enter) backwards; }
-  .spark-fill-in { animation: chartIn var(--dur-grand) var(--ease-enter) backwards; }
 
   /* ── Bars ────────────────────────────────────────────────────────────────
      Bars sweep their WIDTH in at the shared reveal speed. The CURVE matters
@@ -980,11 +879,6 @@
       height calc(600ms * var(--anim-speed)) var(--ease-move),
       opacity calc(600ms * var(--anim-speed)) var(--ease-move);
   }
-  @keyframes growX {
-    from { transform: scaleX(0); }
-    to { transform: scaleX(1); }
-  }
-  .grow-x { transform-origin: left; animation: growX var(--dur-grand) var(--ease-move) backwards; }
 
   /* ── Disclosures (Home says less, 2026-11-11) ────────────────────────────
      A native <details class="disclose">: what it holds arrives with a short
@@ -1021,17 +915,8 @@
   }
   .disclose .tile-in { animation: none; }
 
-  /* The active-tab underline sweeps in from the left. It is the ONLY moving
-     part of a tab ribbon: the label must not shift, or a row of tabs jitters
-     as you read across it. */
-  @keyframes underlineSweep {
-    from { transform: scaleX(0); }
-    to { transform: scaleX(1); }
-  }
-  .tab-underline {
-    transform-origin: left center;
-    animation: underlineSweep calc(220ms * var(--anim-speed)) var(--ease-enter) both;
-  }
+  /* The active-tab underline is simply THERE (2026-11-12): it no longer
+     sweeps in. `.tab-underline` stays as the hook. */
 
   /* Loading placeholder. A shape where the content will be — never a spinner,
      which says "wait" without saying what for. */
@@ -1041,7 +926,7 @@
   }
   .skeleton {
     border-radius: 6px;
-    background-image: linear-gradient(90deg, #e6edf5 25%, #f2f6fb 37%, #e6edf5 63%);
+    background-image: linear-gradient(90deg, #eceef2 25%, #f4f5f7 37%, #eceef2 63%);
     background-size: 200% 100%;
     animation: skeletonSweep 1.6s ease-in-out infinite;
   }
@@ -1057,7 +942,7 @@
     transition-duration: var(--dur-press);
     transition-timing-function: var(--ease-out);
   }
-  .press:active { transform: scale(0.985); }
+  .press:active { transform: scale(0.99); }
   .press:disabled:active { transform: none; }
 
   /* ── Radix overlay states ────────────────────────────────────────────────
@@ -1106,21 +991,18 @@
      HERE — a `:root` inside `@layer utilities` loses to the unlayered `:root`
      no matter what it says, so the dials are overridden at top level instead
      (search "REDUCED MOTION, PART 1"). What remains below is the half that the
-     dials genuinely cannot reach, and it is not redundant: `.stagger`'s
-     per-child delays are literal (28ms…224ms) and `.skeleton` runs a literal
-     `1.6s` infinite sweep, so neither reads a dial at all.
+     dials genuinely cannot reach, and it is not redundant: `.skeleton` runs a
+     literal `1.6s` infinite sweep, which reads no dial at all. (The entrance
+     classes and their literal stagger ladder are gone, 2026-11-12.)
 
      Radix open/close lifecycles still need to COMPLETE, so overlay animations
      collapse to near-instant rather than `none` — an animation removed
      outright never fires its end event and the element would stay mounted. */
   @media (prefers-reduced-motion: reduce) {
-    .tile-in, .rise-in, .reveal, .page-in, .page-out, .chart-in, .area-draw,
-    .sweep-in, .spark-fill-in, .grow-x, .tab-underline, .skeleton,
-    .stagger > *, .stagger-children > *, .section-enter, .low-pulse,
-    .disclose[open] > :not(summary) {
+    .skeleton, .disclose[open] > :not(summary) {
       animation: none !important;
     }
-    .bar-sweep, .bar-morph, .row-morph, .list-morph, .card-bleed::before,
+    .bar-sweep, .bar-morph, .row-morph, .list-morph,
     .surface-lift, .chart-glide, .chart-calm .recharts-reference-dot,
     .chart-calm .recharts-reference-area, .chart-calm [data-plate] {
       transition: none !important;
@@ -1130,8 +1012,6 @@
     @supports selector(::details-content) {
       .disclose[open]::details-content { transition: none !important; }
     }
-    /* Animation off would leave --reveal at 0% and mask most of the chart. */
-    .area-draw { -webkit-mask-image: none; mask-image: none; }
     .press:active { transform: none; }
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
@@ -1142,7 +1022,7 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   ⭐ DARK — matte black, the same navy bar, one orange.
+   ⭐ DARK — matte black, the same hierarchy and geometry as light.
    ══════════════════════════════════════════════════════════════════════════
    `lib/theme.ts` puts `data-theme="dark"` on <html> (absent = light); this is
    the only place that reads it. Everything above is the light app and is not
@@ -1152,11 +1032,13 @@
    - Tokens only. Never a `dark:` class and never a colour literal on a page:
      a page that needs a colour takes a token, and the token gets its dark
      value here. Chart colours come from `lib/chartTokens.ts` (same rule, JS).
-   - Flat and matte: no gradients on surfaces, black shadows with a faint lit
-     top rim (a navy or grey shadow on black is mud).
-   - Navy stays a FILL (the top bar, solid buttons, with white text). Navy as
-     INK (text, rings, lines) turns light. See "INK vs FILL" in @theme.
-   - One accent, orange #f68d2e, always solid. NEVER BROWN: no darkened or
+   - Flat and matte: no gradients on surfaces, flat panels on a fine hairline,
+     black shadows only for what sits over the page.
+   - The top bar is the card colour with a hairline, like light's white bar;
+     the lit tab is light navy ink over its underline.
+   - Navy stays a FILL (solid buttons, with white text). Navy as INK (text,
+     rings, lines) turns light. See "INK vs FILL" in @theme.
+   - Orange #f68d2e (the mark, warnings), always solid. NEVER BROWN: no darkened or
      desaturated orange, and no half-alpha orange or rust over black (that is
      what brown is). Tints behind alarm text are neutral; the text carries it.
    - Every text colour clears 4.5:1 on the ground, the card and the raised
@@ -1194,6 +1076,19 @@
     --color-on-bad: #16100d;
     --color-brand-orange-wash: #25272c;
     --color-scrim: rgb(0 0 0 / 0.62);
+
+    /* ── The chrome: the card colour, a hairline, light ink ────────────── */
+    --color-chrome: #17181b;
+    --color-chrome-ink: #e6ebf5;
+    --color-chrome-ink-hover: #f3f4f6;
+    --color-chrome-ink-2: #d7dae0;
+    --color-chrome-ink-3: #c5c9d1;
+    --color-chrome-ink-4: #9aa1ad;
+    --color-chrome-hover: #1e2024;
+    --color-chrome-press: #25272c;
+    --color-chrome-rule: #2a2d33;
+    --color-count-bg: #e6ebf5;
+    --color-count-ink: #17181b;
 
     /* ── Surfaces: one flat step per level, lighter = nearer ───────────── */
     --color-platinum-0: #17181b;
@@ -1244,8 +1139,8 @@
     --shadow-rest: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
     --shadow-lift: 0 6px 16px rgb(0 0 0 / 0.5), 0 2px 4px rgb(0 0 0 / 0.4);
     --shadow-over: 0 18px 44px rgb(0 0 0 / 0.66), 0 4px 12px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.05);
-    --shadow-milled: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.45);
-    --shadow-milled-lift: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 4px rgb(0 0 0 / 0.5), 0 12px 24px -10px rgb(0 0 0 / 0.7);
+    --shadow-milled: 0 0 #0000;
+    --shadow-milled-lift: 0 1px 3px rgb(0 0 0 / 0.5);
     --shadow-2xs: 0 1px 1px rgb(0 0 0 / 0.3);
     --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.4);
 
@@ -1305,14 +1200,6 @@
   /* The ground is flat: no graded light under a matte page. */
   html[data-theme="dark"] body {
     background-image: none;
-  }
-
-  /* The hover bleed in a card head was three navy pools: invisible on black.
-     One faint light pool, same mask, same fade. */
-  html[data-theme="dark"] .card-bleed::before {
-    background-image:
-      radial-gradient(240px 76px at 13% -4px, rgb(230 235 245 / 0.07) 0%, rgb(230 235 245 / 0.025) 50%, rgb(230 235 245 / 0) 84%),
-      radial-gradient(260px 69px at 82% -6px, rgb(230 235 245 / 0.05) 0%, rgb(230 235 245 / 0.02) 52%, rgb(230 235 245 / 0) 85%);
   }
 
   html[data-theme="dark"] .skeleton {

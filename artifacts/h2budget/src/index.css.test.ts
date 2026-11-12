@@ -133,16 +133,24 @@ describe("index.css — the reduced-motion switch actually reaches the dials", (
 describe("index.css — the literal-duration kills stay, because dials cannot reach them", () => {
   /**
    * Zeroing the dials covers everything written as `calc(… * var(--anim-speed))`
-   * — but not durations spelled as literals. These two are exactly that, which
-   * is why the `!important` half of the switch is NOT redundant now that the
-   * dials work.
+   * — but not durations spelled as literals. The skeleton sweep is exactly
+   * that, which is why the `!important` half of the switch is NOT redundant
+   * now that the dials work. (2026-11-12) The entrance classes and their
+   * literal stagger ladder are gone altogether: nothing enters, so there is
+   * nothing left for the switch to kill there.
    */
   it("still kills the classes whose durations are hardcoded", () => {
-    expect(SRC).toMatch(/animation-delay:\s*224ms/); // .stagger nth-child ladder
     expect(SRC).toMatch(/animation:\s*skeletonSweep\s+1\.6s/); // literal, infinite
     const kills = SRC.slice(SRC.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
     expect(kills).toMatch(/\.skeleton[^{]*\{[^}]*animation:\s*none\s*!important/s);
-    expect(kills).toMatch(/\.stagger\s*>\s*\*/);
+  });
+
+  it("(2026-11-12) no entrance animation is defined: nothing rises, staggers, fades in or draws itself on", () => {
+    for (const k of ["tileIn", "riseIn", "revealIn", "pageIn", "chartIn", "areaFill", "lowPulse", "underlineSweep", "growX"]) {
+      expect(SRC, k).not.toMatch(new RegExp(`@keyframes\\s+${k}\\b`));
+    }
+    expect(SRC).not.toMatch(/animation-delay:\s*[1-9]\d*ms/);
+    expect(SRC).toMatch(/\.low-pulse\s*\{\s*display:\s*none;\s*\}/);
   });
 
   /**
@@ -313,7 +321,9 @@ describe("index.css — the milled surface keeps its depth under a ring (dashboa
     expect(lift[0]!.value).toContain("var(--tw-ring-shadow, 0 0 #0000)");
   });
 
-  it(".panel is milled too: the same rim and two-stop shadow, never a flat slab", () => {
+  // (2026-11-12) Panels are FLAT (owner-approved): --shadow-milled is no shadow at rest; the composition is kept so a
+  // picked-up surface can still take the lift step.
+  it(".panel takes the shared rest step (flat) and a linked panel the lift step", () => {
     expect(shadowOf(".panel")[0]!.value).toBe("var(--shadow-milled)");
     expect(shadowOf(".panel-link:hover")[0]!.value).toBe("var(--shadow-milled-lift)");
   });
@@ -348,9 +358,9 @@ describe("index.css — the small-alarm-TEXT rust stays readable and stays rust,
     return { L, C: Math.hypot(A, B), H: ((Math.atan2(B, A) * 180) / Math.PI + 360) % 360 };
   };
 
-  it("clears AA (4.5:1) on the panel top and foot and on the platinum ground, top and foot", () => {
+  it("clears AA (4.5:1) on the panel, the ground and the raised neutral step (2026-11-12 neutrals)", () => {
     const ink = hexOf("--color-bad-ink");
-    for (const ground of ["#ffffff", "#fbfcfe", "#f7f9fc", "#eef3fa"]) {
+    for (const ground of ["#ffffff", "#fbfbfc", "#f6f7f9", "#f1f2f5"]) {
       expect(contrast(ink, ground), `${ink} on ${ground}`).toBeGreaterThanOrEqual(4.5);
     }
   });
