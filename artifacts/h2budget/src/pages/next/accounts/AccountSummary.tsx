@@ -74,7 +74,7 @@ export function AccountSummary({
         pending.failed ? (
           <p role="alert" className="text-label text-neutral-600" data-testid="summary-failed">
             {pending.what} did not load ·{" "}
-            <button type="button" onClick={pending.onRetry} className="font-semibold text-brand-navy underline">Try again</button>
+            <button type="button" onClick={pending.onRetry} className="font-medium text-brand-navy underline">Try again</button>
           </p>
         ) : (
           <div className="space-y-2" aria-busy="true" data-testid="summary-loading">

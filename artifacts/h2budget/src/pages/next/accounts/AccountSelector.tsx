@@ -31,17 +31,13 @@ export interface ChipBalance {
 }
 export type BalanceByRow = Record<string, ChipBalance | undefined>;
 
-const EDGE: Record<AccountEntry["identity"]["accent"], string> = {
-  checking: "border-acct-checking",
-  amex: "border-acct-amex",
-  card2: "border-acct-card2",
-  other: "border-acct-other",
-};
-
 const chipBase =
   "flex min-h-[44px] min-w-[11rem] flex-col justify-center gap-0.5 rounded-control border bg-white px-3 py-1.5 text-left " +
   "transition-colors duration-150 motion-reduce:transition-none hover:bg-platinum-1 " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 active:translate-y-px motion-reduce:active:translate-y-0";
+
+/** (2026-11-12) Selection is navy (a navy hairline and ring), identity is the account's dot in its chip — no 4 px edge. */
+const SELECTED = "border-brand-navy ring-1 ring-brand-navy";
 
 /** One chip per account. The selected one is `aria-current`; "All accounts" clears it. */
 export function AccountSelector({
@@ -53,9 +49,9 @@ export function AccountSelector({
         href="/next/accounts"
         aria-current={selectedId === null ? "page" : undefined}
         data-testid="account-chip-all"
-        className={cn(chipBase, "border-brand-line", selectedId === null && "ring-2 ring-brand-navy/40")}
+        className={cn(chipBase, selectedId === null ? SELECTED : "border-brand-line")}
       >
-        <span className="text-label font-semibold text-brand-navy">All accounts</span>
+        <span className="text-label font-semibold text-foreground">All accounts</span>
         <span className="text-micro text-neutral-500">Recent activity from every account</span>
       </Link>
       {entries.map((e) => {
@@ -70,7 +66,7 @@ export function AccountSelector({
             aria-current={sel ? "page" : undefined}
             data-testid={`account-chip-${e.plaidAccountId}`}
             data-accent={e.identity.accent}
-            className={cn(chipBase, "border-l-4", EDGE[e.identity.accent], sel && "ring-2 ring-brand-navy/40")}
+            className={cn(chipBase, sel ? SELECTED : "border-brand-line")}
           >
             <AccountChip identity={e.identity} />
             <span className="flex flex-wrap items-baseline gap-x-2 text-micro text-neutral-600">

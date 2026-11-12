@@ -7,8 +7,8 @@ import {
   getListPlaidLiabilityAccountsQueryKey,
   type AmexWeeklyPayoffCard,
 } from "@workspace/api-client-react";
-import { Page, emptyNote } from "@/ui";
-import { PageGrid, Panel, TxnTable, type TxnRow } from "@/components/next";
+import { emptyNote } from "@/ui";
+import { PageGrid, PageHeader, Panel, TxnTable, type TxnRow } from "@/components/next";
 import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
 import { displayAmount } from "@/lib/amountDisplay";
 import { txnRoute } from "@/lib/accountRoute";
@@ -198,7 +198,10 @@ export default function NextAccountsPage() {
 
   return (
     <div data-testid="page-next-accounts">
-      <Page title={selected ? selected.identity.label : "Accounts"} sub={selected ? undefined : "Every card and bank in one place"}>
+      {/* (2026-11-12) The shared page header: the account's name, or "Accounts". (Its identity dot is on its chip below.) */}
+      <PageHeader title={selected ? selected.identity.label : "Accounts"} />
+      {selected ? null : <p className="mt-1 text-label text-neutral-600">Every card and bank in one place</p>}
+      <div className="mt-4">
         <PageGrid>
           <div className="span-12 min-w-0">
             {isLoading ? (
@@ -206,7 +209,7 @@ export default function NextAccountsPage() {
             ) : !itemsKnown && itemsFailed ? (
               <p role="alert" className="text-body text-neutral-600" data-testid="accounts-failed">
                 Your linked accounts did not load.{" "}
-                <button type="button" onClick={() => void refetchItems()} className="text-label font-semibold text-brand-navy underline">
+                <button type="button" onClick={() => void refetchItems()} className="text-label font-medium text-brand-navy underline">
                   Try again
                 </button>
               </p>
@@ -218,13 +221,13 @@ export default function NextAccountsPage() {
             {entries.length && debtsFailed ? (
               <p role="alert" className="mt-2 text-label text-neutral-600" data-testid="accounts-debts-failed">
                 Debts did not load ·{" "}
-                <button type="button" onClick={() => void debtsQ.refetch()} className="font-semibold text-brand-navy underline">Try again</button>
+                <button type="button" onClick={() => void debtsQ.refetch()} className="font-medium text-brand-navy underline">Try again</button>
               </p>
             ) : null}
             {entries.length && bankFailed ? (
               <p role="alert" className="mt-2 text-label text-neutral-600" data-testid="accounts-bank-failed">
                 Your bank balance did not load ·{" "}
-                <button type="button" onClick={() => void refetchBank()} className="font-semibold text-brand-navy underline">Try again</button>
+                <button type="button" onClick={() => void refetchBank()} className="font-medium text-brand-navy underline">Try again</button>
               </p>
             ) : null}
             {selectedId && !selected && itemsKnown ? (
@@ -309,7 +312,7 @@ export default function NextAccountsPage() {
             <CombinedActivity entries={entries} entriesKnown={itemsKnown} />
           )}
         </PageGrid>
-      </Page>
+      </div>
     </div>
   );
 }
