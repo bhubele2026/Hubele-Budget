@@ -320,7 +320,7 @@ export function AutomationView({
           >
             <GitMerge className="h-4 w-4 shrink-0 text-brand-navy" />
             <div className="min-w-0 flex-1">
-              <div className="text-body font-semibold text-brand-navy">Mapping rules</div>
+              <div className="text-body font-medium text-foreground">Mapping rules</div>
               <div className="text-micro text-neutral-500">
                 Merchant → category, and what H2 learned from your corrections
               </div>
@@ -412,7 +412,7 @@ export function AutomationView({
                 aria-current={now ? "true" : undefined}
                 data-current={now ? "true" : undefined}
               >
-                <span className={now ? "text-body text-brand-navy" : "text-body text-neutral-400"}>{m.text}</span>
+                <span className={now ? "text-body text-foreground" : "text-body text-neutral-500"}>{m.text}</span>
                 {now && <StatusChip tone="on">Now</StatusChip>}
               </li>
             );

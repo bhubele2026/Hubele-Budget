@@ -147,7 +147,7 @@ export function ProposalCard({
       {note && (
         <p
           role={note.error ? "alert" : "status"}
-          className={note.error ? "text-body text-bad" : "text-body text-neutral-600"}
+          className={note.error ? "text-body text-bad-ink" : "text-body text-neutral-600"}
           data-testid="proposal-note"
         >
           {note.text}

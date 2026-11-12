@@ -67,7 +67,7 @@ import {
   Help,
   emptyNote,
 } from "@/ui";
-import { PageGrid, Panel } from "@/components/next";
+import { PageGrid, PageHeader, Panel } from "@/components/next";
 /**
  * The "this is what will happen" panel above Add / below an edit row. Quiet
  * platinum, NOT the alarm orange it used to wear: a preview of an action the
@@ -1771,17 +1771,17 @@ export default function MappingRulesPage() {
   //   - Rows keep dnd-kit's inline transform and never take `press`.
   return (
     <div className="space-y-4" data-testid="page-mapping-rules">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-display font-semibold text-brand-navy">
-          Mapping rules
-        </h1>
-        <Help>
-          A rule categorizes a transaction from its description. When more than
-          one matches, the highest priority wins. Categorizing a transaction by
-          hand teaches H2 the merchant, so its next charges are filed the same
-          way.
-        </Help>
-      </div>
+      <PageHeader
+        title="Mapping rules"
+        help={
+          <Help>
+            A rule categorizes a transaction from its description. When more than
+            one matches, the highest priority wins. Categorizing a transaction by
+            hand teaches H2 the merchant, so its next charges are filed the same
+            way.
+          </Help>
+        }
+      />
 
       <PageGrid>
         <Panel
@@ -1872,7 +1872,7 @@ export default function MappingRulesPage() {
                     past transaction
                     {addPreview.candidateCount === 1 ? "" : "s"} will move
                     into{" "}
-                    <span className="font-medium text-brand-navy">
+                    <span className="font-medium text-foreground">
                       {catById.get(categoryId)?.name ?? "the new category"}
                     </span>{" "}
                     when you add this rule.
@@ -1982,7 +1982,7 @@ export default function MappingRulesPage() {
                   {testRules.data.winningCategoryId ? (
                     <>
                       Winner:{" "}
-                      <span className="font-medium text-brand-navy">
+                      <span className="font-medium text-foreground">
                         {catById.get(testRules.data.winningCategoryId)?.name ??
                           "(unknown category)"}
                       </span>
@@ -2261,7 +2261,7 @@ export default function MappingRulesPage() {
                       return (
                         <section
                           key={group.key}
-                          className="overflow-hidden rounded-card bg-white ring-1 ring-brand-line"
+                          className="overflow-hidden rounded-control bg-white ring-1 ring-brand-line"
                           data-testid={`rule-category-card-${group.key}`}
                           data-collapsed={isCollapsed ? "true" : undefined}
                         >
@@ -2281,7 +2281,7 @@ export default function MappingRulesPage() {
                               <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400" />
                             )}
                             <span
-                              className="min-w-0 truncate text-body font-semibold text-brand-navy"
+                              className="min-w-0 truncate text-body font-semibold text-foreground"
                               data-testid={`rule-category-card-name-${group.key}`}
                             >
                               {group.name}
@@ -2444,7 +2444,7 @@ export default function MappingRulesPage() {
                                                 ? ""
                                                 : "s"}{" "}
                                               will move into{" "}
-                                              <span className="font-medium text-brand-navy">
+                                              <span className="font-medium text-foreground">
                                                 {catById.get(
                                                   editPreview.toCategoryId,
                                                 )?.name ?? "the new category"}
@@ -2522,7 +2522,7 @@ export default function MappingRulesPage() {
                     data-testid="rule-drag-overlay"
                   >
                     <GripVertical className="h-4 w-4 text-neutral-400" />
-                    <span className="rounded bg-platinum-3 px-2 py-0.5 font-mono text-micro text-brand-navy">
+                    <span className="rounded-[4px] bg-platinum-3 px-2 py-0.5 font-mono text-micro text-foreground">
                       {activeDragRule.pattern}
                     </span>
                     <span className={fieldLabel}>

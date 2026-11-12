@@ -164,7 +164,7 @@ function FieldBox({
       {children}
       {hint && !error ? <p className="text-micro text-neutral-500">{hint}</p> : null}
       {error ? (
-        <p className="text-micro text-bad" role="alert">
+        <p className="text-micro text-bad-ink" role="alert">
           {error}
         </p>
       ) : null}
@@ -172,7 +172,7 @@ function FieldBox({
   );
 }
 
-const errLine = "text-micro text-bad";
+const errLine = "text-micro text-bad-ink";
 
 /**
  * ⭐ (F9) SETTINGS › MORNING TEXT — an opt-in text each morning. There is no
@@ -424,7 +424,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
           ))}
         </ul>
         {s.optedOutAt && (
-          <p className="border-t border-brand-line bg-bad-bg px-4 py-2.5 text-micro text-bad" data-testid="opted-out">
+          <p className="border-t border-brand-line bg-bad-bg px-4 py-2.5 text-micro text-bad-ink" data-testid="opted-out">
             You opted out by text. Verify your number again to get the recap back.
           </p>
         )}
@@ -824,12 +824,12 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
                     {w.source}
                   </span>
                   {w.problem && (
-                    <span className="text-micro text-bad" data-testid="history-problem">
+                    <span className="text-micro text-bad-ink" data-testid="history-problem">
                       {w.problem}
                     </span>
                   )}
                   <details className="text-micro text-neutral-600">
-                    <summary className="cursor-pointer select-none font-semibold text-neutral-500 hover:text-brand-navy">
+                    <summary className="cursor-pointer select-none font-medium text-neutral-600 hover:text-foreground">
                       The text
                     </summary>
                     <p className="mt-1 text-body text-brand-ink" data-testid="history-text">

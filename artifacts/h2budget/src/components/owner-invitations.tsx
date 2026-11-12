@@ -197,7 +197,7 @@ export function OwnerInvitationsSection() {
             {...form.register("email")}
           />
           {emailError ? (
-            <span className="text-micro text-bad" role="alert">
+            <span className="text-micro text-bad-ink" role="alert">
               {emailError}
             </span>
           ) : null}

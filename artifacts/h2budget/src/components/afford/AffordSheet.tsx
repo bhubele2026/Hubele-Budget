@@ -142,7 +142,7 @@ function Field({
       </label>
       {children}
       {error ? (
-        <p className="text-micro text-bad" role="alert">
+        <p className="text-micro text-bad-ink" role="alert">
           {error}
         </p>
       ) : null}

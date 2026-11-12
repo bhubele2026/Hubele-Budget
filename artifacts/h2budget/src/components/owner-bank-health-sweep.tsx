@@ -125,7 +125,7 @@ export function OwnerBankHealthSweepSection() {
                 <ul className="list-disc space-y-0.5 pl-5" data-testid="list-sweep-flagged-items">
                   {sample.map((item) => (
                     <li key={item.itemRowId} data-testid={`row-sweep-flagged-${item.itemRowId}`}>
-                      <span className="font-medium text-brand-navy">
+                      <span className="font-medium text-foreground">
                         {item.institutionName ?? "Unknown bank"}
                       </span>
                       <span className="text-neutral-500"> — item {item.itemId}</span>

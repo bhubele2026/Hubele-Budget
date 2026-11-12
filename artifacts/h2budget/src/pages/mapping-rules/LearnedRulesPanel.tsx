@@ -210,7 +210,7 @@ function LearnedRuleRow({
           <p
             className={cn(
               "flex min-w-0 items-center gap-2 text-body font-medium",
-              rule.disabled ? "text-neutral-400" : "text-brand-navy",
+              rule.disabled ? "text-neutral-400" : "text-foreground",
             )}
           >
             <span className="truncate" data-testid={`learned-rule-name-${rule.id}`}>
@@ -549,7 +549,7 @@ export function LearnedRulesPanel({
         How filing works and what the model may do:{" "}
         <Link
           href="/settings?tab=automation"
-          className="font-semibold text-brand-navy underline-offset-2 hover:underline"
+          className="font-medium text-brand-navy underline-offset-2 hover:underline"
         >
           Settings › Automation
         </Link>

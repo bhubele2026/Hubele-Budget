@@ -475,7 +475,7 @@ export function AskView({ m }: { m: AskModel }) {
             {failure && (
               <div
                 role="alert"
-                className="flex flex-wrap items-center gap-3 rounded-control bg-bad-bg px-3 py-2 text-body text-bad ring-1 ring-bad/15"
+                className="flex flex-wrap items-center gap-3 rounded-control bg-bad-bg px-3 py-2 text-body text-bad-ink ring-1 ring-bad/15"
                 data-testid="ask-failure"
               >
                 <span>{failure.message}</span>

@@ -760,7 +760,7 @@ export default function SettingsPage() {
                     )}
                     {item.lastSyncError && (
                       <div
-                        className="mt-1 text-micro text-bad"
+                        className="mt-1 text-micro text-bad-ink"
                         data-testid={`text-last-sync-error-${item.id}`}
                       >
                         {formatPlaidErrorForDisplay(item.lastSyncError)}
@@ -826,7 +826,7 @@ export default function SettingsPage() {
                         having to re-trigger it. Styled like lastSyncError. */}
                     {item.consentExpirationLastRefreshError && (
                       <div
-                        className="mt-1 text-micro text-bad"
+                        className="mt-1 text-micro text-bad-ink"
                         data-testid={`text-consent-refresh-error-${item.id}`}
                       >
                         Couldn't verify disconnect date:{" "}
@@ -983,7 +983,7 @@ export default function SettingsPage() {
           {(errors.weeklyAllowanceAmount ||
             errors.monthlyAllowanceAmount ||
             errors.unplannedAllowanceAmount) && (
-            <p className="mb-3 text-micro text-bad" data-testid="allowance-form-error">
+            <p className="mb-3 text-micro text-bad-ink" data-testid="allowance-form-error">
               Every allowance needs an amount.
             </p>
           )}
@@ -1099,7 +1099,7 @@ export default function SettingsPage() {
                   />
                   {trackerErrors[t.id] && (
                     <span
-                      className="text-micro text-bad"
+                      className="text-micro text-bad-ink"
                       data-testid={`tracker-value-error-${t.id}`}
                       title={trackerErrors[t.id] ?? undefined}
                     >
@@ -1148,7 +1148,7 @@ export default function SettingsPage() {
               Reset to defaults
             </button>
             {hasInvalidTracker && (
-              <span className="text-micro text-bad" data-testid="tracker-save-blocked">
+              <span className="text-micro text-bad-ink" data-testid="tracker-save-blocked">
                 Fix the invalid rule before saving.
               </span>
             )}

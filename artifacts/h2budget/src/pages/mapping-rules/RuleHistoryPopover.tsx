@@ -61,7 +61,7 @@ export function RuleHistoryPopover({
         className="w-80 p-3"
         data-testid={`rule-history-${ruleId}`}
       >
-        <p className="text-body font-semibold text-brand-navy">Rule history</p>
+        <p className="text-body font-semibold text-foreground">Rule history</p>
         <p className="mb-2 truncate font-mono text-micro text-neutral-500">{pattern}</p>
         {/* Mounted only while open, so the query never runs for a closed popover. */}
         <HistoryBody ruleId={ruleId} categoryName={categoryName} />

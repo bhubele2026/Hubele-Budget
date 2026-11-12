@@ -139,7 +139,7 @@ export function MemoryView({ memories, now }: { memories: MemoryRead; now?: Date
       <Panel title="What H2 remembers" span={12} variant={["static", "flush"]}>
         <p className={emptyNote} data-testid="memory-empty">
           H2 hasn't kept any notes yet. Tell it a preference in{" "}
-          <Link href="/ask" className="font-semibold text-brand-navy underline underline-offset-2">
+          <Link href="/ask" className="font-medium text-brand-navy underline underline-offset-2">
             Ask
           </Link>
           .
@@ -171,7 +171,7 @@ export function MemoryView({ memories, now }: { memories: MemoryRead; now?: Date
                   <Link
                     key={id}
                     href={refHref(id)}
-                    className="text-micro font-semibold text-brand-navy underline underline-offset-2"
+                    className="text-micro font-medium text-brand-navy underline underline-offset-2"
                     data-testid="memory-evidence"
                   >
                     {`Charge ${i + 1}`}
@@ -226,7 +226,7 @@ export function MemoryView({ memories, now }: { memories: MemoryRead; now?: Date
                 data-testid="memory-edit-input"
               />
               {error ? (
-                <span className="text-micro text-bad" role="alert">
+                <span className="text-micro text-bad-ink" role="alert">
                   {error}
                 </span>
               ) : (

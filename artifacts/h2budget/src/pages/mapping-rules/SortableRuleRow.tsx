@@ -193,7 +193,7 @@ export function SortableRuleRow({
             itself stretched the pill into a ~700px empty bar on a wide row,
             which read as a broken input rather than a pattern. */}
         <span className="min-w-0 sm:flex-[1_1_8rem]">
-          <span className="inline-block max-w-full truncate rounded bg-platinum-3 px-2 py-0.5 align-middle font-mono text-micro text-brand-navy">
+          <span className="inline-block max-w-full truncate rounded-[4px] bg-platinum-3 px-2 py-0.5 align-middle font-mono text-micro text-foreground">
             {rule.pattern}
           </span>
         </span>

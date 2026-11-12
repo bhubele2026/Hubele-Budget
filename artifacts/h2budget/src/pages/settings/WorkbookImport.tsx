@@ -232,9 +232,9 @@ export function WorkbookImport() {
         {(stage.kind === "preview" || stage.kind === "importing") && (
           <section className="mx-4 mb-4 rounded-control px-3 py-3 ring-1 ring-brand-line" data-testid="import-preview" aria-labelledby="import-question">
             {stage.kind === "preview" && stage.notice && (
-              <p className="mb-2 text-micro font-semibold text-bad" data-testid="import-preview-notice">{stage.notice}</p>
+              <p className="mb-2 text-micro font-semibold text-bad-ink" data-testid="import-preview-notice">{stage.notice}</p>
             )}
-            <h3 id="import-question" ref={questionRef} tabIndex={-1} className="text-body font-semibold text-brand-navy focus:outline-none" data-testid="import-question">
+            <h3 id="import-question" ref={questionRef} tabIndex={-1} className="text-body font-semibold text-foreground focus:outline-none" data-testid="import-question">
               {confirmQuestion(stage.preview)}
             </h3>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-label">
@@ -277,7 +277,7 @@ export function WorkbookImport() {
 
         {stage.kind === "invalid" && (
           <section className="mx-4 mb-4 rounded-control bg-bad-bg px-3 py-3 ring-1 ring-bad/15" data-testid="import-errors">
-            <p className="text-body font-semibold text-bad">{INVALID_TITLE}</p>
+            <p className="text-body font-semibold text-bad-ink">{INVALID_TITLE}</p>
             <ul className="mt-1 list-disc pl-5 text-label text-neutral-700">
               {stage.problems.map((p, i) => (
                 <li key={i}>{p}</li>
@@ -288,13 +288,13 @@ export function WorkbookImport() {
         )}
 
         {stage.kind === "failed" && (
-          <p className="mx-4 mb-4 text-label text-bad" data-testid="import-failed">{stage.message}</p>
+          <p className="mx-4 mb-4 text-label text-bad-ink" data-testid="import-failed">{stage.message}</p>
         )}
         {stage.kind === "done" && (
-          <p className="mx-4 mb-4 text-label font-semibold text-brand-navy" data-testid="import-result">{stage.line}</p>
+          <p className="mx-4 mb-4 text-label font-medium text-foreground" data-testid="import-result">{stage.line}</p>
         )}
         {restoredMsg && (
-          <p className="mx-4 mb-4 text-label font-semibold text-brand-navy" data-testid="restore-result">{restoredMsg}</p>
+          <p className="mx-4 mb-4 text-label font-medium text-foreground" data-testid="restore-result">{restoredMsg}</p>
         )}
       </div>
 
@@ -303,7 +303,7 @@ export function WorkbookImport() {
         {history.isLoading ? (
           <p className="mt-2 text-label text-neutral-600">Loading…</p>
         ) : history.isError && !history.data ? (
-          <p className="mt-2 text-label text-bad">History could not be read.</p>
+          <p className="mt-2 text-label text-bad-ink">History could not be read.</p>
         ) : items.length === 0 ? (
           <p className="mt-2 text-label text-neutral-600" data-testid="import-history-empty">No imports yet.</p>
         ) : (
@@ -334,13 +334,13 @@ export function WorkbookImport() {
 
         {restore?.kind === "checking" && <p className="mt-2 text-label text-neutral-600">Checking…</p>}
         {restore?.kind === "failed" && (
-          <p className="mt-2 text-label text-bad" data-testid="restore-failed">{restore.message}</p>
+          <p className="mt-2 text-label text-bad-ink" data-testid="restore-failed">{restore.message}</p>
         )}
         {restore?.kind === "check" && (
           <section className="mt-2 rounded-control px-3 py-3 ring-1 ring-brand-line" data-testid="restore-preview" aria-labelledby="restore-question">
             {restore.check.status === "ready" ? (
               <>
-                <h4 id="restore-question" ref={restoreRef} tabIndex={-1} className="text-body font-semibold text-brand-navy focus:outline-none">
+                <h4 id="restore-question" ref={restoreRef} tabIndex={-1} className="text-body font-semibold text-foreground focus:outline-none">
                   {RESTORE_QUESTION}
                 </h4>
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-label">
@@ -355,12 +355,12 @@ export function WorkbookImport() {
                 </dl>
               </>
             ) : (
-              <h4 id="restore-question" ref={restoreRef} tabIndex={-1} className="text-body font-semibold text-bad focus:outline-none" data-testid="restore-blocked">
+              <h4 id="restore-question" ref={restoreRef} tabIndex={-1} className="text-body font-semibold text-bad-ink focus:outline-none" data-testid="restore-blocked">
                 {restore.check.reason}
               </h4>
             )}
             {restore.error && (
-              <p className="mt-2 text-label text-bad" data-testid="restore-error">{restore.error}</p>
+              <p className="mt-2 text-label text-bad-ink" data-testid="restore-error">{restore.error}</p>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
               {restore.check.status === "ready" && (

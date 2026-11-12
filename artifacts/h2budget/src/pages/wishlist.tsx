@@ -236,17 +236,17 @@ export default function WishlistPage() {
             <label className="flex flex-col gap-1">
               <span className={fieldLabel}>What is it</span>
               <input type="text" maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} className={input} data-testid="wish-title" />
-              {tried && errors.title && <span className="text-micro text-bad" role="alert">{errors.title}</span>}
+              {tried && errors.title && <span className="text-micro text-bad-ink" role="alert">{errors.title}</span>}
             </label>
             <label className="flex flex-col gap-1">
               <span className={fieldLabel}>How much (optional)</span>
               <input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={`${input} fig`} data-testid="wish-amount" />
-              {tried && errors.amount && <span className="text-micro text-bad" role="alert">{errors.amount}</span>}
+              {tried && errors.amount && <span className="text-micro text-bad-ink" role="alert">{errors.amount}</span>}
             </label>
             <label className="flex flex-col gap-1">
               <span className={fieldLabel}>Link (optional)</span>
               <input type="url" inputMode="url" maxLength={500} value={url} onChange={(e) => setUrl(e.target.value)} className={input} data-testid="wish-url" />
-              {tried && errors.url && <span className="text-micro text-bad" role="alert">{errors.url}</span>}
+              {tried && errors.url && <span className="text-micro text-bad-ink" role="alert">{errors.url}</span>}
             </label>
             <div className="flex gap-3">
               <button type="submit" className={btn} disabled={create.isPending} data-testid="wish-save">
