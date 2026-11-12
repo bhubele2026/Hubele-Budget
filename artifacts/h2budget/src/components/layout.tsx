@@ -39,6 +39,7 @@ import { badgeCount } from "@/lib/reviewQueue";
 import { HomeMark } from "@/components/home-mark";
 import { TabRibbon, TabUnderline, type RibbonTab } from "@/components/tab-ribbon";
 import { AccountMenu } from "@/components/account-menu";
+import { AppearanceButton } from "@/components/appearance-menu";
 import { Crumbs } from "@/ui";
 import {
   BAR_SECTIONS,
@@ -351,6 +352,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <MessageCircleQuestion className="h-4 w-4" aria-hidden />
                 <span className="hidden sm:inline">Ask</span>
               </Link>
+              {/* (Light and dark) Auto · Light · Dark · Time of day, beside Ask.
+                  On a phone the same four sit at the foot of the drawer. */}
+              <AppearanceButton className="hidden md:grid" />
               <AccountMenu />
             </div>
           </div>

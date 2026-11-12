@@ -1,6 +1,11 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { bootTheme } from "./lib/theme";
+
+// Light or dark, before the first render (index.html already put it on <html>
+// for the first paint; this takes over and follows the device and the clock).
+bootTheme();
 
 // (Self-heal) After a deploy the JS chunk filenames change; an already-open tab
 // still asks for an OLD chunk that now 404s ("Failed to fetch dynamically

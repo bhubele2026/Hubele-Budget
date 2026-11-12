@@ -6,6 +6,24 @@
     <title>H2 Budget — Family Finance</title>
     <meta name="description" content="A focused budgeting app for the Hubele family — track spending, plan bills, and stay ahead of debt." />
     <meta name="theme-color" content="#19315b" />
+    <!--
+      ⭐ NO FLASH. Dark is on <html> before the first paint: this runs ahead of
+      the stylesheet and the boot shell below. It is a tiny copy of THE RULE in
+      src/lib/theme.ts (resolveTheme): the remembered pick ("h2:appearance"),
+      then the device's setting, then the clock (dark 7 PM to 7 AM).
+      ⚠️ src/lib/theme.test.ts runs THIS script against resolveTheme for every
+      pick × device × hour. Change the rule in both places or that test fails.
+    -->
+    <script id="theme-boot">
+      (function () {
+        var a = null;
+        try { a = localStorage.getItem("h2:appearance"); } catch (e) {}
+        var h = new Date().getHours(), night = h >= 19 || h < 7;
+        var q = function (s) { try { return matchMedia("(prefers-color-scheme: " + s + ")").matches; } catch (e) { return false; } };
+        var dark = a === "dark" ? true : a === "light" ? false : a === "time" ? night : q("dark") ? true : q("light") ? false : night;
+        if (dark) document.documentElement.setAttribute("data-theme", "dark");
+      })();
+    </script>
     <style>
       /* ⭐ THE PRE-HYDRATION SHELL — the app's first paint, and it needs ZERO
          JavaScript to happen.

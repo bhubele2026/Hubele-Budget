@@ -5539,10 +5539,26 @@ export interface WhatsNewReadReport {
     updates: WhatsNewReadReportUpdatesItem[];
 }
 /**
+ * The signed-in person's light/dark pick (kept per person in
+user_ui_preferences). auto = follow the device, and the clock where
+the device states no setting; time = the local clock alone (dark
+7 PM to 7 AM); light / dark = always that. A person with no pick is
+on auto. A view setting only: no figure depends on it.
+
+ */
+export type Appearance = (typeof Appearance)[keyof typeof Appearance];
+export declare const Appearance: {
+    readonly auto: "auto";
+    readonly light: "light";
+    readonly dark: "dark";
+    readonly time: "time";
+};
+/**
  * Per-user (not per-household) UI preferences for the signed-in user.
  */
 export interface UiPreferences {
     sidebarCollapsed?: boolean;
+    appearance?: Appearance;
     /** (PR14) The Chase list leaves out reviewed rows (the ledger's
   reviewed=false filter). A view setting only: no total or balance
   depends on it.
@@ -5591,6 +5607,7 @@ export interface MeResponse {
     /** @nullable */
     displayName?: string | null;
     isOwner: boolean;
+    appearance?: Appearance;
 }
 export type InvitationStatus = (typeof InvitationStatus)[keyof typeof InvitationStatus];
 export declare const InvitationStatus: {

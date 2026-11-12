@@ -171,4 +171,36 @@ describe("(#860) per-user UI preferences (sidebar collapse)", () => {
     expect("chaseHideReviewed" in (await getPrefs())).toBe(false);
     currentUser = USER_A;
   });
+  it("(Light and dark) saves `appearance` per person, answers it on /me, and a person with no pick is on auto", async () => {
+    await cleanup();
+    const me = async () => {
+      const res = await fetch(`${baseUrl}/me`);
+      expect(res.status).toBe(200);
+      return (await res.json()) as { appearance?: string };
+    };
+    currentUser = USER_A;
+    expect((await me()).appearance).toBe("auto");
+
+    for (const pick of ["dark", "time", "light", "auto"]) {
+      expect((await putPrefs({ appearance: pick })).appearance).toBe(pick);
+      expect((await me()).appearance).toBe(pick);
+    }
+    // A value that is not one of the four is refused, and nothing changes.
+    const bad = await fetch(`${baseUrl}/me/ui-preferences`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appearance: "sepia" }),
+    });
+    expect(bad.status).toBe(400);
+    expect((await me()).appearance).toBe("auto");
+
+    // It merges beside the other keys, and it is this person's alone.
+    await putPrefs({ chaseHideReviewed: true });
+    expect(await putPrefs({ appearance: "dark" })).toEqual({ appearance: "dark", chaseHideReviewed: true });
+    currentUser = USER_B;
+    expect((await me()).appearance).toBe("auto");
+    expect("appearance" in (await getPrefs())).toBe(false);
+    currentUser = USER_A;
+    expect((await me()).appearance).toBe("dark");
+  });
 });

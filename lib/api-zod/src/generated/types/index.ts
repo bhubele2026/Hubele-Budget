@@ -115,6 +115,7 @@ export * from "./amexWeeklyPayoffCard";
 export * from "./amexWeeklyPayoffCardBrand";
 export * from "./amexWeeklyPayoffCardCadence";
 export * from "./amexWeeklyPayoffCardTopMerchant";
+export * from "./appearance";
 export * from "./appliedCorrection";
 export * from "./appliedCorrections";
 export * from "./appliedCorrectionsItemsItem";

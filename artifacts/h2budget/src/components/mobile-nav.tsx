@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { HomeMark } from "@/components/home-mark";
 import { AccountMenu, VERSION_LABEL } from "@/components/account-menu";
+import { AppearanceRow } from "@/components/appearance-menu";
 import { BAR_SECTIONS, MORE_ITEMS, moreItemOf, tabsOf, type NavItem, type Section, type SectionTab } from "@/lib/navModel";
 import { SETTINGS_PAGES, openSettingsSub } from "@/lib/navSettings";
 
@@ -182,6 +183,11 @@ export default function MobileNav({
           </ul>
         </div>
       </nav>
+      {/* (Light and dark) The phone's Appearance choices; the top bar has no room for the button. */}
+      <div className="border-t border-chrome-rule px-4 py-3" data-testid="drawer-appearance">
+        <div className="pb-1.5 text-micro font-semibold uppercase tracking-wide text-chrome-ink-4">Appearance</div>
+        <AppearanceRow tone="chrome" />
+      </div>
       <div className="flex items-center justify-between gap-3 border-t border-chrome-rule p-4">
         <div className="flex min-w-0 flex-col">
           <span className="text-label font-medium text-chrome-ink-2">Account</span>

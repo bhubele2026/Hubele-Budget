@@ -52,6 +52,24 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-11.4",
+    headline: "Light, dark, or automatic",
+    items: [
+      {
+        title: "A dark look",
+        body: "H2 now has a dark look: black, with the same navy bar on top. Every page and chart has it. The light look is the same as before.",
+      },
+      {
+        title: "Four choices",
+        body: "Tap the half circle in the top bar, next to Ask. Pick Auto, Light, Dark, or Time of day. On a phone it is at the bottom of the menu. It is also in Settings, under Household.",
+      },
+      {
+        title: "Auto and Time of day",
+        body: "Auto follows your phone or computer. Time of day is dark from 7 PM to 7 AM. Your pick is yours alone and follows you to every device.",
+      },
+    ],
+  },
+  {
     id: "2026-11-11.3",
     headline: "Home says less",
     items: [

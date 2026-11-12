@@ -5,11 +5,13 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { Appearance } from "./appearance";
 /**
  * Per-user (not per-household) UI preferences for the signed-in user.
  */
 export interface UiPreferences {
     sidebarCollapsed?: boolean;
+    appearance?: Appearance;
     /** (PR14) The Chase list leaves out reviewed rows (the ledger's
   reviewed=false filter). A view setting only: no total or balance
   depends on it.

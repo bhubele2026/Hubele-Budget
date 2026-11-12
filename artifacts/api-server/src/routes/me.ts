@@ -36,8 +36,31 @@ router.get("/me", requireAuth, async (req, res): Promise<void> => {
     email,
     displayName,
     isOwner: isOwnerEmail(email),
+    appearance: await loadAppearance(actualUserId),
   });
 });
+
+const APPEARANCES = ["auto", "light", "dark", "time"] as const;
+type Appearance = (typeof APPEARANCES)[number];
+
+/**
+ * (Light and dark) The person's own pick, read from their UI preferences so it
+ * rides on /me (already fetched at app start; the web's open path must not
+ * import the ledger client that carries /me/ui-preferences). No pick, an
+ * unknown value or a failed read is "auto": /me never fails over a view setting.
+ */
+async function loadAppearance(userId: string): Promise<Appearance> {
+  try {
+    const [row] = await db
+      .select()
+      .from(userUiPreferencesTable)
+      .where(eq(userUiPreferencesTable.userId, userId));
+    const v = (row?.preferences as Record<string, unknown> | null)?.appearance;
+    return APPEARANCES.includes(v as Appearance) ? (v as Appearance) : "auto";
+  } catch {
+    return "auto";
+  }
+}
 
 // (#860) Per-USER UI preferences. Unlike /settings (household-owner
 // scoped), these are keyed by the signed-in user's Clerk id so two

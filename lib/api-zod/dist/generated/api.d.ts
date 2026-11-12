@@ -18707,16 +18707,19 @@ export declare const GetMeResponse: zod.ZodObject<{
     email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     displayName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     isOwner: zod.ZodBoolean;
+    appearance: zod.ZodOptional<zod.ZodEnum<["auto", "light", "dark", "time"]>>;
 }, "strip", zod.ZodTypeAny, {
     userId: string;
     isOwner: boolean;
     displayName?: string | null | undefined;
     email?: string | null | undefined;
+    appearance?: "time" | "auto" | "light" | "dark" | undefined;
 }, {
     userId: string;
     isOwner: boolean;
     displayName?: string | null | undefined;
     email?: string | null | undefined;
+    appearance?: "time" | "auto" | "light" | "dark" | undefined;
 }>;
 /**
  * @summary Returns the signed-in user's per-user UI preferences.
@@ -18724,17 +18727,20 @@ export declare const GetMeResponse: zod.ZodObject<{
 export declare const getUiPreferencesResponseWhatsNewSeenMax = 32;
 export declare const GetUiPreferencesResponse: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+    appearance: zod.ZodOptional<zod.ZodEnum<["auto", "light", "dark", "time"]>>;
     chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
     whatsNewSeen: zod.ZodOptional<zod.ZodString>;
     autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
     modelAutoCategorize: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
+    appearance?: "time" | "auto" | "light" | "dark" | undefined;
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
     autoCategorize?: boolean | undefined;
     modelAutoCategorize?: boolean | undefined;
 }, {
+    appearance?: "time" | "auto" | "light" | "dark" | undefined;
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
@@ -18747,17 +18753,20 @@ export declare const GetUiPreferencesResponse: zod.ZodObject<{
 export declare const updateUiPreferencesBodyWhatsNewSeenMax = 32;
 export declare const UpdateUiPreferencesBody: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+    appearance: zod.ZodOptional<zod.ZodEnum<["auto", "light", "dark", "time"]>>;
     chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
     whatsNewSeen: zod.ZodOptional<zod.ZodString>;
     autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
     modelAutoCategorize: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
+    appearance?: "time" | "auto" | "light" | "dark" | undefined;
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
     autoCategorize?: boolean | undefined;
     modelAutoCategorize?: boolean | undefined;
 }, {
+    appearance?: "time" | "auto" | "light" | "dark" | undefined;
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
@@ -18767,17 +18776,20 @@ export declare const UpdateUiPreferencesBody: zod.ZodObject<{
 export declare const updateUiPreferencesResponseWhatsNewSeenMax = 32;
 export declare const UpdateUiPreferencesResponse: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+    appearance: zod.ZodOptional<zod.ZodEnum<["auto", "light", "dark", "time"]>>;
     chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
     whatsNewSeen: zod.ZodOptional<zod.ZodString>;
     autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
     modelAutoCategorize: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
+    appearance?: "time" | "auto" | "light" | "dark" | undefined;
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
     autoCategorize?: boolean | undefined;
     modelAutoCategorize?: boolean | undefined;
 }, {
+    appearance?: "time" | "auto" | "light" | "dark" | undefined;
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
@@ -37792,7 +37804,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
             };
         }>;
     }, "strip", zod.ZodTypeAny, {
-        mode: "off" | "suggest" | "auto";
+        mode: "off" | "auto" | "suggest";
         verified: number;
         unreviewed: number;
         eligible: boolean;
@@ -37815,7 +37827,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
             };
         };
     }, {
-        mode: "off" | "suggest" | "auto";
+        mode: "off" | "auto" | "suggest";
         verified: number;
         unreviewed: number;
         eligible: boolean;
@@ -37863,7 +37875,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         undoable: boolean;
         transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
-        band: "queue" | "provisional" | "auto";
+        band: "queue" | "auto" | "provisional";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
     }, {
@@ -37877,7 +37889,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         undoable: boolean;
         transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
-        band: "queue" | "provisional" | "auto";
+        band: "queue" | "auto" | "provisional";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
     }>, "many">;
@@ -37935,7 +37947,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         configured: boolean;
     };
     model: {
-        mode: "off" | "suggest" | "auto";
+        mode: "off" | "auto" | "suggest";
         verified: number;
         unreviewed: number;
         eligible: boolean;
@@ -37978,7 +37990,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         undoable: boolean;
         transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
-        band: "queue" | "provisional" | "auto";
+        band: "queue" | "auto" | "provisional";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
     }[];
@@ -38003,7 +38015,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         configured: boolean;
     };
     model: {
-        mode: "off" | "suggest" | "auto";
+        mode: "off" | "auto" | "suggest";
         verified: number;
         unreviewed: number;
         eligible: boolean;
@@ -38046,7 +38058,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         undoable: boolean;
         transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
-        band: "queue" | "provisional" | "auto";
+        band: "queue" | "auto" | "provisional";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
     }[];
@@ -38178,7 +38190,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
             };
         }>;
     }, "strip", zod.ZodTypeAny, {
-        mode: "off" | "suggest" | "auto";
+        mode: "off" | "auto" | "suggest";
         verified: number;
         unreviewed: number;
         eligible: boolean;
@@ -38201,7 +38213,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
             };
         };
     }, {
-        mode: "off" | "suggest" | "auto";
+        mode: "off" | "auto" | "suggest";
         verified: number;
         unreviewed: number;
         eligible: boolean;
@@ -38249,7 +38261,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         undoable: boolean;
         transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
-        band: "queue" | "provisional" | "auto";
+        band: "queue" | "auto" | "provisional";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
     }, {
@@ -38263,7 +38275,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         undoable: boolean;
         transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
-        band: "queue" | "provisional" | "auto";
+        band: "queue" | "auto" | "provisional";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
     }>, "many">;
@@ -38321,7 +38333,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         configured: boolean;
     };
     model: {
-        mode: "off" | "suggest" | "auto";
+        mode: "off" | "auto" | "suggest";
         verified: number;
         unreviewed: number;
         eligible: boolean;
@@ -38364,7 +38376,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         undoable: boolean;
         transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
-        band: "queue" | "provisional" | "auto";
+        band: "queue" | "auto" | "provisional";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
     }[];
@@ -38389,7 +38401,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         configured: boolean;
     };
     model: {
-        mode: "off" | "suggest" | "auto";
+        mode: "off" | "auto" | "suggest";
         verified: number;
         unreviewed: number;
         eligible: boolean;
@@ -38432,7 +38444,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         undoable: boolean;
         transactionId: string;
         resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
-        band: "queue" | "provisional" | "auto";
+        band: "queue" | "auto" | "provisional";
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
     }[];
@@ -38899,7 +38911,7 @@ export declare const ListCategoryDecisionsResponseItem: zod.ZodObject<{
     transactionId: string;
     confidence: number;
     resolution: string | null;
-    band: "queue" | "provisional" | "auto";
+    band: "queue" | "auto" | "provisional";
     explanation: string;
 }, {
     id: string;
@@ -38911,7 +38923,7 @@ export declare const ListCategoryDecisionsResponseItem: zod.ZodObject<{
     transactionId: string;
     confidence: number;
     resolution: string | null;
-    band: "queue" | "provisional" | "auto";
+    band: "queue" | "auto" | "provisional";
     explanation: string;
 }>;
 export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
@@ -38936,7 +38948,7 @@ export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
     transactionId: string;
     confidence: number;
     resolution: string | null;
-    band: "queue" | "provisional" | "auto";
+    band: "queue" | "auto" | "provisional";
     explanation: string;
 }, {
     id: string;
@@ -38948,7 +38960,7 @@ export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
     transactionId: string;
     confidence: number;
     resolution: string | null;
-    band: "queue" | "provisional" | "auto";
+    band: "queue" | "auto" | "provisional";
     explanation: string;
 }>, "many">;
 /**

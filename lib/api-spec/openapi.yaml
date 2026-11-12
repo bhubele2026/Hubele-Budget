@@ -9086,6 +9086,8 @@ components:
       description: Per-user (not per-household) UI preferences for the signed-in user.
       properties:
         sidebarCollapsed: { type: boolean }
+        appearance:
+          $ref: "#/components/schemas/Appearance"
         chaseHideReviewed:
           type: boolean
           description: |
@@ -9140,6 +9142,18 @@ components:
         email: { type: ["string", "null"] }
         displayName: { type: ["string", "null"] }
         isOwner: { type: boolean }
+        appearance:
+          $ref: "#/components/schemas/Appearance"
+
+    Appearance:
+      type: string
+      enum: [auto, light, dark, time]
+      description: |
+        The signed-in person's light/dark pick (kept per person in
+        user_ui_preferences). auto = follow the device, and the clock where
+        the device states no setting; time = the local clock alone (dark
+        7 PM to 7 AM); light / dark = always that. A person with no pick is
+        on auto. A view setting only: no figure depends on it.
 
     Invitation:
       type: object

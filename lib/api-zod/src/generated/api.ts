@@ -8821,6 +8821,12 @@ export const GetMeResponse = zod.object({
   email: zod.string().nullish(),
   displayName: zod.string().nullish(),
   isOwner: zod.boolean(),
+  appearance: zod
+    .enum(["auto", "light", "dark", "time"])
+    .optional()
+    .describe(
+      "The signed-in person's light\/dark pick (kept per person in\nuser_ui_preferences). auto = follow the device, and the clock where\nthe device states no setting; time = the local clock alone (dark\n7 PM to 7 AM); light \/ dark = always that. A person with no pick is\non auto. A view setting only: no figure depends on it.\n",
+    ),
 });
 
 /**
@@ -8831,6 +8837,12 @@ export const getUiPreferencesResponseWhatsNewSeenMax = 32;
 export const GetUiPreferencesResponse = zod
   .object({
     sidebarCollapsed: zod.boolean().optional(),
+    appearance: zod
+      .enum(["auto", "light", "dark", "time"])
+      .optional()
+      .describe(
+        "The signed-in person's light\/dark pick (kept per person in\nuser_ui_preferences). auto = follow the device, and the clock where\nthe device states no setting; time = the local clock alone (dark\n7 PM to 7 AM); light \/ dark = always that. A person with no pick is\non auto. A view setting only: no figure depends on it.\n",
+      ),
     chaseHideReviewed: zod
       .boolean()
       .optional()
@@ -8865,6 +8877,12 @@ export const updateUiPreferencesBodyWhatsNewSeenMax = 32;
 export const UpdateUiPreferencesBody = zod
   .object({
     sidebarCollapsed: zod.boolean().optional(),
+    appearance: zod
+      .enum(["auto", "light", "dark", "time"])
+      .optional()
+      .describe(
+        "The signed-in person's light\/dark pick (kept per person in\nuser_ui_preferences). auto = follow the device, and the clock where\nthe device states no setting; time = the local clock alone (dark\n7 PM to 7 AM); light \/ dark = always that. A person with no pick is\non auto. A view setting only: no figure depends on it.\n",
+      ),
     chaseHideReviewed: zod
       .boolean()
       .optional()
@@ -8896,6 +8914,12 @@ export const updateUiPreferencesResponseWhatsNewSeenMax = 32;
 export const UpdateUiPreferencesResponse = zod
   .object({
     sidebarCollapsed: zod.boolean().optional(),
+    appearance: zod
+      .enum(["auto", "light", "dark", "time"])
+      .optional()
+      .describe(
+        "The signed-in person's light\/dark pick (kept per person in\nuser_ui_preferences). auto = follow the device, and the clock where\nthe device states no setting; time = the local clock alone (dark\n7 PM to 7 AM); light \/ dark = always that. A person with no pick is\non auto. A view setting only: no figure depends on it.\n",
+      ),
     chaseHideReviewed: zod
       .boolean()
       .optional()

@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { Appearance } from "./appearance";
 export interface MeResponse {
     userId: string;
     /** @nullable */
@@ -12,5 +13,6 @@ export interface MeResponse {
     /** @nullable */
     displayName?: string | null;
     isOwner: boolean;
+    appearance?: Appearance;
 }
 //# sourceMappingURL=meResponse.d.ts.map

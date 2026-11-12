@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Fragment, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   Switch,
   Route,
@@ -31,6 +31,7 @@ import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { onWriteSuccess } from "@/lib/mutationInvalidation";
 import { recordDataAsOf, resetDataAsOf } from "@/lib/dataAsOf";
 import { useRefetchMoneyOnReturn } from "@/hooks/useRefetchMoneyOnReturn";
+import { confirmAppearance, scrollBeforeThemeChange, useTheme, writePageScroll } from "@/lib/theme";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -453,6 +454,35 @@ function RouteFallback() {
 // answered during this render".
 const HAD_AUTH_HINT = typeof window !== "undefined" && readAuthHint();
 
+/**
+ * ⭐ (Light and dark) THE OPEN PAGE RE-MOUNTS ONCE WHEN THE THEME CHANGES.
+ * Charts take their colours from JS at draw time (`lib/chartTokens.ts`), so a
+ * page that stayed mounted would keep the old inks. The shell around it (the
+ * top bar and its Appearance menu) stays mounted, and so does the `.page-in`
+ * wrapper, so no page entrance replays. The page is put back where it was
+ * scrolled.
+ */
+function ThemeRepaint({ children }: { children: ReactNode }) {
+  const theme = useTheme();
+  const first = useRef(true);
+  useLayoutEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const y = scrollBeforeThemeChange();
+    if (y <= 0) return;
+    let tries = 0;
+    let raf = 0;
+    const put = () => {
+      if (writePageScroll(y) > 1 && ++tries < 60) raf = requestAnimationFrame(put);
+    };
+    put();
+    return () => cancelAnimationFrame(raf);
+  }, [theme]);
+  return <Fragment key={theme}>{children}</Fragment>;
+}
+
 function ProtectedShell() {
   const [location] = useLocation();
   const { isLoaded, isSignedIn } = useAuth();
@@ -504,7 +534,10 @@ function ProtectedShell() {
   useEffect(() => {
     if (!meKnown) return;
     void queryClient
-      .prefetchQuery({ queryKey: getGetMeQueryKey(), queryFn: () => getMe(), staleTime: 30 * 60_000, retry: false })
+      .fetchQuery({ queryKey: getGetMeQueryKey(), queryFn: () => getMe(), staleTime: 30 * 60_000, retry: false })
+      // (Light and dark) The person's saved pick rides on /me; the browser's
+      // memory painted first, the server's word settles it.
+      .then((me) => confirmAppearance(me?.appearance))
       .catch(() => {
         /* a 401 before Clerk refreshes the cookie is asked again with the rest */
       });
@@ -540,6 +573,7 @@ function ProtectedShell() {
 
   return (
     <AppLayout>
+          <ThemeRepaint>
           <PageErrorBoundary resetKey={location}>
           <Suspense fallback={<RouteFallback />}>
           <Switch>
@@ -600,6 +634,7 @@ function ProtectedShell() {
           </Switch>
           </Suspense>
           </PageErrorBoundary>
+          </ThemeRepaint>
     </AppLayout>
   );
 }

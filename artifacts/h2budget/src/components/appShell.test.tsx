@@ -107,6 +107,10 @@ vi.mock("@/components/ui/dropdown-menu", () => {
     DropdownMenuTrigger: Passthrough,
     DropdownMenuContent: Passthrough,
     DropdownMenuItem: Passthrough,
+    // (Light and dark) The Appearance menu's parts, rendered the same way.
+    DropdownMenuLabel: Passthrough,
+    DropdownMenuRadioGroup: Passthrough,
+    DropdownMenuRadioItem: Passthrough,
   };
 });
 
@@ -917,7 +921,7 @@ describe("(C12) Settings' sub-pages, the account menu and the chrome tokens", ()
   });
 
   it("the chrome is drawn on tokens: no white/NN, rgba() or hex literal in the header, ribbon or drawer", () => {
-    for (const file of ["layout.tsx", "tab-ribbon.tsx", "account-menu.tsx", "mobile-nav.tsx", "home-mark.tsx"]) {
+    for (const file of ["layout.tsx", "tab-ribbon.tsx", "account-menu.tsx", "mobile-nav.tsx", "home-mark.tsx", "appearance-menu.tsx"]) {
       const code = readFileSync(join(import.meta.dirname, file), "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/(^|[^:])\/\/.*$/gm, "$1");

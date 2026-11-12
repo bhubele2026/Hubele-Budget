@@ -100,6 +100,7 @@ import {
   importMemoryTab,
 } from "./settings/settingsTabs";
 import { TabSkeleton } from "./settings/parts";
+import { AppearanceRow } from "@/components/appearance-menu";
 import { WorkbookImport } from "./settings/WorkbookImport";
 
 // (C8) The fold-in tabs are their own lazy chunks (hooks from the `features`
@@ -1154,6 +1155,18 @@ export default function SettingsPage() {
           </div>
         </div>
               </Panel>
+        {/* (Light and dark) Each person's own pick; the same four as the top bar's button. */}
+        <Panel
+          title="Appearance"
+          span={12}
+          variant={["static", "flush"]}
+          data-testid="panel-appearance"
+        >
+          <div className="space-y-2 p-4">
+            <p className="text-body text-neutral-600">How H2 looks for you, on every device you sign in on.</p>
+            <AppearanceRow tone="page" />
+          </div>
+        </Panel>
     </PageGrid>
   );
 
