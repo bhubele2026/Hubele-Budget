@@ -599,6 +599,8 @@ type Spine = {
     unresolvedWeek: string;
     provisional: boolean;
     remainingWeekKnown: string | null;
+    weekCap: string | null;
+    weekForecastAmount: string | null;
   };
   monthAllowance: {
     plan: string | null;
@@ -1261,7 +1263,15 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(spine.position.unresolvedWeek).toBe(pos.unresolvedWeek);
     expect(spine.position.provisional).toBe(pos.provisional);
     expect(spine.position.remainingWeekKnown).toBe(pos.remainingWeekKnown);
-    // The nine headline fields, (Q1) the four of the week contract, and nothing else.
+    // ⭐ (PERF) What Home's "Spent this week" measures against: the position's cap, and with no plan the forecast's own
+    // weekly amount — the earliest weekly hook reserve of the 90-day cash signal, when sized from its stored amount.
+    expect(spine.position.weekCap).toBe(pos.weekCap);
+    const cs = await get<{ hookReserves?: Array<{ hook: string; occurrenceDate: string; basis: string; storedAmount: string; amount: string }> }>(
+      "/forecast/cash-signal?horizonDays=90",
+    );
+    const weekly = (cs.hookReserves ?? []).filter((r) => r.hook === "weekly").sort((a, b) => (a.occurrenceDate < b.occurrenceDate ? -1 : 1))[0];
+    expect(spine.position.weekForecastAmount).toBe(weekly?.basis === "stored_amount" ? (weekly.storedAmount ?? weekly.amount) : null);
+    // The nine headline fields, (Q1) the four of the week contract, (PERF) the two week amounts, and nothing else.
     expect(Object.keys(spine.position).sort()).toEqual([
       "availableUntilPayday",
       "confidence",
@@ -1275,6 +1285,8 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
       "safeToSpendNow",
       "unresolvedWeek",
       "weekAdjustment",
+      "weekCap",
+      "weekForecastAmount",
       "withinPlan",
     ]);
 

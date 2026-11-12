@@ -11,15 +11,16 @@ import { memoryLocation } from "wouter/memory-location";
 // value below is invented.
 
 const h = vi.hoisted(() => ({
-  Q: {} as Record<string, unknown>,
   spine: { data: undefined as unknown, state: "loaded", refetch: vi.fn() } as { data: unknown; state: string; refetch: () => void; olderWords?: string | null },
 }));
-const ok = (data: unknown) => ({ data, isError: false, isLoading: false, refetch: () => {} });
-const loading = { data: undefined, isError: false, isLoading: true, refetch: () => {} };
-const get = (k: string) => (h.Q[k] ?? loading);
+// (PERF) The four boxes read nothing but the spine: no second request is asked for.
 vi.mock("./queries", () => ({
-  useMoneyPositionQ: () => get("pos"),
-  useCashSignalQ: () => get("cash"),
+  useMoneyPositionQ: () => {
+    throw new Error("Home's four numbers must not wait on /money/position");
+  },
+  useCashSignalQ: () => {
+    throw new Error("Home's four numbers must not wait on /forecast/cash-signal");
+  },
 }));
 vi.mock("@/hooks/useSpine", () => ({ useSpine: () => h.spine }));
 vi.mock("@/lib/routePrefetch", () => ({ prefetchRoute: () => {} }));
@@ -34,7 +35,7 @@ const bank = {
   account: { rowId: "c1", externalId: "p-c1", name: "Checking A", mask: "0001", subtype: "checking", via: "sole checking" },
 };
 const noBank = { ...bank, balance: "0.00", asOfDate: null, source: null, snapshot: null, sinceSnapshot: null, account: null };
-const position = { safeToSpendNow: "100.00", remainingWeek: "160.00", knownWeek: "40.00", unresolvedWeek: "0.00", provisional: false, remainingWeekKnown: "160.00", availableUntilPayday: "500.00", paydayDate: "2026-11-13", horizonKind: "payday", withinPlan: "yes", confidence: "firm", degraded: false, weekAdjustment: null };
+const position = { safeToSpendNow: "100.00", remainingWeek: "160.00", knownWeek: "40.00", unresolvedWeek: "0.00", provisional: false, remainingWeekKnown: "160.00", availableUntilPayday: "500.00", paydayDate: "2026-11-13", horizonKind: "payday", withinPlan: "yes", confidence: "firm", degraded: false, weekAdjustment: null, weekCap: "200.00", weekForecastAmount: null };
 const spine = (o: Record<string, unknown> = {}) => ({
   asOf: "2026-11-10T15:00:00Z", bank, spentMonth: 300, spentWeek: 40, nextBill: null, billsDueCount: 0,
   forecast: { lowPoint: "600.00", lowPointDate: "2026-11-16", runwayDays: null, cashBuffer: "500.00", status: "tight" },
@@ -57,7 +58,6 @@ const href = (id: string) => screen.getByTestId(`tile-${id}-link`).getAttribute(
 const BOXES = ["four-checking", "four-lowest", "four-spent", "four-debt"];
 
 beforeEach(() => {
-  h.Q = { pos: ok({ weekCap: "200.00" }), cash: ok({ hookReserves: [] }) };
   h.spine = { data: undefined, state: "loaded", refetch: vi.fn() };
 });
 afterEach(() => cleanup());
@@ -183,8 +183,7 @@ const fill = (id: string) => screen.getByTestId(id).querySelector(".bar-sweep") 
 
 describe("Spent this week", () => {
   it("under the plan: what is left (the spine's own remaining figure), and a navy bar of spent against the plan", () => {
-    h.Q.cash = ok({ hookReserves: [{ hook: "weekly", occurrenceDate: "2026-11-14", basis: "stored_amount", storedAmount: "150.00", amount: "150.00" }] });
-    setup();
+    setup({ position: { ...position, weekForecastAmount: "150.00" } });
     expect(text("four-spent-value")).toBe("$40.00");
     expect(text("four-spent-line")).toBe("$160 left of the $200 planned for this week"); // the last words are for a screen reader only
     expect(screen.getByTestId("four-spent-line").querySelector(".sr-only")!.textContent).toBe(" of the $200 planned for this week");
@@ -220,40 +219,28 @@ describe("Spent this week", () => {
     expect(screen.getByTestId("four-spent-line").firstChild!.textContent).toBe("$159.75 left");
   });
   it("no plan: left or over against the forecast's own weekly amount (the first weekly occurrence), with a bar", () => {
-    h.Q.pos = ok({ weekCap: null });
-    h.Q.cash = ok({ hookReserves: [
-      { hook: "weekly", occurrenceDate: "2026-11-21", basis: "stored_amount", storedAmount: "175.00", amount: "175.00" },
-      { hook: "weekly", occurrenceDate: "2026-11-14", basis: "stored_amount", storedAmount: "150.00", amount: "150.00" },
-      { hook: "monthly", occurrenceDate: "2026-11-12", basis: "stored_amount", storedAmount: "900.00", amount: "900.00" },
-    ] });
-    setup({ position: { ...position, remainingWeekKnown: null, remainingWeek: null, withinPlan: null } });
+    // The spine's weekForecastAmount: the earliest weekly reserve's stored amount (picked on the server, lib/cashSignal.ts).
+    const noPlan = { ...position, weekCap: null, weekForecastAmount: "150.00", remainingWeekKnown: null, remainingWeek: null, withinPlan: null };
+    setup({ position: noPlan });
     expect(text("four-spent-value")).toBe("$40.00");
     expect(screen.getByTestId("four-spent-line").firstChild!.textContent).toBe("$110 left");
     expect(screen.getByTestId("four-spent-line").querySelector(".sr-only")!.textContent).toBe(" of the $150 the forecast sets aside for this week");
     expect(screen.getByTestId("four-spent-bar")).not.toBeNull();
     cleanup();
-    setup({ position: { ...position, knownWeek: "626.66", remainingWeekKnown: null, remainingWeek: null, withinPlan: null } });
+    setup({ position: { ...noPlan, knownWeek: "626.66" } });
     expect(screen.getByTestId("four-spent-line").firstChild!.textContent).toBe("$476.66 over");
     expect(screen.getByTestId("four-spent-line").parentElement!.className).toContain("text-bad-ink");
   });
   it("no amount known (no plan, a forecast that holds a plan of $0, or nothing at all): no line and no bar", () => {
-    const noPlan = { position: { ...position, remainingWeekKnown: null, remainingWeek: null, withinPlan: null } };
-    h.Q.pos = ok({ weekCap: null });
-    h.Q.cash = ok({ hookReserves: [{ hook: "weekly", occurrenceDate: "2026-11-14", basis: "plan", amount: "0.00" }] });
-    setup(noPlan);
-    expect(screen.queryByTestId("four-spent-line")).toBeNull();
-    expect(screen.queryByTestId("four-spent-bar")).toBeNull();
-    cleanup();
-    h.Q.cash = ok({});
+    const noPlan = { position: { ...position, weekCap: null, weekForecastAmount: null, remainingWeekKnown: null, remainingWeek: null, withinPlan: null } };
     setup(noPlan);
     expect(screen.queryByTestId("four-spent-line")).toBeNull();
     expect(screen.queryByTestId("four-spent-bar")).toBeNull();
   });
-  it("the number, its line and its bar never wait on the plan or the forecast requests", () => {
-    h.Q = {};
+  it("the number, its line and its bar come from the spine alone (the queries above throw if asked)", () => {
     setup();
     expect(text("four-spent-value")).toBe("$40.00");
-    expect(text("four-spent-line")).toBe("$160 left");
+    expect(text("four-spent-line")).toBe("$160 left of the $200 planned for this week");
     expect(fill("four-spent-bar").style.width).toBe("20%");
   });
   it("a refresh that changes nothing keeps the same bar element: the sweep does not replay", () => {

@@ -246,6 +246,7 @@ export function createFakeHouseholdApi(opts: FakeHouseholdOptions) {
       safeToSpendNow: null, remainingWeek: wk()?.remaining ?? null, availableUntilPayday: null, paydayDate: null, horizonKind: "week_end",
       withinPlan: wk()?.within ?? null, confidence: "firm", degraded: false, weekAdjustment: null, knownWeek: wk()?.known ?? "0.00", unresolvedWeek: wk()?.unresolved ?? "0.00",
       provisional: wk()?.provisional ?? false, remainingWeekKnown: wk()?.remainingKnown ?? null,
+      weekCap: wk()?.cap ?? null, weekForecastAmount: null,
     },
     monthAllowance: { plan: null, actual: "0.00", status: "not_set", remaining: null, over: null },
     bankConfidence: {

@@ -20302,6 +20302,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
     }>;
     reviewCount: zod.ZodNumber;
     position: zod.ZodObject<{
+        weekCap: zod.ZodNullable<zod.ZodString>;
+        weekForecastAmount: zod.ZodNullable<zod.ZodString>;
         safeToSpendNow: zod.ZodNullable<zod.ZodString>;
         remainingWeek: zod.ZodNullable<zod.ZodString>;
         knownWeek: zod.ZodString;
@@ -20330,6 +20332,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         confidence: "firm" | "estimated";
         withinPlan: "tight" | "over" | "yes" | null;
+        weekCap: string | null;
+        weekForecastAmount: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
         knownWeek: string;
@@ -20348,6 +20352,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
     }, {
         confidence: "firm" | "estimated";
         withinPlan: "tight" | "over" | "yes" | null;
+        weekCap: string | null;
+        weekForecastAmount: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
         knownWeek: string;
@@ -20503,6 +20509,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
     position: {
         confidence: "firm" | "estimated";
         withinPlan: "tight" | "over" | "yes" | null;
+        weekCap: string | null;
+        weekForecastAmount: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
         knownWeek: string;
@@ -20604,6 +20612,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
     position: {
         confidence: "firm" | "estimated";
         withinPlan: "tight" | "over" | "yes" | null;
+        weekCap: string | null;
+        weekForecastAmount: string | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
         knownWeek: string;
@@ -20744,6 +20754,7 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     weekEnd: string;
     assumptions: string[];
     withinPlan: "tight" | "over" | "yes" | null;
+    weekCap: string | null;
     safeToSpendNow: string | null;
     remainingWeek: string | null;
     knownWeek: string;
@@ -20773,7 +20784,6 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     lowestUntilPaydayDate: string | null;
     committedUntilPayday: string;
     reservesHeld: string;
-    weekCap: string | null;
     spentWeekDiscretionary: string;
     needsClassificationWeek: string;
     unplannedWeek: string;
@@ -20794,6 +20804,7 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     weekEnd: string;
     assumptions: string[];
     withinPlan: "tight" | "over" | "yes" | null;
+    weekCap: string | null;
     safeToSpendNow: string | null;
     remainingWeek: string | null;
     knownWeek: string;
@@ -20823,7 +20834,6 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     lowestUntilPaydayDate: string | null;
     committedUntilPayday: string;
     reservesHeld: string;
-    weekCap: string | null;
     spentWeekDiscretionary: string;
     needsClassificationWeek: string;
     unplannedWeek: string;

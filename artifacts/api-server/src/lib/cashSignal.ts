@@ -716,6 +716,19 @@ export interface CashSignalHookReserve {
 
 const dollars = (cents: number): string => (cents / 100).toFixed(2);
 
+/**
+ * ⭐ (PERF) The forecast's own amount for this week's everyday spend when no weekly plan is set: the EARLIEST weekly
+ * hook occurrence, when it was sized from the item's stored amount (`basis: stored_amount`) — its stored amount.
+ * Null when that occurrence is sized from a plan, or there is none. Home's "Spent this week" measures against it
+ * with no plan; it used to pick it out of GET /forecast/cash-signal itself, by this same rule. A selection, not a sum.
+ */
+export function weekForecastAmountOf(reserves: readonly CashSignalHookReserve[] | undefined): string | null {
+  const weekly = (reserves ?? [])
+    .filter((r) => r.hook === "weekly")
+    .sort((a, b) => (a.occurrenceDate < b.occurrenceDate ? -1 : a.occurrenceDate > b.occurrenceDate ? 1 : 0))[0];
+  return weekly?.basis === "stored_amount" ? (weekly.storedAmount ?? weekly.amount) : null;
+}
+
 /** ⭐ (S2) The ledger's hook payoffs as `hookReserves`, by date then hook. Reads only. */
 export function hookReservesOf(payoffs: ReadonlyMap<string, HookPayoff>): CashSignalHookReserve[] {
   return [...payoffs.entries()]

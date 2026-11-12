@@ -6,7 +6,6 @@ import { weekStory } from "@/lib/weekFigures";
 import { useSpine } from "@/hooks/useSpine";
 import { cn } from "@/lib/utils";
 import { useReadyMark } from "@/lib/perfMarks";
-import { useCashSignalQ, useMoneyPositionQ } from "./queries";
 import { dayLabel, money, PanelError, weekdayLabel } from "./shared";
 import { Fig, FillBar, FOUR_BODY, FOUR_BOX, FOUR_BOX_BAR, FOUR_GRID, Skel, Tile } from "./tileParts";
 
@@ -15,8 +14,8 @@ import { Fig, FillBar, FOUR_BODY, FOUR_BOX, FOUR_BOX_BAR, FOUR_GRID, Skel, Tile 
  * words"). Checking · Lowest · Spent this week · Debt paid: each box is ONE big
  * number and at most one short line, no status chip, and one whole-card link to
  * the page the matching tile under "More" opens. Nothing is worked out here:
- * every figure is a field an existing tile already reads (the spine's, the
- * money position's weekly plan, the cash signal's weekly amount). Unknown and
+ * every figure is a spine field (PERF: the week's cap and the forecast's
+ * weekly amount ride on it too, from their owners), so the four boxes wait on one request. Unknown and
  * loading draw "—" or a skeleton, never $0.
  *
  * (Home says less, 2026-11-11) Spent this week and Debt paid each carry one
@@ -119,23 +118,18 @@ function SpentThisWeek({ s }: { s: Spine | undefined }) {
 }
 
 function SpentBody({ s }: { s: Spine }) {
-  const pos = useMoneyPositionQ();
-  // The same cash signal the header already asked for (same key, no new request).
-  const cash = useCashSignalQ(90);
-  const cap = pos.data?.weekCap ?? null;
-  // No plan: the forecast's own weekly amount, read exactly as the week tile's "Forecast assumes" line reads it.
-  const weekly = cap == null
-    ? (cash.data?.hookReserves ?? []).filter((r) => r.hook === "weekly").sort((a, b) => (a.occurrenceDate < b.occurrenceDate ? -1 : 1))[0]
-    : undefined;
-  const of = cap != null ? cap : weekly?.basis === "stored_amount" ? (weekly.storedAmount ?? weekly.amount) : null;
+  // ⭐ (PERF) Everything this box says comes from the spine: the week's cap (the money position's) and, with no
+  // plan, the forecast's own weekly amount — so Home's four numbers wait on one answer, not three.
+  const cap = s.position.weekCap ?? null;
+  const of = cap != null ? cap : (s.position.weekForecastAmount ?? null);
   // The plan against what counts toward it: the spine's own remaining figure (negative when over), said by sign.
   const w = weekStory(s.position);
   const known = Number(w.known);
   // No plan set: the same subtraction against the forecast's weekly amount, so an over week still says "over".
   const ofN = of != null ? Number(of) : NaN;
   const rem = w.planSet ? w.remainingKnown : Number.isFinite(ofN) ? Math.round((ofN - known) * 100) / 100 : null;
-  // (PERF-0) All four boxes real: the spine is here (this body mounts with it), and so is what the week's line reads.
-  useReadyMark("h2:home-numbers-ready", pos.data !== undefined && (cap != null || cash.data !== undefined));
+  // (PERF-0) All four boxes real: this body mounts with the spine, which now carries all it reads.
+  useReadyMark("h2:home-numbers-ready", true);
   return (
     <>
       <Fig big testid="four-spent-value" value={money(w.known)} />

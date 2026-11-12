@@ -14,6 +14,16 @@ import type { SpinePositionWithinPlan } from "./spinePositionWithinPlan";
  */
 export interface SpinePosition {
     /**
+     * (PERF) MoneyPosition.weekCap — this week's cap; null when none is set
+     * @nullable
+     */
+    weekCap: string | null;
+    /**
+     * (PERF) The forecast's own amount for this week with no plan: the earliest weekly hook reserve of GET /forecast/cash-signal?horizonDays=90 when it is sized from the stored amount (basis stored_amount), its storedAmount; null otherwise. What Home's "Spent this week" measures against when weekCap is null.
+     * @nullable
+     */
+    weekForecastAmount: string | null;
+    /**
      * MoneyPosition.safeToSpendNow
      * @nullable
      */

@@ -5274,8 +5274,15 @@ components:
         a debt balance or an amount owed.
       required:
         [safeToSpendNow, remainingWeek, availableUntilPayday, paydayDate, horizonKind, withinPlan, confidence, degraded, weekAdjustment,
-         knownWeek, unresolvedWeek, provisional, remainingWeekKnown]
+         knownWeek, unresolvedWeek, provisional, remainingWeekKnown, weekCap, weekForecastAmount]
       properties:
+        weekCap: { type: ["string", "null"], description: "(PERF) MoneyPosition.weekCap — this week's cap; null when none is set" }
+        weekForecastAmount:
+          type: ["string", "null"]
+          description: >-
+            (PERF) The forecast's own amount for this week with no plan: the earliest weekly hook reserve of
+            GET /forecast/cash-signal?horizonDays=90 when it is sized from the stored amount (basis stored_amount),
+            its storedAmount; null otherwise. What Home's "Spent this week" measures against when weekCap is null.
         safeToSpendNow: { type: ["string", "null"], description: MoneyPosition.safeToSpendNow }
         remainingWeek: { type: ["string", "null"], description: MoneyPosition.remainingWeek }
         knownWeek: { type: string, description: "(Q1) MoneyPosition.knownWeek — Counts toward plan" }

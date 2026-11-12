@@ -620,6 +620,8 @@ export function spine() {
       unresolvedWeek: "0.00",
       provisional: false,
       remainingWeekKnown: "212.00",
+      weekCap: "325.00",
+      weekForecastAmount: null,
       availableUntilPayday: "1240.00",
       paydayDate: "2026-11-13",
       horizonKind: "payday",

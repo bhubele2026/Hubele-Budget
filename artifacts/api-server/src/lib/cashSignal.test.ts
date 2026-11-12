@@ -371,3 +371,18 @@ describe("bankBalanceParts (WP1)", () => {
     expect(bankBalanceParts(ledger({ snapshotAt: null, snapshotISO: null }))).toEqual({ snapshot: null, sinceSnapshot: null });
   });
 });
+
+// ⭐ (PERF) The spine's weekForecastAmount: the earliest WEEKLY hook occurrence, when it is sized from the stored amount.
+import { weekForecastAmountOf } from "./cashSignal";
+describe("weekForecastAmountOf", () => {
+  const r = (hook: "weekly" | "monthly", occurrenceDate: string, basis: "plan" | "stored_amount", storedAmount: string) =>
+    ({ hook, occurrenceDate, basis, storedAmount, amount: storedAmount }) as never;
+  it("takes the earliest weekly occurrence's stored amount", () => {
+    expect(weekForecastAmountOf([r("weekly", "2026-11-21", "stored_amount", "175.00"), r("weekly", "2026-11-14", "stored_amount", "150.00"), r("monthly", "2026-11-12", "stored_amount", "900.00")])).toBe("150.00");
+  });
+  it("is null when that occurrence is sized from a plan, or there is none", () => {
+    expect(weekForecastAmountOf([r("weekly", "2026-11-14", "plan", "0.00"), r("weekly", "2026-11-21", "stored_amount", "150.00")])).toBeNull();
+    expect(weekForecastAmountOf([r("monthly", "2026-11-12", "stored_amount", "900.00")])).toBeNull();
+    expect(weekForecastAmountOf(undefined)).toBeNull();
+  });
+});

@@ -10,6 +10,7 @@ import {
   weekStartFor,
   weekEndFor,
   fmtISO,
+  weekForecastAmountOf,
 } from "../lib/cashSignal";
 import { buildMoneyPosition } from "../lib/moneyPosition";
 import { readMonthAllowance } from "../lib/periodBreakdown";
@@ -250,6 +251,12 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       unresolvedWeek: position.unresolvedWeek,
       provisional: position.provisional,
       remainingWeekKnown: position.remainingWeekKnown,
+      // ⭐ (PERF) What Home's "Spent this week" measures against, so the four numbers need nothing but this answer:
+      // the week's cap (GET /money/position .weekCap) and, with no plan, the forecast's own weekly amount
+      // (`weekForecastAmountOf` over THIS request's cash signal = GET /forecast/cash-signal?horizonDays=90
+      // .hookReserves). An allowance figure — never credit, a limit or a debt balance.
+      weekCap: position.weekCap,
+      weekForecastAmount: weekForecastAmountOf(signal.hookReserves),
     },
     // ⭐ (Q1) Can the bank balance be trusted? `readBankConfidence`
     // (lib/bankConfidence.ts): when the bank last told us anything, the bank's
