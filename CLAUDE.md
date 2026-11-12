@@ -102,38 +102,70 @@ to get the household out of debt; correctness and trust beat everything.
   fallback, not parity. Do not rewrite mature functionality to fit a layout;
   restyle it.
 
-### "H2 evolved" — the design system (`src/index.css`, `src/ui.tsx`, `src/lib/chartTokens.ts`)
+### The design system (`src/index.css`, `src/ui.tsx`, `src/lib/chartTokens.ts`)
 
-- **Identity:** navy `#19315b` / `#22406e` is the primary; orange `#f68d2e` is
-  the call to action and attention accent; `#e16d3e` means something is wrong.
-  **Account accents** identify money: checking/Chase in navy, the Amex card in
-  the teal-green token, other cards in the third token — on chips, panel edges,
-  chart series and the forecast legend. Colour reinforces identity; a label
-  always says it too. **Never brown.** No Tailwind palette utilities
-  (`red-*`, `green-*`, …), no arbitrary colour literals: add a token.
+⭐ **Businesslike pass (owner, 2026-11-12):** clean, mature financial software —
+precise, calm, easy to scan; important numbers get authority through hierarchy
+and alignment, not decoration. (Step 1 applied it to Home, Banking and the
+Chase register; other pages move in Step 2.)
+
+- **Identity:** navy `#19315b` / `#22406e` is the primary — solid buttons, the
+  selected tab and nav item, focus. **Orange is for WARNINGS and the H2 mark
+  only** (`#e16d3e` = something is wrong; `#f68d2e` = the mark's "2"); it is
+  never a call to action or a count. Text is dark charcoal (`#1d2330`, greys
+  `#4a5262` / `#6b7280`), not navy. **Account accents** identify money:
+  checking/Chase in navy, the Amex card in the teal-green token, other cards in
+  the third token — as a small DOT beside the account's name (chips, panel
+  titles, ledger rows), on chart series and the forecast legend; **never a 4 px
+  panel edge.** Colour reinforces identity; a label always says it too.
+  **Never brown.** No Tailwind palette utilities (`red-*`, `green-*`, …), no
+  arbitrary colour literals: add a token.
+- **Surfaces:** a neutral off-white ground (`#f6f7f9`); **flat white panels**
+  on a fine grey hairline (`#e3e6eb`), no gradient, no tinted shadow, no hover
+  stain; 8 px panels (`--radius-card`), 6 px controls (`--radius-control`), 4 px
+  status badges. Shadow only for what sits OVER the page (menus, dialogs, a
+  dragged row). Inside a panel, sections are split by hairlines — never a card
+  inside a card. The top bar is white with a hairline; the lit tab is navy
+  text over a 2 px navy underline (no glow).
+- **Shared shapes:** `PageHeader` (title · context · meta · actions, toolbar
+  row under it), `Toolbar` + `Segmented`/`segment()` (periods and filters as
+  one control), `SummaryGroup` (a screen's headline figures in one panel split
+  by hairlines), `StatusBadge` (pending · confirmed · suggested · unresolved ·
+  warning — the same look everywhere), `Panel`/`PanelSection`, and the one table
+  voice in `ui.tsx` (`th` 12 px medium grey, `td` 13 px on a hairline, `tdNum`
+  right-aligned figures). Keep functionality visible: fold, never hide.
 - **Layout:** a 12-column responsive grid — desktop two or three columns of
   panels, tablet two, phone one. Panels and cards are allowed and expected;
   so are multiple figures per screen. Useful detail beats whitespace: compact
   transaction tables (36–40 px rows), account chips with masked digits on every
   row, balances shown on account panels and the dashboard. The 720 px reading
   column and "one figure per screen" are gone.
-- **Charts:** large and readable — recharts in `vendor-charts`, lazy, never on
+- **Charts:** quiet furniture — 12 px Inter labels, a neutral horizontal grid,
+  hairline axes, 1.5–2 px lines, a flat faint tint under an area (no gradient
+  wash), a white tooltip panel with a fine border. Large and readable — recharts in `vendor-charts`, lazy, never on
   the landing path; readable axes and a legend; actual values visibly distinct
   from projections; hover on desktop, tap/scrub on phone; a selected day stays
   selected across refetches (key by date, never by index). `CssBars` for small
   inline bars. The chart animation must not restart on unrelated renders
   (`lib/chartAnim.ts` + the fingerprint memo in `ProjectedBalanceChart.tsx`).
-- **Type:** Inter Variable, the scale in `index.css` (`--text-hero` for the one
-  number a screen exists for, at most one per screen; `--text-kpi` for a tile's
-  headline figure where a screen has several, e.g. the dashboard's summary row);
-  mono tabular numerals for money and counts. A new step must also be taught to
-  `cn()` (`lib/utils.ts`), or tailwind-merge drops it beside a text colour.
-- **Motion:** purposeful and fast — horizon crossfades, stable chart updates,
-  tooltip and selection markers, expand/collapse, hover/focus/press feedback,
-  progress meters that count up only after data settles. Dials live in
-  `index.css :root`; keep `--anim-speed` equal to `SPEED` in `chartTokens.ts`;
-  `--ease-enter` for arriving, `--ease-move` for travelling. Never animate a
-  payment or an improvement that did not happen. Respect reduced motion.
+- **Type:** standard Inter Variable (no `cv11`/`ss01`), ONE family for labels,
+  body and balances. **Money and counts are Inter's tabular lining figures —
+  the `.fig` class (`--font-figure`) — never the mono face** (`font-mono` is for
+  genuinely code-like text only). Roles: page title `--text-display` 22/600 ·
+  section `--text-title` 15/600 · summary figure `--text-kpi` 22–28/600 · a
+  figure in a row `--text-body` 14/500 · table text `--text-label` 13/400 ·
+  labels `--text-micro` 12/500 · support 12/400 (never below 12 px). Body 400,
+  labels 500, headings 600; nothing heavier. `--text-hero` stays for the one
+  number a screen exists for, at most one per screen. Labels are sentence
+  case, not shouting caps. A new step must also be taught to `cn()`
+  (`lib/utils.ts`), or tailwind-merge drops it beside a text colour.
+- **Motion:** brief and functional only — **no entrance movement** (nothing
+  rises, fades in, staggers or draws itself on when a page opens; `rise()` and
+  the old entrance classes are inert). Kept: horizon reshapes, stable chart
+  updates, tooltip and selection markers, expand/collapse, sheet slides,
+  hover/focus/press feedback. Dials live in `index.css :root`; keep
+  `--anim-speed` equal to `SPEED` in `chartTokens.ts`. Never animate a payment
+  or an improvement that did not happen. Respect reduced motion.
 - **Voice:** calm, supportive, plain; the app is "H2", never "I"; no sass.
 
 ### Motion — reduced motion
@@ -158,8 +190,8 @@ in the DARK block at the foot of `index.css`. So:
 - **Never a `dark:` class, and never a colour literal on a page** (no hex, no
   `rgb()`, no `white/NN`). A page takes a token; a new need gets a new token
   with a light value and a dark one.
-- **Navy is a FILL or an INK, never both.** `bg-brand-navy` (the top bar, a
-  solid button, white text) stays navy in dark; `text-` / `ring-` /
+- **Navy is a FILL or an INK, never both.** `bg-brand-navy` (a solid button,
+  white text) stays navy in dark; `text-` / `ring-` /
   `border-brand-navy` turn light. A data bar is `bg-brand-fill`, a faint navy
   wash is `bg-brand-wash/NN`, a scrim is `bg-scrim`, ink on orange is
   `text-on-orange`, ink on the alarm fill is `text-on-bad`. `bg-white` is the
@@ -169,8 +201,10 @@ in the DARK block at the foot of `index.css`. So:
   `themed(() => ({ … }))`. A translucent fill goes through `washOf()`.
 - **Never brown:** no half-alpha orange or alarm colour over black. Orange is
   solid; tints behind alarm text are neutral.
-- **Light must not move.** A change to a token's light value is a design change
-  and needs the owner.
+- **Light must not move** without the owner. A change to a token's light value
+  is a design change and needs his OK. (The 2026-11-12 businesslike pass is
+  such an owner-approved change: neutral ground and greys, flat panels, white
+  top bar, charcoal text.)
 - **Run the guard after any colour or chart change:**
   `pnpm --filter @workspace/scripts exec tsx ./verify-theme.mts` (headless; an
   invented household; measures contrast, near-white grounds, navy chart lines,

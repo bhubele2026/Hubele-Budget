@@ -24,10 +24,11 @@
  *   4. EVERY PAGE, DARK, at 1440 and 390: (a) no near-white ground larger than 40×40; (b) no chart line left in the light navy;
  *      (c) every visible text node ≥ 4.5:1 against its real ground (3:1 for large text), found by walking up the ancestors and
  *      compositing translucent layers; (d) nothing brown (a dark, half-saturated orange ground or edge); (e) no sideways scroll.
- *      The navy top bar and the phone drawer are the SAME in light and dark by design, so they are measured and reported as INFO.
+ *      The top bar and the phone drawer (white in light, the card colour in dark since 2026-11-12) are measured and reported as INFO.
  *   5. THE OPEN STATES, dark: a dialog, a select list, the Ask thread, the home drawer, a chart tooltip, a toast, the phone
  *      drawer, the More menu, the Appearance menu: same scan.
- *   6. LIGHT is still light: no data-theme and the light token values on every page.
+ *   6. LIGHT is still light: no data-theme and the light token values on every page (the owner-approved 2026-11-12 neutrals:
+ *      ground #f6f7f9, card white, navy ink #19315b).
  *   7. Stills of every page (dark and light, 1440 and 390), every open state, and a short clip of Light → Dark → Auto → OUT.
  *
  * Prints PASS / FAIL / INFO lines, then "N/M passed", and exits 1 on any FAIL.
@@ -68,7 +69,7 @@ const DAY = NOW.slice(0, 10);
 const AT = (hhmm: string) => `${DAY}T${hhmm}:00-06:00`; // America/Chicago in November
 /** What may keep a near-white ground on a dark page. Extend with a selector, and the reason, when something is meant to. */
 const ALLOW_LIGHT = "img, picture, video, canvas, iframe, svg image";
-/** The navy chrome: the same in light and dark by design. Measured, reported as INFO. */
+/** The chrome (top bar, phone drawer). Measured, reported as INFO. */
 const CHROME = '[data-testid="app-header"], [role="dialog"]:has([data-testid="drawer-version"])';
 
 // ── RESULTS ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -642,7 +643,7 @@ try {
           await measure(o.page, tag);
         } else {
           const v = await o.page.evaluate(() => { const s = getComputedStyle(document.documentElement); return { white: s.getPropertyValue("--background-color-white").trim(), bg: s.getPropertyValue("--background").trim(), ink: s.getPropertyValue("--text-color-brand-navy").trim(), scheme: s.colorScheme, body: getComputedStyle(document.body).backgroundColor }; });
-          check(t === null && /^#fff(fff)?$/i.test(v.white) && v.bg === "216 45.5% 97.8%" && v.ink === "#19315b" && v.scheme === "light" && v.body === "rgb(247, 249, 252)", `6 · ${tag}: no data-theme, the light token values`, `data-theme=${fmt(t)} · ${JSON.stringify(v)}`);
+          check(t === null && /^#fff(fff)?$/i.test(v.white) && v.bg === "220 20% 97.1%" && v.ink === "#19315b" && v.scheme === "light" && v.body === "rgb(246, 247, 249)", `6 · ${tag}: no data-theme, the light token values`, `data-theme=${fmt(t)} · ${JSON.stringify(v)}`);
         }
         await growToFit(o.page, vp.w, vp.h);
         await o.page.screenshot({ path: join(OUT, scheme, `${vp.w}-${p.id}.png`) });
