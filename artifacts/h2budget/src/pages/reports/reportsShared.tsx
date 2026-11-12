@@ -59,7 +59,7 @@ import {
 } from "@/lib/reportsBalances";
 import { formatCurrency, cn } from "@/lib/utils";
 import { moneyFace } from "@/components/data-state";
-import { CHART } from "@/lib/chartTokens";
+import { AXIS_TICK as KIT_AXIS_TICK, CHART_INK, themed } from "@/lib/chartTokens";
 import { btnLink, emptyNote, errorBanner, fieldLabel, Help } from "@/ui";
 import { Panel, StatBlock, type PanelSpan } from "@/components/next";
 
@@ -185,7 +185,7 @@ export function useReportRange(): ReportRange {
 // --- Chart chrome ---------------------------------------------------------
 
 /** Axis ticks + legend, on the kit's type scale. One object, every chart. */
-export const AXIS_TICK = { fontSize: 11, fill: "#64748b" } as const;
+export const AXIS_TICK = KIT_AXIS_TICK;
 export const LEGEND_STYLE = { fontSize: 11 } as const;
 /** Money on an axis, short enough to fit a ~55px tick. */
 export const axisMoney = (v: number) => `$${Math.round(v).toLocaleString()}`;
@@ -196,22 +196,25 @@ export function tooltipMoney(v: number | string) {
 }
 
 /**
- * The kit's tooltip surface — a white card with the brand hairline, replacing
- * recharts' grey-outline default. Hex literals rather than `hsl(var(--…))`
- * because recharts writes these into an inline style on an element outside
- * the themed subtree.
+ * The kit's tooltip surface: a card with a hairline, replacing recharts'
+ * grey-outline default. Read from `CHART_INK` (light and dark) at draw time:
+ * recharts writes these into an inline style, so they cannot be classes.
  */
-export const tooltipStyle = {
-  background: "#ffffff",
-  border: `1px solid ${CHART.grid}`,
-  color: "#1a2233",
+export const tooltipStyle: {
+  background: string;
+  border: string;
+  color: string;
+  borderRadius: number;
+  fontSize: number;
+  boxShadow: string;
+} = themed(() => ({
+  background: CHART_INK.tooltipBg,
+  border: `1px solid ${CHART_INK.tooltipLine}`,
+  color: CHART_INK.tooltipInk,
   borderRadius: 8,
   fontSize: 12,
-  boxShadow: "0 6px 24px -8px rgb(25 49 91 / 0.18)",
-};
-
-/** Grid stroke, so no page hand-rolls one. */
-export const GRID_STROKE = CHART.grid;
+  boxShadow: CHART_INK.tooltipShadow,
+}));
 
 // --- Small visual building blocks -----------------------------------------
 

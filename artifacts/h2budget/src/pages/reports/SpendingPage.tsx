@@ -27,6 +27,9 @@ import {
   ANIM_AREA,
   ANIM_BAR,
   CHART,
+  CHART_INK,
+  themed,
+  washOf,
   NAVY_RAMP,
   animBegin,
   catColor,
@@ -57,7 +60,6 @@ import {
   Tooltip,
   Legend,
   AXIS_TICK,
-  GRID_STROKE,
   LEGEND_STYLE,
   ChartCard,
   PanelCard,
@@ -72,10 +74,10 @@ import {
 } from "./reportsShared";
 
 /** Reimbursable vs personal — two marks, two clearly opposed hexes. */
-export const REIMBURSABLE_SERIES = {
+export const REIMBURSABLE_SERIES = themed(() => ({
   outstanding: CHART.orange, // #f68d2e — money still owed back
   personal: CHART.navy, //      #19315b — the true personal cost
-} as const;
+} as const));
 
 export default function SpendingPage() {
   // Weekly-first: opens on the current week; Mo/Yr are opt-in.
@@ -584,7 +586,7 @@ function SpendingSection({
                     outerRadius="92%"
                     innerRadius="55%"
                     paddingAngle={2}
-                    stroke="#fff"
+                    stroke={CHART_INK.plate}
                     strokeWidth={2}
                   >
                     {/* Slots 0–7 are the real categories; the optional 9th
@@ -647,7 +649,7 @@ function SpendingSection({
                 innerRadius="55%"
                 outerRadius="90%"
                 paddingAngle={2}
-                stroke="#fff"
+                stroke={CHART_INK.plate}
                 strokeWidth={2}
               >
                 <Cell fill={REIMBURSABLE_SERIES.outstanding} />
@@ -730,7 +732,7 @@ function SpendingSection({
                   data={facts.dayOfWeek}
                   margin={{ top: 10, right: 16, bottom: 4, left: 0 }}
                 >
-                  <CartesianGrid stroke={GRID_STROKE} vertical={false} />
+                  <CartesianGrid stroke={CHART.grid} vertical={false} />
                   <XAxis
                     dataKey="label"
                     tick={AXIS_TICK}
@@ -903,7 +905,7 @@ function SpendingSection({
                       <Area {...ANIM_AREA} animationBegin={animBegin(i)} type="monotone"
                         dataKey="spend"
                         stroke={catColor(i)}
-                        fill={catColor(i)}
+                        fill={washOf(catColor(i))}
                         fillOpacity={0.2}
                         strokeWidth={1.5}
                       />
@@ -935,7 +937,7 @@ function SpendingSection({
               data={trendBarData}
               margin={{ top: 10, right: 16, bottom: 8, left: 0 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
               <XAxis dataKey="month" tick={AXIS_TICK} />
               <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
               <Tooltip

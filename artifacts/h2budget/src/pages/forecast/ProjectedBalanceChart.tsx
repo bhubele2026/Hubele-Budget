@@ -20,6 +20,8 @@ import {
   DRAW_MS,
   FOLLOW_MS,
   MARKER,
+  CHART_INK,
+  washOf,
   MORPH_MS,
   PULSE_MS,
   niceAxis,
@@ -711,7 +713,7 @@ export function ProjectedBalanceChart({
               key={`risk-b-${i}-${r.x1}`}
               x1={r.x1}
               x2={r.x2}
-              fill={CHART.orangeDeep}
+              fill={washOf(CHART.orangeDeep)}
               fillOpacity={0.1}
               stroke="none"
               ifOverflow="hidden"
@@ -723,7 +725,7 @@ export function ProjectedBalanceChart({
               key={`risk-n-${i}-${r.x1}`}
               x1={r.x1}
               x2={r.x2}
-              fill={CHART.orangeDeep}
+              fill={washOf(CHART.orangeDeep)}
               fillOpacity={0.24}
               stroke="none"
               ifOverflow="hidden"
@@ -847,7 +849,7 @@ export function ProjectedBalanceChart({
                 y={m.balance}
                 r={expanded ? 10 : 5}
                 fill={expanded ? "none" : CHART.navy}
-                stroke={expanded ? CHART.navy : "#ffffff"}
+                stroke={expanded ? CHART.navy : CHART_INK.plate}
                 strokeWidth={expanded ? 2 : 1.5}
                 ifOverflow="extendDomain"
                 isFront
@@ -914,7 +916,7 @@ export function ProjectedBalanceChart({
               y={first.balance}
               r={4}
               fill={CHART.navy}
-              stroke="#ffffff"
+              stroke={CHART_INK.plate}
               strokeWidth={1.5}
               ifOverflow="extendDomain"
               isFront
@@ -971,7 +973,7 @@ export function ProjectedBalanceChart({
               y={lowestPoint.y}
               r={5}
               fill={lowFill}
-              stroke="#ffffff"
+              stroke={CHART_INK.plate}
               strokeWidth={2}
               ifOverflow="extendDomain"
               isFront
@@ -1070,7 +1072,7 @@ function MarkerShape({
   showCount?: boolean;
 }) {
   const fill = MARKER[group.kind];
-  const common = { fill, stroke: "#ffffff", strokeWidth: 1.5 } as const;
+  const common = { fill, stroke: CHART_INK.plate, strokeWidth: 1.5 } as const;
   return (
     <g
       data-testid={`marker-${group.date}`}

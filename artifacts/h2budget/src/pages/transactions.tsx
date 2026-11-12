@@ -2729,6 +2729,7 @@ export default function TransactionsPage({
                       ? "hsl(var(--negative))"
                       : "hsl(var(--chart-1))"
                   }
+                  fill={(rangeBalances.endBal ?? 0) < 0 ? "hsl(var(--negative-wash))" : undefined}
                   height={56}
                 />
               ) : (

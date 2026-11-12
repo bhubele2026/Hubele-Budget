@@ -17,6 +17,7 @@ export function Sparkline({
   data,
   variant = "area",
   color = "hsl(var(--chart-1))",
+  fill,
   height = 28,
   className,
   strokeWidth = 1.75,
@@ -24,6 +25,8 @@ export function Sparkline({
   data: number[];
   variant?: "area" | "line";
   color?: string;
+  /** The colour of the faded area under the line, when it must differ from the line (dark: an orange line over a neutral wash, never a brown one). Defaults to `color`. */
+  fill?: string;
   height?: number;
   className?: string;
   strokeWidth?: number;
@@ -85,8 +88,8 @@ export function Sparkline({
         {variant === "area" && (
           <defs>
             <linearGradient id={`spark-${gid}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={color} stopOpacity={0} />
+              <stop offset="0%" stopColor={fill ?? color} stopOpacity={0.28} />
+              <stop offset="100%" stopColor={fill ?? color} stopOpacity={0} />
             </linearGradient>
           </defs>
         )}

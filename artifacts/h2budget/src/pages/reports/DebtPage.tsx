@@ -14,6 +14,8 @@ import {
   ANIM_AREA,
   ANIM_BAR,
   CHART,
+  themed,
+  washOf,
   animBegin,
   catColor,
 } from "@/lib/chartTokens";
@@ -47,7 +49,6 @@ import {
   Tooltip,
   Legend,
   AXIS_TICK,
-  GRID_STROKE,
   LEGEND_STYLE,
   ChartCard,
   PanelCard,
@@ -66,14 +67,15 @@ import {
  * survive a filter and must not be reassigned by rank. Everything else is a
  * two-series chart where the pair has to read as opposites.
  */
-export const DEBT_SERIES = {
+// `themed`: rebuilt for the theme on screen when read.
+export const DEBT_SERIES = themed(() => ({
   /** Actual total-balance history — one series. */
   history: CHART.navy,
   /** Freed minimums vs the running snowball. */
   waterfall: { freed: CHART.orange, cumulative: CHART.navy },
   /** The payment split. Principal is the part that actually kills the debt. */
   split: { principal: CHART.navy, interest: CHART.orangeDeep },
-} as const;
+} as const));
 
 export default function DebtPage() {
   // (#a8 per-page fetch) The debt report reads debts + balance history + the
@@ -330,7 +332,7 @@ function DebtSection({
                 <stop offset="100%" stopColor={DEBT_SERIES.history} stopOpacity={0.1} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
             <XAxis dataKey="date" tick={AXIS_TICK} interval="preserveStartEnd" />
             <YAxis tick={AXIS_TICK} tickFormatter={axisMoneyK} width={52} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
@@ -359,12 +361,12 @@ function DebtSection({
             <defs>
               {activeDebts.map((d, i) => (
                 <linearGradient key={d.id} id={`${gid}-payoff-${d.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={catColor(i)} stopOpacity={0.85} />
-                  <stop offset="100%" stopColor={catColor(i)} stopOpacity={0.25} />
+                  <stop offset="0%" stopColor={washOf(catColor(i))} stopOpacity={0.85} />
+                  <stop offset="100%" stopColor={washOf(catColor(i))} stopOpacity={0.25} />
                 </linearGradient>
               ))}
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
             <XAxis dataKey="month" tick={AXIS_TICK} interval="preserveStartEnd" />
             <YAxis tick={AXIS_TICK} tickFormatter={axisMoneyK} width={52} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
@@ -393,7 +395,7 @@ function DebtSection({
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={waterfall} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
               <XAxis dataKey="name" tick={AXIS_TICK} angle={-20} textAnchor="end" height={50} />
               <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
@@ -413,7 +415,7 @@ function DebtSection({
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ipBars} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
               <XAxis dataKey="month" tick={AXIS_TICK} interval={2} />
               <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />

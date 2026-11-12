@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { formatCurrency, cn } from "@/lib/utils";
 import { fmtISO } from "@/lib/reportsAnalytics";
-import { CHART } from "@/lib/chartTokens";
+import { CHART, CHART_INK } from "@/lib/chartTokens";
 import { LineTrend } from "@/lib/charts";
 import { CssFillMeter } from "@/lib/cssBars";
 import {
@@ -434,8 +434,8 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
                       <td key={i} className={cn(td, "px-1")}>
                         {c ? (
                           <div
-                            className="flex h-6 items-center justify-center rounded font-mono text-micro tabular-nums text-white"
-                            style={{ background: budgetStatusColor(c.status) }}
+                            className="flex h-6 items-center justify-center rounded font-mono text-micro tabular-nums"
+                            style={{ background: budgetStatusColor(c.status), color: CHART_INK.onFill }}
                             title={`${row.name} · ${c.status} · ${c.pct >= 999 ? "no plan" : `${Math.round(c.pct)}%`}`}
                           >
                             {c.pct >= 999 ? "—" : `${Math.round(c.pct)}%`}

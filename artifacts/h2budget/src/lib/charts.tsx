@@ -21,6 +21,7 @@ import {
   ANIM_LINE,
   AXIS_TICK,
   CHART,
+  CHART_INK,
   LEGEND_STYLE,
   REVEAL_MS,
   animBegin,
@@ -150,7 +151,7 @@ export interface ChartBand {
  * built bundle: three hex digits off the ramp, invisible on screen, and exactly
  * the drift that ends with a palette nobody can grep for.
  */
-const BAND_FILL = "#eef3fa";
+const bandFill = () => CHART_INK.band;
 
 const bandAreas = (bands?: ChartBand[]) =>
   bands?.map((b) => (
@@ -158,7 +159,7 @@ const bandAreas = (bands?: ChartBand[]) =>
       key={`${b.x1}|${b.x2}`}
       x1={b.x1}
       x2={b.x2}
-      fill={BAND_FILL}
+      fill={bandFill()}
       fillOpacity={1}
       stroke="none"
     />
@@ -269,7 +270,7 @@ export function CatTick(props: {
   const text =
     full.length > maxChars ? full.slice(0, maxChars - 1).trimEnd() + "…" : full;
   return (
-    <text x={x} y={y} dy="0.32em" textAnchor="end" fontSize={11} fill="#334155">
+    <text x={x} y={y} dy="0.32em" textAnchor="end" fontSize={11} fill={CHART_INK.label}>
       {text}
       <title>{full}</title>
     </text>
@@ -568,7 +569,7 @@ export function HBar({
               dataKey={valueKey}
               position="right"
               formatter={axisFmt}
-              style={{ fontSize: 11, fontWeight: 600, fill: "#334155" }}
+              style={{ fontSize: 11, fontWeight: 600, fill: CHART_INK.label }}
             />
           </Bar>
         </ComposedChart>
@@ -625,7 +626,7 @@ export function Donut({
               innerRadius="62%"
               outerRadius="92%"
               paddingAngle={2}
-              stroke="#fff"
+              stroke={CHART_INK.plate}
               strokeWidth={2}
               {...ANIM_BAR}
               onClick={

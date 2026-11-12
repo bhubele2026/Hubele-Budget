@@ -22,6 +22,8 @@ import {
   ANIM_BAR,
   ANIM_LINE,
   CHART,
+  themed,
+  washOf,
   animBegin,
   barColorForSign,
   catColor,
@@ -52,7 +54,6 @@ import {
   Legend,
   ReferenceLine,
   AXIS_TICK,
-  GRID_STROKE,
   LEGEND_STYLE,
   ChartCard,
   PanelCard,
@@ -83,7 +84,8 @@ import {
  * quiet steel/mist steps and never the same hue as its current counterpart,
  * so the two periods never depend on the dash pattern alone.
  */
-export const CASHFLOW_SERIES = {
+// `themed`: rebuilt for the theme on screen when read (a plain object here would freeze the light inks).
+export const CASHFLOW_SERIES = themed(() => ({
   /** Income vs expense, with the optional previous-period overlay. */
   inOut: {
     income: CHART.navy, //        #19315b
@@ -101,13 +103,13 @@ export const CASHFLOW_SERIES = {
   /** Single-series charts — nothing to collide with. */
   forecast: CHART.navy,
   burn: CHART.orange,
-} as const;
-const SERIES = {
+} as const));
+const SERIES = themed(() => ({
   ...CASHFLOW_SERIES.inOut,
   ...CASHFLOW_SERIES.net,
   forecast: CASHFLOW_SERIES.forecast,
   burn: CASHFLOW_SERIES.burn,
-};
+}));
 
 // The ceiling on the raw pull behind this page. Named so the number the user
 // is told matches the number that was asked for.
@@ -552,7 +554,7 @@ function CashFlowSection({
       >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
             <XAxis dataKey="date" tick={AXIS_TICK} angle={-25} textAnchor="end" height={50} />
             <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
@@ -594,12 +596,12 @@ function CashFlowSection({
       >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
             <XAxis dataKey="date" tick={AXIS_TICK} angle={-25} textAnchor="end" height={50} />
             <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={LEGEND_STYLE} />
-            <ReferenceLine y={0} stroke={GRID_STROKE} />
+            <ReferenceLine y={0} stroke={CHART.grid} />
             {/* `fill` is what the LEGEND swatch reads; the per-point `Cell`s
                 below still colour each bar by sign. Without it recharts draws
                 a black swatch for this series. */}
@@ -723,11 +725,11 @@ function CashFlowSection({
                     <stop offset="100%" stopColor={SERIES.forecast} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
                 <XAxis dataKey="date" tick={AXIS_TICK} angle={-25} textAnchor="end" height={50} />
                 <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
-                <ReferenceLine y={0} stroke={GRID_STROKE} />
+                <ReferenceLine y={0} stroke={CHART.grid} />
                 <Area {...ANIM_AREA} animationBegin={animBegin(0)} type="monotone"
                   dataKey="balance"
                   stroke={SERIES.forecast}
@@ -749,7 +751,7 @@ function CashFlowSection({
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={flowBars} margin={{ top: 10, right: 16, bottom: 24, left: 0 }} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} horizontal={false} />
               <XAxis type="number" tick={AXIS_TICK} tickFormatter={axisMoney} />
               <YAxis dataKey="stage" type="category" tick={AXIS_TICK} width={80} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
@@ -777,11 +779,11 @@ function CashFlowSection({
             <AreaChart data={burn} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
               <defs>
                 <linearGradient id={`${gid}-burn`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={SERIES.burn} stopOpacity={0.7} />
-                  <stop offset="100%" stopColor={SERIES.burn} stopOpacity={0.05} />
+                  <stop offset="0%" stopColor={washOf(SERIES.burn)} stopOpacity={0.7} />
+                  <stop offset="100%" stopColor={washOf(SERIES.burn)} stopOpacity={0.05} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
               <XAxis dataKey="date" tick={AXIS_TICK} interval="preserveStartEnd" angle={-25} textAnchor="end" height={50} />
               <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />

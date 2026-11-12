@@ -1,4 +1,4 @@
-import { CALM_STROKE, CHART, MARKER, type MarkerKind } from "@/lib/chartTokens";
+import { CALM_STROKE, CHART, MARKER, washOf, type MarkerKind } from "@/lib/chartTokens";
 import { MARKER_LABEL } from "@/lib/forecastEventKinds";
 
 function Swatch({ kind }: { kind: MarkerKind }) {
@@ -36,7 +36,7 @@ function Tint({ opacity }: { opacity: number }) {
     <span
       aria-hidden="true"
       className="inline-block h-3 w-4 rounded-sm"
-      style={{ background: CHART.orangeDeep, opacity }}
+      style={{ background: washOf(CHART.orangeDeep), opacity }}
     />
   );
 }

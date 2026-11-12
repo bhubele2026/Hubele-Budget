@@ -15,7 +15,7 @@ import { spanQuery } from "@/lib/reportRange";
 import { effectiveDebtBalance } from "@/lib/debtBalance";
 // Tokens only — no recharts on the hub. `viz` is plain SVG/CSS, so this whole
 // route stays chart-library-free.
-import { CHART, catColor } from "@/lib/chartTokens";
+import { CHART, catColor, washOf } from "@/lib/chartTokens";
 import { fieldLabel } from "@/ui";
 import { PageGrid } from "@/components/next";
 import { ReportsBalanceTiles } from "./reports/reportsShared";
@@ -209,6 +209,7 @@ export default function ReportsPage() {
                 data={debtSeries}
                 variant="area"
                 color={CHART.orangeDeep}
+                fill={washOf(CHART.orangeDeep)}
                 height={36}
               />
             ) : (

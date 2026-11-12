@@ -8,7 +8,7 @@ import { useSpine } from "@/hooks/useSpine";
 import { RefreshBanner } from "@/components/data-state";
 import { Sparkline, StackBar } from "@/components/viz";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
-import { CHART } from "@/lib/chartTokens";
+import { CHART, washOf } from "@/lib/chartTokens";
 import { card, cardHead, emptyNote, Foot, Help, Stat, errorBanner, btnLink } from "@/ui";
 import { formatCurrency } from "@/lib/utils";
 import { CheckingBalanceFull } from "@/components/checking-balance-note";
@@ -241,6 +241,7 @@ export default function ForecastOverviewPage() {
                 data={dailyValues}
                 variant="area"
                 color={low.chip?.tone === "bad" ? CHART.orangeDeep : CHART.navy}
+                fill={low.chip?.tone === "bad" ? washOf(CHART.orangeDeep) : CHART.navy}
                 height={128}
               />
             </div>

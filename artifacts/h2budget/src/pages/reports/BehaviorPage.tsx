@@ -16,7 +16,6 @@ import {
   YAxis,
   Tooltip,
   AXIS_TICK,
-  GRID_STROKE,
   ChartCard,
   PanelCard,
   axisMoney,
@@ -263,7 +262,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={dow} margin={{ top: 10, right: 16, bottom: 4, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
             <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} />
             <YAxis
               tick={AXIS_TICK}

@@ -2,7 +2,7 @@
  * Chart tokens + pure helpers — the numbers and colours behind every chart.
  *
  * This module is deliberately DEPENDENCY-FREE: no React, no recharts, no
- * tailwind helpers. That is what lets the CSS-bar primitive (`./cssBars`) and
+ * tailwind helpers (its one import, `./themeNow`, is a ten-line flag). That is what lets the CSS-bar primitive (`./cssBars`) and
  * the unit tests use the same palette as the recharts kit (`./charts`) without
  * dragging 450 KB of charting library along with them. `./charts` re-exports
  * everything here, so `@/lib/charts` stays the one documented import path for
@@ -39,39 +39,157 @@
  *    series in one colour. If you want a colour, name the colour.
  */
 
+import { isDarkNow } from "./themeNow";
+
+// ── Light and dark ─────────────────────────────────────────────────────────
+/**
+ * ⭐ EVERY COLOUR TABLE BELOW IS A VIEW, NOT A VALUE. Each keeps the name and
+ * shape it always had (`CHART.navy`, `CAT8[i]`, `NAVY_RAMP`, `MARKER.bill`…),
+ * so no call site changed; what it returns is the light value or the dark one,
+ * whichever theme is on screen at the moment it is READ (`lib/themeNow.ts`,
+ * set by `lib/theme.ts`). Light is exactly the hex it always was (the tests
+ * pin them). `App.tsx` re-mounts the open page when the theme changes, so
+ * every chart redraws and nothing keeps an old ink.
+ *
+ * ⚠️ A module-level constant that COPIES one of these freezes the light value:
+ * `const X = CHART.navy` at the top of a file is navy forever. Read them at
+ * render, or build a table of them with `themed(() => ({ … }))`.
+ */
+export function byTheme<T extends object>(light: T, dark: T): T {
+  const now = (): T => (isDarkNow() ? dark : light);
+  return new Proxy(light, {
+    get: (_t, k) => Reflect.get(now(), k),
+    has: (_t, k) => Reflect.has(now(), k),
+    ownKeys: () => Reflect.ownKeys(now()),
+    getOwnPropertyDescriptor: (_t, k) => Reflect.getOwnPropertyDescriptor(now(), k),
+  });
+}
+
+/** A table built FROM theme-aware values (`{ income: CHART.navy, … }`), rebuilt for the theme on screen when it is read. */
+export function themed<T extends object>(make: () => T): T {
+  let light: T | null = null;
+  let dark: T | null = null;
+  const now = (): T => (isDarkNow() ? (dark ??= make()) : (light ??= make()));
+  return new Proxy(make(), {
+    get: (_t, k) => Reflect.get(now(), k),
+    has: (_t, k) => Reflect.has(now(), k),
+    ownKeys: () => Reflect.ownKeys(now()),
+    getOwnPropertyDescriptor: (_t, k) => Reflect.getOwnPropertyDescriptor(now(), k),
+  });
+}
+
 // ── Palette ────────────────────────────────────────────────────────────────
 // Every series colour is navy, the orange accent, or a steel/mist step
 // between. No teal, no emerald, no crimson.
-export const CHART = {
-  navy: "#19315b", // the primary series
-  navy2: "#22406e",
-  mid: "#3b5c8f", // a mid navy, for a second series
-  mist: "#8fa3bf", // light navy — baselines, comparison periods, "no change"
-  steel: "#4d5d73", // neutral series, plan lines
-  orange: "#f68d2e", // the single bright accent
-  orangeDeep: "#e16d3e", // negatives / the thing that is going wrong
-  // SMALL alarm TEXT on a chart (the low-point and buffer labels): mirrors
-  // --color-bad-ink in index.css (a test pins them equal). Lines, areas and
-  // dots keep orangeDeep.
-  badInk: "#c2410c",
-  grid: "#e1e8f0", // gridlines, hairlines
-} as const;
+// DARK: the same roles on a black card. The LEAD series is near-white, the
+// second a soft blue-grey, mist stays recessive but visible (3.7:1), orange is
+// unchanged (always solid, never a half-alpha that would read brown), and the
+// alarm keeps its hue. The grid is a faint white hairline.
+interface ChartPalette {
+  readonly navy: string;
+  readonly navy2: string;
+  readonly mid: string;
+  readonly mist: string;
+  readonly steel: string;
+  readonly orange: string;
+  readonly orangeDeep: string;
+  readonly badInk: string;
+  readonly grid: string;
+}
+export const CHART: ChartPalette = byTheme<ChartPalette>(
+  {
+    navy: "#19315b", // the primary series
+    navy2: "#22406e",
+    mid: "#3b5c8f", // a mid navy, for a second series
+    mist: "#8fa3bf", // light navy — baselines, comparison periods, "no change"
+    steel: "#4d5d73", // neutral series, plan lines
+    orange: "#f68d2e", // the single bright accent
+    orangeDeep: "#e16d3e", // negatives / the thing that is going wrong
+    // SMALL alarm TEXT on a chart (the low-point and buffer labels): mirrors
+    // --color-bad-ink in index.css (a test pins them equal). Lines, areas and
+    // dots keep orangeDeep.
+    badInk: "#c2410c",
+    grid: "#e1e8f0", // gridlines, hairlines
+  },
+  {
+    navy: "#eef1f6", // near-white: the lead line on a black card
+    navy2: "#c9d3e6",
+    mid: "#8fa9d6", // soft blue-grey: the second series
+    mist: "#66748c", // recessive, still 3.7:1 on the card
+    steel: "#aab3c2",
+    orange: "#f68d2e", // unchanged
+    orangeDeep: "#e16d3e", // 5.5:1 on the card as it is
+    badInk: "#ee7d50", // = --color-bad-ink in the DARK block of index.css
+    grid: "rgba(255, 255, 255, 0.08)",
+  },
+);
+
+/**
+ * The colour of a TRANSLUCENT fill: the wash under a line, a risk band, a
+ * faded stack. Light: the colour itself. Dark: orange and the alarm colour
+ * become a neutral grey, because their half-alpha over black is a dark orange,
+ * which is brown (the one thing this palette never is). The line or edge drawn
+ * over the wash keeps its real colour and still says which series it is.
+ */
+export function washOf(color: string): string {
+  if (!isDarkNow()) return color;
+  const c = color.toLowerCase();
+  return c === "#f68d2e" || c === "#e16d3e" || c === "#ee7d50" ? "#9aa1ad" : color;
+}
+
+/**
+ * The ink a chart draws its WORDS and FURNITURE in: tick text, a category
+ * label, the plate or halo under a label (= the card), the look-back band,
+ * the tooltip card, the hover cursor, text printed inside a filled cell.
+ * These were hex literals spread over the chart files; they are tokens so
+ * dark has a value for each.
+ */
+interface ChartInk {
+  readonly axis: string; // tick text
+  readonly label: string; // a category / value label
+  readonly plate: string; // the card colour: label plates, donut gaps, dot rings
+  readonly band: string; // the look-back backdrop
+  readonly tooltipBg: string;
+  readonly tooltipLine: string;
+  readonly tooltipInk: string;
+  readonly tooltipShadow: string;
+  readonly onFill: string; // text inside a strongly filled cell
+}
+export const CHART_INK: ChartInk = byTheme<ChartInk>(
+  {
+    axis: "#64748b",
+    label: "#334155",
+    plate: "#ffffff",
+    band: "#eef3fa",
+    tooltipBg: "#ffffff",
+    tooltipLine: "#e1e8f0",
+    tooltipInk: "#1a2233",
+    tooltipShadow: "0 6px 24px -8px rgb(25 49 91 / 0.18)",
+    onFill: "#ffffff",
+  },
+  {
+    axis: "#9aa1ad",
+    label: "#c5c9d1",
+    plate: "#17181b",
+    band: "#1e2024",
+    tooltipBg: "#1e2024",
+    tooltipLine: "#3a3e46",
+    tooltipInk: "#f3f4f6",
+    tooltipShadow: "0 10px 28px -8px rgb(0 0 0 / 0.7)",
+    onFill: "#0e0f11",
+  },
+);
 
 /**
  * Validated 8-hue categorical set for charts that cap at 8 series + an
  * "Other" rollup. Assign IN ORDER and keep an item's slot stable across
  * filter changes — the colour marks identity, not rank.
  */
-export const CAT8: readonly string[] = [
-  "#19315b",
-  "#3b5c8f",
-  "#f68d2e",
-  "#4d5d73",
-  "#8fa3bf",
-  "#22406e",
-  "#e16d3e",
-  "#a9bad2",
-];
+export const CAT8: readonly string[] = byTheme<readonly string[]>(
+  ["#19315b", "#3b5c8f", "#f68d2e", "#4d5d73", "#8fa3bf", "#22406e", "#e16d3e", "#a9bad2"],
+  // Dark: lightness still alternates down the list, every slot ≥ 3:1 on the card.
+  ["#eef1f6", "#8fa9d6", "#f68d2e", "#aab3c2", "#5d7299", "#c9d3e6", "#e16d3e", "#7689a8"],
+);
 
 /**
  * Account identity accents — the same hexes as the `--color-acct-*` tokens in
@@ -79,13 +197,18 @@ export const CAT8: readonly string[] = [
  * the chip that names it. Distinct from each other by construction (pinned by
  * a test); `checking` is the brand navy on purpose.
  */
-export const ACCOUNT_ACCENT = {
-  checking: "#19315b",
-  amex: "#0f766e",
-  card2: "#5b4bb3",
-  other: "#5d6674",
-} as const;
-export type AccountAccent = keyof typeof ACCOUNT_ACCENT;
+interface AccountAccents {
+  readonly checking: string;
+  readonly amex: string;
+  readonly card2: string;
+  readonly other: string;
+}
+export const ACCOUNT_ACCENT: AccountAccents = byTheme<AccountAccents>(
+  { checking: "#19315b", amex: "#0f766e", card2: "#5b4bb3", other: "#5d6674" },
+  // = the --color-acct-* values in the DARK block of index.css.
+  { checking: "#9db8e3", amex: "#3fb8a9", card2: "#a595ee", other: "#9aa1ad" },
+);
+export type AccountAccent = keyof AccountAccents;
 
 /**
  * Forecast event markers (the expanded chart). One colour per kind, each also
@@ -93,13 +216,17 @@ export type AccountAccent = keyof typeof ACCOUNT_ACCENT;
  * payday = navy up-tick, bill = steel dot, card payment = the Amex accent
  * square, debt payment = orange diamond.
  */
-export const MARKER = {
-  payday: "#19315b",
-  bill: "#4d5d73",
-  card: "#0f766e",
-  debt: "#f68d2e",
-} as const;
-export type MarkerKind = keyof typeof MARKER;
+interface Markers {
+  readonly payday: string;
+  readonly bill: string;
+  readonly card: string;
+  readonly debt: string;
+}
+export const MARKER: Markers = byTheme<Markers>(
+  { payday: "#19315b", bill: "#4d5d73", card: "#0f766e", debt: "#f68d2e" },
+  { payday: "#eef1f6", bill: "#aab3c2", card: "#3fb8a9", debt: "#f68d2e" },
+);
+export type MarkerKind = keyof Markers;
 
 /**
  * Desaturated neutral grey for the "All others" rollup band.
@@ -129,14 +256,11 @@ export const OTHER_GREY = "#767b83";
  * Six steps graduating from the border grey into the brand navy.
  * Sequential, NOT categorical: index it by rank via `rampByRank()`.
  */
-export const NAVY_RAMP: readonly string[] = [
-  "#e1e8f0",
-  "#c4d0e2",
-  "#a9bad2",
-  "#8fa3bf",
-  "#3b5c8f",
-  "#19315b",
-];
+export const NAVY_RAMP: readonly string[] = byTheme<readonly string[]>(
+  ["#e1e8f0", "#c4d0e2", "#a9bad2", "#8fa3bf", "#3b5c8f", "#19315b"],
+  // Dark turns the anchor over: low sits near the card, high is near-white.
+  ["#2c3342", "#3a4963", "#516a94", "#7690bd", "#aabfe2", "#eef1f6"],
+);
 
 /**
  * Colour for the item at `rank` out of `total`, on the sequential ramp.
@@ -229,7 +353,7 @@ export const CALM_STROKE = {
 export const animBegin = (i = 0): number => 140 + i * 80;
 
 // ── Axes ───────────────────────────────────────────────────────────────────
-export const AXIS_TICK = { fontSize: 11, fill: "#64748b" } as const;
+export const AXIS_TICK: { readonly fontSize: number; readonly fill: string } = themed(() => ({ fontSize: 11, fill: CHART_INK.axis }));
 export const LEGEND_STYLE = { fontSize: 11 } as const;
 
 /**
