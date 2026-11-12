@@ -32,6 +32,7 @@ import { btnLink, btnSecondarySm, btnSm, emptyNote } from "@/ui";
 import { getAutoDoneQueryKey, getNeedsYouQueryKey, planOccurrenceOf, useAutoDone, useNeedsYou, type AutoDoneItem, type NeedsYouItem } from "./needsYouApi";
 import { TxDrawer, type DrawerRow } from "./TxDrawer";
 import { dayWords } from "./words";
+import { useReadyMark } from "@/lib/perfMarks";
 
 /**
  * ⭐ NEEDS YOU — Banking's one task list (owner, 2026-11-12: "it isn't clear to
@@ -209,6 +210,7 @@ export function NeedsYou({
   hrefOfTx?: (tx: Transaction) => string | null;
 }) {
   const q = useNeedsYou();
+  useReadyMark("h2:banking-needs-you-ready", q.data !== undefined); // (PERF-0) the list is real
   const qc = useQueryClient();
   const categories = useListCategories({ query: { queryKey: getListCategoriesQueryKey(), staleTime: 10 * 60_000, gcTime: 30 * 60_000 } });
   const write = useUpsertForecastResolution();

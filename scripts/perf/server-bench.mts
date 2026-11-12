@@ -128,6 +128,7 @@ const ENDPOINTS: Array<[string, string]> = [
   ["avalanche/weekly", "/avalanche/weekly"],
   ["forecast?days=90", "/forecast?days=90"],
   ["banking/review (month, 25/bucket)", `/banking/review?from=${monthFrom}&to=${today}&rowsPerBucket=25`],
+  ["banking/needs-you", "/banking/needs-you"],
   ["amex/summary (all, week)", `/amex/summary?accountId=all&from=${weekFrom}&to=${weekTo}&rowsPerGroup=50`],
   ["transactions/ledger (week, 50)", `/transactions/ledger?limit=50&from=${weekFrom}&to=${today}`],
 ];

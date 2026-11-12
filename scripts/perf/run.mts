@@ -16,7 +16,8 @@
  *   cold  — a fresh browser context (empty HTTP cache) opening /home; the auth hint is set, as for any browser that
  *           has signed in before (with no hint the app waits for Clerk, which this rig cannot measure).
  *   warm  — reload of /home in a context whose HTTP cache is warm (JS cached; data not — React Query is memory).
- *   nav   — /home, then Forecast → Chase (/transactions) → Amex → Reports → Home by client-side navigation.
+ *   nav   — /home, then Forecast → Chase (/transactions) → Amex → Reports → Banking → Home by client-side navigation.
+ *   banking — a warm reload of /banking (HTTP cache warm): the review summary and the Needs-you list.
  *   phone — cold /home at 390×844, 150 ms latency, 1.6 Mbps down / 750 kbps up, CPU slowed 4×.
  *   tabs  — two tabs opening /home at the same moment in one context.
  *   theme — (3 runs) a dark device whose browser remembers "light" while the server says Auto: the page re-mounts once
@@ -246,6 +247,7 @@ const STEPS: Array<{ path: string; mark: string }> = [
   { path: "/transactions", mark: "h2:page-ready:/transactions" },
   { path: "/amex", mark: "h2:page-ready:/amex" },
   { path: "/reports", mark: "h2:page-ready:/reports" },
+  { path: "/banking", mark: "h2:banking-needs-you-ready" },
   { path: "/home", mark: "h2:home-numbers-ready" },
 ];
 let navCtx: BrowserContext | null = null;
@@ -289,6 +291,33 @@ async function tabs(i: number, rec: { har: string; trace: string } | null): Prom
     { scenario: "tabs", i, ok: ra.ok && rb.ok, c: ra.c, extra: { tab: "a" } },
     { scenario: "tabs", i, ok: ra.ok && rb.ok, c: rb.c, extra: { tab: "b" } },
   ];
+}
+
+let bankCtx: BrowserContext | null = null;
+let bankPage: Page | null = null;
+const BANK_MARKS = ["h2:page-ready:/banking", "h2:banking-needs-you-ready"];
+async function bankingOnce(page: Page, how: "goto" | "reload"): Promise<{ ok: boolean; c: Collected }> {
+  if (how === "goto") await page.goto(`${BASE}/banking`, { waitUntil: "commit" });
+  else await page.reload({ waitUntil: "commit" });
+  const ok = await waitMarks(page, BANK_MARKS, 0);
+  await settle(page);
+  return { ok, c: await page.evaluate(COLLECT) };
+}
+async function banking(i: number, rec: { har: string; trace: string } | null): Promise<Run> {
+  if (rec) {
+    const ctx = await newCtx({ har: rec.har });
+    const page = await ctx.newPage();
+    await bankingOnce(page, "goto");
+    const r = await traced(page, rec.trace, () => bankingOnce(page, "reload"));
+    await ctx.close();
+    return { scenario: "banking", i, ...r };
+  }
+  if (!bankPage) {
+    bankCtx = await newCtx();
+    bankPage = await bankCtx.newPage();
+    await bankingOnce(bankPage, "goto");
+  }
+  return { scenario: "banking", i, ...(await bankingOnce(bankPage, "reload")) };
 }
 
 async function theme(i: number): Promise<Run> {
@@ -424,6 +453,7 @@ try {
       ["nav", nav],
       ["phone", (i, r) => cold(i, r, true)],
       ["tabs", tabs],
+      ["banking", banking],
     ];
     for (const [name, fn] of scen) {
       if (!want(name)) continue;
@@ -440,6 +470,7 @@ try {
     if (want("theme")) for (let i = 0; i < 3; i++) runs.push({ ...(await theme(i)), extra: { jobs } });
     if (warmCtx) { await warmCtx.close(); warmCtx = null; warmPage = null; }
     if (navCtx) { await navCtx.close(); navCtx = null; }
+    if (bankCtx) { await bankCtx.close(); bankCtx = null; bankPage = null; }
     await stopServer();
 
     const these = runs.slice(start);
@@ -460,9 +491,32 @@ try {
         md.push("", `Both tabs together (median): 90-day ledger builds before warm-up ${fmt(q(tot.map((t) => t.l), 0.5))}, 400-day base ${fmt(q(tot.map((t) => t.b), 0.5))}; incl. warm-up ${fmt(q(tot.map((t) => t.la), 0.5))} / ${fmt(q(tot.map((t) => t.ba), 0.5))}; joined ${fmt(q(tot.map((t) => t.j), 0.5))}.`);
       }
     }
+    const banks = by("banking");
+    if (banks.length) {
+      const ms = banks.filter((r) => r.ok).map((r) => ({
+        summary: markT(r.c, "h2:page-ready:/banking"), needsYou: markT(r.c, "h2:banking-needs-you-ready"),
+        ny: r.c.api.find((a) => a.path === "/api/banking/needs-you"), rv: r.c.api.find((a) => a.path === "/api/banking/review"),
+        m: metrics(r),
+      }));
+      const row = (label: string, xs: number[]) => `| ${label} | ${fmt(q(xs, 0.5))} | ${fmt(q(xs, 0.9))} |`;
+      md.push("", `### banking — warm reload of /banking (${ms.length}/${banks.length} ok)`, "", "| metric | median | p90 |", "|---|---:|---:|",
+        row("⭐ h2:page-ready:/banking (summary real, ms)", ms.map((x) => x.summary)),
+        row("⭐ h2:banking-needs-you-ready (ms)", ms.map((x) => x.needsYou)),
+        row("/api/banking/review done (ms)", ms.map((x) => x.rv?.end ?? NaN)),
+        row("/api/banking/review server total", ms.map((x) => x.rv?.st.total?.dur ?? NaN)),
+        row("/api/banking/needs-you start (ms)", ms.map((x) => x.ny?.start ?? NaN)),
+        row("/api/banking/needs-you done (ms)", ms.map((x) => x.ny?.end ?? NaN)),
+        row("/api/banking/needs-you server total", ms.map((x) => x.ny?.st.total?.dur ?? NaN)),
+        row("ledger builds (all calls)", ms.map((x) => x.m.ledgerBuilds!)),
+        row("base400 builds (all calls)", ms.map((x) => x.m.baseBuilds!)),
+        row("builds joined", ms.map((x) => x.m.shareJoined!)),
+        row("/api calls", ms.map((x) => x.m.apiCalls!)),
+        row("identical duplicate requests", ms.map((x) => x.m.dupExtra!)),
+        "", apiTable(banks), "", `Identical duplicates: ${dupList(banks)}`);
+    }
     const navs = by("nav");
     if (navs.length) {
-      md.push("", `### nav — Home → Forecast → Chase → Amex → Reports → Home (${navs.filter((r) => r.ok).length}/${navs.length} ok)`, "", "| step | ready after nav (median) | p90 | /api calls (median) | duplicates in the step |", "|---|---:|---:|---:|---|");
+      md.push("", `### nav — Home → Forecast → Chase → Amex → Reports → Banking → Home (${navs.filter((r) => r.ok).length}/${navs.length} ok)`, "", "| step | ready after nav (median) | p90 | /api calls (median) | duplicates in the step |", "|---|---:|---:|---:|---|");
       for (const [k, s] of STEPS.entries()) {
         const xs = navs.map((r) => (r.extra!.steps as Array<{ ms: number; requests: number }>)[k]!);
         md.push(`| ${s.path} | ${fmt(q(xs.map((x) => x.ms), 0.5))} | ${fmt(q(xs.map((x) => x.ms), 0.9))} | ${fmt(q(xs.map((x) => x.requests), 0.5))} | |`);
