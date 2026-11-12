@@ -20,6 +20,9 @@
  *   banking — a warm reload of /banking (HTTP cache warm): the review summary and the Needs-you list.
  *   phone — cold /home at 390×844, 150 ms latency, 1.6 Mbps down / 750 kbps up, CPU slowed 4×.
  *   tabs  — two tabs opening /home at the same moment in one context.
+ *   written — a warm reload of /home right after a write to the household (forecast_settings.updated_at, which no figure
+ *           reads): the server's ledger cache (lib/ledgerCache.ts) cannot answer, so this is the "first open after a
+ *           change" cost.
  *   theme — (3 runs) a dark device whose browser remembers "light" while the server says Auto: the page re-mounts once
  *           (ThemeRepaint); counts the requests fired after it.
  * One more run of each scenario records a HAR and a Chrome trace into OUT/<jobs>/.
@@ -295,6 +298,32 @@ async function tabs(i: number, rec: { har: string; trace: string } | null): Prom
   ];
 }
 
+/** A write the household's revision sees and no figure reads (the perf database only). */
+function touchHousehold(): void {
+  const r = spawnSync("psql", [seeded.databaseUrl, "-Atqc", `UPDATE forecast_settings SET updated_at = now() WHERE user_id = '${hh!.ownerUserId.replace(/'/g, "")}'`], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`psql: ${r.stderr}`);
+}
+let writtenCtx: BrowserContext | null = null;
+let writtenPage: Page | null = null;
+async function written(i: number, rec: { har: string; trace: string } | null): Promise<Run> {
+  if (rec) {
+    const ctx = await newCtx({ har: rec.har });
+    const page = await ctx.newPage();
+    await loadHome(page, "goto");
+    touchHousehold();
+    const r = await traced(page, rec.trace, () => loadHome(page, "reload"));
+    await ctx.close();
+    return { scenario: "written", i, ...r };
+  }
+  if (!writtenPage) {
+    writtenCtx = await newCtx();
+    writtenPage = await writtenCtx.newPage();
+    await loadHome(writtenPage, "goto");
+  }
+  touchHousehold();
+  return { scenario: "written", i, ...(await loadHome(writtenPage, "reload")) };
+}
+
 let bankCtx: BrowserContext | null = null;
 let bankPage: Page | null = null;
 const BANK_MARKS = ["h2:page-ready:/banking", "h2:banking-needs-you-ready"];
@@ -456,6 +485,7 @@ try {
       ["phone", (i, r) => cold(i, r, true)],
       ["tabs", tabs],
       ["banking", banking],
+      ["written", written],
     ];
     for (const [name, fn] of scen) {
       if (!want(name)) continue;
@@ -473,13 +503,14 @@ try {
     if (warmCtx) { await warmCtx.close(); warmCtx = null; warmPage = null; }
     if (navCtx) { await navCtx.close(); navCtx = null; }
     if (bankCtx) { await bankCtx.close(); bankCtx = null; bankPage = null; }
+    if (writtenCtx) { await writtenCtx.close(); writtenCtx = null; writtenPage = null; }
     await stopServer();
 
     const these = runs.slice(start);
     writeFileSync(join(recDir, "runs.json"), JSON.stringify(these));
     const by = (s: string) => these.filter((r) => r.scenario === s);
     md.push("", `## JOBS_MODE=${jobs}`);
-    for (const s of ["cold", "warm", "phone", "tabs"]) {
+    for (const s of ["cold", "warm", "written", "phone", "tabs"]) {
       const rs = by(s);
       if (!rs.length) continue;
       md.push("", `### ${s} — Home (${rs.filter((r) => r.ok).length}/${rs.length} runs reached both marks)`, "", table(rs, HOME_KEYS), "", apiTable(rs), "", `Identical duplicates: ${dupList(rs)}`);
