@@ -322,8 +322,11 @@ export const PREFERS_REDUCED_MOTION: boolean =
 // them move — so they take the symmetric curve. Recharts only accepts the
 // named CSS keywords here, not a cubic-bezier, so "ease-in-out" is the closest
 // expression of that shape.
+// (2026-11-12) NO ENTRANCE (owner): a chart is simply drawn when it appears — bars do not grow, lines do not draw
+// on, areas do not rise. Recharts cannot tell a first draw from an update, so its own animation is off; the
+// Forecast chart's horizon reshape keeps its own functional tween (ProjectedBalanceChart's morph).
 export const ANIM_BAR = {
-  isAnimationActive: !PREFERS_REDUCED_MOTION,
+  isAnimationActive: false,
   animationEasing: "ease-in-out",
   animationDuration: REVEAL_MS,
 } as const;

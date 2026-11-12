@@ -482,17 +482,17 @@ export function ProjectedBalanceChart({
               {isFirst ? (
                 <div className="mt-1 flex items-center justify-between gap-4" data-testid="tooltip-opening">
                   <span className="text-neutral-500">Opening</span>
-                  <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(openingBalance)}</span>
+                  <span className="fig text-neutral-700">{formatCurrency(openingBalance)}</span>
                 </div>
               ) : null}
               <div className="mt-1 flex items-center justify-between gap-4">
                 <span className="text-neutral-500">{isFirst ? "Close" : "Balance"}</span>
-                <span className="font-mono tabular-nums text-neutral-700" data-testid="tooltip-balance">
+                <span className="fig text-neutral-700" data-testid="tooltip-balance">
                   {Number.isFinite(balance) ? formatCurrency(balance) : "—"}
                 </span>
               </div>
               {t && (t.moneyIn !== 0 || t.moneyOut !== 0) ? (
-                <div className="mt-1 font-mono tabular-nums text-neutral-600" data-testid="tooltip-in-out">
+                <div className="mt-1 fig text-neutral-600" data-testid="tooltip-in-out">
                   In {formatCurrency(t.moneyIn)} · Out {formatCurrency(Math.abs(t.moneyOut))}
                 </div>
               ) : null}
@@ -508,14 +508,14 @@ export function ProjectedBalanceChart({
             {openingBalance != null && Number.isFinite(openingBalance) && rawDate && rawDate === data[0]?.rawDate ? (
               <div className="mt-1 flex items-center justify-between gap-4" data-testid="tooltip-opening">
                 <span className="text-neutral-500">Opening</span>
-                <span className="font-mono tabular-nums text-neutral-700">{formatCurrency(openingBalance)}</span>
+                <span className="fig text-neutral-700">{formatCurrency(openingBalance)}</span>
               </div>
             ) : null}
             <div className="mt-1 flex items-center justify-between gap-4">
               <span className="text-neutral-500">
                 {openingBalance != null && rawDate && rawDate === data[0]?.rawDate ? "Close" : "Balance"}
               </span>
-              <span className="font-mono tabular-nums text-neutral-700">
+              <span className="fig text-neutral-700">
                 {Number.isFinite(balance) ? formatCurrency(balance) : "—"}
               </span>
             </div>
@@ -523,13 +523,13 @@ export function ProjectedBalanceChart({
               rawDate &&
               (incomeByDate?.get(rawDate)?.length ?? 0) > 0 && (
                 <div className="mt-2 border-t border-brand-line pt-2">
-                  <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">
+                  <div className="mb-1 text-micro font-medium text-neutral-400">
                     Money in
                   </div>
                   {incomeByDate!.get(rawDate)!.map((inc, i) => (
                     <div key={`${inc.label}-${i}`} className="flex items-center justify-between gap-3">
                       <span className="min-w-0 truncate text-neutral-600">{inc.label}</span>
-                      <span className="font-mono tabular-nums text-ok">{formatCurrency(inc.amount)}</span>
+                      <span className="fig text-ok">{formatCurrency(inc.amount)}</span>
                     </div>
                   ))}
                 </div>
@@ -558,7 +558,7 @@ export function ProjectedBalanceChart({
                       sIdx === 0 ? "mt-2 border-t border-brand-line pt-2" : "mt-2"
                     }
                   >
-                    <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">
+                    <div className="mb-1 text-micro font-medium text-neutral-400">
                       {section.title}
                     </div>
                     <div className="flex flex-col gap-0.5">
@@ -593,7 +593,7 @@ export function ProjectedBalanceChart({
                               <span className="min-w-0 truncate text-neutral-600">
                                 {b.label}
                               </span>
-                              <span className="font-mono tabular-nums text-bad">
+                              <span className="fig text-bad">
                                 {formatCurrency(b.amount)}
                               </span>
                             </button>
@@ -607,7 +607,7 @@ export function ProjectedBalanceChart({
                                 }}
                                 data-testid={`tooltip-mark-missed-${b.itemId}-${b.originalDate}`}
                                 title="Mark this past-due plan as missed so it stops dragging the projection"
-                                className="press whitespace-nowrap rounded-control bg-white px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-bad ring-1 ring-bad/25 hover:bg-bad-bg"
+                                className="press whitespace-nowrap rounded-control bg-white px-1.5 py-px text-[10px] font-medium text-bad ring-1 ring-bad/25 hover:bg-bad-bg"
                               >
                                 Mark missed
                               </button>
@@ -638,7 +638,7 @@ export function ProjectedBalanceChart({
     : null;
 
   return (
-    // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
+    // (2026-11-12) No entrance: the wrapper carries no sweep class. Previously `.chart-in` faded it up and `.area-draw` swept a feathered mask
     // left→right so the curve reads as being plotted across the horizon.
     // (Clean forecast line) Calm: ONE sweep (the mask alone), and no remount on a horizon change — the node
     // stays, so the sweep cannot replay and the line reshapes from the curve already on screen.
@@ -647,7 +647,7 @@ export function ProjectedBalanceChart({
       onPointerMove={expanded ? trackPointer : undefined}
       key={expanded && !calm ? horizonKey : undefined}
       // `chart-reshaping`: only while the line tweens to new data — the new curve's marks wait for it (index.css).
-      className={cn(firstDraw && (calmX ? "area-draw draw-once" : "chart-in area-draw"), calmX && "chart-calm", calmX && areaAnim.isAnimationActive && "chart-reshaping", "h-full w-full")}
+      className={cn(calmX && "chart-calm", calmX && areaAnim.isAnimationActive && "chart-reshaping", "h-full w-full")}
       data-first-draw={calmX ? String(firstDraw) : undefined}
     >
       <ResponsiveContainer width="100%" height="100%">

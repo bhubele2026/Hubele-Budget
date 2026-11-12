@@ -192,8 +192,8 @@ describe("ProjectedBalanceChart — calm (readable forecast)", () => {
     expect(screen.queryByTestId("payday-tick-2026-11-13")).toBeNull();
     expect(areas.map((a) => a.dataKey)).toEqual(["past", "future"]);
     expect(grids[0]!.strokeDasharray).toBe("3 3");
-    expect(wrapper(container).className).toContain("chart-in area-draw");
-    expect(wrapper(container).className).not.toContain("draw-once");
+    // (2026-11-12) No entrance sweep on any chart.
+    expect(wrapper(container).className).not.toMatch(/chart-in|area-draw|draw-once/);
     expect(tips[0]!.cursor).toBeUndefined();
     expect(screen.queryByTestId("low-pulse")).toBeNull();
   });
@@ -252,10 +252,11 @@ describe("ProjectedBalanceChart — calm (readable forecast)", () => {
 });
 
 describe("ProjectedBalanceChart — calm motion (clean forecast line)", () => {
-  it("draws in ONCE: the mask sweep alone on the first mount of a session key, never the library's reveal", () => {
+  // (2026-11-12) No entrance at all: the old one mask sweep is gone too; the library still never reveals.
+  it("draws in with NO sweep on any mount, and never the library's reveal", () => {
     motionOn();
     const a = render(<ProjectedBalanceChart {...props} calm sessionKey="calm-once-a" />);
-    expect(wrapper(a.container).className).toContain("area-draw draw-once");
+    expect(wrapper(a.container).className).not.toContain("area-draw");
     // One effect, not two: no wrapper rise, and the series does not animate its own first draw.
     expect(wrapper(a.container).className).not.toContain("chart-in");
     expect(areas.every((p) => p.isAnimationActive === false)).toBe(true);
@@ -266,7 +267,7 @@ describe("ProjectedBalanceChart — calm motion (clean forecast line)", () => {
     expect(screen.queryByTestId("low-pulse")).toBeNull();
     b.unmount();
     const c = render(<ProjectedBalanceChart {...props} calm sessionKey="calm-once-b" />);
-    expect(wrapper(c.container).className).toContain("area-draw draw-once");
+    expect(wrapper(c.container).className).not.toContain("area-draw");
   });
 
   it("no replay on Show bills, a selected day, or a refetch that answers the same numbers", () => {
@@ -299,7 +300,7 @@ describe("ProjectedBalanceChart — calm motion (clean forecast line)", () => {
     // The new horizon answers: the series reshapes from the old curve.
     a.rerender(<ProjectedBalanceChart {...props} calm sessionKey="calm-horizon" horizonKey={90} data={longer} />);
     expect(wrapper(a.container)).toBe(node);
-    expect(node.className).toContain("area-draw draw-once");
+    expect(node.className).not.toContain("area-draw"); // (2026-11-12) no sweep class, the reshape alone moves
     expect(last().isAnimationActive).toBe(true);
     expect(last().animationDuration).toBe(MORPH_MS);
     act(() => { vi.advanceTimersByTime(MORPH_MS + 200); });

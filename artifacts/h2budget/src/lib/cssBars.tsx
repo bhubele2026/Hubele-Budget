@@ -99,7 +99,7 @@ export function CssFillMeter({
       )}
     >
       <span
-        className="bar-sweep grow-x absolute inset-y-0 left-0 rounded-full"
+        className="bar-sweep absolute inset-y-0 left-0 rounded-full"
         style={{
           width: `${fillPct}%`,
           background: over ? CHART.orangeDeep : CHART.navy,
@@ -143,26 +143,13 @@ const EASE_MOVE = "var(--ease-move, cubic-bezier(0.65, 0, 0.35, 1))";
  * as lag, not polish.
  */
 function useBarDuration(): number {
-  const painted = useRef(false);
-  const [dur, setDur] = useState(REVEAL_MS);
-  useEffect(() => {
-    if (painted.current) return;
-    painted.current = true;
-    const t = setTimeout(() => setDur(MORPH_MS), REVEAL_MS);
-    return () => clearTimeout(t);
-  }, []);
-  return dur;
+  // (2026-11-12) No entrance sweep: every change, the first included, moves at the morph speed.
+  return MORPH_MS;
 }
 
-/** First paint draws bars from zero. Reduced motion starts them at full width. */
+/** (2026-11-12) No entrance: bars are drawn at their width from the first paint; only a later change tweens. */
 function useReveal(): boolean {
-  const [revealed, setRevealed] = useState(PREFERS_REDUCED_MOTION);
-  useEffect(() => {
-    if (PREFERS_REDUCED_MOTION) return;
-    const id = requestAnimationFrame(() => setRevealed(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-  return revealed;
+  return true;
 }
 
 export function CssBars({

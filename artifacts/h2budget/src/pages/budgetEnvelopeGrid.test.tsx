@@ -420,7 +420,9 @@ describe("Budget envelope grid — the CSS fill meters", () => {
   it("uses the kit's own motion classes, not a bespoke transition", () => {
     renderPage();
     const cls = meterFill("cat-over").className.split(/\s+/);
-    expect(cls).toEqual(expect.arrayContaining(["bar-sweep", "grow-x"]));
+    // (2026-11-12) No entrance sweep (`grow-x` is gone); a change of width still tweens on the kit's class.
+    expect(cls).toEqual(expect.arrayContaining(["bar-sweep"]));
+    expect(cls).not.toContain("grow-x");
   });
 });
 
