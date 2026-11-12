@@ -23,7 +23,7 @@ export function StatBlock(props: {
       <div
         className={cn(
           "mt-0.5 fig text-title font-semibold",
-          props.tone === "bad" ? "text-bad" : "text-brand-navy",
+          props.tone === "bad" ? "text-bad" : "text-foreground",
         )}
       >
         {shown}

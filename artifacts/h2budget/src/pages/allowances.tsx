@@ -516,7 +516,7 @@ function BucketCard({
           <span
             className={cn(
               "fig text-display font-semibold",
-              over ? "text-bad" : "text-brand-navy",
+              over ? "text-bad" : "text-foreground",
             )}
           >
             {known ? formatCurrency(spent) : "—"}
