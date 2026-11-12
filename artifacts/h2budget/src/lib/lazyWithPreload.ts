@@ -5,6 +5,7 @@ import {
   type ComponentProps,
   type ComponentType,
 } from "react";
+import { trackChunk } from "./speculative";
 
 /**
  * ⚠️ `lazy()` ALWAYS SUSPENDS ON ITS FIRST RENDER, EVEN WHEN THE CHUNK IS ALREADY
@@ -31,7 +32,8 @@ export function preloadImporter<T>(importer: () => Promise<Mod<T>>): Promise<Mod
   let entry = cache.get(importer) as Entry<T> | undefined;
   if (!entry) {
     const fresh: Entry<T> = { mod: null, promise: undefined as unknown as Promise<Mod<T>> };
-    fresh.promise = importer().then(
+    // (perf phase 2) A chunk in flight is foreground work: the speculative warm-up waits for it.
+    fresh.promise = trackChunk(importer()).then(
       (m) => {
         fresh.mod = m;
         return m;

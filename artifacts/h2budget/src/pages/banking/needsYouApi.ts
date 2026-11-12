@@ -1,4 +1,6 @@
+import type { QueryClient } from "@tanstack/react-query";
 import {
+  getBankingNeedsYou,
   getGetBankingAutoDoneQueryKey,
   getGetBankingNeedsYouQueryKey,
   useGetBankingAutoDone,
@@ -40,9 +42,20 @@ export const getAutoDoneQueryKey = () => getGetBankingAutoDoneQueryKey();
  * The server builds the list from the ledger, so it is not asked for again on every visit: a minute fresh, kept half an
  * hour, and refreshed by every answer (the answers invalidate it, and so does every write through `mutationCache`).
  */
+const NEEDS_YOU_CACHE = { staleTime: 60_000, gcTime: 30 * 60_000 } as const;
+
 export function useNeedsYou() {
   return useGetBankingNeedsYou(undefined, {
-    query: { queryKey: getGetBankingNeedsYouQueryKey(), staleTime: 60_000, gcTime: 30 * 60_000 },
+    query: { queryKey: getGetBankingNeedsYouQueryKey(), ...NEEDS_YOU_CACHE },
+  });
+}
+
+/** Warm the list under the page's own key and cache (the nav's hover and the landing's idle warm-up). */
+export function warmNeedsYou(qc: QueryClient): void {
+  void qc.prefetchQuery({
+    queryKey: getGetBankingNeedsYouQueryKey(),
+    queryFn: ({ signal }) => getBankingNeedsYou(undefined, { signal }),
+    ...NEEDS_YOU_CACHE,
   });
 }
 

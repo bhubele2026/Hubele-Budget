@@ -10,7 +10,7 @@ import { QueryClient } from "@tanstack/react-query";
 const pre = vi.hoisted(() => ({ chunks: [] as string[] }));
 vi.mock("./routePrefetch", () => ({ prefetchRoute: (h: string) => pre.chunks.push(h) }));
 
-import { getGetBankingReviewQueryKey } from "@workspace/api-client-react/features";
+import { getGetBankingNeedsYouQueryKey, getGetBankingReviewQueryKey } from "@workspace/api-client-react/features";
 import { getGetPeriodBreakdownQueryKey, getGetAmexSummaryQueryKey } from "@workspace/api-client-react/features";
 import { getGetTransactionsLedgerInfiniteQueryKey } from "@workspace/api-client-react/ledger";
 import {
@@ -54,16 +54,18 @@ const has = (k: unknown) => keys.includes(JSON.stringify(k));
 const settle = () => vi.waitFor(() => expect(keys.length).toBeGreaterThan(0));
 
 describe("warmRoute — each section warms its real first queries", () => {
-  it("Banking: the review's first call (summary + first pages) and the Plaid items", async () => {
+  it("Banking: the review's first call (summary + first pages), Needs you and the Plaid items", async () => {
     warmRoute(qc, "/banking");
-    await vi.waitFor(() => expect(keys.length).toBe(2));
+    await vi.waitFor(() => expect(keys.length).toBe(3));
     expect(has(getGetBankingReviewQueryKey(bankingDefaultSummaryParams(NOW)))).toBe(true);
+    // (perf phase 2) The page's own Needs-you key (needsYouApi.ts), asked beside the review.
+    expect(has(getGetBankingNeedsYouQueryKey())).toBe(true);
     expect(has(getListPlaidItemsQueryKey())).toBe(true);
   });
 
   it("Banking from a tile that names its account warms that account's review", async () => {
     warmRoute(qc, "/banking?account=c1");
-    await vi.waitFor(() => expect(keys.length).toBe(2));
+    await vi.waitFor(() => expect(keys.length).toBe(3));
     expect(has(getGetBankingReviewQueryKey(bankingDefaultSummaryParams(NOW, "c1")))).toBe(true);
   });
 

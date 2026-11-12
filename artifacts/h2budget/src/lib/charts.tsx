@@ -28,6 +28,11 @@ import {
   compactUSD,
   niceAxis,
 } from "@/lib/chartTokens";
+import { noteChartsLoaded } from "@/lib/speculative";
+
+// (perf phase 2) Every chart is drawn through this kit, so this module running means the chart
+// library is in the browser: from here an idle warm may fetch a page that draws charts.
+noteChartsLoaded();
 
 /**
  * The H2 chart kit — one system, so charts stop being ad-hoc.

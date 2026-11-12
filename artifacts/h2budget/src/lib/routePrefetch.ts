@@ -14,6 +14,7 @@
 // bundler emits one shared chunk per page.
 
 import { loadedModule, preloadImporter } from "./lazyWithPreload";
+import { chartsLoaded } from "./speculative";
 
 // ── Per-page importers (reused by App.tsx's lazy() calls) ────────────────────
 // ⚠️ NO IMPORTER FOR THE LANDING HERE, DELIBERATELY. The landing (/home) is the
@@ -86,6 +87,42 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/next/accounts": importNextAccounts,
 };
 
+// ── Which routes' chunks STATICALLY pull the chart library (vendor-charts) ───
+// (perf phase 2) A speculative warm never fetches vendor-charts: these routes are
+// warmed on idle only once a chart the person could see has loaded it. Hover,
+// focus and press still warm them (`prefetchRoute`). `speculativeWarm.test.ts`
+// walks each page's static imports and keeps this list exact.
+export const CHART_ROUTES: ReadonlySet<string> = new Set([
+  "/forecast",
+  "/review",
+  "/avalanche",
+  "/amex",
+  "/transactions",
+  "/reports",
+  "/reports/debt",
+  "/reports/cashflow",
+  "/reports/spending",
+  "/reports/budget",
+  "/reports/behavior",
+  "/next/forecast",
+]);
+
+/** True when warming `href` would fetch the chart library. */
+export function routeNeedsCharts(href: string): boolean {
+  const key = bestKey(href);
+  return key !== null && CHART_ROUTES.has(key);
+}
+
+/**
+ * A GUESSED warm (idle, not a hover): the route's chunk, unless that would bring
+ * the chart library before any chart is on screen. Returns whether it warmed.
+ */
+export function prefetchRouteSpeculatively(href: string): boolean {
+  if (routeNeedsCharts(href) && !chartsLoaded()) return false;
+  prefetchRoute(href);
+  return true;
+}
+
 // Chunks we've already kicked off — prefetch is a no-op after the first call
 // for a given importer, so repeated hovers cost nothing.
 const prefetched = new Set<string>();
@@ -148,4 +185,10 @@ export function whenRouteChunkLoaded(href: string): Promise<void> | null {
       failed.add(key);
     },
   );
+}
+
+/** Tests only: forget which chunks were asked for. */
+export function _resetRoutePrefetchForTests(): void {
+  prefetched.clear();
+  failed.clear();
 }

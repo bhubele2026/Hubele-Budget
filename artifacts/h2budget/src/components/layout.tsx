@@ -22,7 +22,9 @@ import {
   listCategories,
   getListCategoriesQueryKey,
 } from "@workspace/api-client-react";
-import { prefetchRoute } from "@/lib/routePrefetch";
+import { prefetchRouteSpeculatively } from "@/lib/routePrefetch";
+import { whenForegroundIdle } from "@/lib/speculative";
+import { HOME_MARKS, WARMUP_GIVE_UP_MS, WARMUP_QUIET_MS } from "@/hooks/useLandingWarmup";
 import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -81,6 +83,8 @@ const importMobileNav = () => import("@/components/mobile-nav");
 const MobileNav = lazy(importMobileNav);
 // Amex's per-card tabs are fed by their own small chunk, for the same reason.
 const AmexCardTabsFeed = lazy(() => import("@/components/amex-card-tabs-feed"));
+/** How many of the section's other tabs the idle warm takes. */
+const NEXT_LIKELY_TABS = 3;
 
 /**
  * The Review pill's words for a screen reader. The number is the spine's `reviewCount`, which (2026-11-12) already
@@ -121,26 +125,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
   const prefetch = (rawHref: string) => warmRoute(qc, rawHref);
 
-  // (#perf) After first paint, warm the bar's chunks on idle so the very first
-  // click into each section is instant even without a prior hover.
+  // (#perf, perf phase 2) The NEXT LIKELY click, on idle — not every section. Once the
+  // page's real numbers are in and the foreground is quiet (`lib/speculative.ts`:
+  // never on Save-Data, 2G/3G or a ≤ 2 GB device), warm the phone drawer's small
+  // chunk and this section's own tabs (Home has none: its warm-up is
+  // `useLandingWarmup`). A tab whose chunk would bring the chart library waits
+  // until a chart on screen has loaded it. Hover / focus / press still warm any
+  // link at once (`warmRoute`).
+  const sectionId = section?.id ?? null;
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const warm = () => {
-      for (const { href } of BAR_SECTIONS) {
-        prefetchRoute(href);
-      }
-      void importMobileNav();
-    };
-    const ric = (window as unknown as {
-      requestIdleCallback?: (cb: () => void) => number;
-    }).requestIdleCallback;
-    if (typeof ric === "function") {
-      ric(warm);
-      return;
-    }
-    const t = setTimeout(warm, 1500);
-    return () => clearTimeout(t);
-  }, []);
+    const onHome = sectionId === "dashboard";
+    const tabs = sectionTabs.map((t) => pathOf(t.href));
+    return whenForegroundIdle(
+      qc,
+      { marks: onHome ? HOME_MARKS : undefined, quietMs: WARMUP_QUIET_MS, giveUpMs: WARMUP_GIVE_UP_MS },
+      () => {
+        void importMobileNav();
+        for (const href of tabs.filter((h) => h !== pathOf(location)).slice(0, NEXT_LIKELY_TABS)) prefetchRouteSpeculatively(href);
+      },
+    );
+    // Per section: moving to another section re-plans (and cancels a wait not yet run).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionId]);
 
   // ⭐ Scroll: a new page starts at the top, Back/Forward returns to where you
   // were (`lib/scrollRestore.ts`).

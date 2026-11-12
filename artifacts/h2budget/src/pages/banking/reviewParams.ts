@@ -7,6 +7,7 @@ import {
 } from "@workspace/api-client-react/features";
 import { householdToday } from "@/lib/householdDay";
 import { sanitizeRange } from "./reviewDates";
+import { warmNeedsYou } from "./needsYouApi";
 
 /**
  * (P4) The Banking page's request params, built in ONE place so the page and
@@ -36,7 +37,7 @@ export function bankingDefaultSummaryParams(now: Date = new Date(), account = ""
   return bankingSummaryParams(bankingBase(account, range));
 }
 
-/** Warm what /banking asks first: the review (summary + first pages) and the Plaid items. */
+/** Warm what /banking asks first: the review (summary + first pages), the Needs-you list and the Plaid items. */
 export function warmBanking(qc: QueryClient, account = ""): void {
   const params = bankingDefaultSummaryParams(new Date(), account);
   void qc.prefetchQuery({
@@ -49,4 +50,6 @@ export function warmBanking(qc: QueryClient, account = ""): void {
     queryFn: () => listPlaidItems(),
     staleTime: BANKING_MIN,
   });
+  // (perf phase 2) The page asks for Needs you at once, beside the review.
+  warmNeedsYou(qc);
 }

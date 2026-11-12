@@ -28,6 +28,7 @@ export interface H2Perf {
 
 let nav = 0;
 let marked = new Set<string>();
+const markListeners = new Set<(name: string) => void>();
 
 function perf(): Performance | null {
   return typeof performance !== "undefined" && typeof performance.mark === "function" ? performance : null;
@@ -49,6 +50,20 @@ export function markReady(name: string): void {
   } catch {
     /* a browser without mark details: the mark is a nicety */
   }
+  for (const fn of markListeners) fn(name);
+}
+
+/** True once `name` has been left in this page view. (The speculative warm-up waits on the real-number marks.) */
+export function hasMark(name: string): boolean {
+  return marked.has(name);
+}
+
+/** Called with each mark as it is left. Returns the unsubscribe. */
+export function onMark(fn: (name: string) => void): () => void {
+  markListeners.add(fn);
+  return () => {
+    markListeners.delete(fn);
+  };
 }
 
 /** A new page view (a route change): marks may be left again. */

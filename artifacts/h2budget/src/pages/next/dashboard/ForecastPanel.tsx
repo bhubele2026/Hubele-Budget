@@ -1,6 +1,7 @@
 import { Suspense, useMemo, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { lazyWithPreload } from "@/lib/lazyWithPreload";
+import { useNearViewport } from "@/hooks/useNearViewport";
 import { Link, useLocation } from "wouter";
 import { Panel, shortDate } from "@/components/next";
 import { buildEventsByDate } from "@/lib/forecastPastDue";
@@ -14,7 +15,11 @@ import { useFoldMinH } from "./foldDensity";
 import { toggle } from "@/ui";
 import { Gate, LINK, money, weekdayLabel } from "./shared";
 
-/** The chart (and recharts with it) loads only when this panel mounts. */
+/**
+ * The chart (and recharts with it) loads only when this panel is within reach of
+ * the screen (perf phase 2): below the fold on a phone, the chart library is
+ * never fetched on a guess, ahead of the numbers above it.
+ */
 const Chart = lazyWithPreload(() =>
   import("@/pages/forecast/ProjectedBalanceChart").then((m) => ({ default: m.ProjectedBalanceChart })),
 );
@@ -45,6 +50,7 @@ export function chartWords(days: number, low: { y: number; rawDate: string } | n
 
 export default function ForecastPanel() {
   const minH = useFoldMinH("forecast");
+  const [chartRef, chartNear] = useNearViewport<HTMLDivElement>("200px");
   const [days, setDays] = useState<number>(90);
   const [, navigate] = useLocation();
   const q = useCashSignalQ(days, { placeholderData: keepPreviousData });
@@ -123,7 +129,11 @@ export default function ForecastPanel() {
                     className={cn("h-80 w-full transition-opacity", loading && "opacity-60")}
                     aria-busy={loading}
                     data-testid="dash-forecast-chart"
+                    ref={chartRef}
                   >
+                    {!chartNear ? (
+                      <div className="skeleton h-full w-full rounded-control" data-testid="dash-forecast-chart-waiting" />
+                    ) : (
                     <Suspense fallback={<div className="skeleton h-full w-full rounded-control" />}>
                       <Chart
                         variant="expanded"
@@ -143,6 +153,7 @@ export default function ForecastPanel() {
                         sessionKey="dash-forecast"
                       />
                     </Suspense>
+                    )}
                   </div>
                   {loading ? (
                     <span
