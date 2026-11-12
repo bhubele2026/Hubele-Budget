@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from "react";
-import { lazyWithPreload } from "@/lib/lazyWithPreload";
+import type { QueryClient } from "@tanstack/react-query";
+import { lazyWithPreload, preloadImporter } from "@/lib/lazyWithPreload";
 import { PageGrid } from "@/components/next";
 import { RefreshBanner } from "@/components/data-state";
 import { useSpine } from "@/hooks/useSpine";
@@ -17,9 +18,25 @@ import { hasLinkedBank } from "./dashboard/bankState";
 // asked for at once), the "More" drawer (the six tiles and the header's old
 // small print, mounted when opened) and the forecast graph (after first paint;
 // the chart library is a further lazy chunk inside it).
-const PayThisWeek = lazyWithPreload(() => import("./dashboard/AvalancheWeekBox"));
+const importPayThisWeek = () => import("./dashboard/AvalancheWeekBox");
+const PayThisWeek = lazyWithPreload(importPayThisWeek);
 const MoreDrawer = lazyWithPreload(() => import("./dashboard/MoreDrawer"));
 const ForecastRow = lazyWithPreload(() => import("./dashboard/BelowFold").then((m) => ({ default: m.ForecastRow })));
+
+/**
+ * (perf phase 2) Start "Pay this week" at the open, beside the spine (App.tsx, landing only): its chunk (the same
+ * importer as the lazy box above, so the box renders it without suspending once it is in) and, as soon as that
+ * chunk runs, its plan. Stays off the open path: a dynamic import, not a modulepreload.
+ */
+export function warmPayThisWeek(qc: QueryClient): void {
+  void preloadImporter(importPayThisWeek).then(
+    // The whole module resolves here (`preloadImporter` types only its default).
+    (m) => (m as unknown as typeof import("./dashboard/AvalancheWeekBox")).warmWeekly(qc),
+    () => {
+      /* a failed chunk: the box's own lazy load and error boundary take it from here */
+    },
+  );
+}
 
 /** The closed drawer's own height (its one line), so nothing moves when it arrives. */
 const MoreSkeleton = () => (

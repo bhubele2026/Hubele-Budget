@@ -14,6 +14,8 @@ import React from "react";
 const auth = vi.hoisted(() => ({ isLoaded: false, isSignedIn: false as boolean | undefined }));
 const pageFetch = vi.hoisted(() => vi.fn());
 const chunk = vi.hoisted(() => ({ wait: null as Promise<void> | null }));
+const pay = vi.hoisted(() => ({ warm: vi.fn() }));
+const api = vi.hoisted(() => ({ getSpine: vi.fn(() => new Promise(() => {})) }));
 
 vi.mock("@clerk/react", () => ({
   ClerkProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -24,7 +26,7 @@ vi.mock("@clerk/react", () => ({
 vi.mock("@clerk/react/internal", () => ({ publishableKeyFromHost: () => "pk_test_x" }));
 vi.mock("@clerk/themes", () => ({ shadcn: {} }));
 vi.mock("@workspace/api-client-react", () => ({
-  getSpine: vi.fn(() => new Promise(() => {})),
+  getSpine: api.getSpine,
   getMe: vi.fn(() => new Promise(() => {})),
   getGetMeQueryKey: () => ["/api/me"],
   getGetSpineQueryKey: () => ["/api/spine"],
@@ -51,7 +53,7 @@ vi.mock("./lib/routePrefetch", async () => {
   for (const n of names) out[n] = page;
   return out;
 });
-vi.mock("./pages/next/Dashboard", () => ({ default: () => <div data-testid="page-home" /> }));
+vi.mock("./pages/next/Dashboard", () => ({ default: () => <div data-testid="page-home" />, warmPayThisWeek: pay.warm }));
 vi.mock("./pages/auth", () => ({
   SignInPage: () => <div data-testid="page-sign-in" />,
   SignUpPage: () => <div data-testid="page-sign-up" />,
@@ -63,10 +65,11 @@ vi.mock("@/components/plaid-reconnect-listener", () => ({ PlaidReconnectListener
 vi.mock("@/components/version-update-prompt", () => ({ VersionUpdatePrompt: () => null }));
 vi.mock("@/lib/mutationInvalidation", () => ({ onWriteSuccess: () => {} }));
 
-async function boot(path: string, hint: boolean) {
+async function boot(path: string, hint: boolean, cookie = false) {
   vi.resetModules();
   window.localStorage.clear();
   if (hint) window.localStorage.setItem("h2:auth-hint", "1");
+  document.cookie = cookie ? "__session=jwt; path=/" : "__session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   window.history.pushState({}, "", path);
   const { default: App } = await import("./App");
   return render(<App />);
@@ -78,6 +81,9 @@ beforeEach(() => {
   chunk.wait = null;
   pageFetch.mockReset();
   pageFetch.mockResolvedValue("rows");
+  pay.warm.mockReset();
+  api.getSpine.mockReset();
+  api.getSpine.mockImplementation(() => new Promise(() => {}));
 });
 
 afterEach(cleanup);
@@ -130,5 +136,73 @@ describe("optimistic routes", () => {
     expect(screen.queryByText("data:rows")).toBeNull();
     expect(window.localStorage.getItem("h2:auth-hint")).toBeNull();
     await waitFor(() => expect(qc.getQueryCache().getAll().length).toBe(0));
+  });
+});
+
+/**
+ * (perf phase 2) THE OPEN DOES NOT WAIT FOR CLERK-JS TO ASK FOR THE SPINE when a
+ * session cookie is there, even with no hint; nothing is SHOWN before Clerk answers,
+ * a first visitor (no cookie) asks for nothing, and Clerk answering signed out
+ * empties the cache on any route, the front door included.
+ */
+describe("the landing's early start", () => {
+  it("hint: the spine and 'Pay this week' start at load, before Clerk", async () => {
+    await boot("/home", true);
+    expect(api.getSpine).toHaveBeenCalledTimes(1);
+    expect(pay.warm).toHaveBeenCalledTimes(1);
+  });
+
+  it("no hint but a session cookie: they start at load too, and nothing renders before Clerk", async () => {
+    await boot("/home", false, true);
+    expect(api.getSpine).toHaveBeenCalledTimes(1);
+    expect(pay.warm).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+    expect(screen.queryByTestId("page-home")).toBeNull();
+  });
+
+  it("no hint and no cookie (a first visit): nothing is asked", async () => {
+    await boot("/home", false, false);
+    expect(api.getSpine).not.toHaveBeenCalled();
+    expect(pay.warm).not.toHaveBeenCalled();
+  });
+
+  it("not the landing: no early spine (the page's own data goes first)", async () => {
+    await boot("/amex", false, true);
+    expect(api.getSpine).not.toHaveBeenCalled();
+  });
+
+  it("cookie, then Clerk says signed OUT on the front door: the early answer is dropped", async () => {
+    api.getSpine.mockImplementation(() => Promise.resolve({ spine: true }) as never);
+    const view = await boot("/", false, true);
+    const qc = (window as unknown as { __qc: { getQueryCache: () => { getAll: () => unknown[] } } }).__qc;
+    await waitFor(() => expect(qc.getQueryCache().getAll().length).toBeGreaterThan(0));
+    auth.isLoaded = true;
+    auth.isSignedIn = false;
+    const { default: App } = await import("./App");
+    view.rerender(<App />);
+    await waitFor(() => expect(qc.getQueryCache().getAll().length).toBe(0));
+  });
+
+  it("cookie + Clerk signs in: the landing reads the spine already asked for (no second request)", async () => {
+    api.getSpine.mockImplementation(() => Promise.resolve({ spine: true }) as never);
+    const view = await boot("/home", false, true);
+    auth.isLoaded = true;
+    auth.isSignedIn = true;
+    const { default: App } = await import("./App");
+    view.rerender(<App />);
+    expect(await screen.findByTestId("page-home")).toBeTruthy();
+    expect(api.getSpine).toHaveBeenCalledTimes(1);
+  });
+
+  it("cookie + a 401 before Clerk refreshed it: asked once more when Clerk signs in", async () => {
+    api.getSpine.mockImplementationOnce(() => Promise.reject(Object.assign(new Error("401"), { status: 401 })) as never);
+    api.getSpine.mockImplementation(() => Promise.resolve({ spine: true }) as never);
+    const view = await boot("/home", false, true);
+    await act(async () => {});
+    auth.isLoaded = true;
+    auth.isSignedIn = true;
+    const { default: App } = await import("./App");
+    view.rerender(<App />);
+    await waitFor(() => expect(api.getSpine).toHaveBeenCalledTimes(2));
   });
 });

@@ -1,7 +1,8 @@
 import { Link } from "wouter";
+import type { QueryClient } from "@tanstack/react-query";
 import type { AvalancheWeeklyLastPaid, AvalancheWeeklyWeek } from "@workspace/api-client-react";
 // The lazy `features` module: this box is its own lazy chunk, never on the landing path.
-import { getGetAvalancheWeeklyQueryKey, useGetAvalancheWeekly } from "@workspace/api-client-react/features";
+import { getAvalancheWeekly, getGetAvalancheWeeklyQueryKey, useGetAvalancheWeekly } from "@workspace/api-client-react/features";
 import { Panel } from "@/components/next";
 import { cn } from "@/lib/utils";
 import { householdToday } from "@/lib/householdDay";
@@ -84,9 +85,23 @@ const NUM = "font-mono tabular-nums";
 
 type WeeklyQ = ReturnType<typeof useWeeklyQ>;
 
+const WEEKLY_CACHE = { staleTime: 5 * MIN, gcTime: 30 * MIN } as const;
+
 /** The same key and cache as the Debt page's weekly panel: one plan for both. */
-const useWeeklyQ = () =>
-  useGetAvalancheWeekly({ query: { queryKey: getGetAvalancheWeeklyQueryKey(), staleTime: 5 * MIN, gcTime: 30 * MIN } });
+const useWeeklyQ = () => useGetAvalancheWeekly({ query: { queryKey: getGetAvalancheWeeklyQueryKey(), ...WEEKLY_CACHE } });
+
+/**
+ * (perf phase 2) Ask for the plan as soon as this chunk has run, under the box's own key and cache: the open
+ * starts it beside the spine (`warmPayThisWeek` in Dashboard.tsx), so it no longer waits for the landing to
+ * render and Suspense to let the box in.
+ */
+export function warmWeekly(qc: QueryClient): void {
+  void qc.prefetchQuery({
+    queryKey: getGetAvalancheWeeklyQueryKey(),
+    queryFn: ({ signal }) => getAvalancheWeekly({ signal }),
+    ...WEEKLY_CACHE,
+  });
+}
 
 function Body({ q, controls }: { q: WeeklyQ; controls: AvalancheWeekPayControls }) {
   const today = householdToday();

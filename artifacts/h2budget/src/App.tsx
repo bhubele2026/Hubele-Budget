@@ -42,7 +42,7 @@ import { SignInPage, SignUpPage } from "./pages/auth";
 // splitting it into its own chunk bought nothing but a guaranteed extra network
 // round trip on the one screen that has to feel instant. It is cheap to carry
 // in the entry precisely because it holds zero charts and one query.
-import DashboardPage from "./pages/next/Dashboard";
+import DashboardPage, { warmPayThisWeek } from "./pages/next/Dashboard";
 import { PageSkeleton } from "@/components/page-skeleton";
 // (#perf) Route-chunk importers live in one shared module so the hover/idle
 // prefetch map (lib/routePrefetch) and these lazy() calls can never point at
@@ -330,7 +330,34 @@ function onLanding(): boolean {
   if (base && path.startsWith(base)) path = path.slice(base.length) || "/";
   return path === "/" || path === "/home";
 }
-if (typeof window !== "undefined" && readAuthHint() && onLanding()) {
+/**
+ * (perf phase 2) A Clerk session cookie on this origin (`__session`, or the
+ * suffixed `__session_<id>` Clerk also writes). It is JS-readable by design; we
+ * read only whether it EXISTS, never its value. Like the hint it is a reason to
+ * start fetching early, never an authorisation: the server decides.
+ */
+function hasSessionCookie(): boolean {
+  try {
+    return /(?:^|;\s*)__session(?:_[^=;]+)?=[^;]/.test(document.cookie);
+  } catch {
+    return false;
+  }
+}
+
+// ⭐ (perf phase 2) THE SPINE ALSO STARTS ON THE COOKIE ALONE, IN PARALLEL WITH
+// CLERK-JS. With no hint (first open on this device, storage blocked) the routes
+// still wait for Clerk (`ProtectedShell` renders nothing until it answers), so
+// nothing is SHOWN early; but when a session cookie is there the request no longer
+// waits behind clerk-js's download and boot. What makes it safe:
+//   - no cookie, no request (a first visitor costs nothing, not even a 401);
+//   - the answer only sits in memory, and only the cookie's own session can get one;
+//   - Clerk answering signed OUT empties the cache (`ClerkQueryClientCacheInvalidator`,
+//     on every route, the sign-in page included);
+//   - a 401 (a cookie Clerk has not refreshed yet) is asked again once Clerk has
+//     signed in (`askForSpineAgainIfFailed`), as on the hint path.
+const EARLY_LANDING =
+  typeof window !== "undefined" && onLanding() && (readAuthHint() || hasSessionCookie());
+if (EARLY_LANDING) {
   void queryClient
     .prefetchQuery({
       queryKey: getGetSpineQueryKey(),
@@ -341,6 +368,10 @@ if (typeof window !== "undefined" && readAuthHint() && onLanding()) {
     .catch(() => {
       /* 401 before Clerk refreshes the cookie — ProtectedShell asks again */
     });
+  // (perf phase 2) "Pay this week" (its own lazy chunk and the features client)
+  // starts here too, beside the spine, instead of when the landing first renders
+  // and Suspense lets it retry; its plan is asked as soon as that chunk runs.
+  warmPayThisWeek(queryClient);
 }
 
 const clerkPubKey = publishableKeyFromHost(
@@ -623,7 +654,13 @@ function ProtectedShell() {
 
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
+  const { isLoaded, isSignedIn } = useAuth();
   const qc = useQueryClient();
+  // (perf phase 2) Clerk says signed OUT, on ANY route (the front door included,
+  // where ProtectedShell never mounts): nothing fetched early on the cookie stays.
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) qc.clear();
+  }, [isLoaded, isSignedIn, qc]);
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     const unsubscribe = addListener(({ user }) => {
