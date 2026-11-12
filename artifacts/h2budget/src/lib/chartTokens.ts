@@ -188,9 +188,12 @@ export const CHART_INK: ChartInk = byTheme<ChartInk>(
  * filter changes — the colour marks identity, not rank.
  */
 export const CAT8: readonly string[] = byTheme<readonly string[]>(
-  ["#19315b", "#3b5c8f", "#f68d2e", "#4d5d73", "#8fa3bf", "#22406e", "#e16d3e", "#a9bad2"],
-  // Dark: lightness still alternates down the list, every slot ≥ 3:1 on the card.
-  ["#eef1f6", "#8fa9d6", "#f68d2e", "#aab3c2", "#5d7299", "#c9d3e6", "#e16d3e", "#7689a8"],
+  // (Owner, 2026-11-12) No orange in the categorical set — orange is for warnings. Slot 2 is a muted teal and slot 6
+  // a muted plum: calm, distinct from the navy steps and from the account accents, never brown. Light: 4.7:1 and
+  // 5.2:1 on white.
+  ["#19315b", "#3b5c8f", "#2f7f7a", "#4d5d73", "#8fa3bf", "#22406e", "#8e5b8c", "#a9bad2"],
+  // Dark: lightness still alternates down the list, every slot ≥ 3:1 on the card (teal 7.2:1, plum 6.5:1).
+  ["#eef1f6", "#8fa9d6", "#5fb3a9", "#aab3c2", "#5d7299", "#c9d3e6", "#c08bbd", "#7689a8"],
 );
 
 /**

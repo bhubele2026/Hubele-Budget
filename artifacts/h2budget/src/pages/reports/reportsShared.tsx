@@ -573,21 +573,12 @@ export function ReportShell({
   controls?: ReactNode;
   children: ReactNode;
 }) {
+  void crumb; // kept for the callers; the shell's breadcrumb says it
   return (
     <div className="space-y-4">
-      <nav className="flex flex-wrap items-center gap-1 text-micro text-neutral-500">
-        <Link
-          href="/reports"
-          className="press rounded px-1 py-0.5 font-medium text-neutral-500 hover:bg-neutral-100 hover:text-brand-navy"
-        >
-          Reports
-        </Link>
-        <span aria-hidden className="text-neutral-300">
-          ›
-        </span>
-        <span className="px-1 py-0.5 text-neutral-500">{crumb}</span>
-      </nav>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* (Owner, 2026-11-12) No crumb of its own: the shell's breadcrumb above already names and links this report
+          (`crumb` is kept on the props so no caller changes). */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <h1 className="text-display font-semibold text-foreground">{title}</h1>
         {controls}
       </div>

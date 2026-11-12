@@ -75,7 +75,8 @@ describe("light is exactly what it was", () => {
       // (2026-11-12, owner-approved light change) the grid is a quiet neutral hairline.
       orange: "#f68d2e", orangeDeep: "#e16d3e", badInk: "#c2410c", grid: "#e8eaee",
     });
-    expect([...CAT8]).toEqual(["#19315b", "#3b5c8f", "#f68d2e", "#4d5d73", "#8fa3bf", "#22406e", "#e16d3e", "#a9bad2"]);
+    // (2026-11-12, owner) the two orange slots are now a muted teal and a muted plum.
+    expect([...CAT8]).toEqual(["#19315b", "#3b5c8f", "#2f7f7a", "#4d5d73", "#8fa3bf", "#22406e", "#8e5b8c", "#a9bad2"]);
     expect([...NAVY_RAMP]).toEqual(["#e1e8f0", "#c4d0e2", "#a9bad2", "#8fa3bf", "#3b5c8f", "#19315b"]);
     expect({ ...ACCOUNT_ACCENT }).toEqual({ checking: "#19315b", amex: "#0f766e", card2: "#5b4bb3", other: "#5d6674" });
     expect({ ...MARKER }).toEqual({ payday: "#19315b", bill: "#4d5d73", card: "#0f766e", debt: "#f68d2e" });
@@ -113,6 +114,15 @@ describe("dark — legible on the card, one orange, never brown", () => {
     expect(CHART_INK.plate).toBe(CARD);
     expect(new Set(CAT8).size).toBe(8);
     expect(CAT8).not.toContain(OTHER_GREY);
+  });
+
+  it("(owner, 2026-11-12) the categorical set holds no orange, in light or dark: orange is for warnings", () => {
+    const oranges = ["#f68d2e", "#e16d3e", "#ee7d50", "#c2410c"];
+    for (const dark of [false, true]) {
+      setDarkNow(dark);
+      for (const c of CAT8) expect(oranges, `${c} (${dark ? "dark" : "light"})`).not.toContain(c.toLowerCase());
+    }
+    setDarkNow(false);
   });
 
   it("a translucent fill of orange or the alarm colour becomes neutral (their half-alpha over black is brown); others keep their colour", () => {
