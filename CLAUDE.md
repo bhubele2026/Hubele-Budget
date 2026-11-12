@@ -148,6 +148,35 @@ to get the household out of debt; correctness and trust beat everything.
 - Animation driven from JS (charts, scripted transitions) cannot see CSS media
   queries; gate it on `matchMedia("(prefers-reduced-motion: reduce)")` in code.
 
+### ⭐ Light and dark — tokens only (owner, 2026-11-11)
+
+Each person picks Auto · Light · Dark · Time of day (`lib/theme.ts`; the rule is
+`resolveTheme`, and `index.html` carries a tested copy for the first paint).
+Dark is `<html data-theme="dark">` and is nothing but new values for the tokens,
+in the DARK block at the foot of `index.css`. So:
+
+- **Never a `dark:` class, and never a colour literal on a page** (no hex, no
+  `rgb()`, no `white/NN`). A page takes a token; a new need gets a new token
+  with a light value and a dark one.
+- **Navy is a FILL or an INK, never both.** `bg-brand-navy` (the top bar, a
+  solid button, white text) stays navy in dark; `text-` / `ring-` /
+  `border-brand-navy` turn light. A data bar is `bg-brand-fill`, a faint navy
+  wash is `bg-brand-wash/NN`, a scrim is `bg-scrim`, ink on orange is
+  `text-on-orange`, ink on the alarm fill is `text-on-bad`. `bg-white` is the
+  card colour in dark; `text-white` stays white.
+- **Chart colours come from `lib/chartTokens.ts`**, read at draw time. A
+  module-level `const X = CHART.navy` freezes the light value: wrap a table in
+  `themed(() => ({ … }))`. A translucent fill goes through `washOf()`.
+- **Never brown:** no half-alpha orange or alarm colour over black. Orange is
+  solid; tints behind alarm text are neutral.
+- **Light must not move.** A change to a token's light value is a design change
+  and needs the owner.
+- **Run the guard after any colour or chart change:**
+  `pnpm --filter @workspace/scripts exec tsx ./verify-theme.mts` (headless; an
+  invented household; measures contrast, near-white grounds, navy chart lines,
+  brown and sideways scroll on every page in dark, and proves the rule, the
+  no-flash boot and the switch). Emails stay light.
+
 ### ⭐ The spine — one snapshot, many surfaces
 
 `GET /api/spine` computes the shared household snapshot server-side in one pass

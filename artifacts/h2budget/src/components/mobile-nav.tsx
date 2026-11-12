@@ -185,7 +185,7 @@ export default function MobileNav({
       </nav>
       {/* (Light and dark) The phone's Appearance choices; the top bar has no room for the button. */}
       <div className="border-t border-chrome-rule px-4 py-3" data-testid="drawer-appearance">
-        <div className="pb-1.5 text-micro font-semibold uppercase tracking-wide text-chrome-ink-4">Appearance</div>
+        <div className="pb-1.5 text-micro font-semibold uppercase tracking-wide text-chrome-ink-3">Appearance</div>
         <AppearanceRow tone="chrome" />
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-chrome-rule p-4">
