@@ -44,7 +44,7 @@ const MEANINGS: Record<BucketKey, string> = {
   weekly: "Weekly: counts toward the weekly allowance",
   monthly: "Monthly: counts toward the monthly allowance",
   unplanned: "Unplanned: counts toward the unplanned allowance",
-  reimbursable: "Reimbursable: someone will pay this back",
+  reimbursable: "Reimbursable: someone pays it back",
 };
 
 const ORDER: BucketKey[] = BUCKET_LABEL_ORDER;

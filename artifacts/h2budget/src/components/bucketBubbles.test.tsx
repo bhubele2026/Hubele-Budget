@@ -19,7 +19,7 @@ describe("BucketBubbles", () => {
       ["Weekly bucket", "Weekly: counts toward the weekly allowance"],
       ["Monthly bucket", "Monthly: counts toward the monthly allowance"],
       ["Unplanned bucket", "Unplanned: counts toward the unplanned allowance"],
-      ["Reimbursable", "Reimbursable: someone will pay this back"],
+      ["Reimbursable", "Reimbursable: someone pays it back"],
     ];
     for (const [name, tip] of expected) {
       const b = screen.getByRole("button", { name });
@@ -51,9 +51,9 @@ describe("BucketBubbles", () => {
     expect(src).toContain("hidden sm:inline @6xl:hidden");
   });
 
-  it("the legend names the letters, once above the ledger", () => {
+  it("the legend says what each letter MEANS, once above the ledger", () => {
     render(<BucketLegend />);
-    expect(screen.getByTestId("bucket-legend").textContent).toBe("W Weekly · M Monthly · U Unplanned · R Reimbursable");
+    expect(screen.getByTestId("bucket-legend").textContent).toBe("W Weekly allowance · M Monthly allowance · U Unplanned allowance · R Someone pays it back");
   });
 });
 

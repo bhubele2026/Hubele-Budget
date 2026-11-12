@@ -159,11 +159,9 @@ test.describe("Inline category override on rule-categorized rows (#451)", () => 
     await expect(badge).toHaveText(groceriesName);
 
     await badge.click();
-    await page.getByTestId("checkbox-remember-picker").click();
-    await expect(page.getByTestId("checkbox-remember-picker")).toHaveAttribute(
-      "data-state",
-      "unchecked",
-    );
+    // (2026-11-12) No "Remember" switch any more: the server learns from every hand pick
+    // (it always ignored `rememberPattern`), and the picker says so.
+    await expect(page.getByTestId("note-remember-picker")).toContainText("Every pick teaches H2 this merchant");
 
     // Picker opens with all categories searchable. Pick the second one.
     const patchPromise = page.waitForRequest(

@@ -1513,9 +1513,10 @@ export default function AmexPage({
             description: ruleDescription,
           });
         } else if (rememberPattern) {
+          // (2026-11-12) What the server does: every hand pick teaches H2 this merchant.
           categorizedToast = toast({
-            title: "Categorized & remembered",
-            description: `Future "${rememberPattern}" will auto-categorize.`,
+            title: "Categorized",
+            description: "H2 remembers this merchant for next time.",
           });
         }
         if (categorizedToast) {

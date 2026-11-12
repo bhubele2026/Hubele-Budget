@@ -241,11 +241,9 @@ test.describe("Transfer override flow on the transactions page (#494)", () => {
     await expect(inlineBadge).toBeVisible();
     await expect(inlineBadge).toHaveText(transfersName);
     await inlineBadge.click();
-    await page.getByTestId("checkbox-remember-picker").click();
-    await expect(page.getByTestId("checkbox-remember-picker")).toHaveAttribute(
-      "data-state",
-      "unchecked",
-    );
+    // (2026-11-12) No "Remember" switch any more: the server learns from every hand pick
+    // (it always ignored `rememberPattern`), and the picker says so.
+    await expect(page.getByTestId("note-remember-picker")).toContainText("Every pick teaches H2 this merchant");
 
     const pickReqPromise = page.waitForRequest(
       (req) =>

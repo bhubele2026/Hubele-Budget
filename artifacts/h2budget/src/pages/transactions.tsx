@@ -1421,11 +1421,13 @@ export default function TransactionsPage({
       // toast on click. Avoids the parent toast lingering after Undo
       // is consumed.
       const categorizedToast = toast({
-        title: rememberPattern && !ruleDescription ? "Categorized & remembered" : "Categorized",
+        // (2026-11-12) The words say what the server does: every hand pick teaches H2 this merchant (its own
+        // signature, not the picker's guessed pattern), so no "Future 'X'…" promise is made on the client's guess.
+        title: "Categorized",
         ...(ruleDescription
           ? { description: ruleDescription }
           : rememberPattern
-            ? { description: `Future "${rememberPattern}" will auto-categorize.` }
+            ? { description: "H2 remembers this merchant for next time." }
             : {}),
       });
       const undoAction = buildRuleUndoAction(

@@ -1,7 +1,6 @@
 import { CATEGORY_DELETED, CATEGORY_NONE } from "@/lib/categoryLabel";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Popover,
   PopoverContent,
@@ -45,7 +44,10 @@ export function CategoryPicker({
   const [open, setOpen] = useState(false);
   const loading = categories === undefined;
   categories = categories ?? [];
-  const [remember, setRemember] = useState(true);
+  // (2026-11-12) There is no "Remember" switch: the server learns from EVERY hand pick (merchant memory and a
+  // mapping rule; `rememberPattern` is ignored there). The caption under the list says so; the pattern still rides
+  // along for the toasts that name it.
+  const remember = true;
   // (#474) When the system-managed "Uncategorized" category exists in the
   // list, the hard-coded "Uncategorized" command item picks its real id so
   // the row gets a stored category (and the orange "Categorize" pill goes
@@ -210,17 +212,9 @@ export function CategoryPicker({
             </CommandGroup>
           </CommandList>
           {pattern && (
-            <div className="border-t px-2 py-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <Checkbox
-                checked={remember}
-                onCheckedChange={(v) => setRemember(!!v)}
-                id={rememberId}
-                data-testid={`checkbox-${rememberId}`}
-              />
-              <label htmlFor={rememberId} className="cursor-pointer">
-                Remember <span className="font-mono">"{pattern}"</span>
-              </label>
-            </div>
+            <p className="border-t border-brand-line px-2 py-1.5 text-[11px] leading-snug text-neutral-600" data-testid={`note-${rememberId}`}>
+              Every pick teaches H2 this merchant, so its next charges file the same way. Transfer and Ignore are never learned.
+            </p>
           )}
         </Command>
       </PopoverContent>

@@ -257,14 +257,11 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
     // ===== Surface 2: recategorize-by-pattern preview dialog.
     const triggerRow = page.getByTestId(`row-tx-${triggerB.id}`);
     await expect(triggerRow).toBeVisible({ timeout: 15_000 });
-    // The row's CategoryPicker; "Remember" unticked so the PATCH carries the
-    // category alone and the server's own auto-relearn repoints ruleB.
+    // The row's CategoryPicker; the server's own auto-relearn repoints ruleB.
     await triggerRow.getByTestId("button-category-picker").click();
-    await page.getByTestId("checkbox-remember-picker").click();
-    await expect(page.getByTestId("checkbox-remember-picker")).toHaveAttribute(
-      "data-state",
-      "unchecked",
-    );
+    // (2026-11-12) No "Remember" switch any more: the server learns from every hand pick
+    // (it always ignored `rememberPattern`), and the picker says so.
+    await expect(page.getByTestId("note-remember-picker")).toContainText("Every pick teaches H2 this merchant");
 
     const picker = page.getByPlaceholder(/^search/i);
     await expect(picker).toBeVisible();

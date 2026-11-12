@@ -199,16 +199,12 @@ test.describe("Transactions bulk re-categorize Undo (#191)", () => {
     // repoints the seeded rule and reports candidateCount = 2.
     // (C9 repair) The row's category control is the shared account row's
     // CategoryPicker (`button-category-picker`), not the old CategorizeChip
-    // (`badge-uncategorized-*`). Its "Remember" box is on by default and
-    // would send a `rememberPattern`; the old chip sent the category alone,
-    // which is what drives the server's own auto-relearn (the flow under
-    // test), so it is unticked first.
+    // (`badge-uncategorized-*`). The server's own auto-relearn (the flow
+    // under test) runs on every hand pick.
     await triggerRow.getByTestId("button-category-picker").click();
-    await page.getByTestId("checkbox-remember-picker").click();
-    await expect(page.getByTestId("checkbox-remember-picker")).toHaveAttribute(
-      "data-state",
-      "unchecked",
-    );
+    // (2026-11-12) No "Remember" switch any more: the server learns from every hand pick
+    // (it always ignored `rememberPattern`), and the picker says so.
+    await expect(page.getByTestId("note-remember-picker")).toContainText("Every pick teaches H2 this merchant");
 
     const picker = page.getByPlaceholder(/^search/i);
     await expect(picker).toBeVisible();

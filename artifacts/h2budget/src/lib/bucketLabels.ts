@@ -13,4 +13,15 @@ export const BUCKET_LABELS: Record<BucketLabelKey, { short: string; full: string
   reimbursable: { short: "R", full: "Reimbursable" },
 };
 
+/**
+ * (2026-11-12) What each mark MEANS, in the legend's own words: the owner could not tell W / M / U / R
+ * apart. "Reimbursable" is said as what it does: someone pays it back.
+ */
+export const BUCKET_MEANINGS: Record<BucketLabelKey, string> = {
+  weekly: "Weekly allowance",
+  monthly: "Monthly allowance",
+  unplanned: "Unplanned allowance",
+  reimbursable: "Someone pays it back",
+};
+
 export const BUCKET_LABEL_ORDER: BucketLabelKey[] = ["weekly", "monthly", "unplanned", "reimbursable"];
