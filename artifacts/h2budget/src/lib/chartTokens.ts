@@ -39,7 +39,7 @@
  *    series in one colour. If you want a colour, name the colour.
  */
 
-import { isDarkNow } from "./themeNow";
+import { isDarkNow, quietly } from "./themeNow";
 
 // ── Light and dark ─────────────────────────────────────────────────────────
 /**
@@ -70,7 +70,8 @@ export function themed<T extends object>(make: () => T): T {
   let light: T | null = null;
   let dark: T | null = null;
   const now = (): T => (isDarkNow() ? (dark ??= make()) : (light ??= make()));
-  return new Proxy(make(), {
+  // The shape the Proxy stands on is built at load: not a draw (lib/themeNow.ts).
+  return new Proxy(quietly(make), {
     get: (_t, k) => Reflect.get(now(), k),
     has: (_t, k) => Reflect.has(now(), k),
     ownKeys: () => Reflect.ownKeys(now()),

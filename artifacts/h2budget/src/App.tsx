@@ -1,4 +1,4 @@
-import { Fragment, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Switch,
   Route,
@@ -31,8 +31,9 @@ import { lazyWithPreload } from "@/lib/lazyWithPreload";
 import { onWriteSuccess } from "@/lib/mutationInvalidation";
 import { recordDataAsOf, resetDataAsOf } from "@/lib/dataAsOf";
 import { useRefetchMoneyOnReturn } from "@/hooks/useRefetchMoneyOnReturn";
-import { confirmAppearance, scrollBeforeThemeChange, useTheme, writePageScroll } from "@/lib/theme";
-import { markReady, startPerfNavigation } from "@/lib/perfMarks";
+import { confirmAppearance } from "@/lib/theme";
+import { ThemeRepaint } from "@/components/theme-repaint";
+import { startPerfNavigation } from "@/lib/perfMarks";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -455,50 +456,6 @@ function RouteFallback() {
 // has to mean "was this browser signed in on a previous open", not "has Clerk
 // answered during this render".
 const HAD_AUTH_HINT = typeof window !== "undefined" && readAuthHint();
-
-/**
- * ⭐ (Light and dark) THE OPEN PAGE RE-MOUNTS ONCE WHEN THE THEME CHANGES.
- * Charts take their colours from JS at draw time (`lib/chartTokens.ts`), so a
- * page that stayed mounted would keep the old inks. The shell around it (the
- * top bar and its Appearance menu) stays mounted, and so does the `.page-in`
- * wrapper, so no page entrance replays. The page is put back where it was
- * scrolled.
- */
-function ThemeRepaint({ children }: { children: ReactNode }) {
-  const theme = useTheme();
-  const first = useRef(true);
-  useLayoutEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    // (PERF-0) The page re-mounted for a theme change: a mark, so a trace shows when.
-    markReady("h2:theme-repaint");
-    const y = scrollBeforeThemeChange();
-    if (y <= 0) return;
-    // ⚠️ One write is not enough: the re-mounted page is briefly shorter than
-    // it was (lazy panels, lists that fill in a frame later), which drags the
-    // scroller back to the top AFTER a first write has stuck. So the position
-    // is held until it has stayed put for a quarter of a second (or 1.5 s have
-    // gone), and let go the moment the person scrolls or types.
-    let frames = 0;
-    let held = 0;
-    let raf = 0;
-    const stop = () => {
-      cancelAnimationFrame(raf);
-      for (const ev of ["wheel", "touchstart", "keydown"] as const) window.removeEventListener(ev, stop);
-    };
-    for (const ev of ["wheel", "touchstart", "keydown"] as const) window.addEventListener(ev, stop, { passive: true });
-    const put = () => {
-      held = writePageScroll(y) > 1 ? 0 : held + 1;
-      if (held >= 15 || ++frames >= 90) return stop();
-      raf = requestAnimationFrame(put);
-    };
-    put();
-    return stop;
-  }, [theme]);
-  return <Fragment key={theme}>{children}</Fragment>;
-}
 
 function ProtectedShell() {
   const [location] = useLocation();

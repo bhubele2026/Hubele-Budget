@@ -27,7 +27,7 @@
 // which is why the save is one direct call.
 import { useSyncExternalStore } from "react";
 import { customFetch } from "@workspace/api-client-react";
-import { setDarkNow } from "./themeNow";
+import { inkWasRead, resetInkRead, setDarkNow } from "./themeNow";
 
 export type Theme = "light" | "dark";
 /** A person's pick. "auto" = the device's setting, else the clock; "time" = the clock alone. */
@@ -110,6 +110,23 @@ let current: Theme = "light";
 /** Where the page was scrolled when the theme last changed; App puts the re-mounted page back there. */
 let scrollAtChange = 0;
 
+// (perf phase 2) THE PAGE RE-MOUNTS ONLY WHEN SOMETHING DREW IN A JS COLOUR. Every
+// colour on a page is a CSS token that follows `<html data-theme>` by itself, except
+// what charts read in JS (`lib/themeNow.ts` notes those reads). So a theme change
+// bumps `repaintEpoch` (App's `ThemeRepaint` keys the page on it) only when a JS
+// colour has been read since the last re-mount; the saved pick settling at the
+// open, before any chart has drawn, repaints with no re-mount at all.
+let repaintEpoch = 0;
+const beforeRemount = new Set<() => void>();
+/** Called just before a theme change re-mounts the page (synchronously, ahead of React). */
+export function onBeforeThemeRemount(fn: () => void): () => void {
+  beforeRemount.add(fn);
+  return () => {
+    beforeRemount.delete(fn);
+  };
+}
+export const getRepaintEpoch = (): number => repaintEpoch;
+
 const scroller = (): HTMLElement | null =>
   typeof document === "undefined" ? null : document.querySelector<HTMLElement>("[data-shell-scroller]");
 /** The page's scroll position: the shell's one scroller, or the window outside the shell. */
@@ -148,6 +165,11 @@ function recompute(): void {
   if (next !== current) {
     scrollAtChange = readPageScroll();
     current = next;
+    if (inkWasRead()) {
+      resetInkRead();
+      repaintEpoch += 1;
+      for (const fn of beforeRemount) fn();
+    }
     paint();
   }
   emit(); // the pick changed even when the theme did not (the menu shows it)
@@ -223,6 +245,10 @@ function subscribe(fn: () => void): () => void {
 export function useTheme(): Theme {
   return useSyncExternalStore(subscribe, getTheme, () => "light" as Theme);
 }
+/** Bumps when a theme change must re-mount the page (see `repaintEpoch`). */
+export function useRepaintEpoch(): number {
+  return useSyncExternalStore(subscribe, getRepaintEpoch, () => 0);
+}
 /** This person's pick. */
 export function useAppearance(): Appearance {
   return useSyncExternalStore(subscribe, getAppearance, () => "auto" as Appearance);
@@ -236,6 +262,8 @@ export function _resetThemeForTests(): void {
   lastSavedAt = 0;
   postSeq = savedSeq = failedSeq = 0;
   scrollAtChange = 0;
+  repaintEpoch = 0;
+  resetInkRead();
   booted = false;
   current = "light";
   if (typeof window !== "undefined") {
