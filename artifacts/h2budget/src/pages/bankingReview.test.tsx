@@ -398,9 +398,9 @@ describe("Banking review — header and summary", () => {
     expect(text("br-inbox")).toBe("Nothing to match");
   });
 
-  it("(2026-11-12) the order: Needs you first, then the figures and the charges to match, then Details (proposed fixes, not on the plan, planned), household last", () => {
+  it("(2026-11-12) the order: Needs you first, then the figures, then Details (charges to match, proposed fixes, not on the plan, planned), household last", () => {
     mount();
-    const order = ["needs-you", "br-summary", "br-inbox-cell", "br-details", "br-household"].map((id) => screen.getByTestId(id));
+    const order = ["needs-you", "br-summary", "br-details", "br-household"].map((id) => screen.getByTestId(id));
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING, `${i}`).toBeTruthy();
     }
@@ -415,7 +415,12 @@ describe("Banking review — header and summary", () => {
     for (const b of ["unmatched", "amountDifference", "timingDifference", "confirmedUnplanned", "uncertain"]) {
       expect(within(details).getByTestId(`br-bucket-${b}`)).toBeTruthy();
     }
-    expect(within(screen.getByTestId("br-inbox-cell")).getByTestId("br-inbox")).toBeTruthy();
+    // The charges-to-match line (chip, scope, Open in Review) leads Details, ahead of the proposed fixes; nothing under
+    // the figures competes with Needs you.
+    const cell = within(details).getByTestId("br-inbox-cell");
+    expect(within(cell).getByTestId("br-inbox")).toBeTruthy();
+    expect(cell.compareDocumentPosition(within(details).getByTestId("br-fixes")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId("br-summary").nextElementSibling?.getAttribute("data-testid")).not.toBe("br-inbox-cell");
   });
 
   it("(2026-11-12) a link that names a part of Details opens it: ?fixes=1, ?bucket=", () => {

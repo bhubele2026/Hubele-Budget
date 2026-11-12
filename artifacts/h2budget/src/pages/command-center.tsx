@@ -43,7 +43,7 @@ import { useOlderSnapshot } from "@/lib/dataAsOf";
  * (2026-11-12) The page opens on ONE task list: where am I (account, range,
  * updated, pending) → ⭐ Needs you (every row with H2's suggested answer, OK or
  * Change, done in place) → what H2 sorted on its own → the four figures (bank vs
- * H2 and its check) and the charges-to-match count → "Details": Proposed fixes,
+ * H2 and its check) → "Details": the charges-to-match count, Proposed fixes,
  * Not in the plan (the five pills and their rows) and Planned this period →
  * the household's week, last. Nothing was removed; the detail is folded.
  *
@@ -392,8 +392,20 @@ export default function BankingReviewPage() {
             </div>
           ) : null}
 
-          {/* (2026-11-12) The forecast's "charges to match" count, in plain words: it scrolls to Needs you, where they are
-              answered. Review's own list stays one link away. */}
+          <details
+            className="disclose surface overflow-hidden rounded-card ring-1 ring-brand-line"
+            open={detailsOpen}
+            onToggle={(e) => setDetailsOpen((e.currentTarget as HTMLDetailsElement).open)}
+            data-testid="br-details"
+          >
+            <summary className="press cursor-pointer px-4 py-3" data-testid="br-details-summary">
+              <span className="text-title font-semibold text-brand-navy">Details</span>
+              <span className="ml-2 text-label text-neutral-600">Proposed fixes · Not in the plan · Planned this period</span>
+            </summary>
+            <div className="space-y-4 border-t border-brand-line p-3 sm:p-4">
+          {/* (2026-11-12) The forecast's "charges to match" count for this account and range, kept whole at the top of
+              Details: under the figures it read as a second, different "to do" beside Needs you. The chip scrolls to
+              Needs you, where they are answered; Review's own list stays one link away. */}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="br-inbox-cell">
             <a
               href="#needs-you"
@@ -415,17 +427,6 @@ export default function BankingReviewPage() {
             ) : null}
           </div>
 
-          <details
-            className="disclose surface overflow-hidden rounded-card ring-1 ring-brand-line"
-            open={detailsOpen}
-            onToggle={(e) => setDetailsOpen((e.currentTarget as HTMLDetailsElement).open)}
-            data-testid="br-details"
-          >
-            <summary className="press cursor-pointer px-4 py-3" data-testid="br-details-summary">
-              <span className="text-title font-semibold text-brand-navy">Details</span>
-              <span className="ml-2 text-label text-neutral-600">Proposed fixes · Not in the plan · Planned this period</span>
-            </summary>
-            <div className="space-y-4 border-t border-brand-line p-3 sm:p-4">
           <section className="space-y-2" aria-label="Proposed fixes" data-testid="br-decide">
             <ProposedFixes defaultOpen={fixesParam === "1"} />
           </section>
