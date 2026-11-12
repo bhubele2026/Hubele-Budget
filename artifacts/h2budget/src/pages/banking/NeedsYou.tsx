@@ -15,20 +15,21 @@ import {
   undoForecastResolution,
   useAcceptCategorizationDecision,
   useCorrectCategorizationDecision,
+  useUndoCategoryDecision,
   type BankingReviewPlanned,
   type ReviewResolution,
 } from "@workspace/api-client-react/features";
-import { HandledByH2 } from "@/components/agent/HandledByH2";
 import { CategoryPickerDialog } from "@/components/review/CategoryPickerDialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toastWithActions } from "@/components/ui/action-toast";
 import { toast } from "@/hooks/use-toast";
 import { useCategoryFollowUps } from "@/hooks/useCategoryFollowUps";
 import { formatDisplayAmount } from "@/lib/amountDisplay";
+import { shortDateOfInstant } from "@/lib/dates";
 import { isTyping } from "@/lib/reviewQueue";
 import { cn } from "@/lib/utils";
 import { btnLink, btnSecondarySm, btnSm, emptyNote } from "@/ui";
-import { getNeedsYouQueryKey, planOccurrenceOf, useNeedsYou, type NeedsYouItem } from "./needsYouApi";
+import { getAutoDoneQueryKey, getNeedsYouQueryKey, planOccurrenceOf, useAutoDone, useNeedsYou, type AutoDoneItem, type NeedsYouItem } from "./needsYouApi";
 import { TxDrawer, type DrawerRow } from "./TxDrawer";
 import { dayWords } from "./words";
 
@@ -53,7 +54,72 @@ import { dayWords } from "./words";
 export const NEEDS_YOU_HINT = "Match = this is a planned bill or payment. Category = what kind of spending it is.";
 
 const accountOf = (i: NeedsYouItem) => `${i.accountName}${i.mask ? ` ••${i.mask.slice(-4)}` : ""}`;
+/** The row's one line: the suggestion (its label is written to follow "Looks like "), else why it waits. */
 const thinkWords = (i: NeedsYouItem) => (i.suggestion ? `Looks like ${i.suggestion.label}` : i.reason);
+/** The drawer's lines: the reason in full, and the suggestion only when the reason does not already say it. */
+const drawerWords = (i: NeedsYouItem): string[] =>
+  i.suggestion && !/looks like/i.test(i.reason) ? [thinkWords(i), i.reason] : [i.reason];
+
+/**
+ * "See them": what H2 matched and filed on its own (GET /banking/auto-done), newest first, each with Undo. A match is
+ * taken back through its answer's own undo (and the auto-sort never matches that row again); a category goes back to
+ * the review queue through its decision's undo.
+ */
+function AutoDoneList() {
+  const q = useAutoDone(true);
+  const qc = useQueryClient();
+  const undoDecision = useUndoCategoryDecision();
+  const [undone, setUndone] = useState<Set<string>>(() => new Set());
+  const undo = async (it: AutoDoneItem) => {
+    try {
+      if (it.kind === "match") await undoForecastResolution(it.undoId, { restore: [] });
+      else await undoDecision.mutateAsync({ id: it.undoId });
+      setUndone((s) => new Set(s).add(it.undoId));
+      toast({ title: it.kind === "match" ? "Undone. It is back in Needs you." : "Put back. It is back in Needs you." });
+    } catch {
+      toast({ title: "Couldn't undo that. Nothing was changed.", variant: "destructive" });
+    }
+    void qc.invalidateQueries({ queryKey: getAutoDoneQueryKey() });
+    // An answer moves rows on many screens: everything is marked stale, what is on screen refetches.
+    void qc.invalidateQueries();
+  };
+  if (!q.data) {
+    return q.isError ? (
+      <p className="text-label text-neutral-700" role="alert">
+        Couldn't load what H2 sorted.{" "}
+        <button type="button" className={btnLink} onClick={() => void q.refetch()}>Try again</button>
+      </p>
+    ) : (
+      <div className="skeleton h-12 w-full rounded-card" aria-busy="true" />
+    );
+  }
+  if (q.data.items.length === 0) return <p className="text-label text-neutral-600" data-testid="ny-autodone-none">Nothing H2 sorted is left to show.</p>;
+  return (
+    <>
+      <ul className="surface list-none divide-y divide-brand-line/70 rounded-card p-0 ring-1 ring-brand-line" data-testid="ny-autodone-items">
+        {q.data.items.map((it) => {
+          const gone = undone.has(it.undoId);
+          return (
+            <li key={`${it.kind}:${it.undoId}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2" data-testid="ny-autodone-item">
+              <span className="min-w-0">
+                <span className="text-body text-brand-ink">{it.kind === "match" ? `Matched to ${it.label}` : `Filed under ${it.label}`}</span>
+                <span className="ml-2 text-micro text-neutral-500">{shortDateOfInstant(it.at)}</span>
+              </span>
+              {gone ? (
+                <span className="chip gray">Undone</span>
+              ) : (
+                <button type="button" className={btnLink} onClick={() => void undo(it)} data-testid={`ny-autodone-undo-${it.undoId}`}>
+                  Undo
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {q.data.truncated ? <p className="mt-1 text-micro text-neutral-600">Showing the newest {q.data.items.length}.</p> : null}
+    </>
+  );
+}
 const shortDay = (iso: string) => (/^\d{4}-\d{2}-\d{2}/.test(iso) ? dayWords(iso.slice(0, 10)) : iso);
 
 /** The planned occurrences a row may be matched to: those not already paid by another row. */
@@ -381,12 +447,10 @@ export function NeedsYou({
                           </button>
                           <span className="text-micro text-neutral-600" data-testid={`ny-account-${item.id}`}>{accountOf(item)}</span>
                           {item.pending ? <span className="chip gray">Pending</span> : null}
-                          {item.categoryName !== undefined ? (
-                            <span className="text-micro text-neutral-600" data-testid={`ny-cat-${item.id}`}>
-                              <span className="sr-only">Category: </span>
-                              {item.categoryName ?? "No category"}
-                            </span>
-                          ) : null}
+                          <span className="text-micro text-neutral-600" data-testid={`ny-cat-${item.id}`}>
+                            <span className="sr-only">Category: </span>
+                            {item.categoryName ?? "No category"}
+                          </span>
                           <span className="chip info">{item.kind === "match" ? "Match" : "Category"}</span>
                         </div>
                         <p className="mt-1 text-label text-neutral-700" data-testid={`ny-think-${item.id}`}>{thinkWords(item)}</p>
@@ -402,7 +466,7 @@ export function NeedsYou({
             </ul>
             {q.data.truncated && count > items.length ? (
               <p className="border-t border-brand-line px-4 py-2 text-micro text-neutral-600" data-testid="ny-more">
-                Showing <span className="font-mono tabular-nums">{items.length}</span> of{" "}
+                Showing the first <span className="font-mono tabular-nums">{items.length}</span> of{" "}
                 <span className="font-mono tabular-nums">{count}</span>. Answer these and the next ones come up.
               </p>
             ) : null}
@@ -421,7 +485,7 @@ export function NeedsYou({
           </button>
           {seeDone ? (
             <div className="mt-2" data-testid="ny-autodone-list">
-              <HandledByH2 />
+              <AutoDoneList />
             </div>
           ) : null}
         </div>
@@ -430,8 +494,9 @@ export function NeedsYou({
       <TxDrawer row={drawerRow} onOpenChange={(o) => !o && setOpened(null)} hrefOfTx={hrefOfTx}>
         {opened ? (
           <div className="space-y-2" data-testid="ny-drawer-answer">
-            <p className="text-label text-neutral-700">{thinkWords(opened)}</p>
-            {opened.suggestion ? <p className="text-micro text-neutral-600">{opened.reason}</p> : null}
+            {drawerWords(opened).map((w, i) => (
+              <p key={i} className={i === 0 ? "text-label text-neutral-700" : "text-micro text-neutral-600"} data-testid="ny-drawer-words">{w}</p>
+            ))}
             {answerButtons(opened, "drawer")}
           </div>
         ) : null}

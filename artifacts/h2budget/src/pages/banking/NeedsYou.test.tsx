@@ -20,7 +20,6 @@ vi.mock("@/hooks/use-toast", () => ({
   },
   useToast: () => ({ toast: () => ({ id: "t" }) }),
 }));
-vi.mock("@/components/agent/HandledByH2", () => ({ HandledByH2: () => <section data-testid="handled-by-h2" /> }));
 
 import { NeedsYou, NEEDS_YOU_HINT, matchCandidates } from "./NeedsYou";
 import { planOccurrenceOf } from "./needsYouApi";
@@ -36,9 +35,9 @@ const CATEGORIES = [
 ];
 const ITEMS = [
   {
-    id: "n1", txId: "tx-1", accountName: "Cedar Hollow Bank Checking", mask: "1234", date: "2026-11-03", name: "Pine Mutual Auto", amount: "-112.00", pending: false,
+    id: "n1", txId: "tx-1", accountName: "Cedar Hollow Bank Checking", mask: "1234", date: "2026-11-03", name: "Pine Mutual Auto", amount: "-112.00", pending: false, categoryName: "Insurance",
     kind: "match", suggestion: { label: "the Car insurance payment, planned $112.00 on Nov 3", planOccurrenceId: "ri-car|2026-11-03", confidence: "medium" },
-    reason: "The amount fits, the day is two days off.",
+    reason: "Looks like the Car insurance payment, planned $112.00 on Nov 3. Confirm the match or pick another.",
   },
   {
     id: "n2", txId: "tx-2", accountName: "Card A", mask: "9876", date: "2026-11-04", name: "Corner Market", amount: "-42.10", pending: false, categoryName: null,
@@ -46,7 +45,7 @@ const ITEMS = [
     reason: "A new merchant.",
   },
   {
-    id: "n3", txId: "tx-3", accountName: "Cedar Hollow Bank Checking", mask: "1234", date: "2026-11-05", name: "Transfer 0042", amount: "-300.00", pending: true,
+    id: "n3", txId: "tx-3", accountName: "Cedar Hollow Bank Checking", mask: "1234", date: "2026-11-05", name: "Transfer 0042", amount: "-300.00", pending: true, categoryName: null,
     kind: "match", suggestion: null, reason: "Two planned bills could fit.",
   },
   {
@@ -63,12 +62,21 @@ const PLANNED = [
 ];
 const body = (items = ITEMS, auto = { matched: 5, categorized: 2, since: "2026-11-03" }) => ({ throughDate: "2026-11-10", count: items.length, items, autoDone: auto });
 const RESOLUTION = { id: "res-1", replaced: [] };
+const AUTO_DONE = {
+  since: "2026-11-03", matched: 1, categorized: 1, truncated: false,
+  items: [
+    { kind: "match", undoId: "res-auto-1", txnId: "tx-8", at: "2026-11-09T15:00:00.000Z", planKey: "ri-gym|2026-11-05", categoryId: null, label: "Gym" },
+    { kind: "category", undoId: "dec-auto-2", txnId: "tx-9", at: "2026-11-08T15:00:00.000Z", planKey: null, categoryId: "cat-g", label: "Groceries" },
+  ],
+};
 const RESOLVED = { userDecisionId: "ud-1", retroactiveCandidates: { count: 0 } };
 
 function reply(c: Call): [number, unknown] {
   if (c.method === "GET" && c.path === "/api/banking/needs-you") return [200, needsYou];
   if (c.method === "GET" && c.path === "/api/budget/categories") return [200, CATEGORIES];
   if (c.method === "GET" && c.path === "/api/transactions") return [200, []];
+  if (c.method === "GET" && c.path === "/api/banking/auto-done") return [200, AUTO_DONE];
+  if (c.method === "POST" && /^\/api\/category-decisions\/[^/]+\/undo$/.test(c.path)) return [200, { id: "ud" }];
   if (failWrites && c.method !== "GET") return [500, { error: "nope" }];
   if (c.method === "POST" && c.path === "/api/forecast/resolutions") return [200, RESOLUTION];
   if (c.method === "POST" && /^\/api\/forecast\/resolutions\/[^/]+\/undo$/.test(c.path)) return [200, { undone: "res-1", restored: 0 }];
@@ -137,8 +145,7 @@ describe("Needs you — the list", () => {
     await waitFor(() => expect(rows().length).toBe(4));
     expect(screen.getByTestId("ny-cat-n2").textContent).toBe("Category: No category");
     expect(screen.getByTestId("ny-cat-n4").textContent).toBe("Category: Dining out");
-    // A row the server sent without the field (the older shape) claims nothing.
-    expect(screen.queryByTestId("ny-cat-n1")).toBeNull();
+    expect(screen.getByTestId("ny-cat-n1").textContent).toBe("Category: Insurance");
   });
 
   it("a truncated list says how many it shows of how many wait; the count is the server's", async () => {
@@ -146,10 +153,10 @@ describe("Needs you — the list", () => {
     mount();
     await waitFor(() => expect(rows().length).toBe(4));
     expect(screen.getByTestId("ny-count").textContent).toBe(" (30)");
-    expect(screen.getByTestId("ny-more").textContent).toContain("Showing 4 of 30.");
+    expect(screen.getByTestId("ny-more").textContent).toContain("Showing the first 4 of 30.");
     fireEvent.click(screen.getByTestId("ny-ok-n1"));
     expect(screen.getByTestId("ny-count").textContent).toBe(" (29)");
-    expect(screen.getByTestId("ny-more").textContent).toContain("Showing 3 of 29.");
+    expect(screen.getByTestId("ny-more").textContent).toContain("Showing the first 3 of 29.");
   });
 
   it("OK is off with no suggestion, and then Change is the primary button", async () => {
@@ -177,9 +184,20 @@ describe("Needs you — the list", () => {
     mount();
     await waitFor(() => expect(screen.getByTestId("ny-autodone")).toBeTruthy());
     expect(screen.getByTestId("ny-autodone").textContent).toContain("H2 sorted 7 rows for you since Nov 3");
-    expect(screen.queryByTestId("handled-by-h2")).toBeNull();
+    // Read only once opened.
+    expect(calls.some((c) => c.path === "/api/banking/auto-done")).toBe(false);
     fireEvent.click(screen.getByTestId("ny-see-them"));
-    expect(screen.getByTestId("handled-by-h2")).toBeTruthy();
+    const list = await screen.findByTestId("ny-autodone-items");
+    const lines = within(list).getAllByTestId("ny-autodone-item").map((li) => li.textContent);
+    expect(lines[0]).toContain("Matched to Gym");
+    expect(lines[1]).toContain("Filed under Groceries");
+    // Undo a match: its answer's own undo, restoring nothing; a category: its decision's undo.
+    fireEvent.click(within(list).getByTestId("ny-autodone-undo-res-auto-1"));
+    await waitFor(() => expect(writes("POST", /^\/api\/forecast\/resolutions\/res-auto-1\/undo$/).length).toBe(1));
+    expect(writes("POST", /^\/api\/forecast\/resolutions\/res-auto-1\/undo$/)[0]!.body).toEqual({ restore: [] });
+    fireEvent.click(within(list).getByTestId("ny-autodone-undo-dec-auto-2"));
+    await waitFor(() => expect(writes("POST", /^\/api\/category-decisions\/dec-auto-2\/undo$/).length).toBe(1));
+    await waitFor(() => expect(within(list).getAllByText("Undone").length).toBe(2));
     cleanup();
     needsYou = body(ITEMS, { matched: 0, categorized: 0, since: "2026-11-03" });
     mount();
@@ -301,9 +319,23 @@ describe("Needs you — keys and the drawer", () => {
     expect(within(drawer).getByTestId("tx-drawer-amount").textContent).toBe("-$42.10");
     // The row's own day, bounded, only now.
     await waitFor(() => expect(calls.some((c) => c.path === "/api/transactions")).toBe(true));
+    // The reason in full, and the suggestion beside it (the reason does not already say it).
+    expect(within(drawer).getAllByTestId("ny-drawer-words").map((p) => p.textContent)).toEqual(["Looks like Groceries", "A new merchant."]);
     // Its answer is in the drawer too.
     fireEvent.click(within(drawer).getByTestId("ny-ok-n2-drawer"));
     await waitFor(() => expect(writes("POST", /^\/api\/categorization\/review\/rv-2\/accept$/).length).toBe(1));
+  });
+});
+
+describe("Needs you — words", () => {
+  it("a reason that already says 'Looks like …' is not said twice in the drawer", async () => {
+    mount();
+    await waitFor(() => expect(rows().length).toBe(4));
+    fireEvent.click(rows()[0]!);
+    const drawer = await screen.findByTestId("tx-drawer");
+    const words = within(drawer).getAllByTestId("ny-drawer-words").map((p) => p.textContent);
+    expect(words).toEqual(["Looks like the Car insurance payment, planned $112.00 on Nov 3. Confirm the match or pick another."]);
+    expect(drawer.textContent!.match(/Looks like/g)!.length).toBe(1);
   });
 });
 
