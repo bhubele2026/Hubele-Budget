@@ -143,8 +143,8 @@ export function InboxCardView({
         </div>
       </div>
       <span
-        className={`font-mono text-label font-semibold tabular-nums ${
-          card.bank.amount < 0 ? "text-bad" : "text-brand-navy"
+        className={`fig text-label font-semibold ${
+          card.bank.amount < 0 ? "text-foreground" : "text-brand-navy"
         }`}
       >
         {formatCurrency(card.bank.amount)}

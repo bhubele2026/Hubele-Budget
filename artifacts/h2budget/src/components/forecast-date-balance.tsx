@@ -46,7 +46,7 @@ export function ForecastDateBalance({
       <div className={cardHead}>
         <label
           htmlFor="forecast-balance-date"
-          className="text-title font-semibold text-brand-navy"
+          className="text-title font-semibold text-foreground"
         >
           How much will we have?
         </label>

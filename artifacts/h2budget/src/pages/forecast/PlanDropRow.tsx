@@ -354,8 +354,8 @@ export function PlanDropRow({
             : (hookChip ?? row.status),
         )}
         <span
-          className={`font-mono text-label tabular-nums ${
-            offCurveHook ? "text-neutral-500" : displayAmount < 0 ? "text-bad" : "text-brand-navy"
+          className={`fig text-label ${
+            offCurveHook ? "text-neutral-500" : displayAmount < 0 ? "text-foreground" : "text-brand-navy"
           }`}
           data-testid={`plan-amount-${testKey}`}
         >

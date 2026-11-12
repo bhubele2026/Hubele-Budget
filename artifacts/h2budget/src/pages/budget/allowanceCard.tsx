@@ -66,7 +66,7 @@ export function AllowanceCard({
       <div className="panel-head">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-title font-semibold text-brand-navy">
+            <span className="truncate text-title font-semibold text-foreground">
               Allowance
             </span>
             <span className="chip gray" data-testid="section-allowance-not-in-plan">

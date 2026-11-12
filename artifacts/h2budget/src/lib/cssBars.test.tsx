@@ -284,10 +284,10 @@ describe("CssBars — the number is always printed", () => {
     expect(text).toContain("$100");
   });
 
-  it("renders values in mono tabular numerals so digits do not jitter", () => {
+  // (2026-11-12) Inter's tabular lining figures (`.fig`), no longer the mono face.
+  it("renders values in tabular figure numerals so digits do not jitter", () => {
     const { container } = render(<CssBars rows={ROWS} format={money} />);
-    const value = rowByLabel(container, "Groceries").querySelector(".tabular-nums");
+    const value = rowByLabel(container, "Groceries").querySelector(".fig");
     expect(value).toBeTruthy();
-    expect(value?.className).toContain("font-mono");
   });
 });

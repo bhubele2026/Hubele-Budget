@@ -180,7 +180,7 @@ function ForecastHero({ ctx, onOpenList }: { ctx: ForecastNextCtx; onOpenList: (
       }
     >
       <div
-        className={`font-mono text-display font-semibold tabular-nums ${
+        className={`fig text-display font-semibold ${
           projReady && Number.isFinite(endingNum) && endingNum < 0 ? "text-bad" : "text-brand-navy"
         }`}
         data-testid="hero-forecast-balance"

@@ -200,7 +200,7 @@ export function Breakdown({ data, open, onToggle, routeOf }: {
   const why = whyOverLines(data);
   return (
     <section id="sp-breakdown" className="surface scroll-mt-20 rounded-card ring-1 ring-brand-line" data-testid="sp-breakdown">
-      <h2 className="border-b border-brand-line px-4 py-2.5 text-title font-semibold text-brand-navy">
+      <h2 className="border-b border-brand-line px-4 py-2.5 text-title font-semibold text-foreground">
         {over ? (data.provisional ? "Why over so far?" : "Why over?") : "Where it went"}
       </h2>
       {why.over ? <p className="border-b border-brand-line px-4 py-2 text-label text-neutral-700" data-testid="sp-why-line">{why.over}</p> : null}

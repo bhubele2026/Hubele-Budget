@@ -134,7 +134,7 @@ export function AvalancheCardConfig() {
   return (
     <div className="panel">
       <div className="panel-head">
-        <span className="text-title font-semibold text-brand-navy">Amex cards</span>
+        <span className="text-title font-semibold text-foreground">Amex cards</span>
         <Help className="ml-auto">
           Tier sets the cadence — Blue is a monthly card, Platinum is weekly.
           Adding a card to the plan creates it as a debt the avalanche can

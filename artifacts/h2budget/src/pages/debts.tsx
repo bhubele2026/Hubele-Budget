@@ -258,7 +258,7 @@ export default function DebtsPage() {
 
       <div className="panel span-12">
         <div className="panel-head">
-          <span className="text-title font-semibold text-brand-navy">Creditors</span>
+          <span className="text-title font-semibold text-foreground">Creditors</span>
           <span className="text-micro text-neutral-400">
             Highest APR first
           </span>

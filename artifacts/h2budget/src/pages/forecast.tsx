@@ -2565,7 +2565,7 @@ export default function ForecastPage({
                   className="h-4 w-4 text-neutral-400"
                   aria-hidden="true"
                 />
-                <h2 className="sr-only text-title font-semibold text-brand-navy">
+                <h2 className="sr-only text-title font-semibold text-foreground">
                   From Chase · {monthFilter}
                 </h2>
                 <span className="chip warn">{bankReconcile.pending} pending</span>
@@ -2746,8 +2746,8 @@ export default function ForecastPage({
                           {formatDate(r.bank.date)}
                         </span>
                         <span
-                          className={`font-mono tabular-nums ${
-                            r.bank.amount < 0 ? "text-bad" : "text-brand-navy"
+                          className={`fig ${
+                            r.bank.amount < 0 ? "text-foreground" : "text-brand-navy"
                           }`}
                         >
                           {formatCurrency(r.bank.amount)}
@@ -3027,7 +3027,7 @@ export default function ForecastPage({
                 <section className={kitCard}>
                   <div className={`${cardHead} flex-wrap`}>
                     {/* Folded (readable), the section's head already says it: the heading is read, not shown twice. */}
-                    <h2 className={readable ? "sr-only" : "text-title font-semibold text-brand-navy"}>
+                    <h2 className={readable ? "sr-only" : "text-title font-semibold text-foreground"}>
                       Planned items
                     </h2>
                     <Help>
@@ -3089,7 +3089,7 @@ export default function ForecastPage({
                 <CollapsibleSection id="missed" title={`Missed · ${monthFilter}`} count={missed.length} chipClass="chip bad" total={formatCurrency(missedTotal)} totalTone={missedTotal < 0 ? "bad" : undefined} forceOpen={bucketHasHighlight(listed)}>
                 <section className={kitCard} data-testid="missed-bucket-panel">
                   <div className={cardHead}>
-                    <h2 className="sr-only text-title font-semibold text-brand-navy">
+                    <h2 className="sr-only text-title font-semibold text-foreground">
                       Missed · {monthFilter}
                     </h2>
                     <span className="chip bad">{missed.length}</span>
@@ -3097,8 +3097,8 @@ export default function ForecastPage({
                       Marked as not happening, so off the projection; a card week stays owed.
                     </Help>
                     <span
-                      className={`ml-auto font-mono text-label tabular-nums ${
-                        missedTotal < 0 ? "text-bad" : "text-brand-navy"
+                      className={`ml-auto fig text-label ${
+                        missedTotal < 0 ? "text-foreground" : "text-brand-navy"
                       }`}
                       data-testid="missed-bucket-total"
                     >
@@ -3136,8 +3136,8 @@ export default function ForecastPage({
                         </div>
                         <div className="flex flex-wrap items-center justify-end gap-2">
                           <span
-                            className={`mr-2 font-mono text-label tabular-nums ${
-                              b.amount < 0 ? "text-bad" : "text-brand-navy"
+                            className={`mr-2 fig text-label ${
+                              b.amount < 0 ? "text-foreground" : "text-brand-navy"
                             }`}
                           >
                             {formatCurrency(b.amount)}
@@ -3194,14 +3194,14 @@ export default function ForecastPage({
                       className="h-4 w-4 text-neutral-400"
                       aria-hidden="true"
                     />
-                    <h2 className="sr-only text-title font-semibold text-brand-navy">
+                    <h2 className="sr-only text-title font-semibold text-foreground">
                       Moved · {monthFilter}
                     </h2>
                     <span className="chip info">{moved.length}</span>
                     <Help>Counted on the new date, not the original one.</Help>
                     <span
-                      className={`ml-auto font-mono text-label tabular-nums ${
-                        movedTotal < 0 ? "text-bad" : "text-brand-navy"
+                      className={`ml-auto fig text-label ${
+                        movedTotal < 0 ? "text-foreground" : "text-brand-navy"
                       }`}
                       data-testid="rescheduled-bucket-total"
                     >
@@ -3231,8 +3231,8 @@ export default function ForecastPage({
                         </div>
                         <div className="flex items-center gap-4">
                           <span
-                            className={`font-mono text-label tabular-nums ${
-                              b.amount < 0 ? "text-bad" : "text-brand-navy"
+                            className={`fig text-label ${
+                              b.amount < 0 ? "text-foreground" : "text-brand-navy"
                             }`}
                           >
                             {formatCurrency(b.amount)}
@@ -3315,7 +3315,7 @@ export default function ForecastPage({
               const bucketTotal = bucket.reduce((s, b) => s + b.amount, 0);
               return (
                 <div className={cardHead} data-testid="review-bucket-header">
-                  <h2 className="sr-only text-title font-semibold text-brand-navy">
+                  <h2 className="sr-only text-title font-semibold text-foreground">
                     Review bucket
                   </h2>
                   <span className="chip gray" data-testid="review-bucket-count">
@@ -3323,8 +3323,8 @@ export default function ForecastPage({
                   </span>
                   <Help>Everything triaged this month; the total is the month's net effect.</Help>
                   <span
-                    className={`ml-auto font-mono text-label tabular-nums ${
-                      bucketTotal < 0 ? "text-bad" : "text-brand-navy"
+                    className={`ml-auto fig text-label ${
+                      bucketTotal < 0 ? "text-foreground" : "text-brand-navy"
                     }`}
                     data-testid="review-bucket-total"
                   >
@@ -3381,8 +3381,8 @@ export default function ForecastPage({
                     </div>
                     <div className="flex items-center gap-4">
                       <span
-                        className={`font-mono text-label tabular-nums ${
-                          b.amount < 0 ? "text-bad" : "text-brand-navy"
+                        className={`fig text-label ${
+                          b.amount < 0 ? "text-foreground" : "text-brand-navy"
                         }`}
                       >
                         {formatCurrency(b.amount)}
@@ -3484,8 +3484,8 @@ export default function ForecastPage({
                 <div>
                   Planned for {formatDate(moveTarget.date)} ·{" "}
                   <span
-                    className={`font-mono tabular-nums ${
-                      moveTarget.amount < 0 ? "text-bad" : "text-brand-navy"
+                    className={`fig ${
+                      moveTarget.amount < 0 ? "text-foreground" : "text-brand-navy"
                     }`}
                   >
                     {formatCurrency(moveTarget.amount)}

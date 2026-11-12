@@ -53,7 +53,7 @@ export function AvalancheScheduleCard() {
   return (
     <div className="panel" data-testid="card-avalanche-schedule">
       <div className="panel-head">
-        <span className="text-title font-semibold text-brand-navy">Schedule</span>
+        <span className="text-title font-semibold text-foreground">Schedule</span>
         {target && (
           <span className="truncate text-micro text-neutral-400">
             {target.debtName} · {(target.apr * 100).toFixed(2)}% APR

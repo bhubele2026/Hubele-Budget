@@ -213,7 +213,7 @@ export function SplitTransactionDialog({
         </div>
 
         <div
-          className={`font-mono text-label tabular-nums ${
+          className={`fig text-label ${
             Math.abs(remaining) < 0.01 ? "text-neutral-500" : "text-bad"
           }`}
         >

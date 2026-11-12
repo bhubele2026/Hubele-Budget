@@ -339,7 +339,7 @@ export function CssBars({
                 values change under a moving cursor. */}
             <span
               style={{ width: valueWidth }}
-              className="shrink-0 text-right font-mono text-xs tabular-nums"
+              className="shrink-0 text-right fig text-xs"
             >
               <span
                 className={cn(

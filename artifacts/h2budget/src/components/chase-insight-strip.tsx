@@ -150,7 +150,7 @@ export function ChaseInsightStrip({
       {/* The head wraps on a phone: the title, the freshness line and Sync do
           not fit one 390px row, and a squeezed label is as good as hidden. */}
       <div className={`${cardHead} flex-wrap gap-y-1.5`}>
-        <h2 className="text-title font-semibold text-brand-navy">
+        <h2 className="text-title font-semibold text-foreground">
           Spending this {period}
         </h2>
         <Help>

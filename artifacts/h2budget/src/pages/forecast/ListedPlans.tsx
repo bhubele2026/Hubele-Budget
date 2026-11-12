@@ -73,7 +73,7 @@ function PlanRow({ row, prefix, missedWord, h }: { row: DraggingPlanRow; prefix:
           <div className="truncate text-body font-medium text-neutral-700">{row.label}</div>
           <div className="text-micro text-neutral-600">Due {shortDate(row.originalDate)}</div>
         </div>
-        <span className={`fig text-label ${row.amount < 0 ? "text-bad" : "text-foreground"}`}>
+        <span className={`fig text-label ${row.amount < 0 ? "text-foreground" : "text-brand-navy"}`}>
           {formatCurrency(row.amount)}
         </span>
       </button>
@@ -177,7 +177,7 @@ export function ListedPlans({
 
   const unpaidHead = (
     <div className={cardHead}>
-      <h2 className="text-title font-semibold text-brand-navy">Unpaid items</h2>
+      <h2 className="text-title font-semibold text-foreground">Unpaid items</h2>
       {hasCarried && (
         <>
           <span className="chip bad" data-testid="dragging-plans-chip">
@@ -338,7 +338,7 @@ export function ListedPlans({
       {incomeNotArrived.length > 0 && (
         <section className={`${kitCard} ${anchorClass}`} id={ANCHOR.income} tabIndex={-1} data-testid="card-income-not-arrived">
           <div className={cardHead}>
-            <h2 className="text-title font-semibold text-brand-navy">Income not arrived</h2>
+            <h2 className="text-title font-semibold text-foreground">Income not arrived</h2>
             <span className="chip warn">{incomeNotArrived.length} · off the curve</span>
           </div>
           {incomeList}

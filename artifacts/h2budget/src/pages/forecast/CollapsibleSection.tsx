@@ -68,7 +68,7 @@ export function CollapsibleSection({
         data-testid={`section-${id}-summary`}
       >
         <ChevronDown className="h-4 w-4 flex-none text-neutral-400 transition-transform group-open:rotate-180" aria-hidden="true" />
-        <span className="min-w-0 truncate text-title font-semibold text-brand-navy">{title}</span>
+        <span className="min-w-0 truncate text-title font-semibold text-foreground">{title}</span>
         {count != null ? <span className={chipClass}>{count}</span> : null}
         {total != null ? (
           <span className={`ml-auto fig text-label ${totalTone === "bad" ? "text-bad" : "text-foreground"}`}>{total}</span>

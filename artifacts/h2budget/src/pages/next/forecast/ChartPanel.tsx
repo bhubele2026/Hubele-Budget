@@ -248,7 +248,7 @@ export function ChartPanel({
           className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-3 rounded-none p-4 sm:rounded-none"
           data-testid="chart-sheet"
         >
-          <DialogTitle className="text-title font-semibold text-brand-navy">Projected cash — {label}</DialogTitle>
+          <DialogTitle className="text-title font-semibold text-foreground">Projected cash — {label}</DialogTitle>
           <div className="min-h-0 flex-1" onKeyDown={onKeyDown}>
             {sheetOpen && chart}
           </div>

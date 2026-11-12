@@ -226,7 +226,7 @@ export default function ForecastOverviewPage() {
       {/* ── The curve ─────────────────────────────────────────────────────── */}
       <section className={card} data-testid="fo-curve">
         <div className={cardHead}>
-          <h2 className="text-title font-semibold text-brand-navy">
+          <h2 className="text-title font-semibold text-foreground">
             Projected balance · {days}
           </h2>
           <Help>{`Checking today rolled forward through every planned bill and income event for the next ${days}. Navy is the projection; it is not a record of what happened.`}</Help>
@@ -258,7 +258,7 @@ export default function ForecastOverviewPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <section className={card} data-testid="fo-in-out">
           <div className={cardHead}>
-            <h2 className="text-title font-semibold text-brand-navy">
+            <h2 className="text-title font-semibold text-foreground">
               Money in vs out · {days}
             </h2>
             <Help>{`Totals of every projected income and expense event over the ${days}. Navy is money in, deep orange is money out.`}</Help>
@@ -288,7 +288,7 @@ export default function ForecastOverviewPage() {
 
         <section className={card} data-testid="fo-big-bills">
           <div className={cardHead}>
-            <h2 className="text-title font-semibold text-brand-navy">
+            <h2 className="text-title font-semibold text-foreground">
               Biggest bills ahead
             </h2>
             <Help>{`The six largest single expense events in the ${days}, largest first. Recurring bills appear once per occurrence.`}</Help>

@@ -801,7 +801,7 @@ export default function AvalanchePage() {
       {payoffRows.length > 0 && (
         <div className={cn("panel", planTargets.length > 0 ? "span-6" : "span-12")}>
           <div className="panel-head">
-            <span className="text-title font-semibold text-brand-navy">Payoff order</span>
+            <span className="text-title font-semibold text-foreground">Payoff order</span>
             <span className="text-micro text-neutral-400">
               Balance left
             </span>
@@ -839,7 +839,7 @@ export default function AvalanchePage() {
             data-testid="panel-this-month"
           >
             <div className="panel-head">
-              <span className="text-title font-semibold text-brand-navy">This month</span>
+              <span className="text-title font-semibold text-foreground">This month</span>
               <span className="ml-auto fig text-label font-semibold text-foreground">
                 {fmtMoney(planTotal)}
               </span>
@@ -975,7 +975,7 @@ export default function AvalanchePage() {
         {/* Extra per month */}
         <div className="panel span-6">
           <div className="panel-head">
-            <span className="text-title font-semibold text-brand-navy">
+            <span className="text-title font-semibold text-foreground">
               {settings?.extraCadence === "weekly" ? "Target per month" : "Extra per month"}
             </span>
             <span className="ml-auto fig text-label font-semibold text-foreground">
@@ -1155,7 +1155,7 @@ export default function AvalanchePage() {
         {/* Strategy */}
         <div className="panel span-6">
           <div className="panel-head">
-            <span className="text-title font-semibold text-brand-navy">Strategy</span>
+            <span className="text-title font-semibold text-foreground">Strategy</span>
             <Help className="ml-auto">
               Avalanche pays the highest APR first and costs the least interest.
               Snowball pays the smallest balance first and clears debts sooner.
@@ -1194,7 +1194,7 @@ export default function AvalanchePage() {
           avalanchePagePlan.test.tsx — keep both when restyling. */}
       <div className={cn(settings?.extraCadence === "weekly" ? "span-12" : "span-6", "space-y-3")}>
         <div className="flex items-baseline gap-2">
-          <h2 className="text-title font-semibold text-brand-navy">Your next 3 moves</h2>
+          <h2 className="text-title font-semibold text-foreground">Your next 3 moves</h2>
           <span className="text-micro text-neutral-400">Kill order</span>
         </div>
         {next3.length === 0 ? (
@@ -1281,7 +1281,7 @@ export default function AvalanchePage() {
         <TabsContent value="debts" className="mt-4">
           <div className="panel">
             <div className="panel-head">
-              <span className="text-title font-semibold text-brand-navy">Debts</span>
+              <span className="text-title font-semibold text-foreground">Debts</span>
               <span className="text-micro text-neutral-400">
                 Highest APR first
               </span>
@@ -1409,7 +1409,7 @@ export default function AvalanchePage() {
         <TabsContent value="projection" className="mt-4 space-y-4">
           <div className="panel">
             <div className="panel-head">
-              <span className="text-title font-semibold text-brand-navy">What-if extra</span>
+              <span className="text-title font-semibold text-foreground">What-if extra</span>
               <span className="ml-auto fig text-label font-semibold text-foreground">
                 +{fmtMoney(whatIf)}
               </span>
@@ -1442,7 +1442,7 @@ export default function AvalanchePage() {
 
           <div className="panel">
             <div className="panel-head">
-              <span className="text-title font-semibold text-brand-navy">Schedule</span>
+              <span className="text-title font-semibold text-foreground">Schedule</span>
               <span className="text-micro text-neutral-400">
                 Month by month
               </span>
@@ -1519,7 +1519,7 @@ export default function AvalanchePage() {
         <TabsContent value="chart" className="mt-4">
           <div className="panel">
             <div className="panel-head">
-              <span className="text-title font-semibold text-brand-navy">Payoff projection</span>
+              <span className="text-title font-semibold text-foreground">Payoff projection</span>
               <Help className="ml-auto">
                 Balance left is what you still owe at the end of each month;
                 interest paid is the running total of interest since today. Both
@@ -1544,7 +1544,7 @@ export default function AvalanchePage() {
           <TabsContent value="archived" className="mt-4">
             <div className="panel">
               <div className="panel-head">
-                <span className="text-title font-semibold text-brand-navy">Archived</span>
+                <span className="text-title font-semibold text-foreground">Archived</span>
               </div>
               <table className="w-full">
                 <tbody>

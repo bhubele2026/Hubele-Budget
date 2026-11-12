@@ -134,7 +134,7 @@ export function DayPanel({
                       <span className="truncate text-body text-neutral-700">{ev.label}</span>
                     </span>
                     <span
-                      className={`fig text-label ${ev.amount < 0 ? "text-bad" : "text-foreground"}`}
+                      className={`fig text-label ${ev.amount < 0 ? "text-foreground" : "text-brand-navy"}`}
                     >
                       {formatCurrency(ev.amount)}
                     </span>
@@ -198,7 +198,7 @@ export function DayPanel({
               <li key={`bank-${b.txnId}`} className="py-2" data-testid={`day-bank-${b.txnId}`}>
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="truncate text-body text-neutral-700">{b.label}</span>
-                  <span className={`fig text-label ${b.amount < 0 ? "text-bad" : "text-foreground"}`}>
+                  <span className={`fig text-label ${b.amount < 0 ? "text-foreground" : "text-brand-navy"}`}>
                     {formatCurrency(b.amount)}
                   </span>
                 </div>

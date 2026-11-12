@@ -213,11 +213,10 @@ describe("Forecast — Review Bucket shrink + total (#602)", () => {
     // formatCurrency renders negative amounts as "-$1,860.00".
     expect(total.textContent ?? "").toContain("1,860");
     expect(total.textContent ?? "").toMatch(/[-−]/);
-    // Negative totals take the palette's "bad" colour — the same deep orange
-    // (#e16d3e) the old `text-destructive` token resolved to, renamed to the
-    // kit's token in C2. Colour is a reinforcement here, not the signal: the
-    // minus sign asserted above is what actually carries it.
-    expect(total.className).toMatch(/text-bad/);
+    // The minus sign asserted above carries the sign; colour only reinforces it.
+    // (2026-11-12) Money out is charcoal, money in navy: an ordinary negative sum is not an alarm (orange).
+    expect(total.className).toMatch(/text-foreground/);
+    expect(total.className).not.toMatch(/text-bad/);
     // Sanity: the assertion above matches the actual sum we built.
     expect(expectedSum).toBe(-1860);
   });

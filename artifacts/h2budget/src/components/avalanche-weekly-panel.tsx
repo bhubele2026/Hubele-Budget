@@ -72,7 +72,7 @@ export function AvalancheWeeklyPanel({ settings, onUpdate, saving = false }: Pro
   return (
     <div className="panel span-12" data-testid="panel-avalanche-weekly">
       <div className="panel-head">
-        <span className="text-title font-semibold text-brand-navy">Avalanche payments</span>
+        <span className="text-title font-semibold text-foreground">Avalanche payments</span>
         <Help className="ml-auto">
           Weekly pays the most the forecast says is safe each week, never taking checking below your cash
           cushion. The monthly amount stays as the target. When a debt is paid off, its minimum joins the
