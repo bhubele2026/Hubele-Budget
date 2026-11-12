@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getOwnerEmail } from "./requireOwner";
+import { addAuthMs } from "../lib/requestTiming";
 
 declare global {
   namespace Express {
@@ -286,6 +287,9 @@ export async function requireAuth(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  // (PERF-0) Time spent here is the request's `auth` (Server-Timing).
+  const authStart = performance.now();
+  const authDone = () => addAuthMs(performance.now() - authStart);
   const auth = getAuth(req);
   // (data-integrity fix) Key household identity on Clerk's CANONICAL stable
   // user id (`auth.userId`, the `user_…` value), NOT a custom `sessionClaims.
@@ -302,6 +306,7 @@ export async function requireAuth(
     (auth?.sessionClaims as unknown as { userId?: string } | undefined)
       ?.userId;
   if (!actualUserId) {
+    authDone();
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -315,9 +320,11 @@ export async function requireAuth(
     req.householdOwnerId = h.householdOwnerId;
   } catch (e) {
     req.log.warn({ err: e }, "Household resolution failed");
+    authDone();
     res.status(500).json({ error: "Failed to resolve household" });
     return;
   }
+  authDone();
   next();
 }
 

@@ -59,6 +59,7 @@ import { inFullDebtIdsFor } from "./cardPayoffMode";
 import { patchRows, type CorrectionOverlay } from "./correctionOverlay";
 import type { AvalancheOnCurve } from "./debtMinSchedule";
 import type { WeeklyAvalanchePlan } from "./avalancheWeeklyPlan";
+import { startLedgerBuild } from "./requestTiming";
 import {
   addDays,
   expandItem,
@@ -421,6 +422,22 @@ export function forecastLedgerBuildCount(): number {
   return ledgerBuilds;
 }
 
+/**
+ * ⭐ THE FORECAST LEDGER (below, `buildForecastLedgerUntimed`), timed: the build
+ * counts for the request that started it (`lib/requestTiming.ts`: Server-Timing
+ * `ledger`, or `base400` for the weekly avalanche's base). Nothing else differs.
+ */
+export async function buildForecastLedger(
+  ...args: Parameters<typeof buildForecastLedgerUntimed>
+): Promise<ForecastLedger> {
+  const done = startLedgerBuild(args[2]?.avalancheBase === true);
+  try {
+    return await buildForecastLedgerUntimed(...args);
+  } finally {
+    done();
+  }
+}
+
 /** Resolution statuses that close a plan occurrence for the curve. */
 const CLOSING_STATUSES: ReadonlySet<string> = new Set(["matched", "skipped", "missed", "dismissed"]);
 
@@ -499,7 +516,7 @@ const CLOSING_STATUSES: ReadonlySet<string> = new Set(["matched", "skipped", "mi
  *     PLAN stays out (its minimum pays it); a card the owner pays in full has
  *     no `debt:` minimum (`expandDebtMin`'s `inFull`).
  */
-export async function buildForecastLedger(
+async function buildForecastLedgerUntimed(
   householdId: string,
   ownerUserId: string,
   opts: {

@@ -35,6 +35,8 @@
 //
 // Kill switch: `LEDGER_SHARING=off` builds every call on its own, as before.
 
+import { noteShareJoined } from "./requestTiming";
+
 /** False when `LEDGER_SHARING=off` (read per call, so it can be flipped without a restart in tests). */
 export function ledgerSharingEnabled(): boolean {
   return (process.env.LEDGER_SHARING ?? "").trim().toLowerCase() !== "off";
@@ -72,6 +74,7 @@ export function shareInFlight<T>(key: string, build: () => Promise<T>): Promise<
   const running = inFlight.get(fullKey);
   if (running) {
     ledgerShareStats.joined += 1;
+    noteShareJoined();
     return running as Promise<T>;
   }
   ledgerShareStats.started += 1;

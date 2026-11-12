@@ -22,6 +22,7 @@ import { computeBankFreshness } from "../lib/bankFreshness";
 import { computeDebtHeadline } from "../lib/debtPlan";
 import { readBankConfidence } from "../lib/bankConfidence";
 import { dataAsOfOf } from "../lib/dataAsOf";
+import { timed } from "../lib/requestTiming";
 
 const router: IRouter = Router();
 
@@ -115,38 +116,39 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   // Promise.all instead of surfacing as an unhandled rejection.
   const weekStartISO = weekStartFor(today);
   const weekEndISO = weekEndFor(today);
-  const supersedePromise = findSupersededPendingForRange(
+  // (PERF-0) `timed(...)` only measures each branch for Server-Timing (`sp.*`); it returns the same promise.
+  const supersedePromise = timed("sp.supersede", findSupersededPendingForRange(
     householdId,
     monthStartISO < weekStartISO ? monthStartISO : weekStartISO,
     todayISO > weekEndISO ? todayISO : weekEndISO,
-  );
+  ));
   // (PR-B1) The cash signal and the freshness are read once and handed to the
   // money position too, so its figures sit on the very curve the forecast
   // fields below quote.
-  const cashPromise = computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: 90 });
-  const freshnessPromise = computeBankFreshness(householdId, ownerUserId);
+  const cashPromise = timed("sp.cash", computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: 90 }));
+  const freshnessPromise = timed("sp.freshness", computeBankFreshness(householdId, ownerUserId));
   const [cash, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness, position, monthAllowance, bankConfidence] =
     await Promise.all([
       cashPromise,
-      supersedePromise.then((supersede) =>
+      timed("sp.spentMonth", supersedePromise.then((supersede) =>
         buildSpendingFacts(householdId, monthStartISO, todayISO, { supersede }),
-      ),
-      supersedePromise.then((supersede) =>
+      )),
+      timed("sp.spentWeek", supersedePromise.then((supersede) =>
         buildSpendingFacts(householdId, weekStartISO, weekEndISO, { supersede }),
-      ),
-      buildBillsSummary(householdId, ownerUserId),
-      db.select().from(debtsTable).where(eq(debtsTable.householdId, householdId)),
-      computeReviewCount(householdId, ownerUserId),
+      )),
+      timed("sp.bills", buildBillsSummary(householdId, ownerUserId)),
+      timed("sp.debts", Promise.resolve(db.select().from(debtsTable).where(eq(debtsTable.householdId, householdId)))),
+      timed("sp.reviewCount", computeReviewCount(householdId, ownerUserId)),
       freshnessPromise,
-      buildMoneyPosition(householdId, ownerUserId, {
+      timed("sp.position", buildMoneyPosition(householdId, ownerUserId, {
         cash: cashPromise,
         freshness: freshnessPromise,
         supersede: supersedePromise,
-      }),
-      readMonthAllowance(householdId, ownerUserId, { cash: cashPromise }),
+      })),
+      timed("sp.allowance", readMonthAllowance(householdId, ownerUserId, { cash: cashPromise })),
       // (Q1) Can the balance be trusted: the check, the pending rows, the bank's
       // own figure beside H2's — on THIS request's signal and freshness.
-      readBankConfidence(householdId, ownerUserId, { cash: cashPromise, freshness: freshnessPromise }),
+      timed("sp.confidence", readBankConfidence(householdId, ownerUserId, { cash: cashPromise, freshness: freshnessPromise })),
     ]);
   const signal = cash.signal;
   // (WP1) The snapshot and what the roll adds since, from the very ledger that
@@ -163,11 +165,11 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   // to end. One extra read of already-visible transaction rows, on the same
   // household, off the same connection.
   const [debtRowsWithPending, debtHeadline] = await Promise.all([
-    withPendingPayments(householdId, debtRows),
+    timed("sp.debtPending", withPendingPayments(householdId, debtRows)),
     // (PR-D) The same function `GET /debt-plan` runs, over the same 90-day
     // signal. Both fields are safe for the front door: a month and a label, and
     // an amount PAID — never a balance.
-    computeDebtHeadline(householdId, ownerUserId, signal),
+    timed("sp.debtHeadline", computeDebtHeadline(householdId, ownerUserId, signal)),
   ]);
 
   res.json({

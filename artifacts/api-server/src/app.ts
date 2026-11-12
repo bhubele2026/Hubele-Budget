@@ -16,6 +16,8 @@ import {
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { mountWebApp, resolveWebDistDir } from "./webMounts";
+import { pool } from "@workspace/db";
+import { instrumentPool, requestTiming, timedAuth } from "./lib/requestTiming";
 
 const app: Express = express();
 
@@ -89,6 +91,13 @@ app.use(
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
+// ⭐ (PERF-0) Where each /api request's time went: total, queries and their
+// time, pool waits, forecast-ledger builds, auth — as a `Server-Timing` header
+// and a debug log line (lib/requestTiming.ts). Durations and counts only. After
+// the body parsers (their stream callbacks would drop the per-request store).
+instrumentPool(pool);
+app.use("/api", requestTiming({ log: logger }));
+
 // Basic abuse limiter for the JSON API. Registered AFTER the body parsers
 // (so raw-body capture and JSON parsing are untouched) and scoped to /api
 // so it never throttles the SPA's static assets or the Clerk proxy. The
@@ -116,12 +125,14 @@ app.use(
 );
 
 app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
+  timedAuth(
+    clerkMiddleware((req) => ({
+      publishableKey: publishableKeyFromHost(
+        getClerkProxyHost(req) ?? "",
+        process.env.CLERK_PUBLISHABLE_KEY,
+      ),
+    })),
+  ),
 );
 
 app.use("/api", router);

@@ -22,6 +22,7 @@ import { inArray } from "drizzle-orm";
 import {
   db,
   allowancePlansTable,
+  avalancheSettingsTable,
   budgetCategoriesTable,
   debtsTable,
   forecastResolutionsTable,
@@ -102,8 +103,16 @@ const CARD_MERCHANTS: Array<[string, string, "weekly" | "monthly" | null]> = [
  * Seed the household for `ownerUserId` (a fresh synthetic id). `scale`
  * multiplies the generated card history (1 ≈ 1,000 rows; the timing harness
  * uses more).
+ *
+ * (PERF-0) `weekly: true` also writes Avalanche settings with the WEEKLY extra
+ * cadence (migration 0240): every non-base forecast build then prices the
+ * weekly plan on a 400-day base ledger, as the household's own does.
+ * `manualExtra` is the monthly figure the weekly plan works within.
  */
-export async function seedRichHousehold(ownerUserId: string, opts: { scale?: number } = {}): Promise<RichHousehold> {
+export async function seedRichHousehold(
+  ownerUserId: string,
+  opts: { scale?: number; weekly?: boolean; manualExtra?: string } = {},
+): Promise<RichHousehold> {
   const scale = opts.scale ?? 1;
   const tag = randomUUID().slice(0, 8);
   const { householdId } = await createTestHousehold(ownerUserId);
@@ -345,6 +354,16 @@ export async function seedRichHousehold(ownerUserId: string, opts: { scale?: num
     { ...base, name: "Summit Visa", balance: "1180.00", originalBalance: "2400.00", apr: "0.2299", minPayment: "35.00", payment: "60.00", type: "credit_card", status: "active", sortOrder: 4, dueDay: 9 },
   ]);
 
+  if (opts.weekly) {
+    await db.insert(avalancheSettingsTable).values({
+      userId: ownerUserId,
+      householdId,
+      manualExtra: opts.manualExtra ?? "600",
+      extraCadence: "weekly",
+      extraWeekday: 5,
+    });
+  }
+
   return {
     ownerUserId,
     householdId,
@@ -377,5 +396,6 @@ export async function cleanupRichHouseholds(ownerUserIds: string[]): Promise<voi
   await db.delete(plaidAccountsTable).where(inArray(plaidAccountsTable.userId, ownerUserIds));
   await db.delete(plaidItemsTable).where(inArray(plaidItemsTable.userId, ownerUserIds));
   await db.delete(settingsTable).where(inArray(settingsTable.userId, ownerUserIds));
+  await db.delete(avalancheSettingsTable).where(inArray(avalancheSettingsTable.userId, ownerUserIds));
   if (householdIds.length > 0) await db.delete(allowancePlansTable).where(inArray(allowancePlansTable.householdId, householdIds));
 }
