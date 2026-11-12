@@ -6,6 +6,7 @@ import * as sp from "./spending.mjs";
 import * as ai from "./assistant.mjs";
 import * as st from "./settingsData.mjs";
 import { whatsNewMe } from "./whatsNew.mjs";
+import { needsYou } from "./needsYou.mjs";
 
 /** GET: pathname → (query) => body */
 export const GET_EXACT = {
@@ -17,6 +18,7 @@ export const GET_EXACT = {
   "/api/transactions/ledger": (q) => L.ledgerPage(q),
   "/api/transactions/balances": (q) => L.ledgerBalances(q),
   "/api/banking/review": (q) => sp.bankingReview(q),
+  "/api/banking/needs-you": () => needsYou(),
   "/api/money/period-breakdown": (q) => sp.periodBreakdown(q),
   "/api/amex/weekly-payoff": (q) => sp.amexWeeklyPayoff(q),
   "/api/amex/summary": (q) => sp.amexSummary(q),

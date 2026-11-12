@@ -22,6 +22,9 @@ import {
  *   stored amount to the plan, so the Forecast, its overview and the dashboard's
  *   forecast panel read the new plan — not a cached reserve.
  *
+ * - ⭐ (2026-11-12) Banking's Needs you (`/api/banking/needs-you`): a category or a
+ *   match written anywhere (the register, Amex, Review) can settle one of its rows.
+ *
  * - ⭐ (AVAL-W) The weekly avalanche (`/api/avalanche/weekly`): each week pays
  *   the most the forecast says is safe, so any write that moves the curve moves it.
  *
@@ -38,6 +41,8 @@ export const PERIOD_BREAKDOWN_KEY = ["/api/money/period-breakdown"] as const;
 export const AMEX_SUMMARY_KEY = ["/api/amex/summary"] as const;
 /** (C5) The cash signal: a prefix, so every horizon and dry run is covered. */
 export const CASH_SIGNAL_KEY = ["/api/forecast/cash-signal"] as const;
+/** (2026-11-12) Banking's Needs you list: any category or match write can settle one of its rows. */
+export const NEEDS_YOU_KEY = ["/api/banking/needs-you"] as const;
 /** (AVAL-W) The weekly avalanche plan: priced on the forecast curve. */
 export const AVALANCHE_WEEKLY_KEY = ["/api/avalanche/weekly"] as const;
 
@@ -50,6 +55,7 @@ export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: MONEY_POSITION_KEY });
   void queryClient.invalidateQueries({ queryKey: WAYS_BACK_KEY });
   void queryClient.invalidateQueries({ queryKey: BANKING_REVIEW_KEY });
+  void queryClient.invalidateQueries({ queryKey: NEEDS_YOU_KEY });
   // (T4) Spending (every week and month, any account) and the Amex summary move with any write too.
   void queryClient.invalidateQueries({ queryKey: PERIOD_BREAKDOWN_KEY });
   void queryClient.invalidateQueries({ queryKey: AMEX_SUMMARY_KEY });

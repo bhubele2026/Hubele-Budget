@@ -91,6 +91,13 @@ describe("invalidateAfterWrite", () => {
     expect(invalidated(qc, ["/api/avalanche/weekly"])).toBe(true);
     expect(invalidated(qc, UNRELATED)).toBe(false);
   });
+  it("(2026-11-12) marks Banking's Needs you stale: a category or match written anywhere can settle one of its rows", () => {
+    const qc = new QueryClient();
+    for (const k of [["/api/banking/needs-you"], UNRELATED]) qc.setQueryData(k, { seeded: true });
+    invalidateAfterWrite(qc);
+    expect(invalidated(qc, ["/api/banking/needs-you"])).toBe(true);
+    expect(invalidated(qc, UNRELATED)).toBe(false);
+  });
   it("leaves unrelated queries alone", () => {
     const qc = seeded();
     invalidateAfterWrite(qc);

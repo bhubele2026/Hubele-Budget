@@ -52,6 +52,16 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-12",
+    headline: "Banking sorts itself",
+    items: [
+      {
+        title: "Banking sorts itself",
+        body: "H2 matches and files the bank rows it is sure of. Banking now opens on the few that need you, each with OK or Change.",
+      },
+    ],
+  },
+  {
     id: "2026-11-11.4",
     headline: "Light, dark, or automatic",
     items: [

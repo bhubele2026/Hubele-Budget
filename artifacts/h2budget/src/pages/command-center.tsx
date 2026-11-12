@@ -21,6 +21,8 @@ import { Help, figLabel, input, toggle } from "@/ui";
 import { BalanceCheck } from "./banking/BalanceCheck";
 import { BucketRows } from "./banking/BucketRows";
 import { ProposedFixes } from "./banking/ProposedFixes";
+import { NeedsYou } from "./banking/NeedsYou";
+import { TxDrawer, type DrawerRow } from "./banking/TxDrawer";
 import { PRESETS, isDay, presetOf, presetRange, rangeWords, sanitizeRange } from "./banking/reviewDates";
 import { bankingBase, bankingSummaryParams } from "./banking/reviewParams";
 import { BUCKETS, KIND_ORDER, KIND_WORDS, bucketAria, bucketNote, dayWords, isBucketName, isKind, isZeroMoney, kindChipWords, plannedFateWords, sideShort } from "./banking/words";
@@ -38,10 +40,12 @@ import { useOlderSnapshot } from "@/lib/dataAsOf";
  * The account's own totals lead. The household's week is one small, labelled
  * block at the end, because it is a different thing (all accounts).
  *
- * (Q5) The order is the order of the questions: where am I (account, range,
- * updated, bank vs H2 and its check, pending) → what needs MY decision
- * (Proposed fixes, the To-review count for this account and range) → what was
- * not on the plan → what was planned → the household's week, last.
+ * (2026-11-12) The page opens on ONE task list: where am I (account, range,
+ * updated, pending) → ⭐ Needs you (every row with H2's suggested answer, OK or
+ * Change, done in place) → what H2 sorted on its own → the four figures (bank vs
+ * H2 and its check) and the charges-to-match count → "Details": Proposed fixes,
+ * Not in the plan (the five pills and their rows) and Planned this period →
+ * the household's week, last. Nothing was removed; the detail is folded.
  *
  * Three words that are NOT the same, and are kept apart on screen:
  *   - "Balance check" — the bank's balance against the ledger (a manual Sync);
@@ -241,6 +245,31 @@ export default function BankingReviewPage() {
   const needsOwnSync = !!d && d.account.id != null && !/chase|american express|amex/i.test(d.account.institution ?? "");
   const activePreset = presetOf(range, today);
 
+  // (2026-11-12) A "Not in the plan" row opens in place, in the drawer; the register stays one link away inside it.
+  const [openRow, setOpenRow] = useState<BankingReviewRow | null>(null);
+  const drawerRow: DrawerRow | null = openRow
+    ? { id: openRow.id, date: openRow.date, name: openRow.displayName || openRow.description, amount: openRow.amount, pending: openRow.pending, accountLabel: headLabel, registerHref: hrefOf(openRow) }
+    : null;
+  const hrefOfTx = (t: { id: string; occurredOn: string; plaidAccountId?: string | null; source?: string | null }) =>
+    txnRoute({ id: t.id, occurredOn: t.occurredOn, plaidAccountId: t.plaidAccountId ?? null, source: t.source ?? null }, entries, { entriesKnown }).href;
+  // (2026-11-12) Proposed fixes, Not in the plan and Planned this period fold under ONE "Details". A link that
+  // names one of them (`?fixes=1`, `?bucket=`, `?kind=`) opens it.
+  const [detailsOpen, setDetailsOpen] = useState(fixesParam === "1" || !!bucketParam || !!kindParam);
+  // `/banking#needs-you` (the home tile, the top bar's Review pill) lands on the list; so does the chip below.
+  const toNeedsYou = () => document.getElementById("needs-you")?.scrollIntoView?.({ block: "start" });
+  useEffect(() => {
+    const go = () => {
+      if (window.location.hash === "#needs-you") toNeedsYou();
+    };
+    go();
+    window.addEventListener("hashchange", go);
+    window.addEventListener("pushState", go);
+    return () => {
+      window.removeEventListener("hashchange", go);
+      window.removeEventListener("pushState", go);
+    };
+  }, []);
+
   // (Q5) `?fixes=1` lands on the panel: once the page has its own answer (so the layout is final), once.
   const [scrolledToFixes, setScrolledToFixes] = useState(false);
   useEffect(() => {
@@ -299,6 +328,7 @@ export default function BankingReviewPage() {
       </header>
 
       <QueryRefreshBanner q={q} data-testid="br-error" />
+      <NeedsYou planned={d?.planned} hrefOfTx={hrefOfTx} />
       {d === undefined ? (
         q.isError ? null : (
           <ReviewSkeleton />
@@ -362,21 +392,41 @@ export default function BankingReviewPage() {
             </div>
           ) : null}
 
-          <section className="space-y-2" aria-label="Needs your decision" data-testid="br-decide">
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-              <h2 className="text-title font-semibold text-brand-navy">Needs your decision</h2>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="br-inbox-cell">
-                <Link
-                  href={inboxHref}
-                  className="press chip gray"
-                  data-testid="br-inbox"
-                  aria-label={`${inboxWords}, ${inboxScope}`}
-                >
-                  {inboxWords}
-                </Link>
-                <span className="text-micro text-neutral-600" data-testid="br-inbox-scope">{inboxScope}</span>
-              </div>
-            </div>
+          {/* (2026-11-12) The forecast's "charges to match" count, in plain words: it scrolls to Needs you, where they are
+              answered. Review's own list stays one link away. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="br-inbox-cell">
+            <a
+              href="#needs-you"
+              onClick={(e) => {
+                e.preventDefault();
+                toNeedsYou();
+              }}
+              className="press chip gray"
+              data-testid="br-inbox"
+              aria-label={`${inboxWords}, ${inboxScope}`}
+            >
+              {inboxWords}
+            </a>
+            <span className="text-micro text-neutral-600" data-testid="br-inbox-scope">{inboxScope}</span>
+            {inboxCount > 0 ? (
+              <Link href={inboxHref} className="text-micro font-semibold text-brand-navy hover:underline" data-testid="br-inbox-review">
+                Open in Review
+              </Link>
+            ) : null}
+          </div>
+
+          <details
+            className="disclose surface overflow-hidden rounded-card ring-1 ring-brand-line"
+            open={detailsOpen}
+            onToggle={(e) => setDetailsOpen((e.currentTarget as HTMLDetailsElement).open)}
+            data-testid="br-details"
+          >
+            <summary className="press cursor-pointer px-4 py-3" data-testid="br-details-summary">
+              <span className="text-title font-semibold text-brand-navy">Details</span>
+              <span className="ml-2 text-label text-neutral-600">Proposed fixes · Not in the plan · Planned this period</span>
+            </summary>
+            <div className="space-y-4 border-t border-brand-line p-3 sm:p-4">
+          <section className="space-y-2" aria-label="Proposed fixes" data-testid="br-decide">
             <ProposedFixes defaultOpen={fixesParam === "1"} />
           </section>
 
@@ -454,6 +504,7 @@ export default function BankingReviewPage() {
                     hrefOf={hrefOf}
                     empty={selCount === 0}
                     seed={selBucket ? { rows: selBucket.rows, truncated: selBucket.truncated } : null}
+                    onOpen={setOpenRow}
                   />
                 </div>
               </section>
@@ -486,6 +537,8 @@ export default function BankingReviewPage() {
               </p>
             )}
           </details>
+            </div>
+          </details>
 
           {d.household ? (
             <section className="border-t border-brand-line pt-3" data-testid="br-household">
@@ -516,6 +569,7 @@ export default function BankingReviewPage() {
           ) : null}
         </>
       )}
+      <TxDrawer row={drawerRow} onOpenChange={(o) => !o && setOpenRow(null)} hrefOfTx={hrefOfTx} />
     </div>
   );
 }

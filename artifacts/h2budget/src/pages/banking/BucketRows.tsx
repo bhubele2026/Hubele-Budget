@@ -141,7 +141,7 @@ function SuggestionAnswer({ row, target }: { row: BankingReviewRow; target: Targ
   );
 }
 
-function RowLine({ row, href, bucket, first }: { row: BankingReviewRow; href: string | null; bucket: BankingReviewBucketName; first?: React.RefObject<HTMLLIElement | null> }) {
+function RowLine({ row, href, bucket, first, onOpen }: { row: BankingReviewRow; href: string | null; bucket: BankingReviewBucketName; first?: React.RefObject<HTMLLIElement | null>; onOpen?: (row: BankingReviewRow) => void }) {
   const plan = planLine(row);
   const flags = row.flags;
   const name = row.displayName || row.description;
@@ -159,7 +159,12 @@ function RowLine({ row, href, bucket, first }: { row: BankingReviewRow; href: st
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="text-label tabular-nums text-neutral-600">{dayWords(row.date)}</span>
-            {href ? (
+            {onOpen ? (
+              // (2026-11-12) The row opens IN PLACE (the drawer, with "Open in register" inside): Banking never sends you away.
+              <button type="button" onClick={() => onOpen(row)} className="press truncate text-left text-body font-medium text-brand-navy hover:underline" data-testid={`br-link-${row.id}`}>
+                {name}
+              </button>
+            ) : href ? (
               <Link href={href} className="press truncate text-body font-medium text-brand-navy hover:underline" data-testid={`br-link-${row.id}`}>
                 {name}
               </Link>
@@ -212,6 +217,7 @@ function Chunk({
   hrefOf,
   bucket,
   seed,
+  onOpen,
 }: {
   base: GetBankingReviewParams;
   cursor: string | undefined;
@@ -220,6 +226,7 @@ function Chunk({
   hrefOf: (row: BankingReviewRow) => string | null;
   bucket: BankingReviewBucketName;
   seed?: BucketSeed | null;
+  onOpen?: (row: BankingReviewRow) => void;
 }) {
   const qc = useQueryClient();
   const params: GetBankingReviewParams = { ...base, limit: PAGE, ...(cursor ? { cursor } : {}) };
@@ -251,7 +258,7 @@ function Chunk({
   if (seeded && seed) {
     return (
       <>
-        {seed.rows.map((r) => <RowLine key={r.id} row={r} href={hrefOf(r)} bucket={bucket} />)}
+        {seed.rows.map((r) => <RowLine key={r.id} row={r} href={hrefOf(r)} bucket={bucket} onOpen={onOpen} />)}
         {last && seed.truncated ? (
           <MoreButton
             onHover={() => void cursorOf().catch(() => {})}
@@ -276,7 +283,7 @@ function Chunk({
   }
   return (
     <>
-      {(page?.rows ?? []).map((r, i) => <RowLine key={r.id} row={r} href={hrefOf(r)} bucket={bucket} first={i === 0 && added ? firstRow : undefined} />)}
+      {(page?.rows ?? []).map((r, i) => <RowLine key={r.id} row={r} href={hrefOf(r)} bucket={bucket} first={i === 0 && added ? firstRow : undefined} onOpen={onOpen} />)}
       {last && page?.nextCursor ? <MoreButton load={async () => onMore(page.nextCursor as string)} /> : null}
     </>
   );
@@ -294,6 +301,7 @@ export function BucketRows({
   hrefOf,
   empty,
   seed,
+  onOpen,
 }: {
   base: GetBankingReviewParams;
   bucket: BankingReviewBucketName;
@@ -305,6 +313,8 @@ export function BucketRows({
   empty: boolean;
   /** The summary's own rows for this bucket; used for the first page when no kind is chosen. */
   seed?: BucketSeed | null;
+  /** Opens a row in place (the drawer); without it the name links to the register. */
+  onOpen?: (row: BankingReviewRow) => void;
 }) {
   if (empty) return <div className={emptyNote} data-testid="br-empty">Nothing here for this range.</div>;
   const pageBase: GetBankingReviewParams = { ...base, bucket, ...(kind ? { kind } : {}) };
@@ -312,7 +322,7 @@ export function BucketRows({
   return (
     <ul className="divide-y divide-brand-line/70" data-testid="br-rows">
       {all.map((c, i) => (
-        <Chunk key={c ?? "first"} base={pageBase} cursor={c} last={i === all.length - 1} onMore={onMore} hrefOf={hrefOf} bucket={bucket} seed={kind ? null : seed} />
+        <Chunk key={c ?? "first"} base={pageBase} cursor={c} last={i === all.length - 1} onMore={onMore} hrefOf={hrefOf} bucket={bucket} seed={kind ? null : seed} onOpen={onOpen} />
       ))}
     </ul>
   );

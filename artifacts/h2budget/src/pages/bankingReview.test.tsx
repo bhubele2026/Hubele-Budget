@@ -50,6 +50,9 @@ function withFirstPages(r: Record<string, unknown>, pages: Record<string, unknow
 vi.mock("@workspace/api-client-react", async (orig) => ({
   ...(await orig<typeof import("@workspace/api-client-react")>()),
   useListPlaidItems: () => ({ data: h.items, isError: false, isLoading: false }),
+  // (2026-11-12) The in-place row drawer reads the row's day; the categories list feeds its picker.
+  useListTransactions: () => ({ data: [], isError: false, isLoading: false, refetch: vi.fn() }),
+  useListCategories: () => ({ data: [], isError: false, isLoading: false }),
   useGetMe: () => ({ data: { isOwner: h.owner }, isError: false, isLoading: false }),
   useUpsertForecastResolution: () => ({
     isPending: false,
@@ -108,6 +111,11 @@ vi.mock("@workspace/api-client-react/features", async (orig) => ({
     };
     return { data: echoed, isError: h.refreshError, isRefetchError: h.refreshError, dataUpdatedAt: h.refreshError ? Date.now() - 5 * 60_000 : 0, isLoading: false, isPlaceholderData: h.placeholder, refetch: vi.fn() };
   },
+}));
+// (2026-11-12) Needs you has its own read; these tests are about the rest of the page (NeedsYou.test.tsx covers it).
+vi.mock("./banking/needsYouApi", async (orig) => ({
+  ...(await orig<typeof import("./banking/needsYouApi")>()),
+  useNeedsYou: () => ({ data: { throughDate: "2026-10-14", count: 0, items: [], autoDone: { matched: 0, categorized: 0, since: "2026-10-07" } }, isError: false, refetch: vi.fn() }),
 }));
 vi.mock("@/hooks/useSpine", () => ({ useSpine: () => ({ data: h.spine, state: h.spine ? "loaded" : "cold", refetch: () => {} }) }));
 vi.mock("@/components/sync-button", () => ({ SyncButton: () => <button data-testid="own-sync">Sync</button> }));
@@ -346,8 +354,10 @@ describe("Banking review — header and summary", () => {
     // One name everywhere (the dashboard tile and the top bar say "review"). The count is THIS account and range, not the badge's.
     expect(text("br-inbox")).toBe("15 charges to match");
     expect(text("br-inbox-scope")).toBe("This account · Oct 1 – Oct 14");
-    // (Q5 fix) The destination opens on that month, so the list has the scope the chip names.
-    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review?month=2026-10");
+    // (2026-11-12) The chip scrolls to Needs you, where the charges are answered; Review's list, on that month (so it has
+    // the scope the chip names), stays one link away.
+    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("#needs-you");
+    expect(screen.getByTestId("br-inbox-review").getAttribute("href")).toBe("/review?month=2026-10");
     expect(screen.getByTestId("br-inbox").getAttribute("aria-label")).toBe("15 charges to match, This account · Oct 1 – Oct 14");
     expect(screen.getByTestId("banking-review").textContent).not.toMatch(/Review inbox|to review this month|reconcile/i);
     expect(screen.getByTestId("br-tie-cell").textContent).not.toMatch(/reconcile|review/i);
@@ -358,22 +368,22 @@ describe("Banking review — header and summary", () => {
     mount("/banking?from=2026-09-01&to=2026-09-30");
     expect(text("br-inbox")).toBe("1 charge to match");
     expect(text("br-inbox-scope")).toBe("This account · Sep 1 – Sep 30");
-    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review?month=2026-09");
+    expect(screen.getByTestId("br-inbox-review").getAttribute("href")).toBe("/review?month=2026-09");
     cleanup();
     // (Round 3) A month two back ties too: Review loads it (GET /forecast?fromMonth). Thirteen back it cannot: the page's count.
     mount("/banking?from=2026-08-01&to=2026-08-31");
     expect(text("br-inbox-scope")).toBe("This account · Aug 1 – Aug 31");
-    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review?month=2026-08");
+    expect(screen.getByTestId("br-inbox-review").getAttribute("href")).toBe("/review?month=2026-08");
     cleanup();
     mount("/banking?from=2025-08-01&to=2025-08-31");
     expect(text("br-inbox-scope")).toBe("Planned account · this month");
-    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review");
+    expect(screen.getByTestId("br-inbox-review").getAttribute("href")).toBe("/review");
     cleanup();
     // This week is part of a month (the review page lists the whole month): the chip says the page's count and scope.
     mount("/banking?from=2026-10-11&to=2026-10-14");
     expect(text("br-inbox")).toBe("9 charges to match");
     expect(text("br-inbox-scope")).toBe("Planned account · this month");
-    expect(screen.getByTestId("br-inbox").getAttribute("href")).toBe("/review");
+    expect(screen.getByTestId("br-inbox-review").getAttribute("href")).toBe("/review");
     cleanup();
     // Another account: the review page lists the planned account only.
     h.review = review({ account: { id: "acct-sav", institution: "Chase", name: "Savings", mask: "8802", isForecastAccount: false, lastSyncedAt: null }, freshness: null });
@@ -388,14 +398,32 @@ describe("Banking review — header and summary", () => {
     expect(text("br-inbox")).toBe("Nothing to match");
   });
 
-  it("the order is the order of the questions: context, then what needs a decision, then not on the plan, planned, household", () => {
+  it("(2026-11-12) the order: Needs you first, then the figures and the charges to match, then Details (proposed fixes, not on the plan, planned), household last", () => {
     mount();
-    const order = ["br-summary", "br-decide", "br-notinplan", "br-planned", "br-household"].map((id) => screen.getByTestId(id));
+    const order = ["needs-you", "br-summary", "br-inbox-cell", "br-details", "br-household"].map((id) => screen.getByTestId(id));
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING, `${i}`).toBeTruthy();
     }
-    expect(within(screen.getByTestId("br-decide")).getByTestId("br-fixes")).toBeTruthy();
-    expect(within(screen.getByTestId("br-decide")).getByTestId("br-inbox")).toBeTruthy();
+    // One "Details" disclosure holds the proposed fixes, the five pills with their rows, and the planned list; closed on a plain open.
+    const details = screen.getByTestId("br-details") as HTMLDetailsElement;
+    expect(details.tagName).toBe("DETAILS");
+    expect(details.className).toContain("disclose");
+    expect(details.open).toBe(false);
+    expect(within(details).getByTestId("br-fixes")).toBeTruthy();
+    expect(within(details).getByTestId("br-notinplan")).toBeTruthy();
+    expect(within(details).getByTestId("br-planned")).toBeTruthy();
+    for (const b of ["unmatched", "amountDifference", "timingDifference", "confirmedUnplanned", "uncertain"]) {
+      expect(within(details).getByTestId(`br-bucket-${b}`)).toBeTruthy();
+    }
+    expect(within(screen.getByTestId("br-inbox-cell")).getByTestId("br-inbox")).toBeTruthy();
+  });
+
+  it("(2026-11-12) a link that names a part of Details opens it: ?fixes=1, ?bucket=", () => {
+    mount("/banking?fixes=1");
+    expect((screen.getByTestId("br-details") as HTMLDetailsElement).open).toBe(true);
+    cleanup();
+    mount("/banking?bucket=uncertain");
+    expect((screen.getByTestId("br-details") as HTMLDetailsElement).open).toBe(true);
   });
 
   it("no balance for an account without a snapshot reads a dash, never $0.00", () => {
@@ -519,10 +547,15 @@ describe("Banking review — Not in the plan", () => {
     expect(text("br-cat-r2")).toBe("No category");
   });
 
-  it("each row links to its register with account, month and transaction", () => {
+  it("(2026-11-12) a row opens IN PLACE, in the drawer, which keeps a link to its register with account, month and transaction", () => {
     h.pages["unmatched||"] = { bucket: "unmatched", kind: null, limit: 25, nextCursor: null, rows: [rowOf("r3", { date: "2026-10-09" })] };
     mount();
-    const href = screen.getByTestId("br-link-r3").getAttribute("href")!;
+    const before = window.location.href;
+    fireEvent.click(screen.getByTestId("br-link-r3"));
+    expect(window.location.href).toBe(before);
+    expect(screen.getByTestId("tx-drawer")).toBeTruthy();
+    expect(screen.getByTestId("tx-drawer-meta").textContent).toContain("Oct 9");
+    const href = screen.getByTestId("tx-drawer-register").getAttribute("href")!;
     const u = new URL(href, "http://x");
     expect(u.pathname).toBe("/transactions");
     expect(u.searchParams.get("account")).toBe("acct-chk");
