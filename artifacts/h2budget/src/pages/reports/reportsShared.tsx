@@ -460,7 +460,7 @@ export function ReportsBalanceTiles() {
         data-testid="reports-tile-total-debt"
       />
       {/* (R) The Dashboard's block, not this page's own words: "Checking today", the calculated line, Details. */}
-      <div className="panel span-3 p-4" style={{ animationDelay: "calc(1 * var(--stagger))" }} data-testid="reports-tile-bank">
+      <div className="panel span-3 p-4" data-testid="reports-tile-bank">
         {/* (R) The one shared block: label, figure, calculated line, Details — from the spine's bank (the Dashboard
             tile's own source), no Plaid/Manual account words, no second calculation. Before the spine answers
             it makes no claim about a reading. */}

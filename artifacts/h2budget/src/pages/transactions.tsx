@@ -116,7 +116,7 @@ import {
   type BalanceSeriesPoint,
 } from "@/components/account-page";
 import { ChaseLogo } from "@/components/brand-logos";
-import { PageGrid, rise } from "@/components/next/PageGrid";
+import { PageGrid } from "@/components/next/PageGrid";
 import { bucketPatchOf } from "@/lib/bucketPatch";
 import { Panel } from "@/components/next/Panel";
 import { identityOf } from "@/lib/accountIdentity";
@@ -2572,7 +2572,6 @@ export default function TransactionsPage({
               span={lead ? 4 : 6}
               variant="static"
               accent="checking"
-              className={rise(0)}
               data-testid="chase-stats-in-out"
               actions={
                 <Help>
@@ -2639,7 +2638,6 @@ export default function TransactionsPage({
               span={lead ? 4 : 6}
               variant="static"
               accent="checking"
-              className={rise(1)}
               data-testid="chase-stats-balance"
               actions={
                 balanceUnavailable ? (
