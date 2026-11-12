@@ -286,7 +286,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
               radius={[4, 4, 0, 0]}
             >
               {dow.map((_, i) => (
-                <Cell key={i} fill={i === dowMaxIdx ? CHART.orange : CHART.navy} />
+                <Cell key={i} fill={i === dowMaxIdx ? CHART.navy : CHART.mist} />
               ))}
             </Bar>
           </BarChart>

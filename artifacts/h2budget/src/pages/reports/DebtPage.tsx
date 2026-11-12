@@ -72,7 +72,7 @@ export const DEBT_SERIES = themed(() => ({
   /** Actual total-balance history — one series. */
   history: CHART.navy,
   /** Freed minimums vs the running snowball. */
-  waterfall: { freed: CHART.orange, cumulative: CHART.navy },
+  waterfall: { freed: CHART.mist, cumulative: CHART.navy }, // (2026-11-12) no orange: freed money is not a warning
   /** The payment split. Principal is the part that actually kills the debt. */
   split: { principal: CHART.navy, interest: CHART.orangeDeep },
 } as const));

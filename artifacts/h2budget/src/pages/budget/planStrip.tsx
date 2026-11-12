@@ -41,7 +41,8 @@ export function PlanStrip({
 
   const segments = [
     { label: "Bills", value: bills, color: CHART.navy },
-    { label: "Debt payments", value: debts, color: CHART.orange },
+    // (2026-11-12) Orange is kept for warnings: debt payments are the steel series beside navy bills.
+    { label: "Debt payments", value: debts, color: CHART.mist },
   ].filter((s) => s.value > 0);
 
   return (
