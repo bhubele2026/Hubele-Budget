@@ -159,11 +159,11 @@ export default function ReviewCategoriesPage() {
           ) : (
             <>
               <p className="border-b border-brand-line px-4 py-2 text-micro text-neutral-500" data-testid="review-count">
-                <span className="font-mono tabular-nums">{total}</span> to review
+                <span className="fig">{total}</span> to review
                 {total > items.length && (
                   <>
                     {" "}
-                    · showing <span className="font-mono tabular-nums">{items.length}</span>
+                    · showing <span className="fig">{items.length}</span>
                   </>
                 )}
                 <span className="hidden md:inline"> · j / k to move · a accept · c change · s skip</span>
@@ -194,7 +194,7 @@ export default function ReviewCategoriesPage() {
                           </p>
                         </div>
                         {amount != null && (
-                          <data value={centsValue(amount)} className="shrink-0 font-mono text-label font-semibold tabular-nums text-brand-navy">
+                          <data value={centsValue(amount)} className="shrink-0 fig text-label font-semibold text-foreground">
                             {amount > 0 ? `+${fmtMoney(amount)}` : fmtMoney(amount)}
                           </data>
                         )}

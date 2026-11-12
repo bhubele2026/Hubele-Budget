@@ -77,7 +77,7 @@ function CapMeter({ label, spent, limit, id }: { label: string; spent: number; l
           {CAP_WORDS[status]}
         </StatusChip>
       </div>
-      <p className="mt-1 font-mono text-body tabular-nums text-brand-ink">
+      <p className="mt-1 fig text-body text-brand-ink">
         {usd(spent)} <span className="text-neutral-500">of {usd(limit)}</span>
       </p>
       <CssFillMeter value={spent} ceiling={limit} className="mt-2" title={`${usd(spent)} of ${usd(limit)}`} />
@@ -162,33 +162,33 @@ export function AiCostView({ data, now }: { data: AiCostData; now?: Date }) {
       <Panel title="This month" sub={`Spent so far in ${monthWords(u.month)}`} span={4} variant="static" data-testid="ai-month">
         <data
           value={String(u.monthToDateUsd)}
-          className="block font-mono text-display font-semibold tabular-nums text-brand-navy"
+          className="block fig text-kpi font-semibold text-foreground"
           data-testid="figure-ai-month"
         >
           {usd(u.monthToDateUsd)}
         </data>
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-body text-neutral-600" data-testid="ai-counts">
           <div className="flex gap-1">
-            <dd className="font-mono tabular-nums text-brand-ink" data-testid="ai-calls">
+            <dd className="fig text-brand-ink" data-testid="ai-calls">
               {u.calls ?? 0}
             </dd>
             <dt>calls</dt>
           </div>
           <div className="flex gap-1">
-            <dd className="font-mono tabular-nums text-brand-ink" data-testid="ai-failures">
+            <dd className="fig text-brand-ink" data-testid="ai-failures">
               {u.failures ?? 0}
             </dd>
             <dt>failed</dt>
           </div>
           <div className="flex gap-1">
-            <dd className="font-mono tabular-nums text-brand-ink" data-testid="ai-blocked">
+            <dd className="fig text-brand-ink" data-testid="ai-blocked">
               {u.blocked ?? 0}
             </dd>
             <dt>stopped by the cap</dt>
           </div>
           {u.cacheHitRatio != null && (
             <div className="flex gap-1">
-              <dd className="font-mono tabular-nums text-brand-ink" data-testid="ai-cache">
+              <dd className="fig text-brand-ink" data-testid="ai-cache">
                 {percent(u.cacheHitRatio)}
               </dd>
               <dt>reused from cache</dt>
@@ -245,7 +245,7 @@ export function AiCostView({ data, now }: { data: AiCostData; now?: Date }) {
             <label className="flex w-28 flex-col gap-1">
               <span className={fieldLabel}>Monthly cap</span>
               <input
-                className={`${input} font-mono`}
+                className={`${input} fig`}
                 inputMode="decimal"
                 value={monthly ?? String(budget.monthlyCapUsd)}
                 onChange={(e) => setMonthly(e.target.value)}
@@ -255,7 +255,7 @@ export function AiCostView({ data, now }: { data: AiCostData; now?: Date }) {
             <label className="flex w-28 flex-col gap-1">
               <span className={fieldLabel}>Hard stop</span>
               <input
-                className={`${input} font-mono`}
+                className={`${input} fig`}
                 inputMode="decimal"
                 value={hard ?? String(budget.hardCapUsd)}
                 onChange={(e) => setHard(e.target.value)}
@@ -334,7 +334,7 @@ export function AiCostView({ data, now }: { data: AiCostData; now?: Date }) {
               <li key={r.id} className="flex flex-col gap-0.5 px-4 py-2" data-testid="ai-run">
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-body text-brand-ink">{taskWord(r.kind)}</span>
-                  <span className="font-mono text-label tabular-nums text-brand-ink">
+                  <span className="fig text-label text-brand-ink">
                     {r.costUsd == null ? "—" : usd(r.costUsd)}
                   </span>
                 </div>

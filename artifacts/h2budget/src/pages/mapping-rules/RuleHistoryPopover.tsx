@@ -121,7 +121,7 @@ function HistoryBody({
         {history.entries.map((e) => (
           <li key={e.id} className="py-2 text-micro" data-testid={`rule-history-entry-${e.id}`}>
             <p className="text-neutral-700">
-              <span className="font-mono tabular-nums text-neutral-500">{whenWords(e.createdAt)}</span>
+              <span className="fig text-neutral-500">{whenWords(e.createdAt)}</span>
               {" · "}
               {headline(e)}
             </p>

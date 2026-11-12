@@ -126,11 +126,11 @@ function DecisionRow({
             {d.description}
           </span>
           {amt == null ? (
-            <span className="font-mono text-label text-neutral-400">—</span>
+            <span className="fig text-label text-neutral-400">—</span>
           ) : (
             <data
               value={centsValue(amt)}
-              className="shrink-0 font-mono text-label tabular-nums text-brand-ink"
+              className="shrink-0 fig text-label text-brand-ink"
               data-testid="decision-amount"
             >
               {amt > 0 ? `+${fmtMoney(amt)}` : fmtMoney(amt)}
@@ -138,7 +138,7 @@ function DecisionRow({
           )}
         </div>
         <p className="text-micro text-neutral-500" data-testid="decision-words">
-          <span className="font-mono tabular-nums" data-testid="decision-when">
+          <span className="fig" data-testid="decision-when">
             {shortDate(d.occurredOn)}
           </span>{" "}
           · <span data-testid="decision-category">{d.categoryName ?? "Not filed"}</span> ·{" "}
@@ -147,7 +147,7 @@ function DecisionRow({
           <span data-testid="decision-resolution">{resolutionWord(d)}</span>
         </p>
         {d.resolution === "unreviewed" && (
-          <p className="text-micro text-neutral-400" data-testid="decision-hint">
+          <p className="text-micro text-neutral-500" data-testid="decision-hint">
             {UNREVIEWED_HINT}
           </p>
         )}
@@ -351,7 +351,7 @@ export function AutomationView({
           )}
         </div>
         {ran && (
-          <div className="section-enter mt-3 space-y-1">
+          <div className="mt-3 space-y-1">
             <p className="text-micro text-neutral-600" data-testid="backlog-result">
               {runResultLine(ran)}
             </p>
@@ -451,7 +451,7 @@ export function AutomationView({
                 <StatusChip tone={r.met ? "on" : "neutral"}>{r.met ? "Met" : "Not met"}</StatusChip>
               </div>
               {requirementFigure(r) && (
-                <span className="font-mono text-micro tabular-nums text-neutral-600" data-testid="req-figure">
+                <span className="fig text-micro text-neutral-600" data-testid="req-figure">
                   {requirementFigure(r)}
                 </span>
               )}

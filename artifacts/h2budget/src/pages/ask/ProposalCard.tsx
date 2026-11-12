@@ -182,7 +182,7 @@ function ChangeValue({ face, value }: { face: string; value: string | null }) {
   return value == null ? (
     <span>{face}</span>
   ) : (
-    <data value={value} className="font-mono tabular-nums">
+    <data value={value} className="fig">
       {face}
     </data>
   );

@@ -120,7 +120,7 @@ export default function WishlistPage() {
           {amt == null ? (
             <span className="text-label text-neutral-400">—</span>
           ) : (
-            <data value={centsValue(amt)} className="shrink-0 font-mono text-label font-semibold tabular-nums text-brand-navy">
+            <data value={centsValue(amt)} className="shrink-0 fig text-label font-semibold text-foreground">
               {fmtMoney(amt)}
             </data>
           )}
@@ -149,7 +149,7 @@ export default function WishlistPage() {
             {evAfter != null && (
               <span data-testid="wish-eval-after">
                 free until payday after{" "}
-                <data value={centsValue(evAfter)} className="font-mono tabular-nums">
+                <data value={centsValue(evAfter)} className="fig">
                   {fmtMoney(evAfter)}
                 </data>
               </span>
@@ -240,7 +240,7 @@ export default function WishlistPage() {
             </label>
             <label className="flex flex-col gap-1">
               <span className={fieldLabel}>How much (optional)</span>
-              <input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={`${input} font-mono tabular-nums`} data-testid="wish-amount" />
+              <input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={`${input} fig`} data-testid="wish-amount" />
               {tried && errors.amount && <span className="text-micro text-bad" role="alert">{errors.amount}</span>}
             </label>
             <label className="flex flex-col gap-1">

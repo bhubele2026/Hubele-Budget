@@ -89,7 +89,7 @@ import {
   errorBanner,
 } from "@/ui";
 
-import { AccountChip, PageGrid, Panel } from "@/components/next";
+import { AccountChip, PageGrid, PageHeader, Panel, StatusBadge } from "@/components/next";
 import { cardOrderOf, identityOf, type AccountIdentity } from "@/lib/accountIdentity";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
 import {
@@ -586,13 +586,13 @@ export default function SettingsPage() {
               </Help>
             </span>
             <span className="flex items-center gap-2">
-              <span
-                className="chip bad"
+              <StatusBadge
+                state="warning"
                 data-testid="badge-duplicate-transaction-count"
                 title="Approximate number of rows the cleanup would merge into their twins."
               >
                 {duplicateCount} duplicate{duplicateCount === 1 ? "" : "s"} found
-              </span>
+              </StatusBadge>
               <button
                 type="button"
                 className={btnSecondarySm}
@@ -636,8 +636,8 @@ export default function SettingsPage() {
             <div className="space-y-1.5 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2 empty:hidden">
                 {needsReconnect && (
-                        <span
-                          className="chip bad"
+                        <StatusBadge
+                          state="warning"
                           data-testid={`badge-needs-reconnect-${item.id}`}
                           // (#228) Use the per-code reason so the tooltip
                           // explains *why* (saved login expired vs.
@@ -656,11 +656,11 @@ export default function SettingsPage() {
                           })} Click Reconnect to fix it.`}
                         >
                           Needs reconnect
-                        </span>
+                        </StatusBadge>
                       )}
                       {item.stillPreparing && (
-                        <span
-                          className="chip gray"
+                        <StatusBadge
+                          state="pending"
                           data-testid={`badge-still-preparing-${item.id}`}
                           title="Plaid is still staging the historical batch for this freshly linked bank — try Sync again in a minute."
                         >
@@ -670,11 +670,11 @@ export default function SettingsPage() {
                               ? `Still preparing · ${elapsed}`
                               : "Still preparing";
                           })()}
-                        </span>
+                        </StatusBadge>
                       )}
               </div>
               <div
-                      className="text-micro text-neutral-400"
+                      className="text-micro text-neutral-500"
                       data-testid={`text-last-synced-${item.id}`}
                     >
                       {item.lastSyncedAt
@@ -721,7 +721,7 @@ export default function SettingsPage() {
                       );
                       return (
                         <div
-                          className="flex flex-wrap items-center gap-2 text-micro text-neutral-400"
+                          className="flex flex-wrap items-center gap-2 text-micro text-neutral-500"
                           data-testid={`text-consent-refreshed-${item.id}`}
                           title={
                             item.consentExpirationAt
@@ -738,13 +738,13 @@ export default function SettingsPage() {
                             ).toLocaleString()}
                           </span>
                           {isStale && (
-                            <span
-                              className="chip warn"
+                            <StatusBadge
+                              state="warning"
                               data-testid={`badge-consent-refresh-stale-${item.id}`}
                               title={`The daily check hasn't advanced this timestamp in ${age ?? "several days"}. The disconnect date above may be out of date — click Sync to re-verify with Plaid.`}
                             >
                               Disconnect date stale
-                            </span>
+                            </StatusBadge>
                           )}
                         </div>
                       );
@@ -1200,8 +1200,8 @@ export default function SettingsPage() {
               data-testid="banner-non-prod-cleanup"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="chip bad">Wrong environment</span>
-                <span className="text-body font-medium text-brand-navy">
+                <StatusBadge state="warning">Wrong environment</StatusBadge>
+                <span className="text-body font-medium text-foreground">
                   {plaidEnv.nonProdItemCount} link
                   {plaidEnv.nonProdItemCount === 1 ? "" : "s"} not from Plaid
                   Production
@@ -1216,9 +1216,7 @@ export default function SettingsPage() {
                 {plaidEnv.nonProdItems.map((it) => (
                   <li key={it.id}>
                     {it.institutionName ?? "Unnamed institution"}{" "}
-                    <span className="uppercase tracking-wide">
-                      ({it.env ?? "unknown"})
-                    </span>
+                    <span>({it.env ?? "unknown"})</span>
                   </li>
                 ))}
               </ul>
@@ -1272,14 +1270,14 @@ export default function SettingsPage() {
         >
         <div className="space-y-2 p-4 text-body text-neutral-600">
           <p>
-            <span className="font-medium text-brand-navy">
+            <span className="font-medium text-foreground">
               Plaid brokers the bank connection.
             </span>{" "}
             Your bank login is never seen or stored by this app — we receive
             transactions and balances only, read-only.
           </p>
           <p>
-            <span className="font-medium text-brand-navy">
+            <span className="font-medium text-foreground">
               Your data stays in your household.
             </span>{" "}
             Every record is scoped to your household and visible only to members
@@ -1320,23 +1318,26 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-4" data-testid="settings-page">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-display font-semibold text-brand-navy">Settings</h1>
-        {plaidEnv?.env && (
-          <span
-            className={`chip ${plaidEnv.env === "production" ? "ok" : "warn"}`}
-            data-testid="badge-plaid-env"
-            title={`Plaid is running in ${plaidEnv.env} mode`}
-          >
-            Plaid: {plaidEnv.env}
-          </span>
-        )}
-      </div>
+      {/* (2026-11-12) The shared page header: the title, the Plaid mode as its state, and the tab bar under it. */}
+      <PageHeader
+        title="Settings"
+        meta={
+          plaidEnv?.env ? (
+            <StatusBadge
+              state={plaidEnv.env === "production" ? "confirmed" : "warning"}
+              data-testid="badge-plaid-env"
+              title={`Plaid is running in ${plaidEnv.env} mode`}
+            >
+              Plaid: {plaidEnv.env}
+            </StatusBadge>
+          ) : null
+        }
+      >
+        <SettingsTabBar current={tab} />
+      </PageHeader>
 
-      <SettingsTabBar current={tab} />
-
-      {/* Keyed on the tab: only the tab's content rises in on a switch. */}
-      <div key={tab} className="section-enter" data-testid={`settings-tab-${tab}`}>
+      {/* Keyed on the tab: a switch swaps the content, nothing rises in. */}
+      <div key={tab} data-testid={`settings-tab-${tab}`}>
         {content}
       </div>
 

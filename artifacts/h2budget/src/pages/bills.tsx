@@ -188,7 +188,7 @@ function DueCell({ iso }: { iso: string | null }) {
   const pill = formatDatePill(iso);
   if (!pill) return <span className="text-neutral-300">—</span>;
   return (
-    <span className="whitespace-nowrap font-mono text-label tabular-nums text-brand-navy">
+    <span className="whitespace-nowrap fig text-label text-foreground">
       {pill.month} {pill.day}
     </span>
   );
@@ -778,7 +778,7 @@ export default function BillsPage() {
 
         <div className="span-8 space-y-4">
           {/* ── Due window ───────────────────────────────────────────────── */}
-          <div className="panel tile-in" data-testid="bills-due-lead">
+          <div className="panel" data-testid="bills-due-lead">
             <div className="panel-head">
               <div className="text-label font-semibold text-brand-navy">
                 Due {windowWord}
@@ -873,14 +873,14 @@ export default function BillsPage() {
             />
           ) : null}
           {archivedDebtsList.length > 0 && (
-            <div className="panel tile-in" data-testid="card-archived-debts">
+            <div className="panel" data-testid="card-archived-debts">
               <div className="panel-head">
                 <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
                 <div className="text-label font-semibold text-neutral-500">
                   Archived debts
                 </div>
                 <span className="chip gray">Paid off</span>
-                <span className="ml-auto text-micro text-neutral-400">
+                <span className="ml-auto text-micro text-neutral-500">
                   manage on the Debt page
                 </span>
               </div>
@@ -914,7 +914,7 @@ export default function BillsPage() {
 
         {/* ── Side column ────────────────────────────────────────────────── */}
         <div className="span-4 space-y-4">
-          <div className="panel tile-in">
+          <div className="panel">
             <div className="panel-head">
               <div className="text-label font-semibold text-brand-navy">Per month</div>
               <Help>
@@ -961,7 +961,7 @@ export default function BillsPage() {
             </table></div>
           </div>
 
-          <div className="panel tile-in" data-testid="card-actual-this-month">
+          <div className="panel" data-testid="card-actual-this-month">
             <div className="panel-head">
               <div className="text-label font-semibold text-brand-navy">Actual</div>
               <Help>
@@ -969,7 +969,7 @@ export default function BillsPage() {
                 a bill. Transfers are excluded.
               </Help>
               <span
-                className="ml-auto text-micro text-neutral-400"
+                className="ml-auto text-micro text-neutral-500"
                 data-testid="text-actual-month-label"
               >
                 {new Date(currentMonth + "T00:00:00").toLocaleDateString("en-US", {
@@ -1011,7 +1011,7 @@ export default function BillsPage() {
             <Foot>Real transactions, transfers excluded.</Foot>
           </div>
 
-          <Link href="/forecast" className="panel panel-link tile-in block">
+          <Link href="/forecast" className="panel panel-link block">
             <div className="flex items-center justify-between px-4 py-3">
               <div>
                 <div className={fieldLabel}>Next</div>
@@ -1361,7 +1361,7 @@ function SummaryRow({
         </span>
         {actual !== undefined ? (
           <span
-            className="ml-1.5 text-micro text-neutral-400"
+            className="ml-1.5 text-micro text-neutral-500"
             data-testid={actualTestId}
             title={`${formatCurrency(actual)} actual so far this month`}
           >
@@ -1413,17 +1413,17 @@ function BillGroupCard({
   const sign = tone === "income" ? "+" : "−";
 
   return (
-    <div className="panel tile-in">
+    <div className="panel">
       {/* ⚠️ The title is a <div>, not a heading: four e2e specs match
           getByRole("heading", { name: /bills/i }) and a second heading
           containing "Bills" would be a strict-mode violation. */}
       <div className="panel-head">
         <div className="text-label font-semibold text-brand-navy">{title}</div>
-        <span className="text-micro text-neutral-400">
+        <span className="text-micro text-neutral-500">
           {rows.length} item{rows.length === 1 ? "" : "s"}
         </span>
         <span
-          className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy"
+          className="ml-auto fig text-label font-semibold text-foreground"
           data-testid={`text-group-total-${tone}`}
         >
           {sign}
@@ -1511,7 +1511,7 @@ function BillGroupCard({
                         </span>
                         {!active && <span className="chip gray">Paused</span>}
                       </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-micro text-neutral-400">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-micro text-neutral-500">
                         <span className="whitespace-nowrap">{frequencyLabel(item)}</span>
                         {linkedDebt ? (
                           <span
@@ -1554,7 +1554,7 @@ function BillGroupCard({
                         {display.amountText}
                       </div>
                       {display.monthlyHint ? (
-                        <div className="text-micro text-neutral-400">
+                        <div className="text-micro text-neutral-500">
                           {display.monthlyHint}
                         </div>
                       ) : null}
@@ -1650,7 +1650,7 @@ function DebtMinimumsCard({
   onOpen: (debtId: string) => void;
 }) {
   return (
-    <div className="panel tile-in" data-testid="card-debt-minimums">
+    <div className="panel" data-testid="card-debt-minimums">
       <div className="panel-head">
         <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
         <div className="text-label font-semibold text-brand-navy">Debt minimums</div>
@@ -1658,7 +1658,7 @@ function DebtMinimumsCard({
           Synced from Debts and edited on the Debt page, never here. Each minimum
           stops on the month the avalanche pays that debt off.
         </Help>
-        <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
+        <span className="ml-auto fig text-label font-semibold text-foreground">
           −{formatCurrency(total)}
         </span>
       </div>
@@ -1729,7 +1729,7 @@ function DebtMinimumsCard({
                 </td>
                 <td className={td}>
                   <div className="truncate text-brand-ink">{r.debtName} minimum</div>
-                  <div className="mt-0.5 truncate text-micro text-neutral-400">
+                  <div className="mt-0.5 truncate text-micro text-neutral-500">
                     min {formatCurrency(min)}/mo · stops at payoff
                     {r.source === "plaid" ? " · synced from Plaid" : ""}
                   </div>

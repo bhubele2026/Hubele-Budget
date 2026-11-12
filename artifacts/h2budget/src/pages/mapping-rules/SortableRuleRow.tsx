@@ -175,7 +175,7 @@ export function SortableRuleRow({
         </button>
       </div>
       <span
-        className="w-12 shrink-0 text-center font-mono text-micro tabular-nums text-neutral-500"
+        className="w-12 shrink-0 text-center fig text-micro text-neutral-500"
         title="Priority — the highest match wins"
         data-testid={`rule-priority-${rule.id}`}
       >

@@ -24,10 +24,10 @@ export function SettingsTabBar({ current }: { current: SettingsTab }) {
                 onMouseEnter={warm ? () => void warm() : undefined}
                 onFocus={warm ? () => void warm() : undefined}
                 className={cn(
-                  "press -mb-px block whitespace-nowrap border-b-2 px-3 py-2 text-label font-semibold",
+                  "press -mb-px block whitespace-nowrap border-b-2 px-3 py-2 text-label font-medium",
                   active
                     ? "border-brand-navy text-brand-navy"
-                    : "border-transparent text-neutral-500 hover:text-brand-navy",
+                    : "border-transparent text-neutral-600 hover:text-foreground",
                 )}
               >
                 {t.label}

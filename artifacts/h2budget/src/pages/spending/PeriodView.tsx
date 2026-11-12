@@ -53,7 +53,7 @@ const MIN = PERIOD_MIN;
 
 const CELL = "surface rounded-card px-4 py-3 ring-1 ring-brand-line";
 const CELL_LABEL = figLabel;
-const CELL_VALUE = "mt-1 whitespace-nowrap font-mono text-kpi font-semibold tabular-nums";
+const CELL_VALUE = "mt-1 whitespace-nowrap fig text-kpi font-semibold";
 
 export function PeriodView({ view }: { view: PeriodView }) {
   const today = useMemo(() => householdToday(new Date()), []);
@@ -213,8 +213,8 @@ export function PeriodView({ view }: { view: PeriodView }) {
               ) : (
                 <>
                   <dl className="mt-2 space-y-1 text-body">
-                    <div className="flex justify-between gap-3"><dt className="text-neutral-700">Planned</dt><dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-hb-planned">{formatCurrency(budget.data.summary.expenses.budget)}</dd></div>
-                    <div className="flex justify-between gap-3"><dt className="text-neutral-700">Actual</dt><dd className="font-mono tabular-nums text-brand-ink" data-testid="sp-hb-actual">{formatCurrency(budget.data.summary.expenses.actual)}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-neutral-700">Planned</dt><dd className="fig text-brand-ink" data-testid="sp-hb-planned">{formatCurrency(budget.data.summary.expenses.budget)}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-neutral-700">Actual</dt><dd className="fig text-brand-ink" data-testid="sp-hb-actual">{formatCurrency(budget.data.summary.expenses.actual)}</dd></div>
                   </dl>
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-label">
                     <Link href={`/budget?month=${start}`} className="font-medium text-brand-navy underline" data-testid="sp-hb-link">Open the budget</Link>

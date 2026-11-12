@@ -122,7 +122,7 @@ export default function BillsOverviewPage() {
       )}
 
         {/* ── This month ──────────────────────────────────────────────────── */}
-        <div className="panel tile-in span-4" data-testid="bills-month-card">
+        <div className="panel span-4" data-testid="bills-month-card">
           <div className="panel-head">
             <h2 className="text-label font-semibold text-brand-navy">This month</h2>
             <Help>
@@ -195,7 +195,7 @@ export default function BillsOverviewPage() {
                     Committed
                   </span>
                   <span
-                    className="font-mono text-label font-semibold tabular-nums text-brand-navy"
+                    className="fig text-label font-semibold text-foreground"
                     data-testid="text-overview-committed"
                   >
                     {committedPct}%
@@ -215,7 +215,7 @@ export default function BillsOverviewPage() {
         </div>
 
         {/* ── Biggest recurring bills ─────────────────────────────────────── */}
-        <div className="panel tile-in span-8" data-testid="bills-biggest-card">
+        <div className="panel span-8" data-testid="bills-biggest-card">
           <div className="panel-head">
             <h2 className="text-label font-semibold text-brand-navy">
               Biggest recurring bills
@@ -224,7 +224,7 @@ export default function BillsOverviewPage() {
               Each bill at its monthly rate, ranked. Paused items and debt
               minimums are not in this list.
             </Help>
-            <span className="ml-auto text-micro text-neutral-400">per month</span>
+            <span className="ml-auto text-micro text-neutral-500">per month</span>
           </div>
           {billRows.length ? (
             <div className="px-4 py-3">

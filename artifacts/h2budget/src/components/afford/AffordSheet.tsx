@@ -35,7 +35,7 @@ function Money({ value }: { value: string | number | null | undefined }) {
   const n = toAmount(value);
   if (n == null) return <span className="text-neutral-400">—</span>;
   return (
-    <data value={centsValue(n)} className="font-mono tabular-nums">
+    <data value={centsValue(n)} className="fig">
       {fmtMoney(n)}
     </data>
   );
@@ -302,7 +302,7 @@ export default function AffordSheet({
               type="text"
               inputMode="decimal"
               autoComplete="off"
-              className={`${input} font-mono tabular-nums`}
+              className={`${input} fig`}
               value={amount}
               onChange={(e) => {
                 setAmount(e.target.value);

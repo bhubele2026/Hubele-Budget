@@ -291,7 +291,7 @@ function LearnedRuleRow({
             ) : null}
             {band ? (
               <span
-                className="whitespace-nowrap font-mono text-micro tabular-nums text-neutral-600"
+                className="whitespace-nowrap fig text-micro text-neutral-600"
                 data-testid={`learned-rule-band-${rule.id}`}
               >
                 {band}
@@ -359,13 +359,13 @@ function LearnedRuleRow({
 
       {preview ? (
         <div
-          className="section-enter mt-2 rounded-control bg-platinum-2 px-3 py-2 ring-1 ring-brand-line"
+          className="mt-2 rounded-control bg-platinum-2 px-3 py-2 ring-1 ring-brand-line"
           data-testid={`learned-rule-preview-${rule.id}`}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-micro text-neutral-600">
               <span
-                className="font-mono font-semibold tabular-nums text-brand-navy"
+                className="fig font-semibold text-foreground"
                 data-testid={`learned-rule-preview-count-${rule.id}`}
               >
                 {preview.count}
@@ -397,17 +397,17 @@ function LearnedRuleRow({
             <ul className="mt-1.5 divide-y divide-brand-line/70" data-testid={`learned-rule-sample-${rule.id}`}>
               {preview.sample.map((s) => (
                 <li key={s.transactionId} className="flex items-center gap-3 py-1 text-micro">
-                  <span className="w-12 shrink-0 font-mono tabular-nums text-neutral-500">
+                  <span className="w-12 shrink-0 fig text-neutral-500">
                     {shortDate(s.occurredOn)}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-neutral-700">{s.description}</span>
-                  <span className="shrink-0 font-mono tabular-nums text-neutral-700">{fmtMoney(s.amount)}</span>
+                  <span className="shrink-0 fig text-neutral-700">{fmtMoney(s.amount)}</span>
                 </li>
               ))}
             </ul>
           ) : null}
           {preview.sample.length < preview.count ? (
-            <p className="mt-1 text-micro text-neutral-400">
+            <p className="mt-1 text-micro text-neutral-500">
               Showing the {preview.sample.length} most recent of {preview.count}.
             </p>
           ) : null}
@@ -538,7 +538,7 @@ export function LearnedRulesPanel({
       data-testid="learned-rules-panel"
       actions={
         hasData(state) && rules.length > 0 ? (
-          <span className="font-mono text-micro tabular-nums text-neutral-400" data-testid="learned-rules-count">
+          <span className="fig text-micro text-neutral-500" data-testid="learned-rules-count">
             {rules.length} learned{onCount !== rules.length ? ` · ${onCount} on` : ""}
           </span>
         ) : null

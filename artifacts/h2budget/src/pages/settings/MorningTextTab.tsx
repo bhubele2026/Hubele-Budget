@@ -437,7 +437,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
           <div className="flex flex-wrap items-center justify-between gap-3" data-testid="phone-verified">
             <p className="flex items-center gap-3 text-body text-brand-ink">
               <StatusChip tone="fresh">Verified</StatusChip>
-              <span className="font-mono tabular-nums" data-testid="phone-mask">
+              <span className="fig" data-testid="phone-mask">
                 {maskedPhone(s.phoneLast4)}
               </span>
             </p>
@@ -467,7 +467,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
                 inputMode="tel"
                 autoComplete="tel"
                 placeholder="(555) 555-0100"
-                className={`${input} max-w-xs font-mono`}
+                className={`${input} max-w-xs fig`}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 aria-invalid={phoneBad || undefined}
@@ -539,7 +539,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={6}
-                className={`${input} max-w-[10rem] font-mono tabular-nums`}
+                className={`${input} max-w-[10rem] fig`}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 data-testid="code-input"
@@ -569,7 +569,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
               <input
                 id="recap-time"
                 type="time"
-                className={`${input} w-36 font-mono`}
+                className={`${input} w-36 fig`}
                 value={cur.sendTimeLocal}
                 onChange={(e) => setDraft({ ...cur, sendTimeLocal: e.target.value })}
                 data-testid="time-input"
@@ -677,7 +677,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
             </p>
           )}
           {shown && (
-            <div className="section-enter flex flex-col gap-3" data-testid="preview-result">
+            <div className="flex flex-col gap-3" data-testid="preview-result">
               {shown.model ? (
                 <div className="rounded-control bg-platinum-2 px-3 py-2 ring-1 ring-brand-line" data-testid="preview-model">
                   <p className={`mb-1 flex items-center gap-2 ${fieldLabel}`}>
@@ -719,7 +719,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
                 {testSend.isPending ? "Sending…" : "Send a test text"}
               </button>
               {left != null && (
-                <span className="font-mono text-micro tabular-nums text-neutral-500" data-testid="tests-left">
+                <span className="fig text-micro text-neutral-500" data-testid="tests-left">
                   {left} left today
                 </span>
               )}
@@ -815,7 +815,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
               return (
                 <li key={h.id} className="flex flex-col gap-1 px-4 py-2.5" data-testid="history-row" data-status={w.status}>
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-mono text-body tabular-nums text-brand-ink">{shortDate(h.forDate)}</span>
+                    <span className="fig text-body text-brand-ink">{shortDate(h.forDate)}</span>
                     <StatusChip tone={STATUS_TONE[w.status] ?? "neutral"} data-testid="history-status">
                       {statusLabel(w.status)}
                     </StatusChip>

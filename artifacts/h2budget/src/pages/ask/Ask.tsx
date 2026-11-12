@@ -139,7 +139,7 @@ function ConversationList({
         New conversation
       </button>
       {conversations.length === 0 ? (
-        <p className="text-micro text-neutral-400">Nothing asked yet.</p>
+        <p className="text-micro text-neutral-500">Nothing asked yet.</p>
       ) : (
         <ul className="divide-y divide-brand-line/70">
           {conversations.map((c) => (
@@ -155,7 +155,7 @@ function ConversationList({
                 data-testid="conversation-item"
               >
                 <span className="truncate text-label font-semibold text-brand-navy">{c.title?.trim() || "New conversation"}</span>
-                <span className="text-micro text-neutral-400">{relativeTime(c.lastMessageAt)}</span>
+                <span className="text-micro text-neutral-500">{relativeTime(c.lastMessageAt)}</span>
               </button>
             </li>
           ))}
@@ -574,7 +574,7 @@ export function AskView({ m }: { m: AskModel }) {
                 </button>
               </span>
             </div>
-            <p className="text-micro text-neutral-400">{HINT}</p>
+            <p className="text-micro text-neutral-500">{HINT}</p>
           </form>
         </Panel>
       </PageGrid>

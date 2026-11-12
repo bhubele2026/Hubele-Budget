@@ -76,7 +76,7 @@ export function AccountSelector({
             <span className="flex flex-wrap items-baseline gap-x-2 text-micro text-neutral-600">
               <span data-testid="chip-balance">
                 {b?.label ? `${b.label} ` : null}
-                {b?.figure ? <span className="font-mono tabular-nums">{b.figure}</span> : b?.words ? null : "—"}
+                {b?.figure ? <span className="fig">{b.figure}</span> : b?.words ? null : "—"}
                 {b?.words ? `${b.figure ? " · " : ""}${b.words}` : null}
               </span>
               {b?.plan ? <span className="font-medium" data-testid="chip-plan">{b.plan}</span> : null}

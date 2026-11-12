@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
  *
  * The OWNER sees under each note "Read by <name> on <day>" / "Not read yet";
  * a member never does. That line keeps its height while it loads, so nothing
- * jumps. Motion is the dialog's own (`.anim-modal`) plus `.stagger`, both off
+ * jumps. Motion is the dialog's own (`.anim-modal`) — nothing staggers in (2026-11-12) — off
  * under reduced motion.
  */
 
@@ -117,7 +117,7 @@ export default function WhatsNewSheet(props: WhatsNewSheetProps) {
                   {unreadIds.has(u.id) ? <NewChip /> : null}
                 </p>
                 {props.owner ? <OwnerLines id={u.id} report={props.report} /> : null}
-                <ul className="stagger mt-3 flex list-none flex-col gap-3 p-0">
+                <ul className="mt-3 flex list-none flex-col gap-3 p-0">
                   {u.items.map((item) => (
                     <li key={item.title}>
                       <p className="text-body font-semibold text-brand-navy">{item.title}</p>

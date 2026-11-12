@@ -1858,13 +1858,13 @@ export default function MappingRulesPage() {
             addPreview.matchType === matchType &&
             addPreview.candidateCount > 0 && (
               <div
-                className={`section-enter mt-1 ${previewPanel}`}
+                className={`mt-1 ${previewPanel}`}
                 data-testid="rule-add-preview"
               >
                 {categoryId ? (
                   <span>
                     <span
-                      className="font-mono font-semibold text-brand-navy"
+                      className="fig font-semibold text-foreground"
                       data-testid="rule-add-preview-count"
                     >
                       {addPreview.candidateCount}
@@ -1881,7 +1881,7 @@ export default function MappingRulesPage() {
                   <span>
                     This would match{" "}
                     <span
-                      className="font-mono font-semibold text-brand-navy"
+                      className="fig font-semibold text-foreground"
                       data-testid="rule-add-preview-count"
                     >
                       {addPreview.candidateCount}
@@ -1968,14 +1968,14 @@ export default function MappingRulesPage() {
           </div>
           {testRules.data && (
             <div
-              className="section-enter mt-3 text-body text-neutral-600"
+              className="mt-3 text-body text-neutral-600"
               data-testid="test-result"
             >
               {testRules.data.matches.length === 0 ? (
                 <p className="text-neutral-400">No rule matches this.</p>
               ) : (
                 <p>
-                  <span className="font-mono font-semibold text-brand-navy">
+                  <span className="fig font-semibold text-foreground">
                     {testRules.data.matches.length}
                   </span>{" "}
                   matching {testRules.data.matches.length === 1 ? "rule" : "rules"}.{" "}
@@ -2004,7 +2004,7 @@ export default function MappingRulesPage() {
             <div className={previewPanel} data-testid="focus-pill">
               <span className="flex-1">
                 <span
-                  className="font-mono font-semibold text-brand-navy"
+                  className="fig font-semibold text-foreground"
                   data-testid="focus-pill-count"
                 >
                   {matchedFocusIds.length}
@@ -2043,7 +2043,7 @@ export default function MappingRulesPage() {
               aria-label="Search rules by pattern, category, or match type"
             />
             {searchQuery && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-micro tabular-nums text-neutral-400">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 fig text-micro text-neutral-500">
                 {filtered.length} result{filtered.length === 1 ? "" : "s"}
               </span>
             )}
@@ -2104,7 +2104,7 @@ export default function MappingRulesPage() {
                   </button>
                 )}
                 <span
-                  className="font-mono text-micro tabular-nums text-neutral-400"
+                  className="fig text-micro text-neutral-500"
                   data-testid="rule-count"
                 >
                   {sorted.length} total{" "}
@@ -2383,7 +2383,7 @@ export default function MappingRulesPage() {
                                             onChange={(e) =>
                                               setEditPriority(e.target.value)
                                             }
-                                            className={`${input} h-8 w-20 py-0 font-mono text-micro tabular-nums`}
+                                            className={`${input} h-8 w-20 py-0 fig text-micro`}
                                             data-testid={`rule-edit-priority-${rule.id}`}
                                             aria-label="Rule priority"
                                           />
@@ -2434,7 +2434,7 @@ export default function MappingRulesPage() {
                                           >
                                             <span>
                                               <span
-                                                className="font-mono font-semibold text-brand-navy"
+                                                className="fig font-semibold text-foreground"
                                                 data-testid={`rule-edit-preview-count-${rule.id}`}
                                               >
                                                 {editPreview.candidateCount}
