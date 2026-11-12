@@ -140,14 +140,14 @@ describe("the rest of the facts", () => {
     expect(f.weekToDate.spent).toBeGreaterThanOrEqual(0);
   });
 
-  it("review counts: the spine's, plus the categorizer's when one is registered (0 when absent)", async () => {
+  it("review counts: the spine's one count (the categorizer's is reported beside it, never added: it is inside)", async () => {
     let f = await recapFacts(A.householdId, A.userId, A.userId, FOR_DATE);
     expect(f.categorizationReviewCount).toBe(0);
     expect(f.needsLookCount).toBe(f.reviewCount);
     registerCategorizationReviewCount(async () => 3);
     f = await recapFacts(A.householdId, A.userId, A.userId, FOR_DATE);
     expect(f.categorizationReviewCount).toBe(3);
-    expect(f.needsLookCount).toBe(f.reviewCount + 3);
+    expect(f.needsLookCount).toBe(f.reviewCount);
     expect(f.nextStep).toBe("review");
     registerCategorizationReviewCount(async () => {
       throw new Error("boom");

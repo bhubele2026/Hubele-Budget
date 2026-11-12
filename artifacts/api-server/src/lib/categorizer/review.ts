@@ -15,6 +15,7 @@ import { merchantSignature } from "../merchantNameExtract";
 import { uncategorizedCategoryIds } from "../pendingFiling";
 import { spendContextOf } from "../spendContext";
 import type { Exec } from "./db";
+import { promotedDecisionIdOf } from "./promote";
 import { DIRECTION_EXPLANATION } from "./direction";
 import { rowsWithSignatures, type RetroactiveCandidates } from "./memory";
 import {
@@ -26,7 +27,7 @@ import {
   setCategoryByHand,
 } from "./userDecisions";
 
-const OPEN = and(
+export const OPEN_DECISION = and(
   inArray(categoryDecisionsTable.band, ["provisional", "queue"]),
   isNull(categoryDecisionsTable.resolvedAt),
   isNull(categoryDecisionsTable.undoneAt),
@@ -37,7 +38,7 @@ export async function openReviewCount(householdId: string): Promise<number> {
   const [{ total }] = (await db
     .select({ total: count() })
     .from(categoryDecisionsTable)
-    .where(and(eq(categoryDecisionsTable.householdId, householdId), OPEN))) as [{ total: number }];
+    .where(and(eq(categoryDecisionsTable.householdId, householdId), OPEN_DECISION))) as [{ total: number }];
   return Number(total);
 }
 
@@ -185,7 +186,7 @@ export async function listReviewQueue(
     })
     .from(categoryDecisionsTable)
     .innerJoin(transactionsTable, eq(transactionsTable.id, categoryDecisionsTable.transactionId))
-    .where(and(eq(categoryDecisionsTable.householdId, householdId), OPEN))
+    .where(and(eq(categoryDecisionsTable.householdId, householdId), OPEN_DECISION))
     .orderBy(asc(categoryDecisionsTable.createdAt), asc(categoryDecisionsTable.id))
     .limit(limit);
   const [rows, total] = await Promise.all([listRead, openReviewCount(householdId)]);
@@ -505,6 +506,29 @@ export async function undoDecision(
     if (!t) return { status: 404 as const, body: { error: "Not found" } };
     const refused = undoRefusal(d, t);
     if (refused) return { status: refused.status, body: { error: refused.error } };
+    // ⭐ (BANK-AUTO) Undoing a promotion puts the charge back in the queue as it
+    // was: the provisional decision it promoted is open again, the row is
+    // provisional again, and its category (the suggestion's) stays.
+    const promoted = promotedDecisionIdOf(d.inputHash);
+    if (promoted) {
+      await tx
+        .update(transactionsTable)
+        .set({ categoryProvisional: true })
+        .where(and(eq(transactionsTable.id, d.transactionId), eq(transactionsTable.householdId, householdId)));
+      await tx.update(categoryDecisionsTable).set({ undoneAt: new Date() }).where(eq(categoryDecisionsTable.id, d.id));
+      await tx
+        .update(categoryDecisionsTable)
+        .set({ resolvedAt: null, resolvedBy: null, resolution: null, resolvedVia: null })
+        .where(
+          and(
+            eq(categoryDecisionsTable.id, promoted),
+            eq(categoryDecisionsTable.householdId, householdId),
+            eq(categoryDecisionsTable.transactionId, d.transactionId),
+            isNull(categoryDecisionsTable.undoneAt),
+          ),
+        );
+      return { status: 200 as const, body: { decisionId: d.id, transactionId: d.transactionId, categoryId: t.categoryId } };
+    }
     const wrote = d.source === "user" || (d.band !== "queue" && d.categoryId != null);
     const set: Record<string, unknown> = { categoryProvisional: false };
     if (wrote) set.categoryId = d.previousCategoryId;

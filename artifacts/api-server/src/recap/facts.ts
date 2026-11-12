@@ -92,7 +92,7 @@ export interface RecapFacts {
   reviewCount: number;
   /** The categorizer's review count (0 until that package is wired in). */
   categorizationReviewCount: number;
-  /** reviewCount + categorizationReviewCount: "N charges need a look". */
+  /** (BANK-AUTO) reviewCount — which already holds the category queue: "N charges need a look". */
   needsLookCount: number;
   /** The one next step, chosen by code: review, then a bill due tomorrow, else none. */
   nextStep: "review" | "bill_tomorrow" | null;
@@ -292,7 +292,10 @@ export async function recapFacts(
     computeReviewCount(householdId, ownerUserId),
     categorizationReviewCount(householdId, ownerUserId),
   ]);
-  const needsLookCount = reviewCount + catReview;
+  // ⭐ (BANK-AUTO) The spine's review count IS the one count now (the rows to
+  // match and the category queue, a charge on both once): adding the queue's
+  // total beside it would count the queue twice.
+  const needsLookCount = reviewCount;
   const nextStep: RecapFacts["nextStep"] =
     needsLookCount > 0 ? "review" : billsNext3Days.some((b) => b.dueTomorrow) ? "bill_tomorrow" : null;
 

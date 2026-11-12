@@ -269,6 +269,8 @@ EXPECTED.S4 = {
   amex: { endingBalance: "566.33", source: "debt", weekCharges: "66.33", chargeCount: 1, combinedWeekCharges: "66.33" },
   spentWeek: "108.43",
   spentMonth: "108.43",
+  // ⭐ (BANK-AUTO) One count: the KROGER refund waiting in the category queue counts too.
+  reviewCount: 2,
   debt: { ...EXPECTED.S3b.debt, payoffPct: "43.367" },
   position: { ...EXPECTED.S3b.position, remainingWeek: "191.57", needsClassificationWeek: "108.43", safeToSpendNow: "191.57" },
   queue: ["KROGER #442 REFUND | refund | queue | Groceries"],
@@ -300,7 +302,8 @@ EXPECTED.S5 = {
   amex: { ...EXPECTED.S4.amex, endingBalance: "466.33" },
   spentWeek: "0.00",
   cash: "2357.90",
-  reviewCount: 2,
+  // ⭐ (BANK-AUTO) One count: the checking payment to match (also queued, counted once) and the queued refund.
+  reviewCount: 3,
   debt: { ...EXPECTED.S4.debt, payoffPct: "53.367" },
   position: {
     remainingWeek: "300.00",

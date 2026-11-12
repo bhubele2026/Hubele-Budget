@@ -4,9 +4,14 @@ import { matchesCardPaymentPattern, PFC_CARD_PAYMENT } from "./spendingRule";
 /**
  * ⭐ "PROBABLY PAID" — WHICH PLANNED PAYMENT DID THIS BANK ROW PAY? (PR5)
  *
- * Read-only. The server never writes a match on its own (auto-match stays off).
- * The user confirms a suggestion ("matched"), rejects it ("not_match") or
- * confirms part of it ("partial"). The bank row itself always stays in cash.
+ * Read-only. The user confirms a suggestion ("matched"), rejects it
+ * ("not_match") or confirms part of it ("partial"). The bank row itself always
+ * stays in cash. ⭐ (BANK-AUTO, owner 2026-11-12) The bank auto-sort
+ * (api-server lib/bankAutoSort.ts) writes a "matched" answer ON ITS OWN only
+ * for a tier-1/2 pair that is unambiguous, off the curve and within
+ * max($1, 1%) of the plan — one row, one occurrence — or for the one obvious
+ * open plan no other row wants; never a partial, never a tier-3 or ambiguous
+ * pair. This module still writes nothing.
  *
  * A plan and a row PAIR (a suggestion) when:
  *   - same sign;

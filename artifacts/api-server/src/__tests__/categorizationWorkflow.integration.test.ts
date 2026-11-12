@@ -296,7 +296,8 @@ describe("categorization with a scripted model (fixture / provider-mocked verifi
       expect(facts.reviewCount).toBe(spine.reviewCount);
       expect(facts.categorizationReviewCount).toBe(count);
       expect(count).toBe(3);
-      expect(facts.needsLookCount).toBe(spine.reviewCount + count);
+      // (BANK-AUTO) The spine's count already holds the queue.
+      expect(facts.needsLookCount).toBe(spine.reviewCount);
       // The template (what is sent when the model is off) says the same count.
       const n = facts.needsLookCount;
       expect(prev.json.template.text).toContain(`${n} ${n === 1 ? "charge needs" : "charges need"} a look.`);
@@ -371,8 +372,9 @@ describe("categorization with a scripted model (fixture / provider-mocked verifi
     expect(Number(pre.uncategorized.amount) - Number(post.uncategorized.amount)).toBeCloseTo(42, 2);
     expect(post.uncategorized.count).toBe(pre.uncategorized.count - 1);
     expect(post.reviewTotal).toBe(pre.reviewTotal - 1);
-    // The spine's review count is the bank-matching count: categorizing a card row does not move it.
-    expect(post.spine.reviewCount).toBe(pre.spine.reviewCount);
+    // ⭐ (BANK-AUTO) The spine's review count is the one count, the category queue included:
+    // filing the queued card row takes it off the list.
+    expect(post.spine.reviewCount).toBe(pre.spine.reviewCount - 1);
   });
 
   it("4b. Skip (reject) leaves the row exactly as it was and records the answer", async () => {
