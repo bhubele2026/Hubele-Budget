@@ -4666,6 +4666,23 @@ export declare const forecastResolutionsTable: import("drizzle-orm/pg-core").PgT
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        source: import("drizzle-orm/pg-core").PgColumn<{
+            name: "source";
+            tableName: "forecast_resolutions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
     };
     dialect: "pg";
 }>;
@@ -5824,5 +5841,6 @@ export * from "./metrics";
 export * from "./goals";
 export * from "./whatsNew";
 export * from "./avalancheWeekPayments";
+export * from "./bankAutoSort";
 export * from "./money";
 //# sourceMappingURL=index.d.ts.map

@@ -858,6 +858,14 @@ export const forecastResolutionsTable = pgTable(
     matchedTxnId: uuid("matched_txn_id"),
     rescheduledTo: date("rescheduled_to"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    /**
+     * ⭐ (BANK-AUTO) Who gave the answer: 'user' (a person, or a proposed fix
+     * they applied) or 'auto' (the bank auto-sort matched a row the forecast
+     * ledger paired unambiguously, or the one obvious candidate — never a
+     * partial, an ignore or an ambiguous row). Undo is the same as for a hand
+     * answer. From lib/db/migrations/0250_bank_auto_sort.sql.
+     */
+    source: text("source").notNull().default("user"),
   },
   (t) => ({
     userIdx: index("forecast_resolutions_user_idx").on(t.userId),
@@ -1157,4 +1165,5 @@ export * from "./metrics";
 export * from "./goals";
 export * from "./whatsNew";
 export * from "./avalancheWeekPayments";
+export * from "./bankAutoSort";
 export * from "./money";
