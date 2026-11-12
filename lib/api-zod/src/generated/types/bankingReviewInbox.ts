@@ -20,7 +20,7 @@ export interface BankingReviewInbox {
   unresolvedFrom: string;
   /** (Q1) The last day unresolvedInRange reads (= period.to) */
   unresolvedTo: string;
-  /** The Review badge (spine.reviewCount) */
+  /** The Review badge (spine.reviewCount) — (BANK-AUTO) GET /banking/needs-you .count: this month's rows to match plus the category queue */
   badgeCount: number;
   badgeScope: BankingReviewInboxBadgeScope;
 }

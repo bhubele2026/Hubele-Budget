@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexCardPayoffMode, AmexSummary, AmexWeeklyPayoff, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, AvalancheWeekPayInput, AvalancheWeekPayRefusal, AvalancheWeekPayResult, AvalancheWeeklyPlan, BadgeCount, BankBalanceExplain, BankSnapshot, BankingCheckExplain, BankingReview, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, Category, CategoryDecision, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, CreateWeekAdjustmentBody, CreateWishlistItemBody, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DirectionRefusal, DuplicateTransactionCount, EvaluateAffordBody, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastResolutionUndoInput, ForecastResolutionUndone, ForecastSettings, ForecastSettingsInput, GetAmexSummaryParams, GetAmexWeeklyPayoffParams, GetBankingReviewParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetMetricsParams, GetPeriodBreakdownParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, Goal, GoalCreate, GoalDeleteResult, GoalList, GoalUpdate, HealthStatus, ImportError, ImportHistory, ImportPreview, ImportRestorePreview, ImportRestoreResult, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategorizationReviewParams, ListCategoryDecisionsParams, ListDashboardBudgetsParams, ListGoalsParams, ListImportHistoryParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleHistory, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MemoryItem, MemoryList, MetricsRecomputeResult, MetricsResponse, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PlanUnsafe, PreviewWorkbookImportBody, PutMemoryBody, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecomputeMetricsParams, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewProposals, ReviewQueue, ReviewQueueCount, ReviewRefusal, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetAmexCardPayoffModeBody, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, UpdateWishlistItemBody, VersionInfo, WaysBack, WeekAdjustment, WeeklySettlement, WeeklySettlementInput, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlanDryRun, AllowancePlanSaved, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexCardPayoffMode, AmexSummary, AmexWeeklyPayoff, AppliedCorrection, AppliedCorrections, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, ApplyReviewProposalInput, ApplyReviewProposalParams, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, AvalancheWeekPayInput, AvalancheWeekPayRefusal, AvalancheWeekPayResult, AvalancheWeeklyPlan, BadgeCount, BankBalanceExplain, BankSnapshot, BankingAutoDone, BankingAutoSortResult, BankingCheckExplain, BankingNeedsYou, BankingReview, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, Category, CategoryDecision, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CorrectionPreview, CorrectionRefusal, CorrectionUndo, CreateAllowancePlanBody, CreateAllowancePlanParams, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, CreateWeekAdjustmentBody, CreateWishlistItemBody, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DirectionRefusal, DuplicateTransactionCount, EvaluateAffordBody, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastResolutionUndoInput, ForecastResolutionUndone, ForecastSettings, ForecastSettingsInput, GetAmexSummaryParams, GetAmexWeeklyPayoffParams, GetBankingAutoDoneParams, GetBankingNeedsYouParams, GetBankingReviewParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetMetricsParams, GetPeriodBreakdownParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, Goal, GoalCreate, GoalDeleteResult, GoalList, GoalUpdate, HealthStatus, ImportError, ImportHistory, ImportPreview, ImportRestorePreview, ImportRestoreResult, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategorizationReviewParams, ListCategoryDecisionsParams, ListDashboardBudgetsParams, ListGoalsParams, ListImportHistoryParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleHistory, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MemoryItem, MemoryList, MetricsRecomputeResult, MetricsResponse, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PeriodBreakdown, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PlanUnsafe, PreviewWorkbookImportBody, PutMemoryBody, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecomputeMetricsParams, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewProposals, ReviewQueue, ReviewQueueCount, ReviewRefusal, ReviewResolution, RunBankingAutoSortParams, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetAmexCardPayoffModeBody, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, UpdateWishlistItemBody, VersionInfo, WaysBack, WeekAdjustment, WeeklySettlement, WeeklySettlementInput, WhatsNewMe, WhatsNewReadInput, WhatsNewReadReport, WhatsNewReadResult, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -2072,7 +2072,8 @@ export declare const useRefreshForecastBank: <TError = ErrorType<unknown>, TCont
     data: BodyType<RefreshBankInput>;
 }, TContext>;
 /**
- * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ * (BANK-AUTO) computeReviewCount() — the same number as GET /banking/needs-you .count and the spine's reviewCount: bank rows this household month still waiting for a match, plus charges only the categorization queue holds (a charge on both counts once). Before BANK-AUTO it counted the match rows only.
+ * @summary The Review badge's count without the full forecast bundle
  */
 export declare const getGetForecastReviewCountUrl: () => string;
 export declare const getForecastReviewCount: (options?: RequestInit) => Promise<BadgeCount>;
@@ -2086,7 +2087,7 @@ export declare const getGetForecastReviewCountQueryOptions: <TData = Awaited<Ret
 export type GetForecastReviewCountQueryResult = NonNullable<Awaited<ReturnType<typeof getForecastReviewCount>>>;
 export type GetForecastReviewCountQueryError = ErrorType<unknown>;
 /**
- * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ * @summary The Review badge's count without the full forecast bundle
  */
 export declare function useGetForecastReviewCount<TData = Awaited<ReturnType<typeof getForecastReviewCount>>, TError = ErrorType<unknown>>(options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastReviewCount>>, TError, TData>;
@@ -3678,6 +3679,81 @@ export declare function useGetBankingReview<TData = Awaited<ReturnType<typeof ge
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * After the bank auto-sort did what it was sure of: `match` items are the bank rows still waiting for a match (exactly what the Review badge counts: this household month, the forecast's account, in the forecast, no deciding answer); `category` items are the categorization review queue, one per charge. A charge on both is one `match` item whose reason mentions the category. `count` is the figure every badge shows (the spine's reviewCount, GET /forecast/review-count, the banking review's badgeCount). Items are newest first and capped at `limit`; `truncated` says when the cap cut the list (otherwise count = items.length). A match suggestion's `planOccurrenceId` is `<recurringItemId>|<occurrenceDate>` (answer it with POST /forecast/resolutions); a category suggestion's `reviewItemId` is the queue decision (POST /categorization/review/{decisionId}/accept). Read-only.
+ * @summary (BANK-AUTO) The one list — every charge H2 still needs a person for, and the one count
+ */
+export declare const getGetBankingNeedsYouUrl: (params?: GetBankingNeedsYouParams) => string;
+export declare const getBankingNeedsYou: (params?: GetBankingNeedsYouParams, options?: RequestInit) => Promise<BankingNeedsYou>;
+export declare const getGetBankingNeedsYouQueryKey: (params?: GetBankingNeedsYouParams) => readonly ["/api/banking/needs-you", ...GetBankingNeedsYouParams[]];
+export declare const getGetBankingNeedsYouQueryOptions: <TData = Awaited<ReturnType<typeof getBankingNeedsYou>>, TError = ErrorType<void>>(params?: GetBankingNeedsYouParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingNeedsYou>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getBankingNeedsYou>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetBankingNeedsYouQueryResult = NonNullable<Awaited<ReturnType<typeof getBankingNeedsYou>>>;
+export type GetBankingNeedsYouQueryError = ErrorType<void>;
+/**
+ * @summary (BANK-AUTO) The one list — every charge H2 still needs a person for, and the one count
+ */
+export declare function useGetBankingNeedsYou<TData = Awaited<ReturnType<typeof getBankingNeedsYou>>, TError = ErrorType<void>>(params?: GetBankingNeedsYouParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingNeedsYou>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * Automatic matches still stored and promotions not undone, made on or after `since` (household days), newest first, at most 100 listed. Undo a match with POST /forecast/resolutions/{undoId}/undo and `{ "restore": [] }` (it also tells the auto-sort never to match that row again); undo a category with POST /category-decisions/{undoId}/undo (the charge goes back to the review queue). Read-only.
+ * @summary (BANK-AUTO) What the auto-sort matched and categorized, each with its undo id
+ */
+export declare const getGetBankingAutoDoneUrl: (params?: GetBankingAutoDoneParams) => string;
+export declare const getBankingAutoDone: (params?: GetBankingAutoDoneParams, options?: RequestInit) => Promise<BankingAutoDone>;
+export declare const getGetBankingAutoDoneQueryKey: (params?: GetBankingAutoDoneParams) => readonly ["/api/banking/auto-done", ...GetBankingAutoDoneParams[]];
+export declare const getGetBankingAutoDoneQueryOptions: <TData = Awaited<ReturnType<typeof getBankingAutoDone>>, TError = ErrorType<void>>(params?: GetBankingAutoDoneParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingAutoDone>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getBankingAutoDone>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetBankingAutoDoneQueryResult = NonNullable<Awaited<ReturnType<typeof getBankingAutoDone>>>;
+export type GetBankingAutoDoneQueryError = ErrorType<void>;
+/**
+ * @summary (BANK-AUTO) What the auto-sort matched and categorized, each with its undo id
+ */
+export declare function useGetBankingAutoDone<TData = Awaited<ReturnType<typeof getBankingAutoDone>>, TError = ErrorType<void>>(params?: GetBankingAutoDoneParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingAutoDone>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * Matches every bank row H2 is sure of — the forecast ledger paired it with exactly one plan occurrence unambiguously, or it has exactly one high-confidence open plan no other waiting row wants — on the forecast's account, dated through today, not pending, with no answer on it, its plan or the pair, never handed back by a person and not in a closed month: a `matched` answer with source "auto". Never a partial, an ignore or an ambiguous row. Then files each provisional category the household's own hand filings of the merchant agree with (at least two, all the same category; never a transfer, a card or debt payment, or a pick against the money's direction). Idempotent. `dryRun=1` reports what it would do and writes nothing.
+ * @summary (BANK-AUTO) Sort the household's bank rows now (owner only); it also runs after every bank sync
+ */
+export declare const getRunBankingAutoSortUrl: (params?: RunBankingAutoSortParams) => string;
+export declare const runBankingAutoSort: (params?: RunBankingAutoSortParams, options?: RequestInit) => Promise<BankingAutoSortResult>;
+export declare const getRunBankingAutoSortMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof runBankingAutoSort>>, TError, {
+        params?: RunBankingAutoSortParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof runBankingAutoSort>>, TError, {
+    params?: RunBankingAutoSortParams;
+}, TContext>;
+export type RunBankingAutoSortMutationResult = NonNullable<Awaited<ReturnType<typeof runBankingAutoSort>>>;
+export type RunBankingAutoSortMutationError = ErrorType<void>;
+/**
+ * @summary (BANK-AUTO) Sort the household's bank rows now (owner only); it also runs after every bank sync
+ */
+export declare const useRunBankingAutoSort: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof runBankingAutoSort>>, TError, {
+        params?: RunBankingAutoSortParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof runBankingAutoSort>>, TError, {
+    params?: RunBankingAutoSortParams;
+}, TContext>;
 /**
  * (T2) The forecast checking account's last balance check (the record a manual Sync stored) and what H2 holds about it: the previous reading, the bank's figure and what H2 expected; the bank rows the check counted between the two readings; pending deposits its rules left out and deposits they added; rows H2 recorded itself (no Plaid account: counted in H2's balance, left out of the check); rows that arrived after the check; today's balance and the reading under it; and a verdict — late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded itself add up to the difference), unknown, or null when there is no difference to explain. `check` is GET /banking/review's balanceCheck for the same account. Each row list holds at most 200 rows. No Plaid call, no write: nothing here clears or changes the check.
  * @summary Review difference — the last balance check, explained (read-only)

@@ -1,0 +1,1 @@
+{"version":3,"file":"bankingAutoDone.d.ts","sourceRoot":"","sources":["../../../src/generated/types/bankingAutoDone.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,mBAAmB,EAAE,MAAM,uBAAuB,CAAC;AAEjE,MAAM,WAAW,eAAe;IAC9B,KAAK,EAAE,MAAM,CAAC;IACd,OAAO,EAAE,MAAM,CAAC;IAChB,WAAW,EAAE,MAAM,CAAC;IACpB,KAAK,EAAE,mBAAmB,EAAE,CAAC;IAC7B,SAAS,EAAE,OAAO,CAAC;CACpB"}

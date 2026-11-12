@@ -18,5 +18,7 @@ export interface ForecastResolutionReplaced {
     /** @nullable */
     rescheduledTo: string | null;
     createdAt: string;
+    /** (BANK-AUTO) "user" or "auto"; absent reads as "user" */
+    source?: string;
 }
 //# sourceMappingURL=forecastResolutionReplaced.d.ts.map

@@ -57,7 +57,10 @@ import type {
   BadgeCount,
   BankBalanceExplain,
   BankSnapshot,
+  BankingAutoDone,
+  BankingAutoSortResult,
   BankingCheckExplain,
+  BankingNeedsYou,
   BankingReview,
   BehaviorFacts,
   BillsSummary,
@@ -127,6 +130,8 @@ import type {
   ForecastSettingsInput,
   GetAmexSummaryParams,
   GetAmexWeeklyPayoffParams,
+  GetBankingAutoDoneParams,
+  GetBankingNeedsYouParams,
   GetBankingReviewParams,
   GetBillsSummaryParams,
   GetForecastCashSignalParams,
@@ -230,6 +235,7 @@ import type {
   ReviewQueueCount,
   ReviewRefusal,
   ReviewResolution,
+  RunBankingAutoSortParams,
   RunCategorizationInput,
   SeedDefaultBudgetResult,
   SendTransactionsToReviewInput,
@@ -7210,7 +7216,8 @@ export const useRefreshForecastBank = <
 };
 
 /**
- * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ * (BANK-AUTO) computeReviewCount() — the same number as GET /banking/needs-you .count and the spine's reviewCount: bank rows this household month still waiting for a match, plus charges only the categorization queue holds (a charge on both counts once). Before BANK-AUTO it counted the match rows only.
+ * @summary The Review badge's count without the full forecast bundle
  */
 export const getGetForecastReviewCountUrl = () => {
   return `/api/forecast/review-count`;
@@ -7262,7 +7269,7 @@ export type GetForecastReviewCountQueryResult = NonNullable<
 export type GetForecastReviewCountQueryError = ErrorType<unknown>;
 
 /**
- * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ * @summary The Review badge's count without the full forecast bundle
  */
 
 export function useGetForecastReviewCount<
@@ -12906,6 +12913,299 @@ export function useGetBankingReview<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * After the bank auto-sort did what it was sure of: `match` items are the bank rows still waiting for a match (exactly what the Review badge counts: this household month, the forecast's account, in the forecast, no deciding answer); `category` items are the categorization review queue, one per charge. A charge on both is one `match` item whose reason mentions the category. `count` is the figure every badge shows (the spine's reviewCount, GET /forecast/review-count, the banking review's badgeCount). Items are newest first and capped at `limit`; `truncated` says when the cap cut the list (otherwise count = items.length). A match suggestion's `planOccurrenceId` is `<recurringItemId>|<occurrenceDate>` (answer it with POST /forecast/resolutions); a category suggestion's `reviewItemId` is the queue decision (POST /categorization/review/{decisionId}/accept). Read-only.
+ * @summary (BANK-AUTO) The one list — every charge H2 still needs a person for, and the one count
+ */
+export const getGetBankingNeedsYouUrl = (params?: GetBankingNeedsYouParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/banking/needs-you?${stringifiedParams}`
+    : `/api/banking/needs-you`;
+};
+
+export const getBankingNeedsYou = async (
+  params?: GetBankingNeedsYouParams,
+  options?: RequestInit,
+): Promise<BankingNeedsYou> => {
+  return customFetch<BankingNeedsYou>(getGetBankingNeedsYouUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBankingNeedsYouQueryKey = (
+  params?: GetBankingNeedsYouParams,
+) => {
+  return [`/api/banking/needs-you`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetBankingNeedsYouQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBankingNeedsYou>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetBankingNeedsYouParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBankingNeedsYou>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBankingNeedsYouQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBankingNeedsYou>>
+  > = ({ signal }) => getBankingNeedsYou(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingNeedsYou>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBankingNeedsYouQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBankingNeedsYou>>
+>;
+export type GetBankingNeedsYouQueryError = ErrorType<void>;
+
+/**
+ * @summary (BANK-AUTO) The one list — every charge H2 still needs a person for, and the one count
+ */
+
+export function useGetBankingNeedsYou<
+  TData = Awaited<ReturnType<typeof getBankingNeedsYou>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetBankingNeedsYouParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBankingNeedsYou>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBankingNeedsYouQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Automatic matches still stored and promotions not undone, made on or after `since` (household days), newest first, at most 100 listed. Undo a match with POST /forecast/resolutions/{undoId}/undo and `{ "restore": [] }` (it also tells the auto-sort never to match that row again); undo a category with POST /category-decisions/{undoId}/undo (the charge goes back to the review queue). Read-only.
+ * @summary (BANK-AUTO) What the auto-sort matched and categorized, each with its undo id
+ */
+export const getGetBankingAutoDoneUrl = (params?: GetBankingAutoDoneParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/banking/auto-done?${stringifiedParams}`
+    : `/api/banking/auto-done`;
+};
+
+export const getBankingAutoDone = async (
+  params?: GetBankingAutoDoneParams,
+  options?: RequestInit,
+): Promise<BankingAutoDone> => {
+  return customFetch<BankingAutoDone>(getGetBankingAutoDoneUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBankingAutoDoneQueryKey = (
+  params?: GetBankingAutoDoneParams,
+) => {
+  return [`/api/banking/auto-done`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetBankingAutoDoneQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBankingAutoDone>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetBankingAutoDoneParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBankingAutoDone>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBankingAutoDoneQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBankingAutoDone>>
+  > = ({ signal }) => getBankingAutoDone(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingAutoDone>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBankingAutoDoneQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBankingAutoDone>>
+>;
+export type GetBankingAutoDoneQueryError = ErrorType<void>;
+
+/**
+ * @summary (BANK-AUTO) What the auto-sort matched and categorized, each with its undo id
+ */
+
+export function useGetBankingAutoDone<
+  TData = Awaited<ReturnType<typeof getBankingAutoDone>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetBankingAutoDoneParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBankingAutoDone>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBankingAutoDoneQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Matches every bank row H2 is sure of — the forecast ledger paired it with exactly one plan occurrence unambiguously, or it has exactly one high-confidence open plan no other waiting row wants — on the forecast's account, dated through today, not pending, with no answer on it, its plan or the pair, never handed back by a person and not in a closed month: a `matched` answer with source "auto". Never a partial, an ignore or an ambiguous row. Then files each provisional category the household's own hand filings of the merchant agree with (at least two, all the same category; never a transfer, a card or debt payment, or a pick against the money's direction). Idempotent. `dryRun=1` reports what it would do and writes nothing.
+ * @summary (BANK-AUTO) Sort the household's bank rows now (owner only); it also runs after every bank sync
+ */
+export const getRunBankingAutoSortUrl = (params?: RunBankingAutoSortParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/banking/auto-sort?${stringifiedParams}`
+    : `/api/banking/auto-sort`;
+};
+
+export const runBankingAutoSort = async (
+  params?: RunBankingAutoSortParams,
+  options?: RequestInit,
+): Promise<BankingAutoSortResult> => {
+  return customFetch<BankingAutoSortResult>(getRunBankingAutoSortUrl(params), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRunBankingAutoSortMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runBankingAutoSort>>,
+    TError,
+    { params?: RunBankingAutoSortParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runBankingAutoSort>>,
+  TError,
+  { params?: RunBankingAutoSortParams },
+  TContext
+> => {
+  const mutationKey = ["runBankingAutoSort"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runBankingAutoSort>>,
+    { params?: RunBankingAutoSortParams }
+  > = (props) => {
+    const { params } = props ?? {};
+
+    return runBankingAutoSort(params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunBankingAutoSortMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runBankingAutoSort>>
+>;
+
+export type RunBankingAutoSortMutationError = ErrorType<void>;
+
+/**
+ * @summary (BANK-AUTO) Sort the household's bank rows now (owner only); it also runs after every bank sync
+ */
+export const useRunBankingAutoSort = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runBankingAutoSort>>,
+    TError,
+    { params?: RunBankingAutoSortParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runBankingAutoSort>>,
+  TError,
+  { params?: RunBankingAutoSortParams },
+  TContext
+> => {
+  return useMutation(getRunBankingAutoSortMutationOptions(options));
+};
 
 /**
  * (T2) The forecast checking account's last balance check (the record a manual Sync stored) and what H2 holds about it: the previous reading, the bank's figure and what H2 expected; the bank rows the check counted between the two readings; pending deposits its rules left out and deposits they added; rows H2 recorded itself (no Plaid account: counted in H2's balance, left out of the check); rows that arrived after the check; today's balance and the reading under it; and a verdict — late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded itself add up to the difference), unknown, or null when there is no difference to explain. `check` is GET /banking/review's balanceCheck for the same account. Each row list holds at most 200 rows. No Plaid call, no write: nothing here clears or changes the check.

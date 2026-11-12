@@ -4906,6 +4906,12 @@ export const GetForecastResponse = zod.object({
       txnDescription: zod.string().nullish(),
       txnAmount: zod.string().nullish(),
       txnForecastFlag: zod.boolean().nullish(),
+      source: zod
+        .string()
+        .optional()
+        .describe(
+          '(BANK-AUTO) Who gave the answer — \"user\" (a person) or \"auto\" (the bank auto-sort)',
+        ),
       replaced: zod
         .array(
           zod.object({
@@ -4917,6 +4923,12 @@ export const GetForecastResponse = zod.object({
             matchedTxnId: zod.string().nullable(),
             rescheduledTo: zod.string().nullable(),
             createdAt: zod.string(),
+            source: zod
+              .string()
+              .optional()
+              .describe(
+                '(BANK-AUTO) \"user\" or \"auto\"; absent reads as \"user\"',
+              ),
           }),
         )
         .optional()
@@ -5465,6 +5477,12 @@ export const UpsertForecastResolutionResponse = zod.object({
   txnDescription: zod.string().nullish(),
   txnAmount: zod.string().nullish(),
   txnForecastFlag: zod.boolean().nullish(),
+  source: zod
+    .string()
+    .optional()
+    .describe(
+      '(BANK-AUTO) Who gave the answer — \"user\" (a person) or \"auto\" (the bank auto-sort)',
+    ),
   replaced: zod
     .array(
       zod.object({
@@ -5476,6 +5494,12 @@ export const UpsertForecastResolutionResponse = zod.object({
         matchedTxnId: zod.string().nullable(),
         rescheduledTo: zod.string().nullable(),
         createdAt: zod.string(),
+        source: zod
+          .string()
+          .optional()
+          .describe(
+            '(BANK-AUTO) \"user\" or \"auto\"; absent reads as \"user\"',
+          ),
       }),
     )
     .optional()
@@ -5510,6 +5534,12 @@ export const UndoForecastResolutionBody = zod.object({
         matchedTxnId: zod.string().nullable(),
         rescheduledTo: zod.string().nullable(),
         createdAt: zod.string(),
+        source: zod
+          .string()
+          .optional()
+          .describe(
+            '(BANK-AUTO) \"user\" or \"auto\"; absent reads as \"user\"',
+          ),
       }),
     )
     .max(undoForecastResolutionBodyRestoreMax),
@@ -5559,7 +5589,8 @@ export const RefreshForecastBankResponse = zod.object({
 });
 
 /**
- * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ * (BANK-AUTO) computeReviewCount() — the same number as GET /banking/needs-you .count and the spine's reviewCount: bank rows this household month still waiting for a match, plus charges only the categorization queue holds (a charge on both counts once). Before BANK-AUTO it counted the match rows only.
+ * @summary The Review badge's count without the full forecast bundle
  */
 export const GetForecastReviewCountResponse = zod.object({
   count: zod.number(),
@@ -9579,7 +9610,7 @@ export const GetSpineResponse = zod.object({
   reviewCount: zod
     .number()
     .describe(
-      "computeReviewCount() — unmatched forecast-flagged bank txns this month",
+      "computeReviewCount() — (BANK-AUTO) the one count every badge shows: GET \/banking\/needs-you .count (bank rows this household month still waiting for a match, plus charges only the categorization queue holds; a charge on both counts once)",
     ),
   position: zod
     .object({
@@ -13680,7 +13711,9 @@ export const GetBankingReviewResponse = zod
           .describe("(Q1) The last day unresolvedInRange reads (= period.to)"),
         badgeCount: zod
           .number()
-          .describe("The Review badge (spine.reviewCount)"),
+          .describe(
+            "The Review badge (spine.reviewCount) — (BANK-AUTO) GET \/banking\/needs-you .count: this month's rows to match plus the category queue",
+          ),
         badgeScope: zod.enum(["this calendar month, forecast account"]),
       })
       .describe(
@@ -14095,6 +14128,177 @@ export const GetBankingReviewResponse = zod
   .describe(
     '(S4) One bank account\'s period: balance, cash in and out, the plan occurrences due in it, and every counted row placed exactly once — in one of the five \"not in the plan\" buckets or as planned. Money is a two-decimal string, signed (negative is money out) unless named in \/ out. See GET \/banking\/review for the rules.',
   );
+
+/**
+ * After the bank auto-sort did what it was sure of: `match` items are the bank rows still waiting for a match (exactly what the Review badge counts: this household month, the forecast's account, in the forecast, no deciding answer); `category` items are the categorization review queue, one per charge. A charge on both is one `match` item whose reason mentions the category. `count` is the figure every badge shows (the spine's reviewCount, GET /forecast/review-count, the banking review's badgeCount). Items are newest first and capped at `limit`; `truncated` says when the cap cut the list (otherwise count = items.length). A match suggestion's `planOccurrenceId` is `<recurringItemId>|<occurrenceDate>` (answer it with POST /forecast/resolutions); a category suggestion's `reviewItemId` is the queue decision (POST /categorization/review/{decisionId}/accept). Read-only.
+ * @summary (BANK-AUTO) The one list — every charge H2 still needs a person for, and the one count
+ */
+export const getBankingNeedsYouQueryLimitDefault = 200;
+export const getBankingNeedsYouQueryLimitMax = 500;
+
+export const getBankingNeedsYouQuerySinceMax = 10;
+
+export const GetBankingNeedsYouQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getBankingNeedsYouQueryLimitMax)
+    .default(getBankingNeedsYouQueryLimitDefault)
+    .describe("Items listed, 1 to 500 (`count` always covers every charge)."),
+  since: zod.coerce
+    .string()
+    .max(getBankingNeedsYouQuerySinceMax)
+    .optional()
+    .describe(
+      "The first household day `autoDone` counts (YYYY-MM-DD, not after today). Default a week back.",
+    ),
+});
+
+export const GetBankingNeedsYouResponse = zod.object({
+  throughDate: zod.string().describe("The household's today (YYYY-MM-DD)"),
+  count: zod
+    .number()
+    .describe("Every charge on the list — the number every badge shows"),
+  truncated: zod
+    .boolean()
+    .describe("True when `limit` cut the list (count > items.length)"),
+  items: zod.array(
+    zod.object({
+      id: zod.string().describe("`<kind>:<txId>`, one per charge"),
+      txId: zod.string(),
+      accountName: zod.string(),
+      mask: zod.string().nullable(),
+      date: zod.string(),
+      name: zod.string(),
+      amount: zod.string().describe("Signed"),
+      categoryName: zod
+        .string()
+        .nullable()
+        .describe(
+          "The row's current category (a provisional one included); null when it has none",
+        ),
+      pending: zod.boolean(),
+      kind: zod.enum(["match", "category"]),
+      suggestion: zod.union([
+        zod.object({
+          label: zod
+            .string()
+            .describe(
+              'Written to follow \"Looks like \": a match\'s plan as \"the <plan name> payment, planned $<amount> on <Mon D>\" (\"deposit\" for money in); a category\'s name',
+            ),
+          planOccurrenceId: zod
+            .string()
+            .optional()
+            .describe("Match: `<recurringItemId>|<occurrenceDate>`"),
+          categoryId: zod
+            .string()
+            .optional()
+            .describe("Category: the suggested category"),
+          reviewItemId: zod
+            .string()
+            .optional()
+            .describe("Category: the review-queue decision to accept"),
+          confidence: zod.enum(["high", "medium", "low"]),
+        }),
+        zod.null(),
+      ]),
+      reason: zod.string().describe("Why it is here"),
+    }),
+  ),
+  autoDone: zod.object({
+    matched: zod
+      .number()
+      .describe("Automatic matches made on or after `since` that still stand"),
+    categorized: zod
+      .number()
+      .describe("Categories filed automatically on or after `since`"),
+    since: zod.string(),
+  }),
+});
+
+/**
+ * Automatic matches still stored and promotions not undone, made on or after `since` (household days), newest first, at most 100 listed. Undo a match with POST /forecast/resolutions/{undoId}/undo and `{ "restore": [] }` (it also tells the auto-sort never to match that row again); undo a category with POST /category-decisions/{undoId}/undo (the charge goes back to the review queue). Read-only.
+ * @summary (BANK-AUTO) What the auto-sort matched and categorized, each with its undo id
+ */
+export const getBankingAutoDoneQuerySinceMax = 10;
+
+export const GetBankingAutoDoneQueryParams = zod.object({
+  since: zod.coerce
+    .string()
+    .max(getBankingAutoDoneQuerySinceMax)
+    .optional()
+    .describe("YYYY-MM-DD, not after today. Default a week back."),
+});
+
+export const GetBankingAutoDoneResponse = zod.object({
+  since: zod.string(),
+  matched: zod.number(),
+  categorized: zod.number(),
+  items: zod.array(
+    zod.object({
+      kind: zod.enum(["match", "category"]),
+      undoId: zod
+        .string()
+        .describe("Match: the answer's id. Category: the decision's id."),
+      txnId: zod.string(),
+      at: zod.string().describe("When it was done (ISO instant)"),
+      planKey: zod
+        .string()
+        .nullable()
+        .describe("Match: `<recurringItemId>|<occurrenceDate>`"),
+      categoryId: zod.string().nullable(),
+      label: zod.string().describe("The plan's or the category's name"),
+    }),
+  ),
+  truncated: zod.boolean(),
+});
+
+/**
+ * Matches every bank row H2 is sure of — the forecast ledger paired it with exactly one plan occurrence unambiguously, or it has exactly one high-confidence open plan no other waiting row wants — on the forecast's account, dated through today, not pending, with no answer on it, its plan or the pair, never handed back by a person and not in a closed month: a `matched` answer with source "auto". Never a partial, an ignore or an ambiguous row. Then files each provisional category the household's own hand filings of the merchant agree with (at least two, all the same category; never a transfer, a card or debt payment, or a pick against the money's direction). Idempotent. `dryRun=1` reports what it would do and writes nothing.
+ * @summary (BANK-AUTO) Sort the household's bank rows now (owner only); it also runs after every bank sync
+ */
+export const RunBankingAutoSortQueryParams = zod.object({
+  dryRun: zod
+    .enum(["0", "1", "true", "false"])
+    .optional()
+    .describe("1 to report without writing."),
+});
+
+export const RunBankingAutoSortResponse = zod.object({
+  dryRun: zod.boolean(),
+  matched: zod.array(
+    zod.object({
+      resolutionId: zod
+        .string()
+        .nullable()
+        .describe("The answer written; null on a dry run"),
+      txnId: zod.string(),
+      date: zod.string(),
+      amount: zod.string(),
+      planKey: zod.string(),
+      recurringItemId: zod.string(),
+      occurrenceDate: zod.string(),
+      label: zod.string(),
+      why: zod.enum(["ledger", "one_obvious"]),
+    }),
+  ),
+  categorized: zod.array(
+    zod.object({
+      decisionId: zod
+        .string()
+        .nullable()
+        .describe("The decision written; null on a dry run"),
+      promotedDecisionId: zod
+        .string()
+        .describe("The provisional decision it filed for good"),
+      txnId: zod.string(),
+      categoryId: zod.string(),
+      confirmed: zod
+        .number()
+        .describe("How many hand filings of the merchant agree"),
+    }),
+  ),
+});
 
 /**
  * (T2) The forecast checking account's last balance check (the record a manual Sync stored) and what H2 holds about it: the previous reading, the bank's figure and what H2 expected; the bank rows the check counted between the two readings; pending deposits its rules left out and deposits they added; rows H2 recorded itself (no Plaid account: counted in H2's balance, left out of the check); rows that arrived after the check; today's balance and the reading under it; and a verdict — late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded itself add up to the difference), unknown, or null when there is no difference to explain. `check` is GET /banking/review's balanceCheck for the same account. Each row list holds at most 200 rows. No Plaid call, no write: nothing here clears or changes the check.

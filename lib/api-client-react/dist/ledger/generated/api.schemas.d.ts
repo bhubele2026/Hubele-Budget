@@ -1150,7 +1150,7 @@ export interface Spine {
     billsDueCount: number;
     forecast: SpineForecast;
     debt: SpineDebt;
-    /** computeReviewCount() — unmatched forecast-flagged bank txns this month */
+    /** computeReviewCount() — (BANK-AUTO) the one count every badge shows: GET /banking/needs-you .count (bank rows this household month still waiting for a match, plus charges only the categorization queue holds; a charge on both counts once) */
     reviewCount: number;
     position: SpinePosition;
     monthAllowance: SpineMonthAllowance;
@@ -2374,7 +2374,7 @@ export interface BankingReviewInbox {
     unresolvedFrom: string;
     /** (Q1) The last day unresolvedInRange reads (= period.to) */
     unresolvedTo: string;
-    /** The Review badge (spine.reviewCount) */
+    /** The Review badge (spine.reviewCount) — (BANK-AUTO) GET /banking/needs-you .count: this month's rows to match plus the category queue */
     badgeCount: number;
     badgeScope: BankingReviewInboxBadgeScope;
 }
@@ -5676,6 +5676,134 @@ export interface ForecastEvent {
     kind: string;
     amount: number;
 }
+export type BankingNeedsYouSuggestionConfidence = (typeof BankingNeedsYouSuggestionConfidence)[keyof typeof BankingNeedsYouSuggestionConfidence];
+export declare const BankingNeedsYouSuggestionConfidence: {
+    readonly high: "high";
+    readonly medium: "medium";
+    readonly low: "low";
+};
+export interface BankingNeedsYouSuggestion {
+    /** Written to follow "Looks like ": a match's plan as "the <plan name> payment, planned $<amount> on <Mon D>" ("deposit" for money in); a category's name */
+    label: string;
+    /** Match: `<recurringItemId>|<occurrenceDate>` */
+    planOccurrenceId?: string;
+    /** Category: the suggested category */
+    categoryId?: string;
+    /** Category: the review-queue decision to accept */
+    reviewItemId?: string;
+    confidence: BankingNeedsYouSuggestionConfidence;
+}
+export type BankingNeedsYouItemKind = (typeof BankingNeedsYouItemKind)[keyof typeof BankingNeedsYouItemKind];
+export declare const BankingNeedsYouItemKind: {
+    readonly match: "match";
+    readonly category: "category";
+};
+export interface BankingNeedsYouItem {
+    /** `<kind>:<txId>`, one per charge */
+    id: string;
+    txId: string;
+    accountName: string;
+    /** @nullable */
+    mask: string | null;
+    date: string;
+    name: string;
+    /** Signed */
+    amount: string;
+    /**
+     * The row's current category (a provisional one included); null when it has none
+     * @nullable
+     */
+    categoryName: string | null;
+    pending: boolean;
+    kind: BankingNeedsYouItemKind;
+    suggestion: BankingNeedsYouSuggestion | null;
+    /** Why it is here */
+    reason: string;
+}
+export interface BankingNeedsYouAutoDone {
+    /** Automatic matches made on or after `since` that still stand */
+    matched: number;
+    /** Categories filed automatically on or after `since` */
+    categorized: number;
+    since: string;
+}
+export interface BankingNeedsYou {
+    /** The household's today (YYYY-MM-DD) */
+    throughDate: string;
+    /** Every charge on the list — the number every badge shows */
+    count: number;
+    /** True when `limit` cut the list (count > items.length) */
+    truncated: boolean;
+    items: BankingNeedsYouItem[];
+    autoDone: BankingNeedsYouAutoDone;
+}
+export type BankingAutoDoneItemKind = (typeof BankingAutoDoneItemKind)[keyof typeof BankingAutoDoneItemKind];
+export declare const BankingAutoDoneItemKind: {
+    readonly match: "match";
+    readonly category: "category";
+};
+export interface BankingAutoDoneItem {
+    kind: BankingAutoDoneItemKind;
+    /** Match: the answer's id. Category: the decision's id. */
+    undoId: string;
+    txnId: string;
+    /** When it was done (ISO instant) */
+    at: string;
+    /**
+     * Match: `<recurringItemId>|<occurrenceDate>`
+     * @nullable
+     */
+    planKey: string | null;
+    /** @nullable */
+    categoryId: string | null;
+    /** The plan's or the category's name */
+    label: string;
+}
+export interface BankingAutoDone {
+    since: string;
+    matched: number;
+    categorized: number;
+    items: BankingAutoDoneItem[];
+    truncated: boolean;
+}
+export type BankingAutoSortMatchedWhy = (typeof BankingAutoSortMatchedWhy)[keyof typeof BankingAutoSortMatchedWhy];
+export declare const BankingAutoSortMatchedWhy: {
+    readonly ledger: "ledger";
+    readonly one_obvious: "one_obvious";
+};
+export interface BankingAutoSortMatched {
+    /**
+     * The answer written; null on a dry run
+     * @nullable
+     */
+    resolutionId: string | null;
+    txnId: string;
+    date: string;
+    amount: string;
+    planKey: string;
+    recurringItemId: string;
+    occurrenceDate: string;
+    label: string;
+    why: BankingAutoSortMatchedWhy;
+}
+export interface BankingAutoSortCategorized {
+    /**
+     * The decision written; null on a dry run
+     * @nullable
+     */
+    decisionId: string | null;
+    /** The provisional decision it filed for good */
+    promotedDecisionId: string;
+    txnId: string;
+    categoryId: string;
+    /** How many hand filings of the merchant agree */
+    confirmed: number;
+}
+export interface BankingAutoSortResult {
+    dryRun: boolean;
+    matched: BankingAutoSortMatched[];
+    categorized: BankingAutoSortCategorized[];
+}
 export interface ForecastResolutionReplaced {
     id: string;
     userId: string;
@@ -5689,6 +5817,8 @@ export interface ForecastResolutionReplaced {
     /** @nullable */
     rescheduledTo: string | null;
     createdAt: string;
+    /** (BANK-AUTO) "user" or "auto"; absent reads as "user" */
+    source?: string;
 }
 export interface ForecastResolution {
     id: string;
@@ -5709,6 +5839,8 @@ export interface ForecastResolution {
     txnAmount?: string | null;
     /** @nullable */
     txnForecastFlag?: boolean | null;
+    /** (BANK-AUTO) Who gave the answer — "user" (a person) or "auto" (the bank auto-sort) */
+    source?: string;
     /** (Task 6, POST only) The answers this write deleted (one per plan occurrence and one per bank row): what POST /forecast/resolutions/{id}/undo puts back */
     replaced?: ForecastResolutionReplaced[];
 }

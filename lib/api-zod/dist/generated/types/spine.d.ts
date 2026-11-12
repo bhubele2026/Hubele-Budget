@@ -28,7 +28,7 @@ export interface Spine {
     billsDueCount: number;
     forecast: SpineForecast;
     debt: SpineDebt;
-    /** computeReviewCount() — unmatched forecast-flagged bank txns this month */
+    /** computeReviewCount() — (BANK-AUTO) the one count every badge shows: GET /banking/needs-you .count (bank rows this household month still waiting for a match, plus charges only the categorization queue holds; a charge on both counts once) */
     reviewCount: number;
     position: SpinePosition;
     monthAllowance: SpineMonthAllowance;

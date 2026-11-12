@@ -25,6 +25,8 @@ export interface ForecastResolution {
     txnAmount?: string | null;
     /** @nullable */
     txnForecastFlag?: boolean | null;
+    /** (BANK-AUTO) Who gave the answer — "user" (a person) or "auto" (the bank auto-sort) */
+    source?: string;
     /** (Task 6, POST only) The answers this write deleted (one per plan occurrence and one per bank row): what POST /forecast/resolutions/{id}/undo puts back */
     replaced?: ForecastResolutionReplaced[];
 }

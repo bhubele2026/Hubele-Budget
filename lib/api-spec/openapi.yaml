@@ -1816,7 +1816,13 @@ paths:
     get:
       operationId: getForecastReviewCount
       tags: [forecast]
-      summary: Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+      summary: The Review badge's count without the full forecast bundle
+      description: >-
+        (BANK-AUTO) computeReviewCount() — the same number as GET
+        /banking/needs-you .count and the spine's reviewCount: bank rows this
+        household month still waiting for a match, plus charges only the
+        categorization queue holds (a charge on both counts once). Before
+        BANK-AUTO it counted the match rows only.
       responses:
         "200":
           description: OK
@@ -3274,6 +3280,102 @@ paths:
             today, more than 366 days), a bad account (not this household's
             checking or savings account), rowsPerBucket, bucket, kind (without
             bucket=unmatched), cursor or limit, or a NUL byte in any value
+
+  /banking/needs-you:
+    get:
+      operationId: getBankingNeedsYou
+      tags: [banking, features]
+      summary: (BANK-AUTO) The one list — every charge H2 still needs a person for, and the one count
+      description: >-
+        After the bank auto-sort did what it was sure of: `match` items are the
+        bank rows still waiting for a match (exactly what the Review badge
+        counts: this household month, the forecast's account, in the forecast,
+        no deciding answer); `category` items are the categorization review
+        queue, one per charge. A charge on both is one `match` item whose reason
+        mentions the category. `count` is the figure every badge shows (the
+        spine's reviewCount, GET /forecast/review-count, the banking review's
+        badgeCount). Items are newest first and capped at `limit`; `truncated`
+        says when the cap cut the list (otherwise count = items.length). A
+        match suggestion's `planOccurrenceId` is `<recurringItemId>|<occurrenceDate>`
+        (answer it with POST /forecast/resolutions); a category suggestion's
+        `reviewItemId` is the queue decision (POST
+        /categorization/review/{decisionId}/accept). Read-only.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          description: Items listed, 1 to 500 (`count` always covers every charge).
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+        - in: query
+          name: since
+          required: false
+          description: The first household day `autoDone` counts (YYYY-MM-DD, not after today). Default a week back.
+          schema: { type: string, maxLength: 10 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankingNeedsYou" }
+        "400": { description: A bad limit or since }
+
+  /banking/auto-done:
+    get:
+      operationId: getBankingAutoDone
+      tags: [banking, features]
+      summary: (BANK-AUTO) What the auto-sort matched and categorized, each with its undo id
+      description: >-
+        Automatic matches still stored and promotions not undone, made on or
+        after `since` (household days), newest first, at most 100 listed. Undo
+        a match with POST /forecast/resolutions/{undoId}/undo and `{ "restore":
+        [] }` (it also tells the auto-sort never to match that row again); undo
+        a category with POST /category-decisions/{undoId}/undo (the charge goes
+        back to the review queue). Read-only.
+      parameters:
+        - in: query
+          name: since
+          required: false
+          description: YYYY-MM-DD, not after today. Default a week back.
+          schema: { type: string, maxLength: 10 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankingAutoDone" }
+        "400": { description: A bad since }
+
+  /banking/auto-sort:
+    post:
+      operationId: runBankingAutoSort
+      tags: [banking, features]
+      summary: (BANK-AUTO) Sort the household's bank rows now (owner only); it also runs after every bank sync
+      description: >-
+        Matches every bank row H2 is sure of — the forecast ledger paired it
+        with exactly one plan occurrence unambiguously, or it has exactly one
+        high-confidence open plan no other waiting row wants — on the forecast's
+        account, dated through today, not pending, with no answer on it, its
+        plan or the pair, never handed back by a person and not in a closed
+        month: a `matched` answer with source "auto". Never a partial, an ignore
+        or an ambiguous row. Then files each provisional category the
+        household's own hand filings of the merchant agree with (at least two,
+        all the same category; never a transfer, a card or debt payment, or a
+        pick against the money's direction). Idempotent. `dryRun=1` reports
+        what it would do and writes nothing.
+      parameters:
+        - in: query
+          name: dryRun
+          required: false
+          description: 1 to report without writing.
+          schema: { type: string, enum: ["0", "1", "true", "false"] }
+      responses:
+        "200":
+          description: What it did (or would do)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankingAutoSortResult" }
+        "400": { description: A bad dryRun }
+        "403": { description: Owner only }
 
   /banking/check-explain:
     get:
@@ -5080,7 +5182,13 @@ components:
                 accounts this household month (see DebtPlan.newChargesMtd). An
                 amount CHARGED, never a balance or available credit; equals GET
                 /debt-plan .newChargesMtd.
-        reviewCount: { type: integer, description: computeReviewCount() — unmatched forecast-flagged bank txns this month }
+        reviewCount:
+          type: integer
+          description: >-
+            computeReviewCount() — (BANK-AUTO) the one count every badge shows:
+            GET /banking/needs-you .count (bank rows this household month still
+            waiting for a match, plus charges only the categorization queue
+            holds; a charge on both counts once)
         position: { $ref: "#/components/schemas/SpinePosition" }
         monthAllowance: { $ref: "#/components/schemas/SpineMonthAllowance" }
         bankConfidence: { $ref: "#/components/schemas/SpineBankConfidence" }
@@ -6145,7 +6253,7 @@ components:
         unresolvedScope: { type: string, enum: ["this account · this period"], description: "(Q1) What unresolvedInRange counts: this review's account (account) and period" }
         unresolvedFrom: { type: string, description: "(Q1) The first day unresolvedInRange reads (= period.from)" }
         unresolvedTo: { type: string, description: "(Q1) The last day unresolvedInRange reads (= period.to)" }
-        badgeCount: { type: integer, description: "The Review badge (spine.reviewCount)" }
+        badgeCount: { type: integer, description: "The Review badge (spine.reviewCount) — (BANK-AUTO) GET /banking/needs-you .count: this month's rows to match plus the category queue" }
         badgeScope: { type: string, enum: ["this calendar month, forecast account"] }
 
     BankingReviewBalanceTie:
@@ -9235,6 +9343,112 @@ components:
         label: { type: string }
         kind: { type: string }
         amount: { type: number }
+    BankingNeedsYouSuggestion:
+      type: object
+      required: [label, confidence]
+      properties:
+        label:
+          type: string
+          description: >-
+            Written to follow "Looks like ": a match's plan as "the <plan name>
+            payment, planned $<amount> on <Mon D>" ("deposit" for money in); a
+            category's name
+        planOccurrenceId: { type: string, description: "Match: `<recurringItemId>|<occurrenceDate>`" }
+        categoryId: { type: string, description: "Category: the suggested category" }
+        reviewItemId: { type: string, description: "Category: the review-queue decision to accept" }
+        confidence: { type: string, enum: [high, medium, low] }
+    BankingNeedsYouItem:
+      type: object
+      required: [id, txId, accountName, mask, date, name, amount, categoryName, pending, kind, suggestion, reason]
+      properties:
+        id: { type: string, description: "`<kind>:<txId>`, one per charge" }
+        txId: { type: string }
+        accountName: { type: string }
+        mask: { type: ["string", "null"] }
+        date: { type: string }
+        name: { type: string }
+        amount: { type: string, description: Signed, as stored }
+        categoryName: { type: ["string", "null"], description: "The row's current category (a provisional one included); null when it has none" }
+        pending: { type: boolean }
+        kind: { type: string, enum: [match, category] }
+        suggestion:
+          oneOf:
+            - { $ref: "#/components/schemas/BankingNeedsYouSuggestion" }
+            - { type: "null" }
+        reason: { type: string, description: Why it is here, in plain words }
+    BankingNeedsYouAutoDone:
+      type: object
+      required: [matched, categorized, since]
+      properties:
+        matched: { type: integer, description: Automatic matches made on or after `since` that still stand }
+        categorized: { type: integer, description: Categories filed automatically on or after `since`, not undone }
+        since: { type: string }
+    BankingNeedsYou:
+      type: object
+      required: [throughDate, count, truncated, items, autoDone]
+      properties:
+        throughDate: { type: string, description: The household's today (YYYY-MM-DD) }
+        count: { type: integer, description: Every charge on the list — the number every badge shows }
+        truncated: { type: boolean, description: True when `limit` cut the list (count > items.length) }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BankingNeedsYouItem" }
+        autoDone: { $ref: "#/components/schemas/BankingNeedsYouAutoDone" }
+    BankingAutoDoneItem:
+      type: object
+      required: [kind, undoId, txnId, at, planKey, categoryId, label]
+      properties:
+        kind: { type: string, enum: [match, category] }
+        undoId: { type: string, description: "Match: the answer's id. Category: the decision's id." }
+        txnId: { type: string }
+        at: { type: string, description: When it was done (ISO instant) }
+        planKey: { type: ["string", "null"], description: "Match: `<recurringItemId>|<occurrenceDate>`" }
+        categoryId: { type: ["string", "null"] }
+        label: { type: string, description: The plan's or the category's name }
+    BankingAutoDone:
+      type: object
+      required: [since, matched, categorized, items, truncated]
+      properties:
+        since: { type: string }
+        matched: { type: integer }
+        categorized: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BankingAutoDoneItem" }
+        truncated: { type: boolean }
+    BankingAutoSortMatched:
+      type: object
+      required: [resolutionId, txnId, date, amount, planKey, recurringItemId, occurrenceDate, label, why]
+      properties:
+        resolutionId: { type: ["string", "null"], description: The answer written; null on a dry run }
+        txnId: { type: string }
+        date: { type: string }
+        amount: { type: string }
+        planKey: { type: string }
+        recurringItemId: { type: string }
+        occurrenceDate: { type: string }
+        label: { type: string }
+        why: { type: string, enum: [ledger, one_obvious] }
+    BankingAutoSortCategorized:
+      type: object
+      required: [decisionId, promotedDecisionId, txnId, categoryId, confirmed]
+      properties:
+        decisionId: { type: ["string", "null"], description: The decision written; null on a dry run }
+        promotedDecisionId: { type: string, description: The provisional decision it filed for good }
+        txnId: { type: string }
+        categoryId: { type: string }
+        confirmed: { type: integer, description: How many hand filings of the merchant agree }
+    BankingAutoSortResult:
+      type: object
+      required: [dryRun, matched, categorized]
+      properties:
+        dryRun: { type: boolean }
+        matched:
+          type: array
+          items: { $ref: "#/components/schemas/BankingAutoSortMatched" }
+        categorized:
+          type: array
+          items: { $ref: "#/components/schemas/BankingAutoSortCategorized" }
     ForecastResolution:
       type: object
       required: [id, status]
@@ -9249,6 +9463,9 @@ components:
         txnDescription: { type: ["string", "null"] }
         txnAmount: { type: ["string", "null"] }
         txnForecastFlag: { type: ["boolean", "null"] }
+        source:
+          type: string
+          description: (BANK-AUTO) Who gave the answer — "user" (a person) or "auto" (the bank auto-sort)
         replaced:
           type: array
           description: >-
@@ -9268,6 +9485,9 @@ components:
         matchedTxnId: { type: ["string", "null"] }
         rescheduledTo: { type: ["string", "null"] }
         createdAt: { type: string }
+        source:
+          type: string
+          description: (BANK-AUTO) "user" or "auto"; absent reads as "user"
     ForecastResolutionUndoInput:
       type: object
       required: [restore]

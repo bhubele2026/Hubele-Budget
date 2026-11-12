@@ -8804,6 +8804,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         txnDescription: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         txnAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         txnForecastFlag: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+        source: zod.ZodOptional<zod.ZodString>;
         replaced: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
             id: zod.ZodString;
             userId: zod.ZodString;
@@ -8813,6 +8814,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             matchedTxnId: zod.ZodNullable<zod.ZodString>;
             rescheduledTo: zod.ZodNullable<zod.ZodString>;
             createdAt: zod.ZodString;
+            source: zod.ZodOptional<zod.ZodString>;
         }, "strip", zod.ZodTypeAny, {
             status: string;
             id: string;
@@ -8822,6 +8824,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             occurrenceDate: string | null;
             matchedTxnId: string | null;
             rescheduledTo: string | null;
+            source?: string | undefined;
         }, {
             status: string;
             id: string;
@@ -8831,10 +8834,12 @@ export declare const GetForecastResponse: zod.ZodObject<{
             occurrenceDate: string | null;
             matchedTxnId: string | null;
             rescheduledTo: string | null;
+            source?: string | undefined;
         }>, "many">>;
     }, "strip", zod.ZodTypeAny, {
         status: string;
         id: string;
+        source?: string | undefined;
         recurringItemId?: string | null | undefined;
         occurrenceDate?: string | null | undefined;
         matchedTxnId?: string | null | undefined;
@@ -8852,10 +8857,12 @@ export declare const GetForecastResponse: zod.ZodObject<{
             occurrenceDate: string | null;
             matchedTxnId: string | null;
             rescheduledTo: string | null;
+            source?: string | undefined;
         }[] | undefined;
     }, {
         status: string;
         id: string;
+        source?: string | undefined;
         recurringItemId?: string | null | undefined;
         occurrenceDate?: string | null | undefined;
         matchedTxnId?: string | null | undefined;
@@ -8873,6 +8880,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             occurrenceDate: string | null;
             matchedTxnId: string | null;
             rescheduledTo: string | null;
+            source?: string | undefined;
         }[] | undefined;
     }>, "many">;
     closedMonths: zod.ZodArray<zod.ZodString, "many">;
@@ -9771,6 +9779,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
     resolutions: {
         status: string;
         id: string;
+        source?: string | undefined;
         recurringItemId?: string | null | undefined;
         occurrenceDate?: string | null | undefined;
         matchedTxnId?: string | null | undefined;
@@ -9788,6 +9797,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             occurrenceDate: string | null;
             matchedTxnId: string | null;
             rescheduledTo: string | null;
+            source?: string | undefined;
         }[] | undefined;
     }[];
     closedMonths: string[];
@@ -10042,6 +10052,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
     resolutions: {
         status: string;
         id: string;
+        source?: string | undefined;
         recurringItemId?: string | null | undefined;
         occurrenceDate?: string | null | undefined;
         matchedTxnId?: string | null | undefined;
@@ -10059,6 +10070,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             occurrenceDate: string | null;
             matchedTxnId: string | null;
             rescheduledTo: string | null;
+            source?: string | undefined;
         }[] | undefined;
     }[];
     closedMonths: string[];
@@ -10328,6 +10340,7 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
     txnDescription: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     txnAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     txnForecastFlag: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    source: zod.ZodOptional<zod.ZodString>;
     replaced: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         userId: zod.ZodString;
@@ -10337,6 +10350,7 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
         matchedTxnId: zod.ZodNullable<zod.ZodString>;
         rescheduledTo: zod.ZodNullable<zod.ZodString>;
         createdAt: zod.ZodString;
+        source: zod.ZodOptional<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         status: string;
         id: string;
@@ -10346,6 +10360,7 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
         occurrenceDate: string | null;
         matchedTxnId: string | null;
         rescheduledTo: string | null;
+        source?: string | undefined;
     }, {
         status: string;
         id: string;
@@ -10355,10 +10370,12 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
         occurrenceDate: string | null;
         matchedTxnId: string | null;
         rescheduledTo: string | null;
+        source?: string | undefined;
     }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     id: string;
+    source?: string | undefined;
     recurringItemId?: string | null | undefined;
     occurrenceDate?: string | null | undefined;
     matchedTxnId?: string | null | undefined;
@@ -10376,10 +10393,12 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
         occurrenceDate: string | null;
         matchedTxnId: string | null;
         rescheduledTo: string | null;
+        source?: string | undefined;
     }[] | undefined;
 }, {
     status: string;
     id: string;
+    source?: string | undefined;
     recurringItemId?: string | null | undefined;
     occurrenceDate?: string | null | undefined;
     matchedTxnId?: string | null | undefined;
@@ -10397,6 +10416,7 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
         occurrenceDate: string | null;
         matchedTxnId: string | null;
         rescheduledTo: string | null;
+        source?: string | undefined;
     }[] | undefined;
 }>;
 export declare const DeleteForecastResolutionParams: zod.ZodObject<{
@@ -10428,6 +10448,7 @@ export declare const UndoForecastResolutionBody: zod.ZodObject<{
         matchedTxnId: zod.ZodNullable<zod.ZodString>;
         rescheduledTo: zod.ZodNullable<zod.ZodString>;
         createdAt: zod.ZodString;
+        source: zod.ZodOptional<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         status: string;
         id: string;
@@ -10437,6 +10458,7 @@ export declare const UndoForecastResolutionBody: zod.ZodObject<{
         occurrenceDate: string | null;
         matchedTxnId: string | null;
         rescheduledTo: string | null;
+        source?: string | undefined;
     }, {
         status: string;
         id: string;
@@ -10446,6 +10468,7 @@ export declare const UndoForecastResolutionBody: zod.ZodObject<{
         occurrenceDate: string | null;
         matchedTxnId: string | null;
         rescheduledTo: string | null;
+        source?: string | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     restore: {
@@ -10457,6 +10480,7 @@ export declare const UndoForecastResolutionBody: zod.ZodObject<{
         occurrenceDate: string | null;
         matchedTxnId: string | null;
         rescheduledTo: string | null;
+        source?: string | undefined;
     }[];
 }, {
     restore: {
@@ -10468,6 +10492,7 @@ export declare const UndoForecastResolutionBody: zod.ZodObject<{
         occurrenceDate: string | null;
         matchedTxnId: string | null;
         rescheduledTo: string | null;
+        source?: string | undefined;
     }[];
 }>;
 export declare const UndoForecastResolutionResponse: zod.ZodObject<{
@@ -10565,7 +10590,8 @@ export declare const RefreshForecastBankResponse: zod.ZodObject<{
     accountId?: string | null | undefined;
 }>;
 /**
- * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ * (BANK-AUTO) computeReviewCount() — the same number as GET /banking/needs-you .count and the spine's reviewCount: bank rows this household month still waiting for a match, plus charges only the categorization queue holds (a charge on both counts once). Before BANK-AUTO it counted the match rows only.
+ * @summary The Review badge's count without the full forecast bundle
  */
 export declare const GetForecastReviewCountResponse: zod.ZodObject<{
     count: zod.ZodNumber;
@@ -33699,6 +33725,344 @@ export declare const GetBankingReviewResponse: zod.ZodObject<{
         snapshotAt: string | null;
         computedAt: string;
     } | undefined;
+}>;
+/**
+ * After the bank auto-sort did what it was sure of: `match` items are the bank rows still waiting for a match (exactly what the Review badge counts: this household month, the forecast's account, in the forecast, no deciding answer); `category` items are the categorization review queue, one per charge. A charge on both is one `match` item whose reason mentions the category. `count` is the figure every badge shows (the spine's reviewCount, GET /forecast/review-count, the banking review's badgeCount). Items are newest first and capped at `limit`; `truncated` says when the cap cut the list (otherwise count = items.length). A match suggestion's `planOccurrenceId` is `<recurringItemId>|<occurrenceDate>` (answer it with POST /forecast/resolutions); a category suggestion's `reviewItemId` is the queue decision (POST /categorization/review/{decisionId}/accept). Read-only.
+ * @summary (BANK-AUTO) The one list — every charge H2 still needs a person for, and the one count
+ */
+export declare const getBankingNeedsYouQueryLimitDefault = 200;
+export declare const getBankingNeedsYouQueryLimitMax = 500;
+export declare const getBankingNeedsYouQuerySinceMax = 10;
+export declare const GetBankingNeedsYouQueryParams: zod.ZodObject<{
+    limit: zod.ZodDefault<zod.ZodNumber>;
+    since: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    limit: number;
+    since?: string | undefined;
+}, {
+    limit?: number | undefined;
+    since?: string | undefined;
+}>;
+export declare const GetBankingNeedsYouResponse: zod.ZodObject<{
+    throughDate: zod.ZodString;
+    count: zod.ZodNumber;
+    truncated: zod.ZodBoolean;
+    items: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        txId: zod.ZodString;
+        accountName: zod.ZodString;
+        mask: zod.ZodNullable<zod.ZodString>;
+        date: zod.ZodString;
+        name: zod.ZodString;
+        amount: zod.ZodString;
+        categoryName: zod.ZodNullable<zod.ZodString>;
+        pending: zod.ZodBoolean;
+        kind: zod.ZodEnum<["match", "category"]>;
+        suggestion: zod.ZodUnion<[zod.ZodObject<{
+            label: zod.ZodString;
+            planOccurrenceId: zod.ZodOptional<zod.ZodString>;
+            categoryId: zod.ZodOptional<zod.ZodString>;
+            reviewItemId: zod.ZodOptional<zod.ZodString>;
+            confidence: zod.ZodEnum<["high", "medium", "low"]>;
+        }, "strip", zod.ZodTypeAny, {
+            label: string;
+            confidence: "high" | "medium" | "low";
+            categoryId?: string | undefined;
+            planOccurrenceId?: string | undefined;
+            reviewItemId?: string | undefined;
+        }, {
+            label: string;
+            confidence: "high" | "medium" | "low";
+            categoryId?: string | undefined;
+            planOccurrenceId?: string | undefined;
+            reviewItemId?: string | undefined;
+        }>, zod.ZodNull]>;
+        reason: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        id: string;
+        kind: "category" | "match";
+        amount: string;
+        pending: boolean;
+        categoryName: string | null;
+        name: string;
+        mask: string | null;
+        reason: string;
+        accountName: string;
+        suggestion: {
+            label: string;
+            confidence: "high" | "medium" | "low";
+            categoryId?: string | undefined;
+            planOccurrenceId?: string | undefined;
+            reviewItemId?: string | undefined;
+        } | null;
+        txId: string;
+    }, {
+        date: string;
+        id: string;
+        kind: "category" | "match";
+        amount: string;
+        pending: boolean;
+        categoryName: string | null;
+        name: string;
+        mask: string | null;
+        reason: string;
+        accountName: string;
+        suggestion: {
+            label: string;
+            confidence: "high" | "medium" | "low";
+            categoryId?: string | undefined;
+            planOccurrenceId?: string | undefined;
+            reviewItemId?: string | undefined;
+        } | null;
+        txId: string;
+    }>, "many">;
+    autoDone: zod.ZodObject<{
+        matched: zod.ZodNumber;
+        categorized: zod.ZodNumber;
+        since: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        matched: number;
+        since: string;
+        categorized: number;
+    }, {
+        matched: number;
+        since: string;
+        categorized: number;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    count: number;
+    truncated: boolean;
+    items: {
+        date: string;
+        id: string;
+        kind: "category" | "match";
+        amount: string;
+        pending: boolean;
+        categoryName: string | null;
+        name: string;
+        mask: string | null;
+        reason: string;
+        accountName: string;
+        suggestion: {
+            label: string;
+            confidence: "high" | "medium" | "low";
+            categoryId?: string | undefined;
+            planOccurrenceId?: string | undefined;
+            reviewItemId?: string | undefined;
+        } | null;
+        txId: string;
+    }[];
+    throughDate: string;
+    autoDone: {
+        matched: number;
+        since: string;
+        categorized: number;
+    };
+}, {
+    count: number;
+    truncated: boolean;
+    items: {
+        date: string;
+        id: string;
+        kind: "category" | "match";
+        amount: string;
+        pending: boolean;
+        categoryName: string | null;
+        name: string;
+        mask: string | null;
+        reason: string;
+        accountName: string;
+        suggestion: {
+            label: string;
+            confidence: "high" | "medium" | "low";
+            categoryId?: string | undefined;
+            planOccurrenceId?: string | undefined;
+            reviewItemId?: string | undefined;
+        } | null;
+        txId: string;
+    }[];
+    throughDate: string;
+    autoDone: {
+        matched: number;
+        since: string;
+        categorized: number;
+    };
+}>;
+/**
+ * Automatic matches still stored and promotions not undone, made on or after `since` (household days), newest first, at most 100 listed. Undo a match with POST /forecast/resolutions/{undoId}/undo and `{ "restore": [] }` (it also tells the auto-sort never to match that row again); undo a category with POST /category-decisions/{undoId}/undo (the charge goes back to the review queue). Read-only.
+ * @summary (BANK-AUTO) What the auto-sort matched and categorized, each with its undo id
+ */
+export declare const getBankingAutoDoneQuerySinceMax = 10;
+export declare const GetBankingAutoDoneQueryParams: zod.ZodObject<{
+    since: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    since?: string | undefined;
+}, {
+    since?: string | undefined;
+}>;
+export declare const GetBankingAutoDoneResponse: zod.ZodObject<{
+    since: zod.ZodString;
+    matched: zod.ZodNumber;
+    categorized: zod.ZodNumber;
+    items: zod.ZodArray<zod.ZodObject<{
+        kind: zod.ZodEnum<["match", "category"]>;
+        undoId: zod.ZodString;
+        txnId: zod.ZodString;
+        at: zod.ZodString;
+        planKey: zod.ZodNullable<zod.ZodString>;
+        categoryId: zod.ZodNullable<zod.ZodString>;
+        label: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        at: string;
+        kind: "category" | "match";
+        categoryId: string | null;
+        label: string;
+        txnId: string;
+        planKey: string | null;
+        undoId: string;
+    }, {
+        at: string;
+        kind: "category" | "match";
+        categoryId: string | null;
+        label: string;
+        txnId: string;
+        planKey: string | null;
+        undoId: string;
+    }>, "many">;
+    truncated: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    matched: number;
+    truncated: boolean;
+    since: string;
+    items: {
+        at: string;
+        kind: "category" | "match";
+        categoryId: string | null;
+        label: string;
+        txnId: string;
+        planKey: string | null;
+        undoId: string;
+    }[];
+    categorized: number;
+}, {
+    matched: number;
+    truncated: boolean;
+    since: string;
+    items: {
+        at: string;
+        kind: "category" | "match";
+        categoryId: string | null;
+        label: string;
+        txnId: string;
+        planKey: string | null;
+        undoId: string;
+    }[];
+    categorized: number;
+}>;
+/**
+ * Matches every bank row H2 is sure of — the forecast ledger paired it with exactly one plan occurrence unambiguously, or it has exactly one high-confidence open plan no other waiting row wants — on the forecast's account, dated through today, not pending, with no answer on it, its plan or the pair, never handed back by a person and not in a closed month: a `matched` answer with source "auto". Never a partial, an ignore or an ambiguous row. Then files each provisional category the household's own hand filings of the merchant agree with (at least two, all the same category; never a transfer, a card or debt payment, or a pick against the money's direction). Idempotent. `dryRun=1` reports what it would do and writes nothing.
+ * @summary (BANK-AUTO) Sort the household's bank rows now (owner only); it also runs after every bank sync
+ */
+export declare const RunBankingAutoSortQueryParams: zod.ZodObject<{
+    dryRun: zod.ZodOptional<zod.ZodEnum<["0", "1", "true", "false"]>>;
+}, "strip", zod.ZodTypeAny, {
+    dryRun?: "0" | "1" | "true" | "false" | undefined;
+}, {
+    dryRun?: "0" | "1" | "true" | "false" | undefined;
+}>;
+export declare const RunBankingAutoSortResponse: zod.ZodObject<{
+    dryRun: zod.ZodBoolean;
+    matched: zod.ZodArray<zod.ZodObject<{
+        resolutionId: zod.ZodNullable<zod.ZodString>;
+        txnId: zod.ZodString;
+        date: zod.ZodString;
+        amount: zod.ZodString;
+        planKey: zod.ZodString;
+        recurringItemId: zod.ZodString;
+        occurrenceDate: zod.ZodString;
+        label: zod.ZodString;
+        why: zod.ZodEnum<["ledger", "one_obvious"]>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        amount: string;
+        label: string;
+        recurringItemId: string;
+        occurrenceDate: string;
+        txnId: string;
+        planKey: string;
+        resolutionId: string | null;
+        why: "ledger" | "one_obvious";
+    }, {
+        date: string;
+        amount: string;
+        label: string;
+        recurringItemId: string;
+        occurrenceDate: string;
+        txnId: string;
+        planKey: string;
+        resolutionId: string | null;
+        why: "ledger" | "one_obvious";
+    }>, "many">;
+    categorized: zod.ZodArray<zod.ZodObject<{
+        decisionId: zod.ZodNullable<zod.ZodString>;
+        promotedDecisionId: zod.ZodString;
+        txnId: zod.ZodString;
+        categoryId: zod.ZodString;
+        confirmed: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        categoryId: string;
+        confirmed: number;
+        decisionId: string | null;
+        txnId: string;
+        promotedDecisionId: string;
+    }, {
+        categoryId: string;
+        confirmed: number;
+        decisionId: string | null;
+        txnId: string;
+        promotedDecisionId: string;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    matched: {
+        date: string;
+        amount: string;
+        label: string;
+        recurringItemId: string;
+        occurrenceDate: string;
+        txnId: string;
+        planKey: string;
+        resolutionId: string | null;
+        why: "ledger" | "one_obvious";
+    }[];
+    dryRun: boolean;
+    categorized: {
+        categoryId: string;
+        confirmed: number;
+        decisionId: string | null;
+        txnId: string;
+        promotedDecisionId: string;
+    }[];
+}, {
+    matched: {
+        date: string;
+        amount: string;
+        label: string;
+        recurringItemId: string;
+        occurrenceDate: string;
+        txnId: string;
+        planKey: string;
+        resolutionId: string | null;
+        why: "ledger" | "one_obvious";
+    }[];
+    dryRun: boolean;
+    categorized: {
+        categoryId: string;
+        confirmed: number;
+        decisionId: string | null;
+        txnId: string;
+        promotedDecisionId: string;
+    }[];
 }>;
 /**
  * (T2) The forecast checking account's last balance check (the record a manual Sync stored) and what H2 holds about it: the previous reading, the bank's figure and what H2 expected; the bank rows the check counted between the two readings; pending deposits its rules left out and deposits they added; rows H2 recorded itself (no Plaid account: counted in H2's balance, left out of the check); rows that arrived after the check; today's balance and the reading under it; and a verdict — late_rows_tie (resolved_since), manual_rows_match (the rows H2 recorded itself add up to the difference), unknown, or null when there is no difference to explain. `check` is GET /banking/review's balanceCheck for the same account. Each row list holds at most 200 rows. No Plaid call, no write: nothing here clears or changes the check.
