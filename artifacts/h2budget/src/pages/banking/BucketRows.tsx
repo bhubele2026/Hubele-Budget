@@ -176,7 +176,10 @@ function RowLine({ row, href, bucket, first, onOpen }: { row: BankingReviewRow; 
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-micro text-neutral-600">
             <span data-testid={`br-cat-${row.id}`}>{row.category ? (row.category.name ?? "Category removed") : "No category"}</span>
-            {bucket === "uncertain" && REASON_WORDS[row.reason] ? <span className={chip}>{REASON_WORDS[row.reason]}</span> : null}
+            {bucket === "uncertain" && REASON_WORDS[row.reason] ? (
+              // (2026-11-12) The row's state in the one badge language: H2's suggestion vs. waiting for an answer.
+              <StatusBadge state={row.reason === "suggested_match" ? "suggested" : "unresolved"}>{REASON_WORDS[row.reason]}</StatusBadge>
+            ) : null}
             {flags.unplannedAllowance ? <span className={chip}>Unplanned allowance</span> : null}
             {flags.reimbursable ? <span className={chip}>Reimbursable</span> : null}
           </div>

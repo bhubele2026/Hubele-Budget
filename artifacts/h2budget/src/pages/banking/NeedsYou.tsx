@@ -454,7 +454,7 @@ export function NeedsYou({
                       <div className="min-w-0">
                         <button
                           type="button"
-                          className="max-w-full truncate text-left text-body font-medium text-foreground hover:text-brand-navy hover:underline"
+                          className="max-w-full text-left text-body font-medium text-foreground hover:text-brand-navy hover:underline md:truncate"
                           onClick={(e) => {
                             e.stopPropagation();
                             setAt(i);
