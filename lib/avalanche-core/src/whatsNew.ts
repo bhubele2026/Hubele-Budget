@@ -52,6 +52,16 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-12.2",
+    headline: "A cleaner, more businesslike look",
+    items: [
+      {
+        title: "A cleaner, more businesslike look",
+        body: "Every page now has plainer type, flat white panels and a white top bar, with amounts lined up in columns. Nothing moved or went away.",
+      },
+    ],
+  },
+  {
     id: "2026-11-12",
     headline: "Banking sorts itself",
     items: [
