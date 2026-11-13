@@ -306,6 +306,35 @@ function touchHousehold(): void {
   const r = spawnSync("psql", [seeded.databaseUrl, "-Atqc", `UPDATE forecast_settings SET updated_at = now() WHERE user_id = '${hh!.ownerUserId.replace(/'/g, "")}'`], { encoding: "utf8" });
   if (r.status !== 0) throw new Error(`psql: ${r.stderr}`);
 }
+/** (PERF) A write, then the household left alone (a webhook in the night): the server may re-warm before the open. */
+const IDLE_AFTER_WRITE_MS = Number(process.env.IDLE_AFTER_WRITE_MS ?? 10_000);
+let idleCtx: BrowserContext | null = null;
+let idlePage: Page | null = null;
+async function writtenIdle(i: number, rec: { har: string; trace: string } | null): Promise<Run> {
+  const ctx = rec ? await newCtx({ har: rec.har }) : (idleCtx ??= await newCtx());
+  const page = rec ? await ctx.newPage() : (idlePage ??= await ctx.newPage());
+  if (rec || i === -1) await loadHome(page, "goto");
+  touchHousehold();
+  await new Promise((r) => setTimeout(r, IDLE_AFTER_WRITE_MS));
+  const r = await traced(page, rec?.trace ?? null, () => loadHome(page, "reload"));
+  if (rec) await ctx.close();
+  return { scenario: "writtenIdle", i, ...r };
+}
+
+/** (PERF) The server restarted (a deploy), the household opened a little later: a fresh process, a browser with its cache. */
+const IDLE_AFTER_RESTART_MS = Number(process.env.IDLE_AFTER_RESTART_MS ?? 10_000);
+let currentJobs = "off";
+async function restart(i: number, rec: { har: string; trace: string } | null): Promise<Run> {
+  await stopServer();
+  await startServer(currentJobs);
+  await new Promise((r) => setTimeout(r, IDLE_AFTER_RESTART_MS));
+  const ctx = await newCtx({ har: rec?.har });
+  const page = await ctx.newPage();
+  const r = await traced(page, rec?.trace ?? null, () => loadHome(page, "goto"));
+  await ctx.close();
+  return { scenario: "restart", i, ...r };
+}
+
 let writtenCtx: BrowserContext | null = null;
 let writtenPage: Page | null = null;
 async function written(i: number, rec: { har: string; trace: string } | null): Promise<Run> {
@@ -404,6 +433,7 @@ function metrics(r: Run): Record<string, number> {
     spinePoolwait: spine?.st.poolwait?.dur ?? NaN,
     spineDb: spine?.st.db?.dur ?? NaN,
     homeNumbers: markT(c, "h2:home-numbers-ready"),
+    homeShown: markT(c, "h2:home-numbers-shown"),
     weeklyPay: markT(c, "h2:weekly-pay-ready"),
     warmupStart: markT(c, "h2:warmup-start"),
     weeklyEnd: weekly?.end ?? NaN,
@@ -473,7 +503,7 @@ const HOME_KEYS: Array<[string, string, number?]> = [
   ["docTtfb", "document TTFB (ms)"], ["dcl", "DOMContentLoaded (ms)"], ["entryEval", "entry JS evaluated (h2:entry-eval, ms)"], ["jsKB", "JS transferred (KB)"],
   ["spineStart", "/api/spine start (ms)"], ["spineTtfb", "/api/spine wait (TTFB − start, ms)"], ["spineEnd", "/api/spine done (ms)"],
   ["spineServer", "/api/spine server total (ms)"], ["spineDb", "/api/spine db time, summed (ms)"], ["spinePoolwait", "/api/spine pool wait, summed (ms)"], ["spineLedgerMs", "/api/spine ledger build (ms)"],
-  ["homeNumbers", "⭐ h2:home-numbers-ready (ms)"], ["weeklyPay", "⭐ h2:weekly-pay-ready (ms)"], ["warmupStart", "h2:warmup-start (ms)"],
+  ["homeShown", "h2:home-numbers-shown — last-known paint (ms)"], ["homeNumbers", "⭐ h2:home-numbers-ready (ms)"], ["weeklyPay", "⭐ h2:weekly-pay-ready (ms)"], ["warmupStart", "h2:warmup-start (ms)"],
   ["lcp", "LCP (ms)"], ["cls", "CLS", 3],
   ["apiCallsBeforeWarmup", "/api calls before warm-up"], ["apiCalls", "/api calls incl. warm-up"],
   ["ledgerBuildsBeforeWarmup", "90-day ledger builds before warm-up"], ["baseBuildsBeforeWarmup", "400-day base builds before warm-up"],
@@ -495,6 +525,7 @@ const md: string[] = [
 browser = await chromium.launch({ headless: true });
 try {
   for (const jobs of JOBS) {
+    currentJobs = jobs;
     await startServer(jobs);
     console.log(`server up (JOBS_MODE=${jobs})`);
     const recDir = join(OUT, jobs);
@@ -508,6 +539,8 @@ try {
       ["tabs", tabs],
       ["banking", banking],
       ["written", written],
+      ["writtenIdle", writtenIdle],
+      ["restart", restart],
     ];
     for (const [name, fn] of scen) {
       if (!want(name)) continue;
@@ -525,6 +558,7 @@ try {
     if (warmCtx) { await warmCtx.close(); warmCtx = null; warmPage = null; }
     if (navCtx) { await navCtx.close(); navCtx = null; }
     if (bankCtx) { await bankCtx.close(); bankCtx = null; bankPage = null; }
+    if (idleCtx) { await idleCtx.close(); idleCtx = null; idlePage = null; }
     if (writtenCtx) { await writtenCtx.close(); writtenCtx = null; writtenPage = null; }
     await stopServer();
 
@@ -532,7 +566,7 @@ try {
     writeFileSync(join(recDir, "runs.json"), JSON.stringify(these));
     const by = (s: string) => these.filter((r) => r.scenario === s);
     md.push("", `## JOBS_MODE=${jobs}`);
-    for (const s of ["cold", "warm", "written", "phone", "tabs"]) {
+    for (const s of ["cold", "warm", "written", "writtenIdle", "restart", "phone", "tabs"]) {
       const rs = by(s);
       if (!rs.length) continue;
       md.push("", `### ${s} — Home (${rs.filter((r) => r.ok).length}/${rs.length} runs reached both marks)`, "", table(rs, HOME_KEYS), "", apiTable(rs), "", `Identical duplicates: ${dupList(rs)}`);
