@@ -111,7 +111,15 @@ describe("index.css — the reduced-motion switch actually reaches the dials", (
       "--anim-speed",
       "--dur-press",
       "--dur-in",
+      "--dur-rise",
+      "--dur-tile",
       "--dur-page",
+      "--dur-fade",
+      "--dur-pop",
+      "--dur-overlay",
+      "--dur-out",
+      "--dur-travel",
+      "--dur-roll",
       "--stagger",
     ]) {
       const decls = declarationsOf(dial).filter((d) => inReduceMedia(d.stack));
@@ -121,12 +129,14 @@ describe("index.css — the reduced-motion switch actually reaches the dials", (
     // Every one of them resolves to zero time.
     const block = SRC.slice(
       SRC.indexOf("@media (prefers-reduced-motion: reduce)"),
-    ).slice(0, 400);
+    ).slice(0, 600);
     expect(block).toMatch(/--anim-speed:\s*0\s*;/);
     expect(block).toMatch(/--dur-press:\s*0ms\s*;/);
     expect(block).toMatch(/--dur-in:\s*0ms\s*;/);
     expect(block).toMatch(/--dur-page:\s*0ms\s*;/);
     expect(block).toMatch(/--stagger:\s*0ms\s*;/);
+    expect(block).toMatch(/--dur-fade:\s*0ms\s*;/);
+    expect(block).toMatch(/--dur-overlay:\s*0ms\s*;/);
   });
 });
 
@@ -145,56 +155,35 @@ describe("index.css — the literal-duration kills stay, because dials cannot re
     expect(kills).toMatch(/\.skeleton[^{]*\{[^}]*animation:\s*none\s*!important/s);
   });
 
-  it("(2026-11-12) no entrance animation is defined: nothing rises, staggers, fades in or draws itself on", () => {
-    for (const k of ["tileIn", "riseIn", "revealIn", "pageIn", "chartIn", "areaFill", "lowPulse", "underlineSweep", "growX"]) {
-      expect(SRC, k).not.toMatch(new RegExp(`@keyframes\\s+${k}\\b`));
+  it("(Every click glides) the arrival classes are named in the reduced-motion kill list too", () => {
+    const kills = SRC.slice(SRC.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    for (const c of [".page-in", ".page-out", ".rise-in", ".roll-in", ".tile-glow"]) {
+      expect(kills, c).toMatch(new RegExp(`\\${c}\\b[^{]*\\{[^}]*animation:\\s*none\\s*!important`, "s"));
     }
-    expect(SRC).not.toMatch(/animation-delay:\s*[1-9]\d*ms/);
-    expect(SRC).not.toMatch(/\.(low-pulse|tile-in|stagger|area-draw|chart-in)\b/); // the inert hooks are gone too
+    // A figure simply shows its new value: the outgoing copy is not drawn at all.
+    expect(kills).toMatch(/\.roll-out\s*\{\s*display:\s*none/);
   });
 
   /**
-   * (Home says less, 2026-11-11) A `<details class="disclose">` slides its body
-   * in when it opens. It reads a dial (`--dur-soft`, which the switch zeroes),
-   * AND it is named in the `!important` list, so neither half alone is what
-   * keeps a disclosure still for someone who asked for no motion. Only the
-   * entrance is animated, and only while [open]: the closed state is the
-   * browser's own.
+   * (Every click glides, 2026-11-12) A `<details class="disclose">` GLIDES open AND shut: its content box eases its
+   * height and fades on --dur-in both ways. `interpolate-size` is set on the details only, so no other height in the
+   * app starts to animate; the pseudo-element is only ever named inside `@supports` (an unknown one voids the whole
+   * rule it sits in, which would take the reduced-motion list with it).
    */
-  it("a disclosure slides open on the soft dial, and not at all under reduced motion", () => {
-    const rule = SRC.match(/\.disclose\[open\]\s*>\s*:not\(summary\)\s*\{([^}]*)\}/);
-    expect(rule, "the .disclose entrance rule").not.toBeNull();
-    expect(rule![1]).toMatch(/animation:\s*discloseIn\s+var\(--dur-soft\)\s+var\(--ease-enter\)/);
+  it("a disclosure glides open and shut on the content box, on the --dur-in dial, and not at all under reduced motion", () => {
+    const sup = SRC.match(/@supports selector\(::details-content\)\s*\{\s*\.disclose\[open\]\s*>\s*:not\(summary\)\s*\{\s*animation:\s*none;\s*\}\s*\.disclose:is\(details\)\s*\{\s*interpolate-size:\s*allow-keywords;\s*\}\s*\.disclose::details-content\s*\{([^}]*)\}\s*\.disclose\[open\]::details-content\s*\{([^}]*)\}/);
+    expect(sup, "the ::details-content rules").not.toBeNull();
+    expect(sup![1]).toMatch(/opacity:\s*0;/);
+    expect(sup![1]).toMatch(/block-size:\s*0;/);
+    expect(sup![1]).toMatch(/transition:\s*block-size var\(--dur-in\) var\(--ease-out\),\s*opacity var\(--dur-in\) var\(--ease-out\),\s*content-visibility var\(--dur-in\) allow-discrete/);
+    expect(sup![2]).toMatch(/opacity:\s*1;\s*block-size:\s*auto;/);
     // No literal duration: the dial is the only clock.
-    expect(rule![1]).not.toMatch(/\d+m?s\b/);
-    // Nothing styles the CLOSED details (no height, no display), so closed layout is untouched.
-    expect(SRC).not.toMatch(/\.disclose(?!\[open\])\s*[{,>]/);
-    expect(SRC).toMatch(/--dur-soft:\s*calc\(240ms \* var\(--anim-speed\)\)/);
+    expect(sup![1] + sup![2]).not.toMatch(/\d+m?s\b/);
+    // interpolate-size is never set app-wide.
+    expect(SRC).not.toMatch(/:root\s*\{[^}]*interpolate-size/);
     const kills = SRC.slice(SRC.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(kills).toMatch(/@supports selector\(::details-content\)\s*\{\s*\.disclose::details-content\s*\{\s*transition:\s*none\s*!important/);
     expect(kills).toMatch(/\.disclose\[open\]\s*>\s*:not\(summary\)[^{]*\{[^}]*animation:\s*none\s*!important/s);
-  });
-
-  /**
-   * (Motion pass, 2026-11-11) Chrome skips style for the children of a closed
-   * details, so the child rule moved the first opening only. Where the browser
-   * has `::details-content`, the slide runs on that box (restyled on every
-   * open; a transition, since no engine animates keyframes there) and the
-   * child rule is switched off, so the two never stack. The
-   * pseudo-element is only ever named inside `@supports`: an unknown one voids
-   * the whole rule it sits in, which would take the reduced-motion list with it.
-   */
-  it("a disclosure slides on every opening: the content box where the browser has it, never both", () => {
-    const sup = SRC.match(/@supports selector\(::details-content\)\s*\{\s*\.disclose\[open\]\s*>\s*:not\(summary\)\s*\{\s*animation:\s*none;\s*\}\s*\.disclose::details-content\s*\{([^}]*)\}\s*\.disclose\[open\]::details-content\s*\{([^}]*)\}/);
-    expect(sup, "the ::details-content rules, with the child rule switched off beside them").not.toBeNull();
-    // Closed: where the slide starts from (nothing that takes part in layout).
-    expect(sup![1].replace(/\s+/g, " ").trim()).toBe("opacity: 0; transform: translateY(-6px);");
-    // Open: at rest with no transform left behind, and the transition lives HERE only, so closing is instant.
-    expect(sup![2]).toMatch(/opacity:\s*1;\s*transform:\s*none;/);
-    expect(sup![2]).toMatch(/transition:\s*opacity var\(--dur-soft\) var\(--ease-enter\),\s*transform var\(--dur-soft\) var\(--ease-enter\)/);
-    expect(sup![2]).not.toMatch(/\d+m?s\b/);
-    const kills = SRC.slice(SRC.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
-    expect(kills).toMatch(/@supports selector\(::details-content\)\s*\{\s*\.disclose\[open\]::details-content\s*\{\s*transition:\s*none\s*!important/);
-    // Outside @supports the pseudo-element never shares a selector list.
     for (const m of SRC.matchAll(/([^{}]*)::details-content[^{]*\{/g)) expect(m[1]).not.toContain(",");
   });
 
@@ -400,5 +389,135 @@ describe("index.css — a picked-up surface still lifts (review #8)", () => {
       const src = readFileSync(resolve(root, f), "utf8");
       expect(src, f).toContain("surface-raised");
     }
+  });
+});
+
+/**
+ * ⭐⭐ EVERY CLICK GLIDES (owner, 2026-11-12: "every click should be a slower load, animated, professional … no click
+ * should ever be abrupt"). The pace is KFI-Housing v220's, number for number; these pins are ported from its
+ * index.css.test.ts and App.test.ts, against this app's files.
+ */
+describe("every click glides — the KFI-Housing v220 pace", () => {
+  const read = (p: string) => readFileSync(resolve(CSS_PATH!, "..", p), "utf8");
+  const motion = read("lib/motion.ts");
+  const extra = read("lib/motion-extra.ts");
+  const app = read("App.tsx");
+  const layout = read("components/layout.tsx");
+  const theme = read("lib/theme.ts");
+
+  it("moves every page together — the shared dials, never one page's own pace", () => {
+    const root = CSS.slice(CSS.indexOf("--ease-out:"), CSS.indexOf("--default-transition-duration"));
+    for (const [dial, ms] of [
+      ["--dur-press", 120], ["--dur-in", 240], ["--dur-rise", 900], ["--dur-tile", 1000], ["--dur-page", 1000],
+      ["--dur-fade", 900], ["--dur-pop", 400], ["--dur-overlay", 700], ["--dur-out", 500], ["--dur-travel", 600],
+      ["--dur-roll", 550], ["--stagger", 100],
+    ] as const) {
+      expect(root, dial).toMatch(new RegExp(`${dial}:\\s*${ms}ms;`));
+    }
+    expect(root).toMatch(/--enter-dist:\s*16px;/);
+    expect(root).toMatch(/--page-dist:\s*24px;/);
+    expect(root).toContain("--ease-out: cubic-bezier(0.22, 0.61, 0.36, 1)");
+    expect(root).toContain("--ease-travel: cubic-bezier(0.45, 0, 0.55, 1)");
+    expect(motion).toContain("export const STAGGER_CAP = 8;");
+    // The older names ride the new dials: one system, not two.
+    expect(SRC).toMatch(/--ease-enter:\s*var\(--ease-out\);/);
+    expect(SRC).toMatch(/--ease-move:\s*var\(--ease-travel\);/);
+    expect(SRC).toMatch(/--dur-soft:\s*var\(--dur-in\);/);
+  });
+
+  it("arrives SOLID EARLY — a section by 50%, a page by 35%, a dialog, sheet or toast by 18%", () => {
+    expect(SRC).toMatch(/@keyframes riseIn \{[^}]*\}\s*50% \{ opacity: 1; \}/);
+    expect(SRC).toMatch(/@keyframes pageIn \{[^}]*\}\s*35% \{ opacity: 1; \}/);
+    expect(SRC).toMatch(/@keyframes modalIn \{[^}]*\}\s*18% \{ opacity: 1; \}/);
+    expect(SRC).toMatch(/@keyframes sheetInRight \{[^}]*\} 18% \{ opacity: 1; \}/);
+    expect(SRC).toMatch(/@keyframes toastIn \{[^}]*\}\s*18% \{ opacity: 1; \}/);
+    expect(SRC).toMatch(/\.anim-modal\[data-state="open"\] \{ animation: modalIn var\(--dur-overlay\)/);
+    expect(SRC).toMatch(/\.anim-pop\[data-state="open"\] \{ animation: popIn var\(--dur-pop\)/);
+    // Leaving is a fade on --dur-out, and a leaving overlay takes no pointer.
+    expect(SRC).toMatch(/\.anim-modal\[data-state="closed"\] \{ animation: modalOut var\(--dur-out\) var\(--ease-travel\) forwards; pointer-events: none; \}/);
+    // No scale anywhere in an overlay's arrival.
+    expect(SRC).not.toMatch(/@keyframes (popIn|modalIn|sheetIn\w*) \{[^}]*scale/);
+  });
+
+  it("cross-fades a click into another page — and Back — and never leaves a blank beat", () => {
+    expect(app).toContain("aroundNav={glideNav}");
+    expect(motion).toContain("performance.now() - lastGesture < GESTURE_MS");
+    expect(motion).toContain("export const GESTURE_MS = 600;");
+    expect(motion).toContain('html.dataset["vt"] = kind;');
+    expect(motion).toContain("flushSync(() => navigate(to, opts))");
+    // Back / Forward: heard before wouter, handed on inside the cross-fade.
+    expect(motion).toContain("e.stopImmediatePropagation();");
+    // Overlapped: the next page starts at 30% of the exit.
+    expect(SRC).toMatch(/html\[data-vt="page"\]::view-transition-new\(root\) \{[^}]*animation-delay: calc\(var\(--dur-out\) \* 0\.3\);/);
+    expect(SRC).toMatch(/html\[data-vt="page"\]::view-transition-old\(root\) \{\s*animation: vtPageOut var\(--dur-out\) var\(--ease-travel\) both;/);
+    // The top bar and the section tabs dissolve in place, each its own group; the lit underline travels.
+    expect(SRC).toContain("[data-vt-bar] { view-transition-name: h2-bar; }");
+    expect(SRC).toContain("[data-vt-tabs] { view-transition-name: h2-tabs; }");
+    expect(SRC).toContain('[data-vt-line="section"] { view-transition-name: h2-line-section; }');
+    expect(layout).toContain('data-vt-bar=""');
+    expect(layout).toContain('data-vt-tabs=""');
+    // Without the API: the old page out, then the next arrives whole.
+    expect(SRC).toMatch(/\.page-out \{ animation: pageOut var\(--dur-out\) var\(--ease-travel\)/);
+    expect(SRC).toMatch(/\.page-in\.page-whole \{\s*animation: pageFade var\(--dur-fade\)[^;]*pageRise var\(--dur-page\)/);
+    expect(SRC).toMatch(/\.page-in\.page-crossed \{ animation: none; \}/);
+    // The frame decides once, and a whole arrival stands down when it lands so nothing replays.
+    expect(layout).toMatch(/const \[kind\] = useState\(\(\) => \{\s*notePageArrived\(\);\s*return takeArrival\(path\);/);
+    expect(layout).toContain('e.animationName === "pageRise") e.currentTarget.style.animation = "none"');
+  });
+
+  it("lets sections rise once, capped, never twice", () => {
+    expect(SRC).toMatch(/\.rise-in \{ animation: riseIn var\(--dur-rise\) var\(--ease-out\) backwards; \}/);
+    expect(SRC).toMatch(/\.rise-in \.rise-in \{ animation: none; \}/);
+    expect(motion).toContain("export const RISE_WINDOW_MS = 2000;");
+    for (const f of ["components/next/Panel.tsx", "components/next/PageHeader.tsx", "components/next/SummaryGroup.tsx"]) {
+      expect(read(f), f).toContain("useRise()");
+    }
+    // Every arrival is `backwards`, never `both`: a held transform would re-anchor every fixed descendant.
+    for (const k of ["page-in", "rise-in"]) expect(SRC).toMatch(new RegExp(`\\.${k} \\{ animation: \\w+ var\\([^)]+\\) var\\([^)]+\\) backwards; \\}`));
+  });
+
+  it("hands a skeleton over by fading it, opacity only — no transform over live content", () => {
+    expect(extra).toContain("animate([{ opacity: 1 }, { opacity: 0 }]");
+    expect(extra).not.toMatch(/ghostOut[\s\S]*?transform[\s\S]*?export function rowExit/);
+    expect(read("components/ui/skeleton.tsx")).toContain("useGhostExit(ref)");
+  });
+
+  it("never mixes a moved or faded keyframe with a property the graphics chip can't draw", () => {
+    const keyframes = [...SRC.matchAll(/@keyframes (\w+) \{([\s\S]*?)\}\s*(?=@keyframes|\.|\[|html|:|$)/g)].map((m) => ({ name: m[1]!, body: m[2]! }));
+    expect(keyframes.map((k) => k.name)).toEqual(expect.arrayContaining(["pageIn", "riseIn", "rollIn", "rollOut", "modalIn", "popIn", "toastIn", "vtPageOut"]));
+    for (const k of keyframes) {
+      if (!/\b(transform|opacity):/.test(k.body)) continue;
+      expect(k.body, k.name).not.toMatch(/\b(clip-path|width|height|background-position|top|left|margin|padding):/);
+    }
+  });
+
+  it("keeps the lighter motion off anyone who asked for none, and never makes it slower than the app", () => {
+    const at = CSS.indexOf('html[data-motion="lite"] {');
+    const media = CSS.lastIndexOf("@media (prefers-reduced-motion: no-preference) {", at);
+    expect(media).toBeGreaterThan(-1);
+    const lite = SRC.slice(SRC.indexOf('html[data-motion="lite"] {'), SRC.indexOf("}", SRC.indexOf('html[data-motion="lite"] {')));
+    expect(lite).toMatch(/--dur-in: 100ms;/);
+    expect(lite).toMatch(/--dur-travel: 0ms;/);
+    expect(lite).toMatch(/--stagger: 0ms;/);
+    // The single-layer glides keep their full length on an old computer.
+    for (const d of ["--dur-out", "--dur-fade", "--dur-page", "--dur-overlay", "--dur-pop", "--enter-dist"]) expect(lite, d).not.toContain(d);
+  });
+
+  it("cross-fades light ⇄ dark as one picture, and swaps at once where it can't", () => {
+    expect(theme).toContain('pageTransition(() => swap(true), "theme")');
+    expect(theme).toContain("flushSync(emit)");
+    expect(SRC).toMatch(/::view-transition-group\(\*\),\s*::view-transition-old\(\*\),\s*::view-transition-new\(\*\) \{\s*animation-duration: var\(--dur-fade\);/);
+    // pageTransition stands down for a hidden tab, reduced motion and a browser without the API.
+    for (const k of ["document.hidden", "reducedMotion()", 'typeof doc.startViewTransition !== "function"']) expect(motion).toContain(k);
+    // Nothing re-colours every element frame by frame.
+    expect(SRC).not.toMatch(/(^|[{};])\s*\*\s*(,[^{]*)?\{[^}]*transition:[^}]*color/m);
+  });
+
+  it("glows navy ink under the pointer on a clickable tile, from a token (light and dark)", () => {
+    expect(SRC).toContain("radial-gradient(480px circle at var(--mx, 50%) var(--my, 0%), hsl(var(--primary-ink) / 0.08), transparent 42%)");
+    expect(SRC).toContain(".group:hover > .tile-glow { opacity: 1; }");
+    const tile = read("pages/next/dashboard/tileParts.tsx");
+    expect(tile).toContain("onPointerMove={glowAt}");
+    expect(tile).toContain('className="tile-glow pointer-events-none absolute inset-0 -z-10"');
   });
 });

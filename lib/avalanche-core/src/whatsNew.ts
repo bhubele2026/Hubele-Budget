@@ -52,6 +52,16 @@ export const READ_CLICK_FROM = "2026-10-16";
 /** Newest first. */
 export const WHATS_NEW: readonly WhatsNewUpdate[] = [
   {
+    id: "2026-11-12.3",
+    headline: "Every click now glides",
+    items: [
+      {
+        title: "Every click now glides",
+        body: "Pages, tabs, drawers and switches now ease in and out smoothly instead of jumping.",
+      },
+    ],
+  },
+  {
     id: "2026-11-12.2",
     headline: "A cleaner, more businesslike look",
     items: [

@@ -159,14 +159,64 @@ Chase register; other pages move in Step 2.)
   number a screen exists for, at most one per screen. Labels are sentence
   case, not shouting caps. A new step must also be taught to `cn()`
   (`lib/utils.ts`), or tailwind-merge drops it beside a text colour.
-- **Motion:** brief and functional only — **no entrance movement** (nothing
-  rises, fades in, staggers or draws itself on when a page opens; `rise()` and
-  the old entrance classes are inert). Kept: horizon reshapes, stable chart
-  updates, tooltip and selection markers, expand/collapse, sheet slides,
-  hover/focus/press feedback. Dials live in `index.css :root`; keep
-  `--anim-speed` equal to `SPEED` in `chartTokens.ts`. Never animate a payment
-  or an improvement that did not happen. Respect reduced motion.
+- **Motion: every click glides** (owner, 2026-11-12: "every click should be a
+  slower load, animated, professional … no click should ever be abrupt"). ONE
+  calm system at KFI-Housing v220's pace; see "Motion — every click glides".
 - **Voice:** calm, supportive, plain; the app is "H2", never "I"; no sass.
+
+### ⭐⭐ Motion — every click glides (owner, 2026-11-12)
+
+This supersedes the restyle's "no entrance movement" and the 8/06 motion
+note. The pace is KFI-Housing v220's, number for number. Premium = ONE thing
+moving slowly and smoothly; the page arrives WHOLE and is readable almost at
+once (solid early) while the small rise settles. Never roulette, 3D, blur,
+overshoot, sideways slides or flying cards; keyframes move with opacity and
+transform only.
+
+- **Dials** (`index.css :root`, read in script by `cssMs`, never copied):
+  `--ease-out` (0.22,0.61,0.36,1) arrivals · `--ease-travel` (0.45,0,0.55,1)
+  anything you watch move · press 120 · in 240 · rise 900 (solid 50%) · tile
+  1000 · page 1000 (solid 35%) · fade 900 · pop 400 · overlay 700 (solid 18%)
+  · out 500 · travel 600 · roll 550 · stagger 100 (cap 8) · enter-dist 16px ·
+  page-dist 24px. `--anim-speed` stays 1 = `SPEED` in `chartTokens.ts`.
+- **A click into another page** (`lib/motion.ts`, wired as wouter's
+  `aroundNav` in `App.tsx`; only within `GESTURE_MS` of a click/Enter) is one
+  View Transition: the old page drifts up 12px and fades on `--dur-out`; the
+  new fades on `--dur-fade` and rises `--page-dist` from +30% of the exit —
+  overlapped, never a blank frame. The top bar (`data-vt-bar`) and section tabs
+  (`data-vt-tabs`) are their own groups and stay put; the lit tab's underline
+  (`data-vt-line`) travels. The click waits ≤ `CHUNK_WAIT_MS` for the page's
+  chunk so the fade lands on the page. Back/Forward cross-fade the same way
+  (heard before wouter). No View Transitions → `.page-out` then
+  `.page-in.page-whole`; a deep link → plain `.page-in`. `PageFrame`
+  (`layout.tsx`) decides once; a filter or hash on the same path never glides.
+- **Inside a page**: `Panel`, `PageHeader` and `SummaryGroup` rise once with
+  their page (`useRise`, `--stagger` apart, capped) — never twice (`.rise-in
+  .rise-in`), never after `RISE_WINDOW_MS`, never a sticky-safe panel. A
+  skeleton hands over by fading over its content (`useGhostExit`; every
+  skeleton container is a `GhostDiv`), never a cut.
+- **Same-page clicks**: segmented controls' pill travels (`useSlidingPill`);
+  `.disclose` details and row details (`Collapse`) glide open AND shut;
+  sheets, dialogs, menus, selects and toasts arrive on overlay/pop and leave on
+  a fade; a switch (month, range, horizon) dims the page's panels while the
+  next answer loads, then brings them back up (`useSwapDim`) — what is shown
+  and when stays the page's own rule; an answered Needs-you row collapses away
+  (`rowExitRef`); light ⇄ dark is one cross-fade (`theme.ts`).
+- **Figures never count.** A figure that changes after a click on the same page
+  ROLLS (`components/figure-roll.tsx`: old slides out, new rises in; only old or
+  new ever visible; never on first paint; a dash filling in is a plain swap;
+  assistive tech reads only the final value). Never animate a payment or an
+  improvement that did not happen.
+- **Hover**: a clickable tile glows (`.tile-glow` + `glowAt`, navy ink token);
+  everything clickable takes `.press`.
+- **Perf**: the glide overlaps the data, never gates it (the ready marks fire
+  when the numbers are real). The click-only pieces load after the first page
+  (`lib/motion-extra.ts`); keep motion code off the landing graph.
+- **Lite** (`lib/motion-probe.ts`, measured frames → `html[data-motion=lite]`):
+  cascades, bars and the sheen shorten or stop; the page glide, overlays and
+  the theme fade keep their full length. **Reduced motion: none of it.**
+- Pins: `index.css.test.ts` ("every click glides"), `lib/motion.test.tsx`,
+  `lib/motion-probe.test.ts`. Rig: headless, frames + timing per click type.
 
 ### Motion — reduced motion
 
