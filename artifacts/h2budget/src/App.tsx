@@ -28,6 +28,7 @@ import { AppLayout } from "./components/layout";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
 import { askForSpineAgainIfFailed, askForUnauthorizedAgain, clerkHasSettled, isUnauthorized, noteClerkSettled } from "@/lib/spineRecovery";
 import { lazyWithPreload } from "@/lib/lazyWithPreload";
+import { sendFreshBankingOpenHome } from "@/lib/landingRedirect";
 import { onWriteSuccess } from "@/lib/mutationInvalidation";
 import { recordDataAsOf, resetDataAsOf } from "@/lib/dataAsOf";
 import { useRefetchMoneyOnReturn } from "@/hooks/useRefetchMoneyOnReturn";
@@ -326,6 +327,13 @@ function writeAuthHint(on: boolean): void {
 // the open is waiting for, and the spine here only feeds the nav badge: the
 // layout asks for it normally, behind the page's queries rather than ahead of
 // them.
+// (2026-11-12) A fresh open of bare /banking lands on the Dashboard (see
+// lib/landingRedirect.ts). Runs before the router and the landing prefetch read
+// the address.
+if (typeof window !== "undefined") {
+  sendFreshBankingOpenHome(import.meta.env.BASE_URL.replace(/\/$/, ""));
+}
+
 function onLanding(): boolean {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   let path = window.location.pathname;
