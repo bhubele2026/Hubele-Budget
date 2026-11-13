@@ -3,6 +3,7 @@ import { segment } from "@/components/next/Toolbar";
 import { Link } from "wouter";
 import { usePageReadyMark } from "@/lib/perfMarks";
 import { ChevronDown, Settings as SettingsIcon } from "lucide-react";
+import { useSlidingPill } from "@/lib/motion";
 import { btnLink } from "@/ui";
 import { PageGrid, Panel, StatBlock } from "@/components/next";
 import { usePaneHeight } from "@/components/account-page/ledger-panel";
@@ -435,6 +436,9 @@ export function ForecastBody({
   readable?: boolean;
 }) {
   const { kinded, bank, markers, incomeByDate, dayTotals } = useChartModel(ctx);
+  // (Every click glides) The register's view tabs: the selection pill travels.
+  const viewTabs = useRef<HTMLDivElement>(null);
+  useSlidingPill(viewTabs);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (pending.current) clearTimeout(pending.current);
@@ -632,7 +636,7 @@ export function ForecastBody({
             // `aria-controls` pointing at a pane that is not on the page is an
             // axe violation (a11y-smoke scans /review).
             onTab ? (
-              <div role="tablist" aria-label="Register views" className="inline-flex flex-wrap items-stretch rounded-control bg-platinum-3 p-0.5 ring-1 ring-brand-line">
+              <div ref={viewTabs} role="tablist" aria-label="Register views" className="inline-flex flex-wrap items-stretch rounded-control bg-platinum-3 p-0.5 ring-1 ring-brand-line">
                 {TABS.map((t) => (
                   <button
                     key={t.id}

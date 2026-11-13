@@ -1,3 +1,4 @@
+import { useSwapDim } from "@/lib/motion-page";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ledgerLoaded, useTxDeepLink } from "@/hooks/useTxDeepLink";
 import { pinRowInView, stickyClearance } from "@/lib/pinRow";
@@ -481,6 +482,7 @@ export default function AmexPage({
   const monthTxns = monthQ.isPlaceholderData ? undefined : monthQ.data;
   const isLoading = monthQ.isLoading;
   const monthSwitching = monthQ.isPlaceholderData === true;
+  useSwapDim(!embedded && monthSwitching); // (Every click glides) dim while the next month loads, then cross-fade
   const { data: categories } = useListCategories();
   const { data: debts, isError: debtsFailed } = useListDebts();
   // Combined statement balance across the live Amex cards — used as the

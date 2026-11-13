@@ -1,3 +1,4 @@
+import { useSwapDim } from "@/lib/motion-page";
 import { QueryRefreshBanner } from "@/components/query-refresh-banner";
 import { groupTxnsByCategory } from "@/lib/splitParts";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -283,6 +284,7 @@ export default function BudgetPage() {
   // from the global `placeholderData: keepPreviousData` default set on
   // the QueryClient in App.tsx — no per-call override needed here.
   const budgetQ = useGetBudgetMonth(currentMonth);
+  useSwapDim(budgetQ.isPlaceholderData === true); // (Every click glides) the last month dims while this one loads
   const { data: budgetData, isLoading: isLoadingBudget } = budgetQ;
   const { data: categories, isLoading: isLoadingCategories } =
     useListCategories();

@@ -1,3 +1,5 @@
+import { RollIf } from "@/components/figure-roll";
+import { useSwapDim } from "@/lib/motion-page";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
@@ -188,7 +190,7 @@ function SummaryFigure({ label, value, hint, tone = "neutral" }: { label: string
   return (
     <div className="min-w-0">
       <div className={SUMMARY_LABEL}>{label}</div>
-      <div className={tone === "bad" ? SUMMARY_FIGURE.replace("text-foreground", "text-bad") : SUMMARY_FIGURE}>{value}</div>
+      <div className={tone === "bad" ? SUMMARY_FIGURE.replace("text-foreground", "text-bad") : SUMMARY_FIGURE}><RollIf value={value} /></div>
       {hint ? <div className={SUMMARY_SUPPORT}>{hint}</div> : null}
     </div>
   );
@@ -333,6 +335,7 @@ export default function BillsPage() {
   // (Q4) The summary has no month echo: a placeholder is the last month's answer. It stays
   // on screen (no blank page) but is SAID to be that month's until this one lands.
   const billsSwitching = summaryQ.isPlaceholderData === true;
+  useSwapDim(billsSwitching); // (Every click glides) the month's panels dim, then the new month comes up
   const [shownMonth, setShownMonth] = useState(currentMonth);
   useEffect(() => {
     if (summaryQ.data && !summaryQ.isPlaceholderData) setShownMonth(currentMonth);

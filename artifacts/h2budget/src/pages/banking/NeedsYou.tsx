@@ -1,3 +1,4 @@
+import { rowExitRef } from "@/lib/motion-page";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
@@ -437,6 +438,7 @@ export function NeedsYou({
                 return (
                   <li
                     key={item.id}
+                    ref={rowExitRef}
                     aria-current={here ? "true" : undefined}
                     onClick={() => {
                       setAt(i);

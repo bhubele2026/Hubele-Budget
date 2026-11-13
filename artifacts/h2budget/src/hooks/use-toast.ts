@@ -81,7 +81,12 @@ export const reducer = (state: State, action: Action): State => {
     case "ADD_TOAST":
       return {
         ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+        // (Every click glides) One toast at a time, but the one it replaces LEAVES
+        // (closed, so it plays its fade-out) instead of vanishing under it.
+        toasts: [
+          action.toast,
+          ...state.toasts.slice(0, TOAST_LIMIT).map((t) => (t.open === false ? t : { ...t, open: false })),
+        ].slice(0, TOAST_LIMIT + 1),
       }
 
     case "UPDATE_TOAST":

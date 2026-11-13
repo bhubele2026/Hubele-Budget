@@ -1,3 +1,4 @@
+import { Collapse } from "@/components/collapse";
 import * as React from "react";
 import type { Transaction } from "@workspace/api-client-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -298,9 +299,10 @@ export function AccountTransactionRow({
       </div>
       {/* Narrow two-line layout: the line break before the card / category / spending line. */}
       {wrapIndent ? <div aria-hidden className="order-2 h-0 basis-full @6xl:hidden" /> : null}
-      {belowNode ? (
-        <div className={cn("min-w-0 basis-full @6xl:col-span-full", wrapIndent && "order-4 @6xl:order-none")}>{belowNode}</div>
-      ) : null}
+      {/* (Every click glides) The row's details open and shut on the collapse glide. */}
+      <Collapse open={belowNode != null && belowNode !== false} className={cn("min-w-0 basis-full @6xl:col-span-full", wrapIndent && "order-4 @6xl:order-none")}>
+        {belowNode}
+      </Collapse>
     </div>
   );
 }

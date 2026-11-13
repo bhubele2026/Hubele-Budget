@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { useSlidingPill } from "@/lib/motion";
 
 /**
  * ⭐ ONE COORDINATED TOOLBAR (owner, 2026-11-12): period toggles, filters and
@@ -46,8 +47,12 @@ export function Segmented({
   className?: string;
   "data-testid"?: string;
 }) {
+  // (Every click glides) The white selection pill travels to the segment picked.
+  const ref = useRef<HTMLDivElement>(null);
+  useSlidingPill(ref);
   return (
     <div
+      ref={ref}
       role="group"
       aria-label={label}
       data-testid={testId}

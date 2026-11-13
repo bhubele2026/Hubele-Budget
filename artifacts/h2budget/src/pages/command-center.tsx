@@ -1,3 +1,5 @@
+import { useSwapDim } from "@/lib/motion-page";
+import { RollIf } from "@/components/figure-roll";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "wouter";
@@ -150,6 +152,7 @@ export default function BankingReviewPage() {
   // ONE first call: the summary also carries each bucket's first page.
   const summaryParams = bankingSummaryParams(base);
   const q = useGetBankingReview(summaryParams, { query: { queryKey: getGetBankingReviewQueryKey(summaryParams), staleTime: MIN } });
+  useSwapDim(q.isPlaceholderData === true); // (Every click glides) another range dims, then cross-fades in
   // (Q4) The review on screen is for THIS account and range. The previous
   // one (kept while this loads) is not: its balance, buckets and rows would sit
   // under the new account's name and the new dates.
@@ -386,11 +389,11 @@ export default function BankingReviewPage() {
             </div>
             <div className={CELL}>
               <div className={CELL_LABEL}>Money in</div>
-              <div className={CELL_VALUE} data-testid="br-in">{face(d.cashFlow.moneyIn)}</div>
+              <div className={CELL_VALUE} data-testid="br-in"><RollIf value={face(d.cashFlow.moneyIn)} /></div>
             </div>
             <div className={CELL}>
               <div className={CELL_LABEL}>Money out</div>
-              <div className={CELL_VALUE} data-testid="br-out">{face(d.cashFlow.moneyOut)}</div>
+              <div className={CELL_VALUE} data-testid="br-out"><RollIf value={face(d.cashFlow.moneyOut)} /></div>
             </div>
             <div className={CELL} data-testid="br-tie-cell">
               <div className={CELL_LABEL}>

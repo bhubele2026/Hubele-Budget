@@ -1,3 +1,4 @@
+import { useSwapDim } from "@/lib/motion-page";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { scoped } from "@/lib/queryState";
@@ -620,6 +621,7 @@ export default function TransactionsPage({
   // (PR14 review LOW-2) While a new range or filter loads, the cache still holds the
   // last one's figures. They are never shown under the new label: "—" until it answers.
   const statsStale = register.isPlaceholderData;
+  useSwapDim(statsStale === true); // (Every click glides) dim while another month or account loads
   useReadyMark("h2:page-ready:/transactions", !embedded && registerPage != null && !statsStale); // (PERF-0) the register is real
   const toReviewCount = statsStale ? null : (registerPage?.review.unreviewed ?? null);
   const reviewedCount = statsStale ? 0 : (registerPage?.review.reviewed ?? 0);

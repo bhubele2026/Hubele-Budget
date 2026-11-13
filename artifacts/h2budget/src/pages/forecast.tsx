@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { segment } from "@/components/next/Toolbar";
+import { useSlidingPill } from "@/lib/motion";
+import { useSwapDim } from "@/lib/motion-page";
 import type { ForecastNextCtx } from "./next/forecast/types";
 import {
   useCallback,
@@ -279,6 +281,9 @@ export default function ForecastPage({
   // ⭐ (Readable forecast) `/forecast` reads as one answer, the next 14 days and a calm chart, with its lists
   // folded under count-and-total heads. `/review` and `/next/forecast` keep the layout they had.
   const readable = mode === "overall" && !renderNext;
+  // (Every click glides) The horizon's selection pill travels to the one picked.
+  const horizonGroup = useRef<HTMLDivElement>(null);
+  useSlidingPill(horizonGroup);
   // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
   // charges — banks sync only on the manual Sync button now.
   // ⭐ (C3) ONE HORIZON (lib/forecastHorizon): `?horizon=` in the address wins, then the saved choice, then 90.
@@ -440,6 +445,7 @@ export default function ForecastPage({
 
   const forecastQuery = useGetForecast({ days: deferredHorizonDays, ...(reviewFromMonth ? { fromMonth: reviewFromMonth } : {}) });
   const { data, isLoading, isError: forecastError, refetch: refetchForecast } = forecastQuery;
+  useSwapDim(forecastQuery.isPlaceholderData === true); // (Every click glides) dim while another horizon loads
   // ⭐ (T1) The bundle is cached 5 minutes: an answer built on an older bank reading than the newest seen
   // (a Sync elsewhere re-read the bank) is labelled "Earlier reading … — updating…" and asked again once.
   const forecastOlder = useOlderSnapshot(forecastQuery);
@@ -2162,7 +2168,7 @@ export default function ForecastPage({
   const horizonControls = (
       <div className="flex items-center gap-2 flex-wrap" data-testid="horizon-tabs">
         {/* ⭐ The horizon segmented control — the app's one `Segmented` look (components/next/Toolbar). */}
-        <div className="inline-flex flex-wrap items-stretch rounded-control bg-platinum-3 p-0.5 ring-1 ring-brand-line" role="group" aria-label="Horizon">
+        <div ref={horizonGroup} className="inline-flex flex-wrap items-stretch rounded-control bg-platinum-3 p-0.5 ring-1 ring-brand-line" role="group" aria-label="Horizon">
         {HORIZON_OPTS.map((h) => {
           const active = horizonDays === h.days;
           // (#618) The active button shows a subtle spinner while the new

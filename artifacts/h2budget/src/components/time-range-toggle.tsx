@@ -1,6 +1,8 @@
 import type { RangeMode } from "@/lib/timeRange";
 import { cn } from "@/lib/utils";
+import { useRef } from "react";
 import { segment } from "@/components/next/Toolbar";
+import { useSlidingPill } from "@/lib/motion";
 
 const OPTIONS: { value: RangeMode; label: string }[] = [
   { value: "wk", label: "Wk" },
@@ -26,8 +28,11 @@ export function TimeRangeToggle({
   className?: string;
   size?: "sm" | "md";
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useSlidingPill(ref);
   return (
     <div
+      ref={ref}
       className={cn(
         "inline-flex items-stretch rounded-control bg-platinum-3 p-0.5 ring-1 ring-brand-line",
         className,
