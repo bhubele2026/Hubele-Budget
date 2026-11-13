@@ -12,6 +12,10 @@ markReady("h2:entry-eval");
 // for the first paint; this takes over and follows the device and the clock).
 bootTheme();
 
+// (Every click glides) Lighter motion on a computer that measured slow before (lib/motion-probe.ts): its own small chunk,
+// read at once — the landing's entry graph has no room for it.
+void import("./lib/motion-probe").then((m) => m.startMotionMode()).catch(() => {});
+
 // (Self-heal) After a deploy the JS chunk filenames change; an already-open tab
 // still asks for an OLD chunk that now 404s ("Failed to fetch dynamically
 // imported module"). Auto-reload ONCE to pull the fresh build so the user never

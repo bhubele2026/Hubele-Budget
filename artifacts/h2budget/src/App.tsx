@@ -34,6 +34,7 @@ import { useRefetchMoneyOnReturn } from "@/hooks/useRefetchMoneyOnReturn";
 import { confirmAppearance } from "@/lib/theme";
 import { ThemeRepaint } from "@/components/theme-repaint";
 import { startPerfNavigation } from "@/lib/perfMarks";
+import { makeGlideNav } from "@/lib/motion";
 import { mustClearForClerkUser } from "@/lib/clerkUserSwitch";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
@@ -738,9 +739,14 @@ function ClerkProviderWithRoutes() {
   );
 }
 
+// ⭐⭐ (Every click glides) Every <Link> and navigate() passes through here: a
+// person's click into another page cross-fades (lib/motion.ts), waiting at
+// most a moment for that page's chunk so the fade lands on the page itself.
+const glideNav = makeGlideNav(whenRouteChunkLoaded, stripBase);
+
 export default function App() {
   return (
-    <WouterRouter base={basePath}>
+    <WouterRouter base={basePath} aroundNav={glideNav}>
       <ClerkProviderWithRoutes />
     </WouterRouter>
   );

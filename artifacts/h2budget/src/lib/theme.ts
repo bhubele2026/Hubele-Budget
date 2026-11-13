@@ -27,7 +27,12 @@
 // which is why the save is one direct call.
 import { useSyncExternalStore } from "react";
 import { customFetch } from "@workspace/api-client-react";
+import { flushSync } from "react-dom";
 import { inkWasRead, resetInkRead, setDarkNow } from "./themeNow";
+// ⭐ (Every click glides) LIGHT ⇄ DARK IS ONE CROSS-FADE: the browser's View Transition, one picture of the page as it
+// was faded into the new one on the graphics chip (`html[data-vt="theme"]`, index.css: `--dur-fade`). Reduced motion,
+// a hidden tab or a browser without it simply swap. The server's word settling at the open never fades.
+import { pageTransition } from "./motion";
 
 export type Theme = "light" | "dark";
 /** A person's pick. "auto" = the device's setting, else the clock; "time" = the clock alone. */
@@ -87,7 +92,7 @@ let postSeq = 0;
 let savedSeq = 0;
 let failedSeq = 0;
 
-function setAppearance(next: Appearance): void {
+function setAppearance(next: Appearance, fade = true): void {
   if (next === appearance) return;
   appearance = next;
   try {
@@ -95,7 +100,7 @@ function setAppearance(next: Appearance): void {
   } catch {
     /* the in-memory value still drives this session */
   }
-  recompute();
+  recompute(fade);
 }
 
 const media = (q: string): MediaQueryList | null =>
@@ -160,17 +165,24 @@ function paint(): void {
   if (meta && meta.getAttribute("content") !== THEME_COLOR[current]) meta.setAttribute("content", THEME_COLOR[current]);
 }
 
-function recompute(): void {
+function recompute(fade = true): void {
   const next = resolveNow();
   if (next !== current) {
-    scrollAtChange = readPageScroll();
-    current = next;
-    if (inkWasRead()) {
-      resetInkRead();
-      repaintEpoch += 1;
-      for (const fn of beforeRemount) fn();
-    }
-    paint();
+    const swap = (inside: boolean) => {
+      scrollAtChange = readPageScroll();
+      current = next;
+      if (inkWasRead()) {
+        resetInkRead();
+        repaintEpoch += 1;
+        for (const fn of beforeRemount) fn();
+      }
+      paint();
+      // Charts and anything coloured in JS re-render INSIDE the cross-fade, so the new picture is whole.
+      if (inside) flushSync(emit);
+      else emit();
+    };
+    if (!(fade && pageTransition(() => swap(true), "theme"))) swap(false);
+    return;
   }
   emit(); // the pick changed even when the theme did not (the menu shows it)
 }
@@ -187,9 +199,9 @@ export function bootTheme(): void {
   paint();
   if (booted) return;
   booted = true;
-  darkQ?.addEventListener?.("change", recompute);
-  lightQ?.addEventListener?.("change", recompute);
-  window.setInterval(recompute, CLOCK_CHECK_MS);
+  darkQ?.addEventListener?.("change", () => recompute());
+  lightQ?.addEventListener?.("change", () => recompute());
+  window.setInterval(() => recompute(), CLOCK_CHECK_MS);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) recompute();
   });
@@ -205,7 +217,7 @@ export function confirmAppearance(v: unknown): void {
   if (lastSavedAt > 0 && Date.now() - lastSavedAt < THEME_HOLD_MS) return;
   const next: Appearance = isAppearance(v) ? v : "auto";
   saved = next;
-  setAppearance(next);
+  setAppearance(next, false);
 }
 
 /** This person's pick: the screen flips at once, then it is saved for them. A refused save puts the old pick back. */

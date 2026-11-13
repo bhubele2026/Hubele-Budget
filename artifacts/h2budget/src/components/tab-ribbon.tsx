@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { warmHandlers } from "@/lib/warmRoutes";
 import { Link, useLocation } from "wouter";
 import { scrollBehavior } from "@/lib/reducedMotion";
+import { useUnderlineTravel } from "@/lib/motion";
 
 /**
  * The app's one navigation ribbon — flush labels, a 2 px navy underline under
@@ -32,15 +33,19 @@ export interface RibbonTab {
 
 /**
  * The lit tab's mark: a crisp 2 px NAVY underline under navy text (owner,
- * 2026-11-12 — no orange, no glow, no sweep). One element for the ribbon AND
- * the More trigger, so the two can never draw "you are here" differently.
+ * 2026-11-12 — no orange, no glow). One element for the ribbon AND the More
+ * trigger, so the two can never draw "you are here" differently.
  * `bg-chrome-ink` is navy on the white bar and light ink in dark.
+ * ⭐ (Every click glides) It TRAVELS from the tab you left to the one you picked
+ * (`useUnderlineTravel`); in a page cross-fade the browser carries it, by its
+ * `data-vt-line` name (index.css).
  */
-export function TabUnderline() {
+export function TabUnderline({ line = "top" }: { line?: "top" | "section" }) {
   return (
     <span
       aria-hidden
-      className="tab-underline pointer-events-none absolute inset-x-3 bottom-0 h-[2px] bg-chrome-ink"
+      data-vt-line={line}
+      className="tab-underline pointer-events-none absolute inset-x-3 bottom-0 h-[2px] origin-left bg-chrome-ink"
     />
   );
 }
@@ -76,6 +81,7 @@ export function TabRibbon({
   const [, navigate] = useLocation();
   const navRef = useRef<HTMLElement>(null);
   const [edges, setEdges] = useState<{ l: boolean; r: boolean }>({ l: false, r: false });
+  useUnderlineTravel(navRef, activeHref);
 
   const measure = () => {
     const n = navRef.current;
@@ -174,7 +180,7 @@ export function TabRibbon({
                     {t.count}
                   </span>
                 )}
-                {on && <TabUnderline />}
+                {on && <TabUnderline line={light ? "section" : "top"} />}
               </Link>
             );
           })}

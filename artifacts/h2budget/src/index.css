@@ -5,7 +5,8 @@
    place in the navigation, orange only for warnings and the H2 mark. One
    typeface (Inter, standard figures, no stylistic sets) for labels, body and
    balances alike; money in tabular lining numerals (`.fig`), never a
-   typewriter face. No entrance motion: brief functional transitions only.
+   typewriter face. Motion: every click glides — ONE calm system on the dials
+   below (2026-11-12, the pace of KFI-Housing v220).
    Originally ported from KFI-Housing and the Financial Dashboard. */
 @layer theme, base, clerk, components, utilities;
 /* ⚠️ `source(none)` IS LOAD-BEARING, AND `@source` ALONE WOULD NOT DO IT.
@@ -340,25 +341,42 @@
   color-scheme: light;
 
   /* ── Motion dials ────────────────────────────────────────────────────────
-     Every movement in the app is one of these numbers. Turn one here and the
-     whole thing changes together — that is the point of having them.
-     --dur-press stays short: the CLICK must answer instantly even when
-     everything it sets in motion is deliberate. */
-  --anim-speed: 1;   /* the dashboard's speed knob — keep equal to SPEED in the chart kit */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-enter: cubic-bezier(0.22, 0.61, 0.36, 1); /* gentle ease-out — arrivals */
-  --ease-move: cubic-bezier(0.45, 0, 0.55, 1);     /* symmetric — anything travelling */
-  --dur-press: 120ms;
-  --dur-in: 460ms;
-  --dur-page: 280ms;
-  --stagger: 45ms;
+     ⭐⭐ EVERY CLICK GLIDES (owner, 2026-11-12: "every click should be a slower
+     load, animated, professional … no click should ever be abrupt"). The pace
+     is KFI-Housing v220's, number for number (its index.css :159-192). Every
+     movement in the app is one of these numbers; turn one here and the whole
+     thing changes together. --dur-press stays short: the CLICK answers at once
+     even when what it sets in motion is deliberate. Arrivals are SOLID EARLY
+     (a section by 50% of its rise, a page by 35%, a dialog by 18%), so a page
+     reads almost at once while the small rise settles. lib/motion.ts reads
+     them (cssMs), never copies them. */
+  --anim-speed: 1;   /* the chart kit's speed knob — keep equal to SPEED in chartTokens.ts */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);   /* arrivals */
+  --ease-travel: cubic-bezier(0.45, 0, 0.55, 1);   /* symmetric — anything you watch move */
+  --dur-press: 120ms;   /* the click is acknowledged before anything moves */
+  --dur-in: 240ms;      /* small UI moves: a collapse, a hover glow, the skeleton's hand-over */
+  --dur-rise: 900ms;    /* a section rising with its page */
+  --dur-tile: 1000ms;   /* a card in a grid */
+  --dur-page: 1000ms;   /* a page arriving: its rise */
+  --dur-fade: 900ms;    /* a page's fade, light ⇄ dark */
+  --dur-pop: 400ms;     /* a menu, a select, a popover */
+  --dur-overlay: 700ms; /* a dialog, a sheet, a toast — usable at once */
+  --dur-out: 500ms;     /* the page you leave, anything leaving, on the travel curve */
+  --dur-travel: 600ms;  /* a selection pill, a tab underline, a bar to its share */
+  --dur-roll: 550ms;    /* a figure rolling to its new value (the dashboard's FigureRoll) */
+  --stagger: 100ms;     /* siblings step this far apart, capped at 8 (lib/motion.ts STAGGER_CAP) */
+  --enter-dist: 16px;   /* a section or dialog rises this far */
+  --page-dist: 24px;    /* a whole page rises this far */
+  /* Every bare `transition-*` utility rides the press dial and the arrival curve, not Tailwind's own 150ms. */
+  --default-transition-duration: var(--dur-press);
+  --default-transition-timing-function: var(--ease-out);
 
-  /* Legacy dial names, rebound onto the kit — the same bridge trick as the
-     colours. Twenty-odd surfaces still name these; rebinding moves them all
-     onto the house curves and pace instead of leaving two motion systems. */
-  --ease-glide: var(--ease-enter);
+  /* Older dial names, bound onto the ones above so nothing runs a second system. */
+  --ease-enter: var(--ease-out);
+  --ease-move: var(--ease-travel);
+  --ease-glide: var(--ease-out);
   --dur-quick: var(--dur-press);
-  --dur-soft: calc(240ms * var(--anim-speed));
+  --dur-soft: var(--dur-in);
   --dur-slow: calc(280ms * var(--anim-speed));
   --dur-grand: calc(700ms * var(--anim-speed));
   /* The Forecast chart's one slow first sweep (DRAW_MS in the chart kit). */
@@ -514,8 +532,82 @@
     --anim-speed: 0;
     --dur-press: 0ms;
     --dur-in: 0ms;
+    --dur-rise: 0ms;
+    --dur-tile: 0ms;
     --dur-page: 0ms;
+    --dur-fade: 0ms;
+    --dur-pop: 0ms;
+    --dur-overlay: 0ms;
+    --dur-out: 0ms;
+    --dur-travel: 0ms;
+    --dur-roll: 0ms;
     --stagger: 0ms;
+  }
+}
+
+/* ⭐⭐ LIGHTER MOTION ON A COMPUTER THAT CAN'T KEEP UP (KFI-Housing v219/v220, motion-probe.ts).
+   `html[data-motion="lite"]` is set by MEASURED frames, never guessed. What lagged on a weak laptop was MANY
+   things moving — sections cascading, bars growing, the sheen — so those shorten or stop here. What is ONE
+   element's opacity + transform on the graphics chip keeps its full, slow length: the page glide
+   (--dur-out / --dur-fade / --dur-page), dialogs and sheets (--dur-overlay), menus (--dur-pop) and the
+   light ⇄ dark fade. Never LONGER than the dials above. ⚠️ Only for someone who has NOT asked for reduced
+   motion: these are more specific than the reduced `:root` and would otherwise hand them a 100ms fade. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-motion="lite"] {
+    --dur-in: 100ms;
+    --dur-rise: 100ms;
+    --dur-tile: 100ms;
+    --dur-travel: 0ms;
+    --dur-roll: 0ms;
+    --stagger: 0ms;
+  }
+  html[data-motion="lite"] :is(.bar-sweep, .bar-morph) { transition: none; }
+  html[data-motion="lite"] .skeleton { animation: none; }
+}
+
+/* ⭐⭐ THE CLICK CROSS-FADE (lib/motion.ts `pageTransition`, KFI-Housing v220). The page you leave drifts up 12px and
+   fades on the exit; the next fades in on --dur-fade and rises --page-dist on --dur-page, starting 30% into the exit —
+   OVERLAPPED, so there is never an empty frame. The white top bar and the section tab row are their own groups: they
+   dissolve IN PLACE, never slide. The lit tab's underline is its own group too, so the browser carries it from the tab
+   you left to the one you picked. Unlayered: these are the browser's pseudo-elements, and nothing else styles them. */
+@keyframes vtPageOut { to { opacity: 0; transform: translateY(-12px); } }
+@keyframes vtPageFade { from { opacity: 0; } }
+@keyframes vtPageRise { from { transform: translateY(var(--page-dist)); } }
+[data-vt-bar] { view-transition-name: h2-bar; }
+[data-vt-tabs] { view-transition-name: h2-tabs; }
+[data-vt-line="top"] { view-transition-name: h2-line-top; }
+[data-vt-line="section"] { view-transition-name: h2-line-section; }
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: var(--dur-fade);
+  animation-timing-function: var(--ease-out);
+}
+html[data-vt="page"]::view-transition-old(root) {
+  animation: vtPageOut var(--dur-out) var(--ease-travel) both;
+}
+html[data-vt="page"]::view-transition-new(root) {
+  animation: vtPageFade var(--dur-fade) var(--ease-out) both, vtPageRise var(--dur-page) var(--ease-out) both;
+  animation-delay: calc(var(--dur-out) * 0.3);
+}
+/* A tab row only one of the two pages has comes and goes WITH its page, never ahead of it over the other page's title. */
+html[data-vt="page"]::view-transition-new(h2-tabs):only-child {
+  animation-delay: calc(var(--dur-out) * 0.3);
+}
+html[data-vt="page"]::view-transition-old(h2-tabs):only-child {
+  animation-duration: var(--dur-out);
+  animation-timing-function: var(--ease-travel);
+}
+::view-transition-group(h2-line-top),
+::view-transition-group(h2-line-section) {
+  animation-duration: var(--dur-travel);
+  animation-timing-function: var(--ease-travel);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }
 
@@ -822,16 +914,84 @@
   .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
   .scrollbar-none::-webkit-scrollbar { display: none; }
 
-  /* ── No entrances (owner, 2026-11-12) ─────────────────────────────────────
-     Nothing rises, fades in, staggers or draws itself on when a page opens:
-     a page simply IS there. The old class names (`tile-in`, `rise-in`,
-     `reveal`, `page-in`, `stagger`, `stagger-children`, `section-enter`,
-     `chart-in`, `area-draw`, `draw-once`, `sweep-in`, `spark-fill-in`,
-     `grow-x`) are inert hooks on their call sites; no rule here animates
-     them. What moves is FUNCTIONAL and brief: a disclosure opening, a sheet
-     sliding, a row's hover, a selection, a chart reshaping to a new horizon.
-     (Every call site is clean of those names now; `.tab-underline` stays as a
-     plain hook for the lit-tab mark, which does not move.) */
+  /* ── ⭐⭐ EVERY CLICK GLIDES (owner, 2026-11-12) ────────────────────────────
+     ONE calm system, the pace of KFI-Housing v220 (its index.css :386-571).
+     Premium = one thing moving slowly and smoothly; the page arrives WHOLE.
+     Opacity + transform only, on the graphics chip: no clip-path, no width, no
+     background-position in an arrival. lib/motion.ts puts the classes on.
+
+     A PAGE (components/layout.tsx `PageFrame`):
+       .page-in               Back, Forward, a deep link: a 16px rise, solid by 35%.
+       .page-in.page-crossed  a click's View Transition already IS the arrival.
+       .page-in.page-whole    no View Transitions: the old page left on .page-out,
+                              the new one fades (--dur-fade) and rises (--dur-page).
+     `backwards`, never `both`: an animation that ENDS holding a transform leaves
+     a containing block behind, and every position:fixed inside would re-anchor. */
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateY(var(--enter-dist)); }
+    35% { opacity: 1; }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes pageFade { from { opacity: 0; } }
+  @keyframes pageRise { from { transform: translateY(var(--page-dist)); } }
+  @keyframes pageOut { to { opacity: 0; transform: translateY(calc(var(--enter-dist) * -1)); } }
+  .page-in { animation: pageIn var(--dur-page) var(--ease-out) backwards; }
+  .page-in.page-whole {
+    animation: pageFade var(--dur-fade) var(--ease-out) backwards, pageRise var(--dur-page) var(--ease-out) backwards;
+  }
+  .page-in.page-crossed { animation: none; }
+  .page-out { animation: pageOut var(--dur-out) var(--ease-travel) forwards; pointer-events: none; }
+
+  /* A SECTION rises once with its page (`useRise`: Panel, PageHeader,
+     SummaryGroup), --stagger after the last, capped at eight. Solid by 50% of
+     its rise — readable almost at once, still visibly arriving. A section
+     inside a rising one stays still, so nothing fades twice. */
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(var(--enter-dist)); }
+    50% { opacity: 1; }
+    to { opacity: 1; transform: none; }
+  }
+  .rise-in { animation: riseIn var(--dur-rise) var(--ease-out) backwards; }
+  .rise-in .rise-in { animation: none; }
+
+  /* A FIGURE that changes on a click ROLLS (components/figure-roll.tsx): the old
+     text slides up and out while the new rises into the same cell. Only the old
+     or the new number is ever on screen; a figure never counts. */
+  @keyframes rollOut { to { opacity: 0; transform: translateY(-100%); } }
+  @keyframes rollIn {
+    from { opacity: 0; transform: translateY(100%); }
+    35% { opacity: 1; }
+    to { opacity: 1; transform: none; }
+  }
+  .roll-out { animation: rollOut calc(var(--dur-roll) * 0.77) var(--ease-travel) both; }
+  .roll-in { animation: rollIn var(--dur-roll) var(--ease-out) both; }
+
+  /* THE DASHBOARD'S HOVER GLOW on a clickable tile: a soft navy light that
+     follows the pointer (lib/motion.ts `glowAt` sets --mx/--my). Navy INK, so
+     it turns light in dark. It sits under the words: the host isolates, the
+     glow is at -z-10. */
+  .glow-host { isolation: isolate; }
+  .tile-glow {
+    background: radial-gradient(480px circle at var(--mx, 50%) var(--my, 0%), hsl(var(--primary-ink) / 0.08), transparent 42%);
+    opacity: 0;
+    transition: opacity var(--dur-in) var(--ease-out);
+  }
+  .group:hover > .tile-glow { opacity: 1; }
+
+  /* A SWITCH NEVER BLANKS THE PAGE (lib/motion.ts `useSwapDim`): while a
+     month, a range or a horizon loads, the page's top-level panels dim where
+     they stand; when it lands they come back up on --dur-fade. */
+  [data-page] :is(.panel, .kpi-grid) {
+    transition: opacity var(--dur-fade) var(--ease-out), box-shadow calc(96ms * var(--anim-speed)) var(--ease-move);
+  }
+  [data-page][data-swapping] :is(.panel, .kpi-grid):not(:is(.panel, .kpi-grid) *) {
+    opacity: 0.55;
+    transition-duration: var(--dur-in), calc(96ms * var(--anim-speed));
+  }
+
+  /* A segment's travelling pill (lib/motion.ts `useSlidingPill`) and a tab's
+     travelling underline (`useUnderlineTravel`) are WAAPI transforms on the
+     --dur-travel dial; nothing here but the press. */
 
   /* ── Charts ──────────────────────────────────────────────────────────────
      (2026-11-12) QUIET FURNITURE on every chart: the axis line and its tick
@@ -879,25 +1039,14 @@
       opacity calc(600ms * var(--anim-speed)) var(--ease-move);
   }
 
-  /* ── Disclosures (Home says less, 2026-11-11) ────────────────────────────
-     A native <details class="disclose">: what it holds arrives with a short
-     slide and fade when it opens. Only the ENTRANCE is animated, on the
-     children of an [open] details, so the closed state is the browser's own
-     (nothing is measured, nothing is held open) and it behaves the same in
-     Chrome and Safari. One step of --dur-soft; none under reduced motion.
-     (Motion pass, 2026-11-11) Where the browser has it, the slide runs on the
-     details' own content box (`::details-content`) and not on the children:
-     Chrome skips style for the children of a CLOSED details, so their
-     animation never reset and only the first opening moved; every later one
-     cut in. The content box is restyled on every open, in Chrome and Safari
-     alike. There it is a TRANSITION, named only on the [open] state: neither
-     engine runs a keyframe animation on that box, and with no transition on
-     the closed state, closing stays the browser's own instant fold. The same
-     6px and the same dial and curve as the keyframe. The child rule stays for
-     a browser without the pseudo-element (it hides closed children outright,
-     which does restart them). The slide is
-     the ONE entrance: a tile inside does not also rise (`.tile-in`), which
-     stacked a second, slower, upward stagger on the first opening only. */
+  /* ── Disclosures (Home says less, 2026-11-11; every click glides, 2026-11-12)
+     A native <details class="disclose"> GLIDES open and shut: its content box
+     (`::details-content`) eases its height and fades on --dur-in, both ways
+     (`interpolate-size` lets `block-size` travel to `auto`; it is set on the
+     details only, so no other height in the app starts to animate). The closed
+     state stays the browser's own (content-visibility, allow-discrete holds it
+     visible until the close has played). A browser without the pseudo-element
+     gets the short fade on the children as it opens. */
   @keyframes discloseIn {
     from { opacity: 0; transform: translateY(-6px); }
     to { opacity: 1; transform: none; }
@@ -905,16 +1054,24 @@
   .disclose[open] > :not(summary) { animation: discloseIn var(--dur-soft) var(--ease-enter) backwards; }
   @supports selector(::details-content) {
     .disclose[open] > :not(summary) { animation: none; }
-    .disclose::details-content { opacity: 0; transform: translateY(-6px); }
+    .disclose:is(details) { interpolate-size: allow-keywords; }
+    .disclose::details-content {
+      opacity: 0;
+      block-size: 0;
+      overflow-y: clip;
+      transition:
+        block-size var(--dur-in) var(--ease-out),
+        opacity var(--dur-in) var(--ease-out),
+        content-visibility var(--dur-in) allow-discrete;
+    }
     .disclose[open]::details-content {
       opacity: 1;
-      transform: none;
-      transition: opacity var(--dur-soft) var(--ease-enter), transform var(--dur-soft) var(--ease-enter);
+      block-size: auto;
     }
   }
 
-  /* The active-tab underline is simply THERE (2026-11-12): it no longer
-     sweeps in. `.tab-underline` stays as the hook. */
+  /* The active-tab underline TRAVELS between tabs (lib/motion.ts); in a page
+     cross-fade the browser carries it by its view-transition-name (below). */
 
   /* Loading placeholder. A shape where the content will be — never a spinner,
      which says "wait" without saying what for. */
@@ -940,66 +1097,90 @@
     transition-duration: var(--dur-press);
     transition-timing-function: var(--ease-out);
   }
-  .press:active { transform: scale(0.99); }
+  .press:active { transform: scale(0.985); }
   .press:disabled:active { transform: none; }
 
-  /* ── Radix overlay states ────────────────────────────────────────────────
-     The app used to pull in tw-animate-css purely for these. Four keyframes
-     on the shared dials replace the dependency, and now the overlays move on
-     the same two curves as everything else. */
-  @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
-  @keyframes popIn { from { opacity: 0; transform: scale(0.97) translateY(-2px); } to { opacity: 1; transform: none; } }
-  @keyframes popOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.97) translateY(-2px); } }
-  @keyframes modalIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-  @keyframes modalOut { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -50%) scale(0.97); } }
+  /* ── Radix overlay states (every click glides, 2026-11-12) ───────────────
+     The KFI-Housing v220 overlays: a dialog or sheet arrives on --dur-overlay
+     and is SOLID BY 18% (~125 ms) — readable and typeable almost at once —
+     while it settles its last 16px (a sheet 24px from its edge); the backdrop
+     washes in on the same dial. A menu, select or popover on --dur-pop. Leaving
+     is a FADE on --dur-out (menus --dur-in), and a leaving overlay takes no
+     pointer, so nobody waits on it. No scale, no slide across the screen. */
+  @keyframes overlayIn { from { opacity: 0; } }
+  @keyframes overlayOut { to { opacity: 0; } }
+  @keyframes popIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    25% { opacity: 1; }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes popOut { to { opacity: 0; } }
+  /* The modal is centred by its own translate, so its keyframes carry it. */
+  @keyframes modalIn {
+    from { opacity: 0; transform: translate(-50%, calc(-50% + var(--enter-dist))); }
+    18% { opacity: 1; }
+    to { opacity: 1; transform: translate(-50%, -50%); }
+  }
+  @keyframes modalOut { to { opacity: 0; transform: translate(-50%, -50%); } }
 
-  .anim-overlay[data-state="open"] { animation: overlayIn var(--dur-page) var(--ease-enter); }
-  .anim-overlay[data-state="closed"] { animation: overlayOut var(--dur-page) var(--ease-move); }
-  .anim-pop[data-state="open"] { animation: popIn var(--dur-page) var(--ease-enter); }
-  .anim-pop[data-state="closed"] { animation: popOut var(--dur-press) var(--ease-move); }
-  /* The modal is centred by its own translate, so its keyframes have to carry
-     that translate too — a scale-only keyframe would drop the centring for the
-     duration of the animation and the dialog would fly in from the corner. */
-  .anim-modal[data-state="open"] { animation: modalIn var(--dur-page) var(--ease-enter); }
-  .anim-modal[data-state="closed"] { animation: modalOut var(--dur-press) var(--ease-move); }
+  .anim-overlay[data-state="open"] { animation: overlayIn var(--dur-overlay) var(--ease-out); }
+  .anim-overlay[data-state="closed"] { animation: overlayOut var(--dur-out) var(--ease-travel) forwards; pointer-events: none; }
+  .anim-pop[data-state="open"] { animation: popIn var(--dur-pop) var(--ease-out); }
+  .anim-pop[data-state="closed"] { animation: popOut var(--dur-in) var(--ease-travel) forwards; pointer-events: none; }
+  .anim-modal[data-state="open"] { animation: modalIn var(--dur-overlay) var(--ease-out); }
+  .anim-modal[data-state="closed"] { animation: modalOut var(--dur-out) var(--ease-travel) forwards; pointer-events: none; }
 
-  @keyframes sheetInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
-  @keyframes sheetOutRight { from { transform: translateX(0); } to { transform: translateX(100%); } }
-  @keyframes sheetInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
-  @keyframes sheetOutLeft { from { transform: translateX(0); } to { transform: translateX(-100%); } }
-  @keyframes sheetInTop { from { transform: translateY(-100%); } to { transform: translateY(0); } }
-  @keyframes sheetOutTop { from { transform: translateY(0); } to { transform: translateY(-100%); } }
-  @keyframes sheetInBottom { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  @keyframes sheetOutBottom { from { transform: translateY(0); } to { transform: translateY(100%); } }
-  .anim-sheet-right[data-state="open"] { animation: sheetInRight var(--dur-in) var(--ease-out); }
-  .anim-sheet-right[data-state="closed"] { animation: sheetOutRight var(--dur-page) var(--ease-move); }
-  .anim-sheet-left[data-state="open"] { animation: sheetInLeft var(--dur-in) var(--ease-out); }
-  .anim-sheet-left[data-state="closed"] { animation: sheetOutLeft var(--dur-page) var(--ease-move); }
-  .anim-sheet-top[data-state="open"] { animation: sheetInTop var(--dur-in) var(--ease-out); }
-  .anim-sheet-top[data-state="closed"] { animation: sheetOutTop var(--dur-page) var(--ease-move); }
-  .anim-sheet-bottom[data-state="open"] { animation: sheetInBottom var(--dur-in) var(--ease-out); }
-  .anim-sheet-bottom[data-state="closed"] { animation: sheetOutBottom var(--dur-page) var(--ease-move); }
+  @keyframes sheetInRight { from { opacity: 0; transform: translateX(24px); } 18% { opacity: 1; } to { opacity: 1; transform: none; } }
+  @keyframes sheetInLeft { from { opacity: 0; transform: translateX(-24px); } 18% { opacity: 1; } to { opacity: 1; transform: none; } }
+  @keyframes sheetInTop { from { opacity: 0; transform: translateY(-24px); } 18% { opacity: 1; } to { opacity: 1; transform: none; } }
+  @keyframes sheetInBottom { from { opacity: 0; transform: translateY(24px); } 18% { opacity: 1; } to { opacity: 1; transform: none; } }
+  @keyframes sheetOut { to { opacity: 0; } }
+  .anim-sheet-right[data-state="open"] { animation: sheetInRight var(--dur-overlay) var(--ease-out); }
+  .anim-sheet-left[data-state="open"] { animation: sheetInLeft var(--dur-overlay) var(--ease-out); }
+  .anim-sheet-top[data-state="open"] { animation: sheetInTop var(--dur-overlay) var(--ease-out); }
+  .anim-sheet-bottom[data-state="open"] { animation: sheetInBottom var(--dur-overlay) var(--ease-out); }
+  :is(.anim-sheet-right, .anim-sheet-left, .anim-sheet-top, .anim-sheet-bottom)[data-state="closed"] {
+    animation: sheetOut var(--dur-out) var(--ease-travel) forwards;
+    pointer-events: none;
+  }
+
+  /* A toast rises in like a dialog; the one it replaces fades where it stood
+     (out of the flow, so the new one never jumps) — hooks/use-toast.ts. */
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(var(--enter-dist)); }
+    18% { opacity: 1; }
+    to { opacity: 1; transform: none; }
+  }
+  .anim-toast[data-state="open"] { animation: toastIn var(--dur-overlay) var(--ease-out); }
+  .anim-toast[data-state="closed"] {
+    animation: overlayOut var(--dur-out) var(--ease-travel) forwards;
+    position: absolute;
+    inset-inline: 1rem;
+    pointer-events: none;
+  }
 
   /* ── ONE SWITCH FOR THE WHOLE SYSTEM, PART 2: THE LITERAL DURATIONS ──────
      Someone who has asked their machine for less motion gets a working app
      with none of it, not a half-animated one.
 
-     Zeroing the four dials does most of the work, but that half CANNOT LIVE
+     Zeroing the dials does most of the work, but that half CANNOT LIVE
      HERE — a `:root` inside `@layer utilities` loses to the unlayered `:root`
      no matter what it says, so the dials are overridden at top level instead
      (search "REDUCED MOTION, PART 1"). What remains below is the half that the
      dials genuinely cannot reach, and it is not redundant: `.skeleton` runs a
-     literal `1.6s` infinite sweep, which reads no dial at all. (The entrance
-     classes and their literal stagger ladder are gone, 2026-11-12.)
+     literal `1.6s` infinite sweep, which reads no dial at all; the arrival
+     classes are named too, so their promise holds on its own terms.
 
      Radix open/close lifecycles still need to COMPLETE, so overlay animations
      collapse to near-instant rather than `none` — an animation removed
      outright never fires its end event and the element would stay mounted. */
   @media (prefers-reduced-motion: reduce) {
-    .skeleton, .disclose[open] > :not(summary) {
+    .skeleton, .disclose[open] > :not(summary),
+    .page-in, .page-out, .rise-in, .roll-in, .tile-glow {
       animation: none !important;
     }
+    /* A figure simply shows its new value (figure-roll.tsx skips the roll in JS too). */
+    .roll-out { display: none; }
     .bar-sweep, .bar-morph, .row-morph, .list-morph,
     .surface-lift, .chart-glide, .chart-calm .recharts-reference-dot,
     .chart-calm .recharts-reference-area, .chart-calm [data-plate] {
@@ -1008,7 +1189,7 @@
     /* Its own rule: a browser that does not know the pseudo-element drops the
        whole rule it appears in, and the list above must never be dropped. */
     @supports selector(::details-content) {
-      .disclose[open]::details-content { transition: none !important; }
+      .disclose::details-content { transition: none !important; }
     }
     .press:active { transform: none; }
     *, *::before, *::after {

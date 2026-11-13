@@ -311,11 +311,15 @@ describe("app shell chrome", () => {
     expect(screen.getByTestId("page-body")).toBeTruthy();
   });
 
-  // (2026-11-12) No entrance motion: the page body is keyed on location but no longer animates in.
-  it("renders the page body without an entrance animation", () => {
+  // (Every click glides) The page body is keyed on location and arrives once: a deep link or Back gets the plain
+  // `.page-in`; a click's cross-fade marks it `.page-crossed` (lib/motion.ts). The frame is the [data-page] host.
+  it("renders the page body in its arriving frame", () => {
     mount("/banking");
-    expect(document.querySelector(".shell-pad")).toBeTruthy();
-    expect(document.querySelector(".page-in")).toBeNull();
+    const frame = document.querySelector("[data-page]");
+    expect(frame).toBeTruthy();
+    expect(frame!.className).toContain("shell-pad");
+    expect(frame!.className).toContain("page-in");
+    expect(frame!.className).not.toContain("page-crossed");
   });
 
   it("the bar is desktop-only and the drawer trigger phone-only — what the phone tests below rely on", () => {

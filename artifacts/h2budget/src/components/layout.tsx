@@ -27,6 +27,7 @@ import { whenForegroundIdle } from "@/lib/speculative";
 import { HOME_MARKS, WARMUP_GIVE_UP_MS, WARMUP_QUIET_MS } from "@/hooks/useLandingWarmup";
 import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { cn } from "@/lib/utils";
+import { loadMotionExtra, notePageArrived, takeArrival } from "@/lib/motion";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import {
@@ -199,6 +200,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           wordmark · the one global bar · account. Every page. ─────────────── */}
       <header
           data-testid="app-header"
+          data-vt-bar=""
           className="sticky top-0 z-30 shrink-0 bg-chrome text-chrome-ink-2 inset-shadow-chrome-edge"
         >
           <div className="flex h-12 items-center gap-1 pl-1 pr-2 md:pl-3 md:pr-4">
@@ -371,6 +373,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {sectionRibbon.length > 0 && (
         <div
           data-testid="section-nav"
+          data-vt-tabs=""
           className="shrink-0 border-b border-brand-line bg-card px-1 md:px-3"
         >
           <TabRibbon
@@ -418,15 +421,43 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           className="shell-scroller min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
           ref={mainRef}
         >
-          {/* KEYED ON LOCATION: every navigation mounts a fresh page. (No
-              entrance animation since 2026-11-12: a page is simply there.) */}
-          {/* `.shell-pad` is p-3 md:p-5, read from --shell-pad-x/-y so the
-              pages' sticky heads bleed by the same numbers. */}
-          <div key={location} className="shell-pad mx-auto max-w-[1600px]">
+          {/* KEYED ON LOCATION: every navigation mounts a fresh page, and
+              `PageFrame` decides once how it arrives (lib/motion.ts). */}
+          <PageFrame key={location} path={location}>
             {children}
-          </div>
+          </PageFrame>
         </main>
       </div>
+    </div>
+  );
+}
+
+/**
+ * ⭐⭐ THE PAGE'S FRAME, AND HOW IT ARRIVES (lib/motion.ts). A click's View Transition already IS the arrival
+ * (`.page-crossed`: no lift of its own); without one the page arrives whole after the old one left (`.page-whole`);
+ * Back, Forward and a deep link get the plain `.page-in`. Decided at mount and never again, and the whole arrival drops
+ * to `animation: none` when it lands, so nothing re-renders it into replaying. Its sections rise on their own stagger.
+ * `.shell-pad` is p-3 md:p-5, read from --shell-pad-x/-y so the pages' sticky heads bleed by the same numbers.
+ */
+function PageFrame({ path, children }: { path: string; children: React.ReactNode }) {
+  const [kind] = useState(() => {
+    notePageArrived();
+    return takeArrival(path);
+  });
+  useEffect(() => {
+    loadMotionExtra();
+    void import("@/lib/motion-probe").then((m) => m.sampleArrival(), () => {});
+  }, []);
+  const cls = kind === "crossed" ? "page-in page-crossed" : kind === "whole" ? "page-in page-whole" : "page-in";
+  return (
+    <div
+      data-page=""
+      className={`shell-pad mx-auto max-w-[1600px] ${cls}`}
+      onAnimationEnd={(e) => {
+        if (e.target === e.currentTarget && e.animationName === "pageRise") e.currentTarget.style.animation = "none";
+      }}
+    >
+      {children}
     </div>
   );
 }
