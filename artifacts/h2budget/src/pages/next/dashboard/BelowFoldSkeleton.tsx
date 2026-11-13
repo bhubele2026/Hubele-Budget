@@ -1,3 +1,4 @@
+import { GhostDiv } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useContext } from "react";
 import { BELOW_FOLD, slotKeys, type BelowFoldKey, type BelowFoldSlot } from "./belowFoldSizes";
@@ -11,7 +12,7 @@ export function BelowFoldSkeleton({ slot }: { slot: BelowFoldSlot }) {
   return (
     <>
       {slotKeys(slot).map((k) => (
-        <div
+        <GhostDiv
           key={k}
           data-testid={`below-fold-skeleton-${k}`}
           aria-busy="true"
@@ -23,7 +24,7 @@ export function BelowFoldSkeleton({ slot }: { slot: BelowFoldSlot }) {
               <div key={i} className="skeleton h-5 w-full rounded-control" />
             ))}
           </div>
-        </div>
+        </GhostDiv>
       ))}
     </>
   );

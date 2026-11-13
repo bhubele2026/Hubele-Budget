@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { GhostDiv, Skeleton } from "@/components/ui/skeleton";
 
 /**
  * Shared loading skeleton for routed pages. Use INSTEAD of `return null` while
@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export function PageSkeleton() {
   return (
-    <div className="space-y-4" data-testid="page-skeleton">
+    <GhostDiv className="space-y-4" data-testid="page-skeleton">
       <Skeleton className="h-7 w-44" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Skeleton className="h-28 w-full rounded-2xl" />
@@ -14,6 +14,6 @@ export function PageSkeleton() {
         <Skeleton className="h-28 w-full rounded-2xl" />
       </div>
       <Skeleton className="h-64 w-full rounded-2xl" />
-    </div>
+    </GhostDiv>
   );
 }

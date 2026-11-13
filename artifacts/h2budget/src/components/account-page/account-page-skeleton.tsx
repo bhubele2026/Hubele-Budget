@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { GhostDiv, Skeleton } from "@/components/ui/skeleton";
 
 /**
  * Loading state for the account pages (Chase, Amex, `/next/accounts`): the
@@ -13,7 +13,7 @@ export function AccountPageSkeleton({ tiles = 2 }: { tiles?: number }) {
   const n = Math.min(Math.max(tiles, 1), 4);
   const span = n === 1 ? "span-12" : n === 2 ? "span-6" : n === 3 ? "span-4" : "span-3";
   return (
-    <div className="space-y-4" data-testid="account-page-skeleton" aria-busy="true">
+    <GhostDiv className="space-y-4" data-testid="account-page-skeleton" aria-busy="true">
       {/* Head: title + actions */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
@@ -75,7 +75,7 @@ export function AccountPageSkeleton({ tiles = 2 }: { tiles?: number }) {
           </div>
         </div>
       </div>
-    </div>
+    </GhostDiv>
   );
 }
 

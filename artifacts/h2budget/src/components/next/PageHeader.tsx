@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { useRise } from "@/lib/motion";
 
 /**
  * ⭐ THE PAGE HEADER (owner, 2026-11-12: "a consistent page header — title,
@@ -44,8 +45,10 @@ export function PageHeader({
   titleTestId?: string;
   "data-testid"?: string;
 }) {
+  // (Every click glides) The header is the first thing to rise with its page.
+  const rise = useRise();
   return (
-    <header className={cn("space-y-3", className)} data-testid={testId}>
+    <header className={cn("space-y-3", rise.className, className)} style={rise.style} data-testid={testId}>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <div className="flex min-w-0 items-center gap-3">
           {icon ? (

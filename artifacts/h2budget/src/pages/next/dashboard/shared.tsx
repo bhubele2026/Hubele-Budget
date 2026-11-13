@@ -1,3 +1,4 @@
+import { GhostDiv } from "@/components/ui/skeleton";
 import type { ReactNode } from "react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { emptyNote } from "@/ui";
@@ -31,11 +32,11 @@ export function ordinal(n: number): string {
 
 export function PanelSkeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <div data-testid="panel-skeleton" className="space-y-2" aria-busy="true">
+    <GhostDiv data-testid="panel-skeleton" className="space-y-2" aria-busy="true">
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="skeleton h-5 w-full rounded-control" />
       ))}
-    </div>
+    </GhostDiv>
   );
 }
 

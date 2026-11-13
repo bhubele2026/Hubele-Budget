@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode, Ref } from "react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { useRise } from "@/lib/motion";
 import type { AccountAccentName } from "@/lib/accountIdentity";
 
 export type PanelSpan = 3 | 4 | 5 | 6 | 7 | 8 | 12;
@@ -86,11 +87,18 @@ export function Panel(props: PanelProps) {
       {props.title}
     </h2>
   );
+  // (Every click glides) It rises once, with its page, on the page's stagger.
+  // ⚠️ Not a sticky-safe panel: it hosts sticky rows and the register's drag overlay, and a transform mid-rise would
+  // re-anchor them.
+  const risen = useRise();
+  const rise = v.has("sticky-safe") ? {} : risen;
   return (
     <section
       data-testid={props["data-testid"]}
+      style={rise.style}
       className={cn(
         "panel",
+        rise.className,
         !v.has("static") && props.to && "panel-link",
         v.has("sticky-safe") && "panel-sticky-safe",
         v.has("flush") && "panel-flush",

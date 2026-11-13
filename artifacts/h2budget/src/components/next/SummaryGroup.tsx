@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { useRise } from "@/lib/motion";
 
 /**
  * ⭐ ONE DISCIPLINED SUMMARY GROUP (owner, 2026-11-12): a screen's headline
@@ -16,8 +17,9 @@ export function SummaryGroup({
   className?: string;
   "data-testid"?: string;
 }) {
+  const rise = useRise();
   return (
-    <div className={cn("panel kpi-grid", className)} data-testid={testId}>
+    <div className={cn("panel kpi-grid", rise.className, className)} style={rise.style} data-testid={testId}>
       {children}
     </div>
   );
