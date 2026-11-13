@@ -15,6 +15,7 @@ import { LINK, money, weekdayLabel } from "./shared";
 import { Check, Clock } from "lucide-react";
 import { StatusBadge } from "@/components/next/StatusBadge";
 import { useReadyMark } from "@/lib/perfMarks";
+import { lastKnown } from "@/lib/lastKnown";
 
 const MIN = 60_000;
 
@@ -101,6 +102,11 @@ const useWeeklyQ = () => useGetAvalancheWeekly({ query: { queryKey: getGetAvalan
  * render and Suspense to let the box in.
  */
 export function warmWeekly(qc: QueryClient): void {
+  // (PERF) The device's last plan for this person paints at once (lib/lastKnown.ts); asked again here.
+  const lk = lastKnown();
+  if (lk?.w && lk.wt && qc.getQueryData(getGetAvalancheWeeklyQueryKey()) === undefined) {
+    qc.setQueryData(getGetAvalancheWeeklyQueryKey(), lk.w, { updatedAt: lk.wt });
+  }
   void qc.prefetchQuery({
     queryKey: getGetAvalancheWeeklyQueryKey(),
     queryFn: ({ signal }) => getAvalancheWeekly({ signal }),
@@ -256,7 +262,9 @@ export default function AvalancheWeekBox() {
   const controls = useAvalancheWeekPay();
   const q = useWeeklyQ();
   // (PERF-0) The week's payment (or its answer) is on screen.
-  useReadyMark("h2:weekly-pay-ready", q.data !== undefined);
+  useReadyMark("h2:weekly-pay-shown", q.data !== undefined);
+  // The REAL, fresh plan (not the device's last copy).
+  useReadyMark("h2:weekly-pay-ready", q.data !== undefined && q.dataUpdatedAt !== lastKnown()?.wt);
   if (q.data !== undefined && weekPayView(q.data).kind === "hidden") return null;
   return (
     <Panel

@@ -6,6 +6,7 @@ import { weekStory } from "@/lib/weekFigures";
 import { useSpine } from "@/hooks/useSpine";
 import { cn } from "@/lib/utils";
 import { useReadyMark } from "@/lib/perfMarks";
+import { lastKnown } from "@/lib/lastKnown";
 import { dayLabel, money, PanelError, weekdayLabel } from "./shared";
 import { Fig, FillBar, FOUR_BODY, FOUR_BOX, FOUR_BOX_BAR, FOUR_GRID, Skel, Tile } from "./tileParts";
 
@@ -69,7 +70,7 @@ const LOADING = {
   debt: { testid: "four-debt", title: "Debt paid", href: "/avalanche", accent: "other", box: FOUR_BOX_BAR },
 } as const;
 
-function Checking({ s, older }: { s: Spine | undefined; older?: string | null }) {
+function Checking({ s, older, updating }: { s: Spine | undefined; older?: string | null; updating?: boolean }) {
   if (!s) return <Tile cell {...LOADING.checking} index={2} body={FOUR_BODY}><Skel /></Tile>;
   const v = bankBalanceView(s.bank);
   const bal = Number(s.bank.balance);
@@ -85,7 +86,7 @@ function Checking({ s, older }: { s: Spine | undefined; older?: string | null })
         value={v.balance == null ? "—" : money(s.bank.balance)}
         tone={!older && v.balance != null && Number.isFinite(bal) && bal < 0 ? "bad" : "neutral"}
       />
-      <Line testid="four-checking-line">{v.balance == null ? "No bank balance yet." : n > 0 ? `${n} ${n === 1 ? "needs" : "need"} you` : null}</Line>
+      <Line testid="four-checking-line">{updating ? "Updating…" : v.balance == null ? "No bank balance yet." : n > 0 ? `${n} ${n === 1 ? "needs" : "need"} you` : null}</Line>
     </Tile>
   );
 }
@@ -128,8 +129,6 @@ function SpentBody({ s }: { s: Spine }) {
   // No plan set: the same subtraction against the forecast's weekly amount, so an over week still says "over".
   const ofN = of != null ? Number(of) : NaN;
   const rem = w.planSet ? w.remainingKnown : Number.isFinite(ofN) ? Math.round((ofN - known) * 100) / 100 : null;
-  // (PERF-0) All four boxes real: this body mounts with the spine, which now carries all it reads.
-  useReadyMark("h2:home-numbers-ready", true);
   return (
     <>
       <Fig big testid="four-spent-value" value={money(w.known)} />
@@ -162,12 +161,18 @@ function DebtPaid({ s }: { s: Spine | undefined }) {
 export default function FourNumbers() {
   const spine = useSpine();
   const s = spine.data;
+  // (PERF) The device's last numbers (lib/lastKnown.ts) until the fresh spine lands: painted, said to be updating.
+  const lk = lastKnown();
+  const updating = !!s && !!lk && spine.updatedAt === new Date(lk.t).toISOString();
+  useReadyMark("h2:home-numbers-shown", !!s);
+  // (PERF-0) REAL, fresh numbers in all four boxes (the spine carries everything they read).
+  useReadyMark("h2:home-numbers-ready", !!s && !updating);
   if (!s && spine.state === "failed") {
     return <div className="span-12"><PanelError what="The numbers" onRetry={spine.refetch} /></div>;
   }
   return (
     <div className={FOUR_GRID} data-testid="dash-four">
-      <Checking s={s} older={spine.olderWords} />
+      <Checking s={s} older={spine.olderWords} updating={updating} />
       <Lowest s={s} />
       <SpentThisWeek s={s} />
       <DebtPaid s={s} />

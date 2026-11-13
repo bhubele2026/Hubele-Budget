@@ -37,6 +37,7 @@ import { ThemeRepaint } from "@/components/theme-repaint";
 import { startPerfNavigation } from "@/lib/perfMarks";
 import { makeGlideNav } from "@/lib/motion";
 import { mustClearForClerkUser } from "@/lib/clerkUserSwitch";
+import { dropLastKnown, lastKnown, seedLastKnown } from "@/lib/lastKnown";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -368,6 +369,8 @@ function hasSessionCookie(): boolean {
 const EARLY_LANDING =
   typeof window !== "undefined" && onLanding() && (readAuthHint() || hasSessionCookie());
 if (EARLY_LANDING) {
+  // (PERF) Signed in on this device before: paint Home's last numbers at once (lib/lastKnown.ts); asked again below.
+  if (readAuthHint()) seedLastKnown(queryClient, getGetSpineQueryKey());
   void queryClient
     .prefetchQuery({
       queryKey: getGetSpineQueryKey(),
@@ -669,17 +672,29 @@ function ClerkQueryClientCacheInvalidator() {
   // (perf phase 2) Clerk says signed OUT, on ANY route (the front door included,
   // where ProtectedShell never mounts): nothing fetched early on the cookie stays.
   useEffect(() => {
-    if (isLoaded && !isSignedIn) qc.clear();
+    if (isLoaded && !isSignedIn) {
+      qc.clear();
+      dropLastKnown();
+    }
   }, [isLoaded, isSignedIn, qc]);
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    const fetchedFor = () => qc.getQueryData<{ userId?: string }>(getGetMeQueryKey())?.userId ?? null;
+    const fetchedFor = () => qc.getQueryData<{ userId?: string }>(getGetMeQueryKey())?.userId ?? lastKnown()?.u ?? null;
+    let stopSaving: (() => void) | null = null;
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
       // (perf phase 2) Clerk's first word too: what the cookie fetched early must be this user's (/me says whose).
       if (mustClearForClerkUser(prevUserIdRef.current, userId, fetchedFor())) {
         qc.clear();
         resetDataAsOf();
+        dropLastKnown();
+      }
+      // (PERF) Keep this person's last numbers on the device (lazy chunk).
+      if (userId && userId !== prevUserIdRef.current) {
+        stopSaving?.();
+        void import("@/lib/lastKnownSave").then((m) => {
+          stopSaving = m.persistLastKnown(qc, userId);
+        });
       }
       prevUserIdRef.current = userId;
     });
@@ -697,6 +712,7 @@ function ClerkQueryClientCacheInvalidator() {
     return () => {
       unsubscribe();
       offMe();
+      stopSaving?.();
     };
   }, [addListener, qc]);
   // (T1) Back to this tab: the balance reads older than a minute are asked again.
