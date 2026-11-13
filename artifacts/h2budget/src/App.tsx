@@ -375,7 +375,8 @@ if (EARLY_LANDING) {
     .prefetchQuery({
       queryKey: getGetSpineQueryKey(),
       queryFn: ({ signal }) => getSpine({ signal }),
-      staleTime: 60_000,
+      // A painted copy is never "fresh": ask the server even when the copy is under a minute old.
+      staleTime: lastKnown() ? 0 : 60_000,
       retry: false,
     })
     .catch(() => {

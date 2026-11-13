@@ -104,13 +104,14 @@ const useWeeklyQ = () => useGetAvalancheWeekly({ query: { queryKey: getGetAvalan
 export function warmWeekly(qc: QueryClient): void {
   // (PERF) The device's last plan for this person paints at once (lib/lastKnown.ts); asked again here.
   const lk = lastKnown();
-  if (lk?.w && lk.wt && qc.getQueryData(getGetAvalancheWeeklyQueryKey()) === undefined) {
-    qc.setQueryData(getGetAvalancheWeeklyQueryKey(), lk.w, { updatedAt: lk.wt });
-  }
+  const painted = !!(lk?.w && lk.wt && qc.getQueryData(getGetAvalancheWeeklyQueryKey()) === undefined);
+  if (painted) qc.setQueryData(getGetAvalancheWeeklyQueryKey(), lk!.w, { updatedAt: lk!.wt });
   void qc.prefetchQuery({
     queryKey: getGetAvalancheWeeklyQueryKey(),
     queryFn: ({ signal }) => getAvalancheWeekly({ signal }),
     ...WEEKLY_CACHE,
+    // A painted copy is never "fresh": ask the server even when the copy is recent.
+    ...(painted ? { staleTime: 0 } : {}),
   });
 }
 
