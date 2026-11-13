@@ -2,7 +2,7 @@
 // the page's real content has rendered (from the invented household in api/).
 export const PAGES = [
   { id: "home", path: "/home", ready: ['[data-testid="four-checking-value"]', '[data-testid="dash-forecast-chart"] .recharts-surface', '[data-testid="dash-more-summary"]'] },
-  { id: "banking", path: "/banking", ready: ['[data-testid="br-summary"]', '[data-testid="ny-items"]', '[data-testid="ny-autodone"]'] },
+  { id: "banking", path: "/banking#needs-you", ready: ['[data-testid="br-summary"]', '[data-testid="ny-items"]', '[data-testid="ny-autodone"]'] },
   // Banking's Details opened (a link that names a pill opens it): the proposed fixes, the five pills and their rows.
   // "Unclear" is the bucket the invented household fills this month.
   { id: "banking-details", path: "/banking?bucket=uncertain", ready: ['[data-testid="br-summary"]', '[data-testid="br-rows"]'] },
