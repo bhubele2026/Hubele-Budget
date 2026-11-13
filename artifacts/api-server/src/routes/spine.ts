@@ -97,13 +97,48 @@ const router: IRouter = Router();
  * only on a person's Sync or a debt's own Refresh). The freshness read is our
  * own tables too: the snapshot, the item behind it, and its sync attempts.
  */
+/** (PERF) The spine's windows for a household day — one place, so a background re-warm asks for the same keys. */
+export function spineWindows(today: Date = todayDate()) {
+  const todayISO = fmtISO(today);
+  const monthStartISO = fmtISO(new Date(today.getFullYear(), today.getMonth(), 1));
+  const weekStartISO = weekStartFor(today);
+  const weekEndISO = weekEndFor(today);
+  return {
+    today,
+    todayISO,
+    monthStartISO,
+    weekStartISO,
+    weekEndISO,
+    supersedeFrom: monthStartISO < weekStartISO ? monthStartISO : weekStartISO,
+    supersedeTo: todayISO > weekEndISO ? todayISO : weekEndISO,
+  };
+}
+
+/**
+ * ⭐ (PERF) The spine's cached reads, asked exactly as GET /spine asks them (same functions, same arguments, same
+ * keys), so the background re-warm (lib/ledgerRewarm.ts) leaves the next open nothing to build. Returns nothing:
+ * the answers stay in the ledger cache.
+ */
+export async function warmSpineReads(householdId: string, ownerUserId: string, shouldStop: () => boolean = () => false): Promise<void> {
+  const step = () => {
+    if (shouldStop()) throw Object.assign(new Error("re-warm gave way to a live request"), { code: "H2_REWARM_ABORTED" });
+  };
+  const w = spineWindows();
+  await computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: 90 });
+  step();
+  const supersede = await findSupersededPendingForRange(householdId, w.supersedeFrom, w.supersedeTo);
+  step();
+  await buildSpendingFacts(householdId, w.monthStartISO, w.todayISO, { supersede });
+  await buildSpendingFacts(householdId, w.weekStartISO, w.weekEndISO, { supersede });
+  step();
+  await computeReviewCount(householdId, ownerUserId);
+}
+
 router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
   const ownerUserId = req.householdOwnerId!;
 
-  const today = todayDate();
-  const todayISO = fmtISO(today);
-  const monthStartISO = fmtISO(new Date(today.getFullYear(), today.getMonth(), 1));
+  const { today, todayISO, monthStartISO, weekStartISO, weekEndISO, supersedeFrom, supersedeTo } = spineWindows();
 
   // ⚠️ `horizonDays: 90` is not a default — it is the horizon the Forecast tile
   // and the Forecast Overview page both request. Ask for a different window and
@@ -115,14 +150,8 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   // answer on its own for /reports/spending-facts, so parity is unchanged.
   // `.then` attaches both consumers at once, so a failed read rejects the
   // Promise.all instead of surfacing as an unhandled rejection.
-  const weekStartISO = weekStartFor(today);
-  const weekEndISO = weekEndFor(today);
   // (PERF-0) `timed(...)` only measures each branch for Server-Timing (`sp.*`); it returns the same promise.
-  const supersedePromise = timed("sp.supersede", findSupersededPendingForRange(
-    householdId,
-    monthStartISO < weekStartISO ? monthStartISO : weekStartISO,
-    todayISO > weekEndISO ? todayISO : weekEndISO,
-  ));
+  const supersedePromise = timed("sp.supersede", findSupersededPendingForRange(householdId, supersedeFrom, supersedeTo));
   // (PR-B1) The cash signal and the freshness are read once and handed to the
   // money position too, so its figures sit on the very curve the forecast
   // fields below quote.

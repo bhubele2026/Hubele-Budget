@@ -55,6 +55,48 @@ export interface RequestTiming {
    * them, so a request never reads its own write through an older memo.
    */
   memo: Map<string, Promise<unknown>>;
+  /**
+   * (PERF) Background work (the ledger re-warm): at most this many of its queries at once, while any live request is
+   * in flight none are throttled (a live request may be waiting on this very build).
+   */
+  queryLimit?: number;
+}
+
+let liveRequests = 0;
+/** (PERF) API requests being served right now (background work waits for zero). */
+export function liveRequestsInFlight(): number {
+  return liveRequests;
+}
+
+type Gate = { active: number; waiting: Array<() => void> };
+const gates = new Map<RequestTiming, Gate>();
+/** Wait for a query slot under the store's limit; none is waited for while a live request is in flight. */
+function acquireSlot(s: RequestTiming): Promise<void> | null {
+  let g = gates.get(s);
+  if (!g) gates.set(s, (g = { active: 0, waiting: [] }));
+  const gate = g;
+  if (gate.active < (s.queryLimit ?? Infinity) || liveRequests > 0) {
+    gate.active += 1;
+    return null;
+  }
+  return new Promise<void>((resolve) =>
+    gate.waiting.push(() => {
+      gate.active += 1;
+      resolve();
+    }),
+  );
+}
+function releaseSlot(s: RequestTiming): void {
+  const g = gates.get(s);
+  if (!g) return;
+  g.active -= 1;
+  const next = g.waiting.shift();
+  if (next) next();
+  else if (g.active <= 0) gates.delete(s);
+}
+/** A live request arrived: every throttled background query may go now. */
+function wakeThrottled(): void {
+  for (const g of gates.values()) while (g.waiting.length) g.waiting.shift()!();
 }
 
 const als = new AsyncLocalStorage<RequestTiming>();
@@ -250,6 +292,28 @@ export function instrumentPool(pool: object): void {
   p.query = function (this: unknown, ...args: unknown[]) {
     const s = als.getStore();
     if (!s) return origQuery.apply(this, args);
+    // (PERF) Background work under a query limit: promise-form queries take a slot first.
+    if (s.queryLimit && typeof args[args.length - 1] !== "function") {
+      const self = this;
+      const run = () => {
+        let out: unknown;
+        try {
+          out = runQuery(self, s, args);
+        } catch (e) {
+          releaseSlot(s);
+          throw e;
+        }
+        const done = () => releaseSlot(s);
+        if (out && typeof (out as Promise<unknown>).then === "function") (out as Promise<unknown>).then(done, done);
+        else done();
+        return out;
+      };
+      const slot = acquireSlot(s);
+      return slot ? slot.then(run) : run();
+    }
+    return runQuery(this, s, args);
+  };
+  const runQuery = function (self: unknown, s: RequestTiming, args: unknown[]): unknown {
     s.queries += 1;
     if (s.memo.size && WRITE_SQL.test(textOf(args[0]))) s.memo.clear();
     const rec: QueryRec = { wait: 0 };
@@ -274,7 +338,7 @@ export function instrumentPool(pool: object): void {
     pendingQuery = rec;
     let out: unknown;
     try {
-      out = origQuery.apply(this, args);
+      out = origQuery.apply(self, args);
     } finally {
       pendingQuery = prev;
     }
@@ -344,6 +408,17 @@ export function requestTiming(opts: { log?: DebugLogger } = {}): RequestHandler 
   return (req: Request, res: Response, next: NextFunction): void => {
     const store = newRequestTiming();
     store.method = req.method;
+    // (PERF) A live request: background work steps aside (lib/ledgerRewarm.ts) and its throttled queries go now.
+    liveRequests += 1;
+    wakeThrottled();
+    let counted = true;
+    const uncount = () => {
+      if (!counted) return;
+      counted = false;
+      liveRequests -= 1;
+    };
+    res.once("finish", uncount);
+    res.once("close", uncount);
     const origWriteHead = res.writeHead;
     let stamped = false;
     res.writeHead = function (this: Response, ...args: unknown[]) {

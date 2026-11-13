@@ -18,7 +18,8 @@
 //   - the key carries the household AND the owner and every other input the
 //     build reads (the caller's key: horizon, fromDate, the household's today,
 //     the expired-hold rule) plus the hook model switch;
-//   - at most MAX_ENTRIES results, none older than MAX_AGE_MS;
+//   - at most MAX_ENTRIES results, none older than MAX_AGE_MS (12 h); storing a newer revision's answer drops the
+//     household's older-revision entries;
 //   - no triggers in the database (a `drizzle-kit push` dev/test database, or
 //     triggers dropped) → no cache: every call builds, as before;
 //   - `LEDGER_CACHE=off` → no cache.
@@ -34,7 +35,12 @@ import { addSpan, noteCacheRead, requestMemo } from "./requestTiming";
 import { deepFreeze } from "./ledgerShare";
 
 export const LEDGER_CACHE_MAX_ENTRIES = 64;
-export const LEDGER_CACHE_MAX_AGE_MS = 5 * 60_000;
+/**
+ * (PERF) How long an entry may be served while its revision still matches. Correctness is the revision triggers and
+ * the key (household, owner, inputs, household day, switches); the age only bounds what a missed trigger could cost.
+ * Long, so the first open of a morning finds last evening's (or the re-warm's) answers.
+ */
+export const LEDGER_CACHE_MAX_AGE_MS = 12 * 3600_000;
 /** How long the "are the triggers there?" answer is trusted. */
 const TRIGGER_CHECK_MS = 60_000;
 
@@ -117,7 +123,7 @@ export function householdRevision(householdId: string): Promise<number> {
   return requestMemo(`rev:${householdId}`, () => readHouseholdRevision(householdId));
 }
 
-type Entry = { value: unknown; at: number };
+type Entry = { value: unknown; at: number; householdId: string; rev: number };
 const entries = new Map<string, Entry>();
 
 /** Counters for tests and the timing harness. No figure reads them. */
@@ -179,7 +185,9 @@ export async function cachedLedgerRead<T>(
       deepFreeze(value);
       addSpan("cache.freeze", performance.now() - f0);
     }
-    entries.set(full, { value, at: Date.now() });
+    // An older revision's answers for this household can never be served again (revisions only rise): let them go.
+    for (const [k, e] of entries) if (e.householdId === householdId && e.rev < rev) entries.delete(k);
+    entries.set(full, { value, at: Date.now(), householdId, rev });
     ledgerCacheStats.stored += 1;
     while (entries.size > LEDGER_CACHE_MAX_ENTRIES) entries.delete(entries.keys().next().value!);
   } else {

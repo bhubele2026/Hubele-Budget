@@ -10,6 +10,9 @@ import { logger } from "./lib/logger";
 import { getPlaidEnv, isPlaidConfigured } from "./lib/plaid";
 import { getJobsMode, markJobsFailed, startJobs, stopJobs } from "./jobs/boss";
 import { ensureAllItemWebhooks } from "./lib/plaidWebhookEnsure";
+import { startLedgerRewarm } from "./lib/ledgerRewarm";
+
+let stopRewarm: () => void = () => {};
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -156,6 +159,10 @@ function onListening(err?: Error): void {
   // start never stops the server serving: it is logged and /api/healthz shows
   // jobs.started=false. The daily plaid_sync_attempts prune (03:47 UTC) moved
   // from node-cron to the `maintenance.prune-sync-attempts` schedule.
+  // ⭐ (PERF) Re-warm the ledger cache in the background after any change, at the day's turn and now, at boot, so the
+  // first open finds its answers built (lib/ledgerRewarm.ts; LEDGER_REWARM=off turns it off).
+  stopRewarm = startLedgerRewarm();
+
   startJobs().catch((jobsErr) => {
     markJobsFailed(jobsErr);
     logger.error({ err: jobsErr }, "Jobs failed to start — serving without them");
@@ -176,6 +183,7 @@ async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info({ signal }, "Shutting down");
+  stopRewarm();
   await new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, 5_000);
     if (!server) {
