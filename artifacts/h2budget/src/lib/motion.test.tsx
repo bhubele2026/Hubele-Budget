@@ -8,6 +8,8 @@ import { Roll, isFigureText } from "@/components/figure-roll";
  * these tests say "no-preference" so the motion paths run, and stub the View Transition the browser would run.
  */
 const realMatch = window.matchMedia;
+// The first page of a visit is simply there (no fade, no rises): spend it, as the app's first frame does.
+expect(takeArrival("/home")).toBe("first");
 let vtCalls = 0;
 beforeEach(() => {
   window.matchMedia = ((q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;

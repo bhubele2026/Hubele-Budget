@@ -188,8 +188,10 @@ transform only.
   (`data-vt-line`) travels. The click waits ≤ `CHUNK_WAIT_MS` for the page's
   chunk so the fade lands on the page. Back/Forward cross-fade the same way
   (heard before wouter). No View Transitions → `.page-out` then
-  `.page-in.page-whole`; a deep link → plain `.page-in`. `PageFrame`
-  (`layout.tsx`) decides once; a filter or hash on the same path never glides.
+  `.page-in.page-whole`. The FIRST page of a visit (deep link, reload) is
+  simply there — no fade, no rises (a fade from zero hid the real numbers: LCP
+  40 → 1,244 ms). `PageFrame` (`layout.tsx`) decides once; a filter or hash on
+  the same path never glides.
 - **Inside a page**: `Panel`, `PageHeader` and `SummaryGroup` rise once with
   their page (`useRise`, `--stagger` apart, capped) — never twice (`.rise-in
   .rise-in`), never after `RISE_WINDOW_MS`, never a sticky-safe panel. A

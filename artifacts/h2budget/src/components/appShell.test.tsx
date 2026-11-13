@@ -312,13 +312,13 @@ describe("app shell chrome", () => {
   });
 
   // (Every click glides) The page body is keyed on location and arrives once: a deep link or Back gets the plain
-  // `.page-in`; a click's cross-fade marks it `.page-crossed` (lib/motion.ts). The frame is the [data-page] host.
+  // `.page-in` (the first page of a visit none); a click's cross-fade marks it `.page-crossed` (lib/motion.ts).
   it("renders the page body in its arriving frame", () => {
     mount("/banking");
     const frame = document.querySelector("[data-page]");
     expect(frame).toBeTruthy();
     expect(frame!.className).toContain("shell-pad");
-    expect(frame!.className).toContain("page-in");
+    // The first page of a visit is simply there; a later one arrives on .page-in. Never crossed without a click.
     expect(frame!.className).not.toContain("page-crossed");
   });
 

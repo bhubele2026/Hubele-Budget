@@ -74,12 +74,19 @@ if (typeof window !== "undefined") {
 }
 export const gestureNow = (): boolean => typeof performance !== "undefined" && performance.now() - lastGesture < GESTURE_MS;
 
-export type Arrival = "crossed" | "whole" | "plain";
+export type Arrival = "crossed" | "whole" | "plain" | "first";
 /** How the page at `path` is arriving: set by `glideNav` just before the swap, read once by the page frame. */
 let arriving: { path: string; kind: Arrival } | null = null;
-/** Read ONCE, by the page frame that mounts for `path`; anything else (Back, a deep link) arrives plain. */
+/**
+ * Read ONCE, by the page frame that mounts for `path`; anything else arrives plain.
+ * ⚠️ THE FIRST PAGE OF A VISIT (a deep link, a reload, a bookmark) IS SIMPLY THERE — "first": no page fade and no
+ * section rises. Measured (perf harness, warm Home): fading the first page in from zero moved LCP from 40 ms to
+ * 1,244 ms while the real numbers sat invisible under the fade. A glide is for a click; opening the app is not one.
+ */
+let firstPage = true;
 export function takeArrival(path: string): Arrival {
-  const kind = arriving && arriving.path === path ? arriving.kind : "plain";
+  const kind = firstPage ? "first" : arriving && arriving.path === path ? arriving.kind : "plain";
+  firstPage = false;
   arriving = null;
   return kind;
 }

@@ -461,7 +461,10 @@ describe("every click glides — the KFI-Housing v220 pace", () => {
     expect(SRC).toMatch(/\.page-in\.page-whole \{\s*animation: pageFade var\(--dur-fade\)[^;]*pageRise var\(--dur-page\)/);
     expect(SRC).toMatch(/\.page-in\.page-crossed \{ animation: none; \}/);
     // The frame decides once, and a whole arrival stands down when it lands so nothing replays.
-    expect(layout).toMatch(/const \[kind\] = useState\(\(\) => \{\s*notePageArrived\(\);\s*return takeArrival\(path\);/);
+    expect(layout).toMatch(/const \[kind\] = useState\(\(\) => \{\s*const k = takeArrival\(path\);/);
+    // The first page of a visit (deep link, reload) is simply there: a fade from zero hid the real numbers (LCP 40 → 1,244 ms).
+    expect(motion).toContain('const kind = firstPage ? "first"');
+    expect(layout).toContain('kind === "first" ? ""');
     expect(layout).toContain('e.animationName === "pageRise") e.currentTarget.style.animation = "none"');
   });
 

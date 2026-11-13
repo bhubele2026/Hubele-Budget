@@ -435,20 +435,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 /**
  * ⭐⭐ THE PAGE'S FRAME, AND HOW IT ARRIVES (lib/motion.ts). A click's View Transition already IS the arrival
  * (`.page-crossed`: no lift of its own); without one the page arrives whole after the old one left (`.page-whole`);
- * Back, Forward and a deep link get the plain `.page-in`. Decided at mount and never again, and the whole arrival drops
+ * the first page of a visit is simply there (lib/motion.ts `takeArrival`); anything else gets the plain `.page-in`. Decided at mount and never again, and the whole arrival drops
  * to `animation: none` when it lands, so nothing re-renders it into replaying. Its sections rise on their own stagger.
  * `.shell-pad` is p-3 md:p-5, read from --shell-pad-x/-y so the pages' sticky heads bleed by the same numbers.
  */
 function PageFrame({ path, children }: { path: string; children: React.ReactNode }) {
   const [kind] = useState(() => {
-    notePageArrived();
-    return takeArrival(path);
+    const k = takeArrival(path);
+    // The first page of a visit is simply there: its sections do not rise either.
+    if (k !== "first") notePageArrived();
+    return k;
   });
   useEffect(() => {
     loadMotionExtra();
     void import("@/lib/motion-probe").then((m) => m.sampleArrival(), () => {});
   }, []);
-  const cls = kind === "crossed" ? "page-in page-crossed" : kind === "whole" ? "page-in page-whole" : "page-in";
+  const cls = kind === "first" ? "" : kind === "crossed" ? "page-in page-crossed" : kind === "whole" ? "page-in page-whole" : "page-in";
   return (
     <div
       data-page=""
