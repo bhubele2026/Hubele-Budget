@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { figLabel } from "@/ui";
+import { RollIf } from "@/components/figure-roll";
 
 /** A label over a mono figure. A number `value` is formatted as money; pass a
  *  string/node for counts or anything pre-formatted. `delta` is a signed
@@ -26,7 +27,7 @@ export function StatBlock(props: {
           props.tone === "bad" ? "text-bad" : "text-foreground",
         )}
       >
-        {shown}
+        <RollIf value={shown} />
       </div>
       {d != null && Number.isFinite(d) && d !== 0 ? (
         <div className="fig text-micro text-neutral-600" data-testid="stat-delta">

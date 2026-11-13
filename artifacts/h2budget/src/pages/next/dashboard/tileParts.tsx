@@ -4,6 +4,8 @@ import { Link } from "wouter";
 import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { cn } from "@/lib/utils";
 import { figLabel } from "@/ui";
+import { RollIf } from "@/components/figure-roll";
+import { glowAt } from "@/lib/motion";
 import { money } from "./shared";
 
 /** The tile shell and its small parts, shared by Tiles.tsx and the lazy week tile. */
@@ -52,14 +54,17 @@ export function Tile({
   return (
     <div
       data-testid={`tile-${testid}`}
+      onPointerMove={glowAt}
       className={cn(
-        "group relative flex flex-col",
+        "glow-host press group relative flex flex-col",
         cell
           ? "gap-2 transition-colors hover:bg-brand-tint focus-within:bg-brand-tint"
           : "panel gap-3 p-4 transition-colors hover:border-neutral-300 focus-within:border-neutral-300",
         box,
       )}
     >
+      {/* (Every click glides) The dashboard's hover glow: a soft navy light that follows the pointer, under the words. */}
+      <span aria-hidden className="tile-glow pointer-events-none absolute inset-0 -z-10" />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className={cell ? "text-micro font-medium text-neutral-600" : "text-body font-semibold text-foreground"}>
@@ -101,7 +106,7 @@ export function Fig({ label, value, tone = "neutral", big = false, testid }: {
         data-testid={testid}
         className={cn("fig font-semibold", big ? "text-kpi" : "text-body", tone === "bad" ? "text-bad-ink" : "text-foreground")}
       >
-        {value}
+        <RollIf value={value} />
       </div>
     </div>
   );

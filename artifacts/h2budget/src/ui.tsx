@@ -1,3 +1,4 @@
+import { RollIf } from "@/components/figure-roll";
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 
@@ -184,7 +185,7 @@ export function Stat(props: {
     >
       <div className={fieldLabel}>{props.label}</div>
       <div className={`fig mt-0.5 text-title font-semibold ${tone}`}>
-        {shown}
+        <RollIf value={shown} />
       </div>
       {props.hint ? <div className="mt-0.5 text-micro text-neutral-600">{props.hint}</div> : null}
     </Tag>
