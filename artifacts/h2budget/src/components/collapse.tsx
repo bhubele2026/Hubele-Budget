@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { cssMs, reducedMotion } from "@/lib/motion";
+import { reducedMotion } from "@/lib/motion";
+import { cssMs } from "@/lib/motion-extra";
 
 /**
  * ⭐ (Every click glides) A row's details open and shut on the collapse glide — the height eases and the content fades

@@ -4,8 +4,7 @@ import { Link } from "wouter";
 import { warmHandlers, warmRoute } from "@/lib/warmRoutes";
 import { cn } from "@/lib/utils";
 import { figLabel } from "@/ui";
-import { RollIf } from "@/components/figure-roll";
-import { glowAt } from "@/lib/motion";
+import { glowAt, RollIf } from "@/lib/motion";
 import { money } from "./shared";
 
 /** The tile shell and its small parts, shared by Tiles.tsx and the lazy week tile. */

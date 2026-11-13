@@ -1,4 +1,4 @@
-import { RollIf } from "@/components/figure-roll";
+import { RollIf } from "@/lib/motion";
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 

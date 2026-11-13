@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { figLabel } from "@/ui";
-import { RollIf } from "@/components/figure-roll";
+import { RollIf } from "@/lib/motion";
 
 /** A label over a mono figure. A number `value` is formatted as money; pass a
  *  string/node for counts or anything pre-formatted. `delta` is a signed

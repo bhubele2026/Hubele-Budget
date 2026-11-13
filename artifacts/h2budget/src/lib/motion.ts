@@ -17,7 +17,7 @@
  * (at most CHUNK_WAIT_MS) only so the cross-fade lands on the page, not on a skeleton — the warm-up already asked for
  * the data on hover/press.
  */
-import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { createElement, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 
 export const reducedMotion = (): boolean =>
@@ -33,30 +33,6 @@ export const motionLite = (): boolean =>
 export const STAGGER_CAP = 8;
 export const staggerAt = (i: number): CSSProperties | undefined =>
   i > 0 ? { animationDelay: `calc(${Math.min(i, STAGGER_CAP)} * var(--stagger))` } : undefined;
-
-type Dial = "--dur-press" | "--dur-in" | "--dur-rise" | "--dur-page" | "--dur-fade" | "--dur-pop" | "--dur-overlay" | "--dur-out" | "--dur-travel" | "--stagger";
-/**
- * A motion dial from index.css in ms, so script timing reads the SAME value the stylesheet animates with.
- * ⚠️ Read once per motion state, never per render: `getComputedStyle(html)` forces a restyle (Housing v217, measured).
- */
-const dials = new Map<string, number | null>();
-let dialState = "";
-export function cssMs(dial: Dial, fallback: number): number {
-  if (typeof document === "undefined") return fallback;
-  const state = `${document.documentElement.dataset["motion"] ?? ""}|${reducedMotion() ? "r" : ""}`;
-  if (state !== dialState) {
-    dials.clear();
-    dialState = state;
-  }
-  let ms = dials.get(dial);
-  if (ms === undefined) {
-    const raw = getComputedStyle(document.documentElement).getPropertyValue(dial).trim();
-    const n = Number.parseFloat(raw);
-    ms = !Number.isFinite(n) ? null : raw.endsWith("ms") ? n : raw.endsWith("s") ? n * 1000 : n;
-    dials.set(dial, ms);
-  }
-  return ms ?? fallback;
-}
 
 // ── The page glide ───────────────────────────────────────────────────────────
 
@@ -187,7 +163,7 @@ export function makeGlideNav(chunkOf: (path: string) => Promise<void> | null, st
       const leaving = document.querySelector<HTMLElement>("[data-page]");
       if (!leaving) return navigate(to, opts);
       leaving.classList.add("page-out");
-      window.setTimeout(() => (mine === seq ? navigate(to, opts) : leaving.classList.remove("page-out")), cssMs("--dur-out", 500));
+      window.setTimeout(() => (mine === seq ? navigate(to, opts) : leaving.classList.remove("page-out")), extra?.cssMs("--dur-out", 500) ?? 500);
     };
     const chunk = chunkOf(path);
     if (!chunk) return go();
@@ -277,15 +253,13 @@ export function useUnderlineTravel(navRef: RefObject<HTMLElement | null>, key: s
   }, [key]);
 }
 
-/** ⭐ THE DASHBOARD'S HOVER GLOW: a soft navy spotlight that follows the pointer across a clickable panel (`.tile-glow`). */
-let glowFrame = 0;
-export function glowAt(e: { currentTarget: EventTarget & HTMLElement; clientX: number; clientY: number }): void {
-  const el = e.currentTarget;
-  const { clientX, clientY } = e;
-  cancelAnimationFrame(glowFrame);
-  glowFrame = requestAnimationFrame(() => {
-    const r = el.getBoundingClientRect();
-    el.style.setProperty("--mx", `${Math.round(clientX - r.left)}px`);
-    el.style.setProperty("--my", `${Math.round(clientY - r.top)}px`);
-  });
+/** ⭐ THE DASHBOARD'S HOVER GLOW: a soft navy light that follows the pointer across a clickable tile (motion-extra). */
+export const glowAt = (e: { currentTarget: EventTarget & HTMLElement; clientX: number; clientY: number }): void => extra?.glowAt(e);
+
+/**
+ * ⭐ A FIGURE THAT A CLICK CHANGES ROLLS to its new value (components/figure-roll.tsx, which rides motion-extra's chunk).
+ * Text rolls once that chunk is in; anything else — and every figure before it lands — is drawn as given.
+ */
+export function RollIf({ value }: { value: unknown }): ReactNode {
+  return typeof value === "string" && extra ? createElement(extra.Roll, { value }) : (value as ReactNode);
 }

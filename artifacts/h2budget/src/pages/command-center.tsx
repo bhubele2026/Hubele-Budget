@@ -1,5 +1,5 @@
 import { useSwapDim } from "@/lib/motion-page";
-import { RollIf } from "@/components/figure-roll";
+import { RollIf } from "@/lib/motion";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "wouter";

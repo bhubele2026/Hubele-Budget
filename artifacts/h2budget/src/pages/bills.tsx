@@ -1,4 +1,4 @@
-import { RollIf } from "@/components/figure-roll";
+import { RollIf } from "@/lib/motion";
 import { useSwapDim } from "@/lib/motion-page";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";

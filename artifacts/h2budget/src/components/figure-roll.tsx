@@ -61,8 +61,3 @@ export function Roll({ value, className = "" }: { value: string; className?: str
     </span>
   );
 }
-
-/** A figure that may be text or a node: text rolls, anything else is drawn as given. */
-export function RollIf({ value }: { value: unknown }) {
-  return typeof value === "string" ? <Roll value={value} /> : <>{value as React.ReactNode}</>;
-}

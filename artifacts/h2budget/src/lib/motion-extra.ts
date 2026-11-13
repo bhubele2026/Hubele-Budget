@@ -3,7 +3,33 @@
  * landing's entry graph has no room for it). Until it is in, these simply do not run: a selection or a row changes as it
  * always did. Pure DOM; each one stands down for reduced motion.
  */
-import { cssMs, reducedMotion } from "./motion";
+import { reducedMotion } from "./motion";
+// The figure roll rides this chunk too: a figure changes on a click, never on the open.
+export { Roll } from "@/components/figure-roll";
+
+type Dial = "--dur-press" | "--dur-in" | "--dur-rise" | "--dur-page" | "--dur-fade" | "--dur-pop" | "--dur-overlay" | "--dur-out" | "--dur-travel" | "--stagger";
+/**
+ * A motion dial from index.css in ms, so script timing reads the SAME value the stylesheet animates with.
+ * ⚠️ Read once per motion state, never per render: `getComputedStyle(html)` forces a restyle (Housing v217, measured).
+ */
+const dials = new Map<string, number | null>();
+let dialState = "";
+export function cssMs(dial: Dial, fallback: number): number {
+  if (typeof document === "undefined") return fallback;
+  const state = `${document.documentElement.dataset["motion"] ?? ""}|${reducedMotion() ? "r" : ""}`;
+  if (state !== dialState) {
+    dials.clear();
+    dialState = state;
+  }
+  let ms = dials.get(dial);
+  if (ms === undefined) {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(dial).trim();
+    const n = Number.parseFloat(raw);
+    ms = !Number.isFinite(n) ? null : raw.endsWith("ms") ? n : raw.endsWith("s") ? n * 1000 : n;
+    dials.set(dial, ms);
+  }
+  return ms ?? fallback;
+}
 
 const ARRIVE = "cubic-bezier(0.22,0.61,0.36,1)";
 const TRAVEL = "cubic-bezier(0.45,0,0.55,1)";
@@ -130,3 +156,16 @@ export function travelLine(u: HTMLElement, was: { left: number; width: number },
   );
 }
 
+
+/** The glow's position: one custom property pair per frame (`.tile-glow`, index.css). */
+let glowFrame = 0;
+export function glowAt(e: { currentTarget: EventTarget & HTMLElement; clientX: number; clientY: number }): void {
+  const el = e.currentTarget;
+  const { clientX, clientY } = e;
+  cancelAnimationFrame(glowFrame);
+  glowFrame = requestAnimationFrame(() => {
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", `${Math.round(clientX - r.left)}px`);
+    el.style.setProperty("--my", `${Math.round(clientY - r.top)}px`);
+  });
+}
