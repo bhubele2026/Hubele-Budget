@@ -511,11 +511,16 @@ export default function SettingsPage() {
     <PageGrid data-testid="settings-banks">
       <Panel
         title="Banks"
-        sub="Linked through Plaid. Transactions and balances import automatically; your bank login is never seen or stored here."
         span={12}
         variant={["static", "flush"]}
         data-testid="panel-banks"
-        actions={<PlaidLinkButton />}
+        actions={
+          <>
+            {/* (Fewer words) How banks link, one hover away. */}
+            <Help>Linked through Plaid. Transactions and balances import automatically; your bank login is never seen or stored here.</Help>
+            <PlaidLinkButton />
+          </>
+        }
       >
         {plaidEnv && !plaidEnv.configured && (
           <div className="px-4 pt-3">

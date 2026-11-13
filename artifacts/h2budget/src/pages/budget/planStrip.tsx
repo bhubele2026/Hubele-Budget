@@ -1,6 +1,6 @@
 import { StackBar } from "@/components/viz";
 import { CHART } from "@/lib/chartTokens";
-import { fieldLabel, Foot, Help } from "@/ui";
+import { fieldLabel, Help } from "@/ui";
 import { formatCurrency } from "@/lib/utils";
 import type { BudgetMonthDetail } from "@workspace/api-client-react";
 
@@ -55,7 +55,8 @@ export function PlanStrip({
           The plan is bills plus debt payments, and nothing else. The allowance
           and any hand-planned envelope are listed beside it rather than added
           to it, because their money is either already inside a bill or not in
-          the plan yet.
+          the plan yet. The allowance is spent out of the Weekly and Monthly
+          Spend bills already counted.
         </Help>
         <span
           className="fig text-label font-semibold text-foreground"
@@ -101,11 +102,6 @@ export function PlanStrip({
         />
       </div>
 
-      <Foot>
-        Bills and debt payments are the plan. The allowance is tracked, not
-        planned again — it is spent out of the Weekly and Monthly Spend bills
-        already counted above.
-      </Foot>
     </section>
   );
 }

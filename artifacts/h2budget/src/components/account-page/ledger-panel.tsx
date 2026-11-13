@@ -57,7 +57,7 @@ export function LedgerPanel({
       titleRef={titleRef}
       sub={sub}
       accent={accent}
-      actions={actions}
+      actions={legend ? <>{/* (Fewer words) The bucket key is one hover away. */}<BucketLegend />{actions}</> : actions}
       span={12}
       variant={["sticky-safe", "flush", "static"]}
       data-testid={testId}
@@ -70,7 +70,6 @@ export function LedgerPanel({
         {pane}
       </div>
       <div data-testid="ledger-body" className="pb-2">
-        {legend ? <BucketLegend className="border-b border-brand-line px-4 py-1.5" /> : null}
         {children}
       </div>
     </Panel>

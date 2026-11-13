@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -53,7 +53,8 @@ describe("BucketBubbles", () => {
 
   it("the legend says what each letter MEANS, once above the ledger", () => {
     render(<BucketLegend />);
-    expect(screen.getByTestId("bucket-legend").textContent).toBe("W Weekly allowance · M Monthly allowance · U Unplanned allowance · R Someone pays it back");
+    // (Fewer words) One hover away: the "?" carries the whole key.
+    expect(within(screen.getByTestId("bucket-legend")).getByRole("note").getAttribute("aria-label")).toBe("W Weekly allowance · M Monthly allowance · U Unplanned allowance · R Someone pays it back");
   });
 });
 

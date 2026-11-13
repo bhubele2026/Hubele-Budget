@@ -94,7 +94,6 @@ import {
   fieldLabel,
   input as inputControl,
   inputInline,
-  Foot,
   Help,
 } from "@/ui";
 import { PageGrid, StatBlock } from "@/components/next";
@@ -865,10 +864,7 @@ export default function BudgetPage() {
                     : "bills and debt payments"}
                 </span>
                 <Help>
-                  Bills plus debt payments, and nothing else. The allowance is
-                  already inside the bills that fund it, and envelopes planned
-                  by hand are listed but not added — so the same dollar is only
-                  counted once.
+                  {`Bills plus debt payments, and nothing else. The allowance is already inside the bills that fund it, and envelopes planned by hand are listed but not added — so the same dollar is only counted once. Every figure on this page is the server's, for ${shownMonthName}. Spend counts a pending purchase once, at its final amount when it posts.`}
                 </Help>
               </div>
             </div>
@@ -983,17 +979,7 @@ export default function BudgetPage() {
         />
       )}
 
-      {summary && (
-        <div className="span-12">
-        <Foot data-testid="budget-basis-note">
-          Every figure on this page is the server's, for {shownMonthName}. Spend
-          counts a pending purchase once, at its final amount when it posts —{" "}
-          {formatCurrency(summary.expenses.actual)} against
-          all envelopes, of which {formatCurrency(actualTotal)} sits against the
-          plan.
-        </Foot>
-        </div>
-      )}
+      {/* (Fewer words, 2026-11-12) The basis note moved into the hero's "?"; its figures are the hero's own. */}
     </PageGrid>
   );
 }
@@ -1046,9 +1032,9 @@ function PlanSection({
               </span>
             )}
           </div>
-          <div className="text-micro text-neutral-500">{def.sub}</div>
         </div>
-        <Help>{def.help}</Help>
+        {/* (Fewer words) The card's footnote is one hover away, with its help. */}
+        <Help>{`${def.help} ${def.foot}`}</Help>
         <div className="text-right">
           <div
             className="fig text-label font-semibold text-foreground"
@@ -1075,7 +1061,6 @@ function PlanSection({
       )}
 
       {footer}
-      <Foot>{def.foot}</Foot>
     </section>
   );
 }

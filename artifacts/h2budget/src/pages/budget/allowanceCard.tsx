@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { CssFillMeter } from "@/lib/cssBars";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
-import { btnLink, Foot, Help } from "@/ui";
+import { btnLink, Help } from "@/ui";
 import { formatCurrency } from "@/lib/utils";
 import type { BudgetMonthDetail } from "@workspace/api-client-react";
 
@@ -72,10 +72,9 @@ export function AllowanceCard({
               already in the plan
             </span>
           </div>
-          <div className="text-micro text-neutral-500">Filed spend, by bucket</div>
         </div>
         <Help>
-          {`Spend you filed into a bucket yourself — unfiled spend counts in none of the three. The weekly and monthly caps are your plans (Unplanned is set in Settings); the weekly one is scaled to this month by ${allowance.weeksInMonth} weeks.`}
+          {`Spend you filed into a bucket yourself — unfiled spend counts in none of the three. The weekly and monthly caps are your plans (Unplanned is set in Settings); the weekly one is scaled to this month by ${allowance.weeksInMonth} weeks. Tracked, not planned again — this money is already in the plan above as the bills that fund it. The slices under Weekly are parts of it, not spending on top of it.`}
         </Help>
         <div className="text-right">
           <div
@@ -218,11 +217,6 @@ export function AllowanceCard({
         })}
       </div>
 
-      <Foot>
-        Tracked, not planned again — this money is already in the plan above as
-        the bills that fund it. The slices under Weekly are parts of it, not
-        spending on top of it.
-      </Foot>
     </section>
   );
 }

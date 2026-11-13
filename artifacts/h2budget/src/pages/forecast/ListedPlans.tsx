@@ -1,5 +1,5 @@
 import type { CashSignalAssumedPaidPlan, CashSignalListedPlan } from "@workspace/api-client-react";
-import { card as kitCard, cardHead, Foot } from "@/ui";
+import { card as kitCard, cardHead, Help } from "@/ui";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
@@ -178,6 +178,8 @@ export function ListedPlans({
   const unpaidHead = (
     <div className={cardHead}>
       <h2 className="text-title font-semibold text-foreground">Unpaid items</h2>
+      {/* (Fewer words) What resolving one does, one hover away. */}
+      {hasCarried && <Help>Resolving a row here removes it from the projection for that day.</Help>}
       {hasCarried && (
         <>
           <span className="chip bad" data-testid="dragging-plans-chip">
@@ -262,7 +264,6 @@ export function ListedPlans({
           <section className={`${kitCard} ${anchorClass}`} id={ANCHOR.unpaid} tabIndex={-1} data-testid="card-dragging-plans-summary">
             {unpaidHead}
             {carriedList}
-            <Foot>Resolving a row here removes it from the projection for that day.</Foot>
           </section>
         )}
         {assumedPaid.length > 0 && (
@@ -330,7 +331,6 @@ export function ListedPlans({
               {olderList}
             </div>
           )}
-          {hasCarried && <Foot>Resolving a row here removes it from the projection for that day.</Foot>}
         </section>
       )}
 

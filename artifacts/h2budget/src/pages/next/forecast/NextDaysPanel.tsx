@@ -140,7 +140,6 @@ export function NextDaysPanel({
   return (
     <Panel
       title={`Next ${days} days`}
-      sub="Money in, money out, and the balance after each day"
       span={4}
       variant={["flush", "static"]}
       className={className}

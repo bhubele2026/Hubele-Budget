@@ -124,7 +124,8 @@ describe("Needs you — the list", () => {
     await waitFor(() => expect(rows().length).toBe(4));
     expect(screen.getByTestId("ny-count").textContent).toBe(" (4)");
     expect(screen.getByRole("heading", { name: /Needs you/ })).toBeTruthy();
-    expect(screen.getByTestId("ny-hint").textContent).toBe(NEEDS_YOU_HINT);
+    // (Fewer words) What Match and Category mean is one hover away: the "?" beside the title.
+    expect(within(screen.getByTestId("ny-hint")).getByRole("note").getAttribute("aria-label")).toBe(NEEDS_YOU_HINT);
     const first = rows()[0]!;
     expect(first.textContent).toContain("Nov 3");
     expect(first.textContent).toContain("Pine Mutual Auto");
@@ -132,8 +133,8 @@ describe("Needs you — the list", () => {
     expect(screen.getByTestId("ny-amount-n1").textContent).toBe("-$112.00");
     expect(screen.getByTestId("ny-think-n1").textContent).toBe("Looks like the Car insurance payment, planned $112.00 on Nov 3");
     expect(screen.getByTestId("ny-think-n2").textContent).toBe("Looks like Groceries");
-    // No suggestion: the reason, plainly.
-    expect(screen.getByTestId("ny-think-n3").textContent).toBe("Two planned bills could fit.");
+    // (Fewer words) No suggestion: no line — the state badge says it waits; the reason is in the drawer.
+    expect(screen.queryByTestId("ny-think-n3")).toBeNull();
     expect(within(rows()[2]!).getByText("Pending")).toBeTruthy();
     expect(within(rows()[0]!).queryByText("Pending")).toBeNull();
     // Only the one bounded read: the list, no transactions until a row is opened.
@@ -153,10 +154,10 @@ describe("Needs you — the list", () => {
     mount();
     await waitFor(() => expect(rows().length).toBe(4));
     expect(screen.getByTestId("ny-count").textContent).toBe(" (30)");
-    expect(screen.getByTestId("ny-more").textContent).toContain("Showing the first 4 of 30.");
+    expect(screen.getByTestId("ny-more").textContent).toContain("First 4 of 30.");
     fireEvent.click(screen.getByTestId("ny-ok-n1"));
     expect(screen.getByTestId("ny-count").textContent).toBe(" (29)");
-    expect(screen.getByTestId("ny-more").textContent).toContain("Showing the first 3 of 29.");
+    expect(screen.getByTestId("ny-more").textContent).toContain("First 3 of 29.");
   });
 
   it("OK is off with no suggestion, and then Change is the primary button", async () => {
@@ -170,12 +171,12 @@ describe("Needs you — the list", () => {
     expect(screen.getByTestId("ny-change-n1").className).not.toBe(screen.getByTestId("ny-ok-n1").className);
   });
 
-  it("empty: 'All caught up through {Mon D}' and a quiet line", async () => {
+  it("empty: 'All caught up through {Mon D}', one line", async () => {
     needsYou = body([]);
     mount();
     await waitFor(() => expect(screen.getByTestId("ny-empty")).toBeTruthy());
     expect(screen.getByTestId("ny-empty").textContent).toContain("All caught up through Nov 10.");
-    expect(screen.getByTestId("ny-empty").textContent).toContain("New bank rows are matched and filed for you when H2 is sure.");
+    expect(screen.getByTestId("ny-empty").textContent).not.toContain("New bank rows");
     expect(screen.getByTestId("ny-count").textContent).toBe(" (0)");
     expect(screen.queryByTestId("ny-hint")).toBeNull();
   });

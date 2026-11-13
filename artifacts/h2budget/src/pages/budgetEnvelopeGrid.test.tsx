@@ -496,9 +496,10 @@ describe("Budget envelope grid — the allowance", () => {
 
   it("says in words that the allowance is not planned a second time", () => {
     renderPage();
-    expect(screen.getByTestId("section-allowance").textContent).toContain(
-      "Tracked, not planned again",
-    );
+    // (Fewer words) Said one hover away, in the card's "?".
+    expect(
+      within(screen.getByTestId("section-allowance")).getAllByRole("note").some((n) => (n.getAttribute("aria-label") ?? "").includes("Tracked, not planned again")),
+    ).toBe(true);
     expect(screen.getByTestId("plan-strip-allowance").textContent).toContain(
       "already inside Bills",
     );

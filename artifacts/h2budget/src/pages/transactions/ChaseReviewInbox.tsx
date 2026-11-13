@@ -163,8 +163,10 @@ export function ChaseLedgerPager({
   onLoadMore: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3 py-2" data-testid="chase-ledger-pager">
-      <span className="text-label text-neutral-500" data-testid="chase-showing">
+    <div className={`flex flex-wrap items-center justify-center gap-3 ${showing < matching || hasMore ? "py-2" : ""}`} data-testid="chase-ledger-pager">
+      {/* (Fewer words) Shown only when something is held back: "Showing 6 of 6" says nothing on screen ("To review" is
+          in the head). A screen reader still hears the count. */}
+      <span className={showing < matching ? "text-label text-neutral-500" : "sr-only"} data-testid="chase-showing">
         Showing <Num n={showing} /> of <Num n={matching} />
         {toReview != null && (
           <>
@@ -173,9 +175,11 @@ export function ChaseLedgerPager({
           </>
         )}
       </span>
-      <Help>
-        Rows in this range through today. Pending rows and rows after today are listed apart and are not in this count.
-      </Help>
+      {showing < matching ? (
+        <Help>
+          Rows in this range through today. Pending rows and rows after today are listed apart and are not in this count.
+        </Help>
+      ) : null}
       {hasMore && (
         <Button variant="outline" size="sm" onClick={onLoadMore} disabled={loading} data-testid="chase-load-more">
           {loading ? "Loading…" : "Load more"}

@@ -29,7 +29,7 @@ import { formatDisplayAmount } from "@/lib/amountDisplay";
 import { shortDateOfInstant } from "@/lib/dates";
 import { isTyping } from "@/lib/reviewQueue";
 import { cn } from "@/lib/utils";
-import { btnLink, btnSecondarySm, btnSm, emptyNote } from "@/ui";
+import { btnLink, btnSecondarySm, btnSm, emptyNote, Help } from "@/ui";
 import { StatusBadge } from "@/components/next/StatusBadge";
 import { getAutoDoneQueryKey, getNeedsYouQueryKey, planOccurrenceOf, useAutoDone, useNeedsYou, type AutoDoneItem, type NeedsYouItem } from "./needsYouApi";
 import { TxDrawer, type DrawerRow } from "./TxDrawer";
@@ -54,14 +54,19 @@ import { useReadyMark } from "@/lib/perfMarks";
  * Every figure is the server's string.
  */
 
-export const NEEDS_YOU_HINT = "Match = this is a planned bill or payment. Category = what kind of spending it is.";
+export const NEEDS_YOU_HINT = "Match = this is a planned bill or payment. Category = what kind of spending it is. Keys: j / k to move, Enter = OK, c = Change.";
 
 /** (2026-11-12) The list's columns on a desktop — the head row and every row share this one track list. */
 const NY_GRID = "grid md:grid-cols-[4rem_minmax(0,1fr)_9.5rem_8.5rem_6.5rem_8rem] md:items-start md:gap-x-4";
 
 const accountOf = (i: NeedsYouItem) => `${i.accountName}${i.mask ? ` ••${i.mask.slice(-4)}` : ""}`;
-/** The row's one line: the suggestion (its label is written to follow "Looks like "), else why it waits. */
+/** The suggestion in words (its label is written to follow "Looks like "), else why it waits — for the drawer and the
+ *  OK button's name. */
 const thinkWords = (i: NeedsYouItem) => (i.suggestion ? `Looks like ${i.suggestion.label}` : i.reason);
+/** (Fewer words, 2026-11-12) The row's own line says only what its columns do not: the planned payment a match points
+ *  at, or a category other than the one shown. No suggestion → nothing (the state badge says it waits). */
+const rowWords = (i: NeedsYouItem): string | null =>
+  !i.suggestion || (i.kind === "category" && i.suggestion.label === i.categoryName) ? null : thinkWords(i);
 /** The drawer's lines: the reason in full, and the suggestion only when the reason does not already say it. */
 const drawerWords = (i: NeedsYouItem): string[] =>
   i.suggestion && !/looks like/i.test(i.reason) ? [thinkWords(i), i.reason] : [i.reason];
@@ -366,6 +371,7 @@ export function NeedsYou({
           }}
           aria-label={okOn ? `OK: ${thinkWords(item)}` : "OK (H2 has no suggestion for this row)"}
           aria-keyshortcuts={where === "row" ? "Enter" : undefined}
+          title={where === "row" ? "OK (Enter)" : undefined}
           data-testid={`ny-ok-${item.id}${where === "drawer" ? "-drawer" : ""}`}
         >
           OK
@@ -380,6 +386,7 @@ export function NeedsYou({
           }}
           aria-label={`Change: ${item.name}`}
           aria-keyshortcuts={where === "row" ? "c" : undefined}
+          title={where === "row" ? "Change (c)" : undefined}
           data-testid={`ny-change-${item.id}${where === "drawer" ? "-drawer" : ""}`}
         >
           Change
@@ -399,14 +406,14 @@ export function NeedsYou({
       <section id="needs-you" className="panel scroll-mt-4" aria-labelledby="needs-you-title" data-testid="needs-you">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-brand-line px-4 py-2.5">
           <div className="min-w-0">
-            <h2 id="needs-you-title" className="text-title font-semibold text-foreground">
-              Needs you{q.data ? <span className="fig ml-1 font-normal text-neutral-600" data-testid="ny-count"> ({count})</span> : null}
+            <h2 id="needs-you-title" className="flex items-center gap-2 text-title font-semibold text-foreground">
+              <span>
+                Needs you{q.data ? <span className="fig ml-1 font-normal text-neutral-600" data-testid="ny-count"> ({count})</span> : null}
+              </span>
+              {/* (Fewer words) What Match and Category mean, and the keys, one hover away. */}
+              {q.data && items.length > 0 ? <span data-testid="ny-hint" className="inline-flex font-normal"><Help>{NEEDS_YOU_HINT}</Help></span> : null}
             </h2>
-            {q.data && items.length > 0 ? (
-              <p className="text-micro text-neutral-600" data-testid="ny-hint">{NEEDS_YOU_HINT}</p>
-            ) : null}
           </div>
-          {items.length > 1 ? <span className="hidden text-micro text-neutral-500 md:inline">j / k to move · Enter = OK · c = Change</span> : null}
         </div>
         {cold ? (
           <div className="space-y-2 p-4" aria-busy="true" data-testid="ny-loading">
@@ -420,7 +427,6 @@ export function NeedsYou({
         ) : items.length === 0 ? (
           <div className="px-4 py-5" data-testid="ny-empty">
             <p className="text-body font-medium text-foreground">All caught up through {shortDay(q.data.throughDate)}.</p>
-            <p className="mt-1 text-label text-neutral-600">New bank rows are matched and filed for you when H2 is sure.</p>
           </div>
         ) : (
           <>
@@ -467,7 +473,7 @@ export function NeedsYou({
                           {item.name}
                         </button>
                         <div className="text-micro text-neutral-600" data-testid={`ny-account-${item.id}`}>{accountOf(item)}</div>
-                        <p className="mt-1 text-label text-neutral-700" data-testid={`ny-think-${item.id}`}>{thinkWords(item)}</p>
+                        {rowWords(item) ? <p className="mt-1 text-label text-neutral-700" data-testid={`ny-think-${item.id}`}>{rowWords(item)}</p> : null}
                       </div>
                       {/* Category and state: one wrapping line under the words on a phone, their own columns on a desktop. */}
                       <div className="col-span-2 col-start-2 row-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 md:contents">
@@ -493,8 +499,7 @@ export function NeedsYou({
             </ul>
             {q.data.truncated && count > items.length ? (
               <p className="border-t border-brand-line px-4 py-2 text-micro text-neutral-600" data-testid="ny-more">
-                Showing the first <span className="fig">{items.length}</span> of{" "}
-                <span className="fig">{count}</span>. Answer these and the next ones come up.
+                First <span className="fig">{items.length}</span> of <span className="fig">{count}</span>.
               </p>
             ) : null}
           </>
