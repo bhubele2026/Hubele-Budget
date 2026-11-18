@@ -51,6 +51,9 @@ import {
   forecastResolutionsTable,
   forecastSettingsTable,
   recurringItemsTable,
+  plaidAccountsTable,
+  plaidItemsTable,
+  transactionsTable,
 } from "@workspace/db";
 import avalancheRouter from "../routes/avalanche";
 import forecastRouter from "../routes/forecast";
@@ -96,6 +99,9 @@ async function call<T = any>(method: string, p: string, body?: unknown): Promise
 }
 
 async function cleanup(): Promise<void> {
+  await db.delete(transactionsTable).where(eq(transactionsTable.householdId, HH));
+  await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.householdId, HH));
+  await db.delete(plaidItemsTable).where(eq(plaidItemsTable.householdId, HH));
   await db.delete(forecastResolutionsTable).where(eq(forecastResolutionsTable.householdId, HH));
   await db.delete(recurringItemsTable).where(eq(recurringItemsTable.householdId, HH));
   await db.delete(debtsTable).where(eq(debtsTable.householdId, HH));
@@ -188,6 +194,42 @@ afterEach(() => {
 });
 
 describe("AVAL-W — weekly cadence on the forecast", () => {
+  // ⭐ (11/18/2026) A morning reading priced a $2,543.66 Friday on $1,832.22 that was not there.
+  it("a bank reading the day outran never sets a week above the target pace", async () => {
+    await seed("weekly");
+    const fresh = (await computeCashSignal(HH, OWNER, { horizonDays: 60 })).events!.filter(isAvalanche);
+    expect(paidOf(fresh[0]!)).toBe(4180);
+    // A Plaid reading at 9 am, then a charge dated the same day that reached the ledger at noon.
+    const externalId = `acct-${randomUUID()}`;
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({ userId: OWNER, householdId: HH, itemId: `item-${randomUUID()}`, accessToken: "x", institutionName: "Chase", institutionSlug: "chase" })
+      .returning();
+    const [acct] = await db
+      .insert(plaidAccountsTable)
+      .values({ userId: OWNER, householdId: HH, itemId: item!.id, accountId: externalId, name: "CHECKING", mask: "0001", type: "depository", subtype: "checking" })
+      .returning();
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotSource: "plaid", bankSnapshotAccountId: acct!.id, bankSnapshotMask: "0001" })
+      .where(eq(forecastSettingsTable.userId, OWNER));
+    await db.insert(transactionsTable).values({
+      userId: OWNER,
+      householdId: HH,
+      occurredOn: "2026-11-10",
+      description: "LATE DEBIT",
+      amount: "-10.00",
+      source: "plaid",
+      plaidAccountId: externalId,
+      plaidTransactionId: `t-${randomUUID()}`,
+      createdAt: new Date("2026-11-10T17:30:00Z"),
+    });
+    const capped = (await computeCashSignal(HH, OWNER, { horizonDays: 60 })).events!.filter(isAvalanche);
+    expect(capped[0]!.date).toBe("2026-11-13");
+    // $2,600 a month × 12 ÷ 52 = $600 a week.
+    expect(paidOf(capped[0]!)).toBe(600);
+  });
+
   it("pays the most that is safe each Friday: a lot in the three-payday month, little in a thin week, never below the buffer", async () => {
     await seed("weekly");
     const sig = await computeCashSignal(HH, OWNER, { horizonDays: 200 });

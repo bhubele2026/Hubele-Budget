@@ -29,6 +29,7 @@ import { householdTodayISO } from "./householdClock";
 import { expiredHoldsRuleOn } from "./supersededPending";
 import { deepFreeze, ledgerFreezeEnabled, ledgerSharingEnabled, shareInFlight } from "./ledgerShare";
 import { cachedLedgerRead } from "./ledgerCache";
+import { bankReadOutrun } from "./bankReadOutrun";
 
 type AvalancheSettingsRow = typeof avalancheSettingsTable.$inferSelect;
 
@@ -99,11 +100,12 @@ async function buildWeeklyAvalanchePlan(
   ownerUserId: string,
   opts: { planOverride?: PlanOverride | null; correctionOverlay?: CorrectionOverlay | null },
 ): Promise<WeeklyAvalanchePlan | null> {
-  const [[settings], debtRows, recurring, inFullDebtIds] = await Promise.all([
+  const [[settings], debtRows, recurring, inFullDebtIds, readOutrun] = await Promise.all([
     db.select().from(avalancheSettingsTable).where(eq(avalancheSettingsTable.userId, ownerUserId)),
     db.select().from(debtsTable).where(eq(debtsTable.householdId, householdId)),
     db.select().from(recurringItemsTable).where(eq(recurringItemsTable.householdId, householdId)),
     loadInFullDebtIds(householdId, ownerUserId),
+    bankReadOutrun(householdId, ownerUserId),
   ]);
   const { cadence, weekday } = cadenceOf(settings);
   if (cadence !== "weekly") return null;
@@ -172,6 +174,9 @@ async function buildWeeklyAvalanchePlan(
     curve,
     strategy,
     answeredDates,
+    // ⭐ (11/18) A bank reading the day outran (`bankReadOutrun.ts`) never sets a payment above the target pace:
+    // 11/13/2026 one priced a $2,543.66 Friday on $1,832.22 that was not there. Re-read → the most that is safe.
+    capAtTarget: readOutrun,
   });
   return { ...plan, todayISO, monthlyTarget, cashBuffer: round2(ledger.cashBuffer), strategy };
 }

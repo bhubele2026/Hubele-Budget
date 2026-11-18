@@ -9,6 +9,9 @@ import {
 import { MANUAL_SNAPSHOT_STALE_MS, PLAID_FEED_QUIET_MS } from "@workspace/avalanche-core/freshness";
 import { BANK_FEED_DEAD_CODES, PLAID_REAUTH_ERROR_CODES } from "./plaidReauthCodes";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
+import { chargeArrivedAfterRead } from "./bankReadOutrun";
+
+export { chargeArrivedAfterRead };
 
 /**
  * ⭐ IS THE BANK BALANCE STALE? One answer, decided on the server.
@@ -27,6 +30,14 @@ import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
  *   old             A Plaid balance whose feed has gone quiet: no balance
  *                   re-read and no successful sync for 48 hours.
  *   manual_old      A typed-in balance older than 7 days.
+ *
+ * ⭐ (11/18) ALSO "old": A READING THE DAY OUTRAN. A Plaid reading with a charge
+ * dated on the reading's own day that reached the ledger AFTER the read. The
+ * roll-forward holds such a row as already inside the reading
+ * (`isInSnapshot`: no bank time, no proof it came later), so if it really came
+ * later, checking reads too high by exactly that charge (11/13/2026: $1,832.22
+ * for five days). A sync that re-anchors (`plaidSync.ts`, manual or
+ * bank-pushed) clears it: the rows are then before the new read.
  *
  * ⚠️ "OLD" READS THE FEED, NOT ONLY THE ANCHOR. Nothing re-reads the balance in
  * the background any more — the Plaid crons are gone and only the owner's Sync
@@ -112,8 +123,11 @@ export function staleReasonFor(args: {
   lastFailureAt: Date | null;
   feedDead: boolean;
   now: Date;
+  /** (11/18) A charge dated on the reading's day arrived after the read. Plaid readings only. */
+  dayOutranRead?: boolean;
 }): BankStaleReason | null {
   if (args.lastFailureAt || args.feedDead) return "refresh_failed";
+  if (args.source === "plaid" && args.dayOutranRead) return "old";
   // The last time the bank told us anything (`lastHeardAt`).
   const lastHeard = lastHeardAt(args);
   if (!lastHeard) return null;
@@ -300,6 +314,11 @@ export async function computeBankFreshness(
     }
   }
 
+  const dayOutranRead =
+    source === "plaid" && settings.at != null && resolved.externalId != null
+      ? await chargeArrivedAfterRead(householdId, resolved.externalId, settings.at)
+      : false;
+
   const staleReason = staleReasonFor({
     source,
     snapshotAt: settings.at ?? null,
@@ -307,6 +326,7 @@ export async function computeBankFreshness(
     lastFailureAt,
     feedDead,
     now,
+    dayOutranRead,
   });
 
   return {

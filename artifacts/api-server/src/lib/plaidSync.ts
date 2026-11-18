@@ -344,6 +344,12 @@ export function plaidLogContext(
   };
 }
 
+
+/** ⭐ (11/18) `BANK_FREE_ANCHOR=off` turns the background re-anchor off (the manual Sync's own read is untouched). */
+export function freeBalanceAnchorEnabled(): boolean {
+  return (process.env.BANK_FREE_ANCHOR ?? "").toLowerCase() !== "off";
+}
+
 /**
  * (#366) Persist the synthetic "needs reconnect" state for an item whose
  * stored access token failed `isValidPlaidAccessToken`. Re-uses
@@ -1273,6 +1279,9 @@ export async function syncPlaidItem(
       // staying inside a perceived <30s click→toast window.
       return [1500, 2500, 4000, 6000, 8000];
     })();
+    // ⭐ (11/18) The balances Plaid sends WITH the rows (`accounts`, free, read at
+    // the same update as the rows): a background sync re-anchors on them below.
+    const syncedBalances = new Map<string, { available: number | null; current: number | null }>();
     while (pollAttemptsUsed < pollAttemptsMax) {
       let walkAdded = 0;
       let walkModified = 0;
@@ -1288,6 +1297,12 @@ export async function syncPlaidItem(
         removed = removed.concat(
           resp.data.removed as { transaction_id: string }[],
         );
+        for (const acct of resp.data.accounts ?? []) {
+          syncedBalances.set(acct.account_id, {
+            available: acct.balances?.available ?? null,
+            current: acct.balances?.current ?? null,
+          });
+        }
         walkAdded += resp.data.added.length;
         walkModified += resp.data.modified.length;
         cursor = resp.data.next_cursor;
@@ -2355,6 +2370,46 @@ export async function syncPlaidItem(
       }
     }
 
+    // ⭐ (11/18) A BANK-PUSHED SYNC RE-ANCHORS FOR FREE. Only the owner's Sync
+    // called /accounts/balance/get, so a morning reading stood for days while the
+    // same day's later debits arrived on top of it — and the snapshot rule holds
+    // a snapshot-day row with no bank time as already inside the reading
+    // (`isInSnapshot`). 11/13/2026: a 6:47 am reading, five debits later that day
+    // ($1,832.22) never subtracted, checking shown $1,832.22 too high for five
+    // days. /transactions/sync returns the balance of every account it brings
+    // rows for, as of the same update — no billed call. Webhook syncs only: the
+    // bank just finished that update, so the balance and the rows are one moment.
+    // Same field rule and pointer checks as the manual path. No balance in the
+    // response: nothing changes.
+    let freeAnchorWritten = false;
+    if (
+      syncOrigin === "webhook" &&
+      !balanceRefreshAttempted &&
+      hasSnapshotAnchor &&
+      checkingPlaidAccountId &&
+      bankSnapshotBelongsToThisItem &&
+      freeBalanceAnchorEnabled()
+    ) {
+      const b = syncedBalances.get(checkingPlaidAccountId);
+      const live = b?.available ?? b?.current;
+      if (live != null) {
+        await db
+          .update(forecastSettingsTable)
+          .set({
+            bankSnapshotBalance: Number(live).toFixed(2),
+            bankSnapshotAt: new Date(),
+            bankSnapshotSource: "plaid",
+            ...(healedSnapshotRowId ? { bankSnapshotAccountId: healedSnapshotRowId } : {}),
+          })
+          .where(eq(forecastSettingsTable.userId, ownerUserId));
+        freeAnchorWritten = true;
+        logger.info(
+          { householdId, itemRowId, anchorField: b?.available != null ? "available" : "current" },
+          "[plaid-sync] bank snapshot re-anchored from the sync's own balance",
+        );
+      }
+    }
+
     if (balanceRefreshError) {
       await db
         .update(plaidItemsTable)
@@ -2381,6 +2436,16 @@ export async function syncPlaidItem(
     // Exactly when the balance call above ran: a manual Sync, on an anchored
     // snapshot, whose account resolved (by pointer or recovery) to this item. A
     // success only when a balance was actually re-read.
+    if (freeAnchorWritten) {
+      await recordPlaidSyncAttempt({
+        userId,
+        plaidItemId: itemRowId,
+        kind: "balance",
+        success: true,
+        errorCode: null,
+        errorMessage: null,
+      });
+    }
     if (balanceRefreshAttempted) {
       await recordPlaidSyncAttempt({
         userId,
